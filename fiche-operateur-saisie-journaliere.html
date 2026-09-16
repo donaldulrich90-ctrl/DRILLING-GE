@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fiche opérateur — 1 page (DRILL)</title>
+    <style>
+        :root { --b: #222; --m: #444; --bg: #f5f5f5; }
+        * { box-sizing: border-box; }
+        @page { size: A4; margin: 6mm; }
+        html, body { margin: 0; padding: 0; }
+        body {
+            font-family: "Segoe UI", system-ui, sans-serif;
+            font-size: 8pt;
+            line-height: 1.2;
+            color: #111;
+            max-width: 198mm;
+            margin: 0 auto;
+            padding: 6mm 8mm 4mm;
+        }
+        h1 {
+            font-size: 11pt;
+            margin: 0 0 2px 0;
+            padding-bottom: 3px;
+            border-bottom: 1.5px solid var(--b);
+        }
+        .sub {
+            font-size: 6.5pt;
+            color: var(--m);
+            margin: 0 0 5px 0;
+        }
+        .label { font-size: 6.5pt; font-weight: 600; color: var(--m); display: block; margin-bottom: 1px; }
+        .line {
+            min-height: 15px;
+            border-bottom: 1px solid var(--b);
+            background: var(--bg);
+            padding: 1px 3px;
+        }
+        .line.xs { min-height: 22px; }
+        .row { display: grid; gap: 4px 8px; margin-bottom: 4px; }
+        .r4 { grid-template-columns: repeat(4, 1fr); }
+        .r3 { grid-template-columns: repeat(3, 1fr); }
+        .r2 { grid-template-columns: 1fr 1fr; }
+        .box {
+            border: 1px solid var(--b);
+            padding: 4px 6px;
+            background: #fafafa;
+            margin-bottom: 4px;
+        }
+        .box h2, .tight-h { font-size: 7.5pt; margin: 0 0 3px 0; font-weight: 700; }
+        table { width: 100%; border-collapse: collapse; font-size: 7pt; margin-top: 2px; }
+        th, td { border: 1px solid var(--b); padding: 2px 4px; vertical-align: top; }
+        th { background: #e0e0e0; font-weight: 600; }
+        td { height: 22px; }
+        table.holes-table td { height: 18px; }
+        table.holes-table th { font-size: 6.5pt; }
+        .holes-hint { font-size: 6pt; color: #555; margin: 2px 0 0 0; }
+        .checks { display: flex; flex-wrap: wrap; gap: 2px 10px; font-size: 7pt; align-items: center; }
+        .checks label { display: inline-flex; align-items: center; gap: 2px; white-space: nowrap; }
+        code { font-family: ui-monospace, monospace; font-size: 6.5pt; background: #eee; padding: 0 2px; }
+        .codes-foot {
+            font-size: 6pt;
+            color: var(--m);
+            margin-top: 3px;
+ padding-top: 3px;
+            border-top: 1px solid #ccc;
+            line-height: 1.25;
+        }
+        .sheet-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 5px;
+            border-bottom: 1.5px solid var(--b);
+            padding-bottom: 4px;
+        }
+        .sheet-header .logo-enterprise {
+            flex-shrink: 0;
+            height: auto;
+            width: auto;
+            max-height: 26mm;
+            max-width: 28mm;
+            object-fit: contain;
+            object-position: center right;
+        }
+        .sheet-header .header-text {
+            flex: 1;
+            min-width: 0;
+            text-align: left;
+        }
+        .sheet-header .header-text h1 {
+            border-bottom: none;
+            padding-bottom: 0;
+            margin-bottom: 1px;
+        }
+        .sheet-header .header-text .sub {
+            margin-bottom: 0;
+        }
+        @media print {
+            .no-print { display: none !important; }
+            body { padding: 0 2mm; font-size: 7.5pt; max-width: none; }
+            .sheet-header .logo-enterprise { max-height: 24mm; max-width: 26mm; }
+        }
+    </style>
+</head>
+<body>
+    <p class="no-print" style="margin:0 0 6px 0;">
+        <button type="button" onclick="window.print()" style="padding:6px 12px;cursor:pointer">Imprimer (1 page A4)</button>
+    </p>
+
+    <header class="sheet-header">
+        <div class="header-text">
+            <h1>Fiche terrain — saisie journalière forage</h1>
+            <p class="sub"><strong>SAHARA MINING AND SERVICE SARL</strong> · GOOD ENGINEERS DRILL · Opérateur / chef d&rsquo;équipe → même saisie côté ingénieur (Rapports · saisie journalière). Une fiche = 1 machine · 1 date · 1 shift.</p>
+        </div>
+        <img class="logo-enterprise" src="logo-sahara-mining-services.png" width="200" height="200" alt="SAHARA MINING AND SERVICE SARL — logo" title="SAHARA MINING AND SERVICE SARL" onerror="this.onerror=null;this.src='logo-sahara.svg'">
+    </header>
+
+    <div class="row r4">
+        <div>
+            <span class="label">Date</span>
+            <div class="line"></div>
+        </div>
+        <div>
+            <span class="label">Machine (ex. FOR-2024-001)</span>
+            <div class="line"></div>
+        </div>
+        <div>
+            <span class="label">Site / client</span>
+            <div class="line"></div>
+        </div>
+        <div>
+            <span class="label">Shift</span>
+            <div class="checks" style="margin-top:1px;">
+                <label><input type="checkbox"> Toute journée</label>
+                <label><input type="checkbox"> Jour <code>day</code></label>
+                <label><input type="checkbox"> Nuit <code>night</code></label>
+            </div>
+        </div>
+    </div>
+
+    <div class="row r3">
+        <div>
+            <span class="label">Type forage (code appli)</span>
+            <div class="line" title="exploration production drainage injection geotechnique eau autre"></div>
+        </div>
+        <div>
+            <span class="label">Bit (ex. carbure-102, diamant-114, autre)</span>
+            <div class="line"></div>
+        </div>
+        <div>
+            <span class="label">Zone / secteur (général)</span>
+            <div class="line"></div>
+        </div>
+    </div>
+
+    <div class="box" style="margin-bottom:4px;">
+        <div class="tight-h">Trous forés — <span style="font-weight:500">une ligne par trou</span></div>
+        <p class="holes-hint">Pour chaque trou : sa référence et la <strong>profondeur</strong> (fond atteint en m, ou préciser « métrage shift » dans la remarque). L&rsquo;ingénieur reporte trou par trou en contrôle Terrain / carnet.</p>
+        <table class="holes-table">
+            <thead>
+                <tr>
+                    <th style="width:18%">Réf. trou</th>
+                    <th style="width:14%">Zone / ligne</th>
+                    <th style="width:12%">Profondeur (m)</th>
+                    <th style="width:12%">Métrage shift (m)</th>
+                    <th>Remarque (trou borgne, eau, arrêt dans X m, etc.)</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td></td><td></td><td></td><td></td><td></td></tr>
+                <tr><td></td><td></td><td></td><td></td><td></td></tr>
+                <tr><td></td><td></td><td></td><td></td><td></td></tr>
+                <tr><td></td><td></td><td></td><td></td><td></td></tr>
+                <tr><td></td><td></td><td></td><td></td><td></td></tr>
+                <tr><td></td><td></td><td></td><td></td><td></td></tr>
+                <tr><td></td><td></td><td></td><td></td><td></td></tr>
+                <tr><td></td><td></td><td></td><td></td><td></td></tr>
+                <tr><td></td><td></td><td></td><td></td><td></td></tr>
+                <tr><td></td><td></td><td></td><td></td><td></td></tr>
+            </tbody>
+        </table>
+        <div class="row r3" style="margin:4px 0 0 0;margin-bottom:0;">
+            <div><span class="label">Somme métrages shift (m) — si contrôle</span><div class="line"></div></div>
+            <div><span class="label">Métrage total saisi globalement (m)</span><div class="line"></div></div>
+            <div><span class="label">Nombre de trous travaillés</span><div class="line"></div></div>
+        </div>
+    </div>
+
+    <div class="row r4">
+        <div><span class="label">H. machine (h)</span><div class="line"></div></div>
+        <div><span class="label">Gasoil consommé direct (L)</span><div class="line"></div></div>
+        <div style="grid-column: 3 / -1"><span class="label">Gasoil ajouté (L) · Prix / L (USD ou XOF)</span><div class="line"></div></div>
+    </div>
+
+    <div class="box">
+        <div class="tight-h">Compteur carburant (L) — début shift &nbsp;|&nbsp; fin shift</div>
+        <div class="row r2" style="margin-bottom:0;">
+            <div class="line"></div>
+            <div class="line"></div>
+        </div>
+        <p style="margin:2px 0 0 0;font-size:6pt;color:#555;">Bilan L ≈ début + ajouté − fin. Fin seule → reprise fin shift précédent en saisie.</p>
+    </div>
+
+    <div class="row r2" style="margin-bottom:0;">
+        <div class="box" style="margin-bottom:0;">
+            <div class="tight-h">Marteau DTH — début | fin | Δ</div>
+            <div class="row r3" style="margin:0;">
+                <div class="line"></div>
+                <div class="line"></div>
+                <div class="line"></div>
+            </div>
+        </div>
+        <div class="box" style="margin-bottom:0;">
+            <div class="tight-h">Horamètre (h) — début | fin | Δ</div>
+            <div class="row r3" style="margin:0;">
+                <div class="line"></div>
+                <div class="line"></div>
+                <div class="line"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="box" style="margin-top:4px;">
+        <div class="tight-h">Temps d&rsquo;arrêt (motif · h · détail)</div>
+        <table>
+            <thead>
+                <tr><th style="width:26%">Motif <span style="font-weight:400">(code)</span></th><th style="width:10%">h</th><th>Détail</th></tr>
+            </thead>
+            <tbody>
+                <tr><td></td><td></td><td></td></tr>
+                <tr><td></td><td></td><td></td></tr>
+                <tr><td></td><td></td><td></td></tr>
+                <tr><td></td><td></td><td></td></tr>
+                <tr><td></td><td></td><td></td></tr>
+                <tr><td></td><td></td><td></td></tr>
+                <tr><td></td><td></td><td></td></tr>
+                <tr><td></td><td></td><td></td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="box">
+        <span class="tight-h" style="display:inline;margin-right:8px;">Changements :</span>
+        <span class="checks" style="display:inline-flex;">
+            <label><input type="checkbox"> Bit</label>
+            <label><input type="checkbox"> Tige</label>
+            <label><input type="checkbox"> Huile</label>
+            <label><input type="checkbox"> Filtres</label>
+        </span>
+        <span class="label" style="margin-top:4px;">Détails changements</span>
+        <div class="line xs"></div>
+        <span class="label" style="margin-top:3px;">Observations / sécurité</span>
+        <div class="line xs"></div>
+    </div>
+
+    <div class="row r2" style="margin-bottom:0;">
+        <div><span class="label">Nom, fonction</span><div class="line"></div></div>
+        <div><span class="label">Signature</span><div class="line" style="min-height:26px"></div></div>
+    </div>
+
+    <p class="codes-foot">
+        <strong>Forage :</strong> <code>exploration</code> <code>production</code> <code>drainage</code> <code>injection</code> <code>geotechnique</code> <code>eau</code> <code>autre</code>
+        · <strong>Bits :</strong> <code>carbure-76</code>…<code>115</code>…<code>152</code> <code>diamant-76</code>…<code>115</code>…<code>152</code> <code>autre</code><br>
+        · <strong>Roche / matériau :</strong> <code>FrM</code> Fresh · <code>TrM</code> Transition · <code>OxM</code> Oxide
+        · <strong>Arrêts :</strong> <code>blast</code> <code>deplacement</code> <code>manque-trou</code> <code>meteo</code> <code>panne</code> <code>attente</code> <code>securite</code> <code>logistique</code> <code>autre</code>
+    </p>
+</body>
+</html>

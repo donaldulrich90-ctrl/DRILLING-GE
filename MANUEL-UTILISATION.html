@@ -1,0 +1,1638 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Manuel d'utilisation — GEDRILLING</title>
+<style>
+  :root {
+    --jaune: #FFCD00;
+    --brun:  #2E1503;
+    --brun2: #5C3317;
+    --creme: #FFF8F0;
+    --gris:  #6b7280;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", Arial, sans-serif;
+    font-size: 10.5pt;
+    color: #1a1a1a;
+    background: #fff;
+    line-height: 1.6;
+  }
+
+  /* ── IMPRESSION ── */
+  @page { size: A4; margin: 18mm 16mm 18mm 20mm; }
+  @media print {
+    .no-print { display: none !important; }
+    .page-break { page-break-before: always; }
+    a { color: inherit; text-decoration: none; }
+    body { font-size: 10pt; }
+  }
+
+  /* ── COUVERTURE ── */
+  .cover {
+    min-height: 100vh;
+    background: linear-gradient(160deg, #2E1503 0%, #1C0A00 60%, #3D1F00 100%);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    text-align: center; padding: 40px 30px;
+    page-break-after: always;
+  }
+  .cover-logo-bar {
+    display: flex; align-items: center; gap: 18px;
+    justify-content: center; margin-bottom: 36px;
+  }
+  .cover-logo-bar img { height: 64px; }
+  .cover-badge {
+    background: var(--jaune); color: #1A0900;
+    font-size: 9pt; font-weight: 800; letter-spacing: .18em;
+    text-transform: uppercase; padding: 4px 14px; border-radius: 4px;
+    margin-bottom: 28px;
+  }
+  .cover h1 {
+    color: var(--jaune); font-size: 34pt; font-weight: 900;
+    letter-spacing: -.02em; line-height: 1.1; margin-bottom: 12px;
+  }
+  .cover h2 {
+    color: rgba(255,245,220,.75); font-size: 14pt; font-weight: 400;
+    margin-bottom: 40px; max-width: 540px;
+  }
+  .cover-meta {
+    color: rgba(255,245,220,.5); font-size: 9pt;
+    border-top: 1px solid rgba(255,205,0,.25); padding-top: 18px; margin-top: 20px;
+  }
+  .cover-stripe {
+    width: 80px; height: 4px; background: var(--jaune);
+    margin: 0 auto 32px;
+  }
+
+  /* ── MISE EN PAGE GÉNÉRALE ── */
+  .page { padding: 10px 0; }
+
+  /* ── EN-TÊTE DE SECTION ── */
+  .chapter {
+    background: linear-gradient(90deg, #2E1503, #5C3317);
+    color: #fff; padding: 14px 22px; border-radius: 8px;
+    margin: 32px 0 18px; display: flex; align-items: center; gap: 12px;
+    page-break-before: always;
+  }
+  .chapter:first-of-type { page-break-before: avoid; }
+  .chapter-num {
+    background: var(--jaune); color: #1A0900;
+    font-size: 11pt; font-weight: 900;
+    width: 32px; height: 32px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .chapter h2 { font-size: 14pt; font-weight: 700; }
+
+  /* ── SOUS-SECTION ── */
+  .section { margin: 22px 0 10px; }
+  .section h3 {
+    font-size: 11.5pt; font-weight: 700; color: var(--brun);
+    border-left: 4px solid var(--jaune); padding-left: 10px; margin-bottom: 8px;
+  }
+  .section h4 {
+    font-size: 10.5pt; font-weight: 700; color: var(--brun2);
+    margin: 14px 0 5px;
+  }
+  p { margin-bottom: 7px; }
+
+  /* ── SOMMAIRE ── */
+  .toc { padding: 10px 0; page-break-after: always; }
+  .toc h2 {
+    font-size: 16pt; font-weight: 800; color: var(--brun);
+    border-bottom: 3px solid var(--jaune); padding-bottom: 8px; margin-bottom: 18px;
+  }
+  .toc-entry {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding: 5px 0; border-bottom: 1px dotted #d1c4a8;
+  }
+  .toc-entry a { color: var(--brun); text-decoration: none; font-size: 10pt; }
+  .toc-entry a:hover { text-decoration: underline; }
+  .toc-entry .pg { color: var(--gris); font-size: 9.5pt; }
+  .toc-sub { padding-left: 20px; }
+  .toc-sub .toc-entry a { font-weight: normal; font-size: 9.5pt; color: var(--brun2); }
+  .toc-group { margin-bottom: 4px; }
+  .toc-group > .toc-entry a { font-weight: 700; }
+
+  /* ── BOÎTES INFO ── */
+  .box {
+    border-radius: 8px; padding: 12px 16px; margin: 12px 0;
+    display: flex; gap: 12px; align-items: flex-start;
+  }
+  .box-icon { font-size: 16pt; flex-shrink: 0; line-height: 1.2; }
+  .box-content { flex: 1; }
+  .box-content strong { display: block; margin-bottom: 3px; font-size: 10pt; }
+  .box.info    { background: #EFF6FF; border-left: 4px solid #3B82F6; }
+  .box.warn    { background: #FFFBEB; border-left: 4px solid #F59E0B; }
+  .box.danger  { background: #FEF2F2; border-left: 4px solid #EF4444; }
+  .box.tip     { background: #F0FDF4; border-left: 4px solid #22C55E; }
+
+  /* ── TABLEAU ── */
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 9.5pt; }
+  th { background: var(--brun); color: #fff; padding: 7px 10px; text-align: left; font-weight: 700; }
+  td { padding: 6px 10px; border-bottom: 1px solid #e5d8c8; vertical-align: top; }
+  tr:nth-child(even) td { background: #FFF8F0; }
+  tr:hover td { background: #FFF0D0; }
+
+  /* ── ÉTAPES (liste numérotée stylée) ── */
+  .steps { list-style: none; margin: 10px 0; padding: 0; }
+  .steps li {
+    display: flex; gap: 12px; align-items: flex-start;
+    margin-bottom: 10px; padding: 10px 14px;
+    background: #FFF8F0; border: 1px solid #E8D5BE;
+    border-left: 4px solid var(--jaune); border-radius: 6px;
+  }
+  .steps li .step-n {
+    background: var(--brun); color: var(--jaune);
+    font-weight: 800; font-size: 10pt;
+    width: 24px; height: 24px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; margin-top: 1px;
+  }
+  .steps li .step-text { flex: 1; }
+  .steps li .step-text strong { display: block; margin-bottom: 2px; }
+
+  /* ── CODE ── */
+  code {
+    font-family: Consolas, monospace;
+    font-size: 9pt; background: #f3ece3;
+    padding: 1px 5px; border-radius: 3px; color: #3D1F00;
+  }
+  pre {
+    background: #1e293b; color: #e2e8f0;
+    font-family: Consolas, monospace; font-size: 9pt;
+    padding: 12px 16px; border-radius: 8px; overflow-x: auto;
+    margin: 10px 0; line-height: 1.5;
+  }
+
+  /* ── BADGE RÔLE ── */
+  .badge {
+    display: inline-block; font-size: 8pt; font-weight: 700;
+    padding: 2px 8px; border-radius: 12px; margin: 1px;
+  }
+  .badge-admin  { background: #7C3AED; color: #fff; }
+  .badge-owner  { background: #DC2626; color: #fff; }
+  .badge-foreur { background: #2563EB; color: #fff; }
+  .badge-gest   { background: #059669; color: #fff; }
+  .badge-all    { background: var(--brun2); color: #fff; }
+
+  /* ── MODULE CARD ── */
+  .module-grid {
+    display: grid; grid-template-columns: repeat(2, 1fr);
+    gap: 10px; margin: 14px 0;
+  }
+  .module-card {
+    border: 1px solid #E8D5BE; border-top: 3px solid var(--jaune);
+    border-radius: 8px; padding: 12px 14px; background: #FFFAF4;
+  }
+  .module-card .mod-title {
+    font-weight: 700; color: var(--brun); font-size: 10pt;
+    margin-bottom: 5px; display: flex; align-items: center; gap: 6px;
+  }
+  .module-card p { font-size: 9.5pt; color: #444; margin: 0; }
+
+  /* ── SCREEN MOCK ── */
+  .screen {
+    border: 2px solid #C4A47C; border-radius: 10px;
+    background: #fff; margin: 14px 0; overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0,0,0,.08);
+  }
+  .screen-bar {
+    background: #2E1503; color: #FFCD00; padding: 8px 14px;
+    font-size: 9pt; font-weight: 700; display: flex; gap: 8px; align-items: center;
+  }
+  .screen-bar .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .screen-bar .dot-r { background: #ef4444; }
+  .screen-bar .dot-y { background: #f59e0b; }
+  .screen-bar .dot-g { background: #22c55e; }
+  .screen-body { padding: 14px 16px; font-size: 9pt; color: #333; }
+  .screen-row {
+    display: flex; gap: 10px; margin-bottom: 8px;
+    padding-bottom: 8px; border-bottom: 1px solid #f0e8d8;
+  }
+  .screen-row:last-child { border-bottom: none; margin-bottom: 0; }
+  .screen-label { color: #78350f; font-weight: 600; min-width: 120px; }
+
+  /* ── NAV SIDEBAR MOCK ── */
+  .sidebar-mock {
+    width: 180px; background: #1C0A00; border-radius: 8px;
+    padding: 10px 0; float: left; margin: 0 14px 14px 0;
+  }
+  .sidebar-item {
+    padding: 7px 14px; font-size: 9pt; color: rgba(255,235,210,.8);
+    border-left: 3px solid transparent;
+  }
+  .sidebar-item.active {
+    border-left-color: #FFCD00; color: #FFCD00; font-weight: 700;
+    background: rgba(255,205,0,.15);
+  }
+
+  /* ── FOOTER ── */
+  .footer-bar {
+    margin-top: 40px; padding-top: 12px;
+    border-top: 2px solid var(--jaune);
+    display: flex; justify-content: space-between;
+    font-size: 8.5pt; color: var(--gris);
+  }
+
+  /* ── BOUTON IMPRIMER ── */
+  .print-btn {
+    position: fixed; bottom: 24px; right: 24px;
+    background: var(--brun); color: var(--jaune);
+    border: 2px solid var(--jaune); font-weight: 700;
+    padding: 12px 22px; border-radius: 8px; cursor: pointer;
+    font-size: 11pt; box-shadow: 0 4px 16px rgba(0,0,0,.3);
+    z-index: 999;
+  }
+  .print-btn:hover { background: #4A2208; }
+
+  hr.sep { border: none; border-top: 1px solid #E8D5BE; margin: 18px 0; }
+</style>
+</head>
+<body>
+
+<button class="print-btn no-print" onclick="window.print()">🖨 Imprimer / Exporter PDF</button>
+
+<!-- ══════════════════════════════════════════════════════ COUVERTURE -->
+<div class="cover">
+  <div class="cover-logo-bar">
+    <img src="logo-good-engineers.png" onerror="this.style.display='none'" alt="GED">
+  </div>
+  <div class="cover-badge">Manuel d'utilisation officiel</div>
+  <div class="cover-stripe"></div>
+  <h1>GEDRILLING</h1>
+  <h2>Plateforme de gestion des opérations de forage minier</h2>
+  <div style="color:rgba(255,245,220,.6);font-size:10pt;margin-bottom:32px;">
+    Gestion complète : foreuses · chantiers · contrats · facturation · RH · HSE · stocks
+  </div>
+  <div class="cover-meta">
+    Version 1.0.0 &nbsp;|&nbsp; Good Engineers Drilling &nbsp;|&nbsp; 2025<br>
+    <span style="font-size:8pt;opacity:.7;">Document confidentiel — usage interne</span>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ SOMMAIRE -->
+<div class="page toc">
+  <h2>Sommaire</h2>
+
+  <div class="toc-group">
+    <div class="toc-entry"><a href="#ch1">1. Présentation de la plateforme</a><span class="pg">3</span></div>
+    <div class="toc-sub">
+      <div class="toc-entry"><a href="#ch1-1">1.1 À quoi sert GEDRILLING ?</a><span class="pg">3</span></div>
+      <div class="toc-entry"><a href="#ch1-2">1.2 Architecture technique</a><span class="pg">3</span></div>
+    </div>
+  </div>
+
+  <div class="toc-group">
+    <div class="toc-entry"><a href="#ch2">2. Installation et démarrage</a><span class="pg">4</span></div>
+    <div class="toc-sub">
+      <div class="toc-entry"><a href="#ch2-1">2.1 Prérequis</a><span class="pg">4</span></div>
+      <div class="toc-entry"><a href="#ch2-2">2.2 Lancement rapide (Windows)</a><span class="pg">4</span></div>
+      <div class="toc-entry"><a href="#ch2-3">2.3 Lancement manuel</a><span class="pg">4</span></div>
+    </div>
+  </div>
+
+  <div class="toc-group">
+    <div class="toc-entry"><a href="#ch3">3. Connexion et rôles utilisateurs</a><span class="pg">5</span></div>
+    <div class="toc-sub">
+      <div class="toc-entry"><a href="#ch3-1">3.1 Écran de connexion</a><span class="pg">5</span></div>
+      <div class="toc-entry"><a href="#ch3-2">3.2 Rôles et permissions</a><span class="pg">5</span></div>
+      <div class="toc-entry"><a href="#ch3-3">3.3 Comptes par défaut</a><span class="pg">6</span></div>
+    </div>
+  </div>
+
+  <div class="toc-group">
+    <div class="toc-entry"><a href="#ch4">4. Navigation générale</a><span class="pg">6</span></div>
+  </div>
+
+  <div class="toc-group">
+    <div class="toc-entry"><a href="#ch5">5. Tableau de bord</a><span class="pg">7</span></div>
+  </div>
+
+  <div class="toc-group">
+    <div class="toc-entry"><a href="#ch6">6. Foreuses et connexions</a><span class="pg">8</span></div>
+  </div>
+
+  <div class="toc-group">
+    <div class="toc-entry"><a href="#ch7">7. Clients</a><span class="pg">9</span></div>
+  </div>
+
+  <div class="toc-group">
+    <div class="toc-entry"><a href="#ch8">8. Sites de forage</a><span class="pg">9</span></div>
+  </div>
+
+  <div class="toc-group">
+    <div class="toc-entry"><a href="#ch9">9. Contrats</a><span class="pg">10</span></div>
+  </div>
+
+  <div class="toc-group">
+    <div class="toc-entry"><a href="#ch10">10. Facturation</a><span class="pg">11</span></div>
+  </div>
+
+  <div class="toc-group">
+    <div class="toc-entry"><a href="#ch11">11. Revenus</a><span class="pg">12</span></div>
+  </div>
+
+  <div class="toc-group">
+    <div class="toc-entry"><a href="#ch12">12. Consommables et stocks</a><span class="pg">12</span></div>
+  </div>
+
+  <div class="toc-group">
+    <div class="toc-entry"><a href="#ch13">13. Ressources Humaines</a><span class="pg">13</span></div>
+  </div>
+
+  <div class="toc-group">
+    <div class="toc-entry"><a href="#ch14">14. Maintenance</a><span class="pg">14</span></div>
+  </div>
+
+  <div class="toc-group">
+    <div class="toc-entry"><a href="#ch15">15. Plan de Forage</a><span class="pg">15</span></div>
+  </div>
+
+  <div class="toc-group">
+    <div class="toc-entry"><a href="#ch16">16. Pilotage projet et Performance</a><span class="pg">16</span></div>
+  </div>
+
+  <div class="toc-group">
+    <div class="toc-entry"><a href="#ch17">17. Rentabilité et Dépenses PM</a><span class="pg">17</span></div>
+  </div>
+
+  <div class="toc-group">
+    <div class="toc-entry"><a href="#ch18">18. Santé &amp; Sécurité (HSE)</a><span class="pg">17</span></div>
+  </div>
+
+  <div class="toc-group">
+    <div class="toc-entry"><a href="#ch19">19. Rapports</a><span class="pg">18</span></div>
+  </div>
+
+  <div class="toc-group">
+    <div class="toc-entry"><a href="#ch20">20. Repas chantier</a><span class="pg">18</span></div>
+  </div>
+
+  <div class="toc-group">
+    <div class="toc-entry"><a href="#ch21">21. Traducteur intégré</a><span class="pg">19</span></div>
+  </div>
+
+  <div class="toc-group">
+    <div class="toc-entry"><a href="#ch22">22. Messagerie équipe (Chat)</a><span class="pg">19</span></div>
+  </div>
+
+  <div class="toc-group">
+    <div class="toc-entry"><a href="#ch23">23. Infos entreprise</a><span class="pg">20</span></div>
+  </div>
+
+  <div class="toc-group">
+    <div class="toc-entry"><a href="#ch24">24. Gestion des comptes utilisateurs</a><span class="pg">20</span></div>
+  </div>
+
+  <div class="toc-group">
+    <div class="toc-entry"><a href="#ch25">25. Multi-entreprises</a><span class="pg">21</span></div>
+  </div>
+
+  <div class="toc-group">
+    <div class="toc-entry"><a href="#ch26">26. Fiche opérateur — Saisie journalière</a><span class="pg">22</span></div>
+  </div>
+
+  <div class="toc-group">
+    <div class="toc-entry"><a href="#ch27">27. Sauvegarde et restauration</a><span class="pg">23</span></div>
+  </div>
+
+  <div class="toc-group">
+    <div class="toc-entry"><a href="#ch28">28. Hébergement et déploiement</a><span class="pg">24</span></div>
+  </div>
+
+  <div class="toc-group">
+    <div class="toc-entry"><a href="#ch29">29. Dépannage</a><span class="pg">25</span></div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════ CH 1 -->
+<div class="page" id="ch1">
+  <div class="chapter"><span class="chapter-num">1</span><h2>Présentation de la plateforme</h2></div>
+
+  <div class="section" id="ch1-1">
+    <h3>1.1 À quoi sert GEDRILLING ?</h3>
+    <p><strong>GEDRILLING</strong> (Good Engineers Drilling) est une application web complète conçue pour les entreprises spécialisées dans le <strong>forage minier</strong>. Elle centralise en un seul outil toute la gestion opérationnelle, administrative et financière des chantiers de forage.</p>
+    <p>La plateforme s'adresse à plusieurs profils :</p>
+    <ul style="margin:8px 0 8px 20px;">
+      <li><strong>Direction / Administration</strong> : suivi financier, facturation, contrats, tableaux de bord</li>
+      <li><strong>Chefs de chantier</strong> : pilotage des foreuses, assignations, maintenance, plan de forage</li>
+      <li><strong>Opérateurs foreurs</strong> : saisie journalière des données de production</li>
+      <li><strong>RH / Comptabilité</strong> : gestion du personnel, fiches de paie, stocks</li>
+      <li><strong>HSE</strong> : suivi sécurité, incidents, formations</li>
+    </ul>
+    <div class="box info">
+      <div class="box-icon">ℹ️</div>
+      <div class="box-content">
+        <strong>Avantage clé</strong>
+        Toutes les données sont centralisées dans une base SQLite locale ou sur un serveur. Plusieurs utilisateurs peuvent se connecter simultanément depuis n'importe quel navigateur sur le réseau local ou via Internet.
+      </div>
+    </div>
+  </div>
+
+  <div class="section" id="ch1-2">
+    <h3>1.2 Architecture technique</h3>
+    <table>
+      <tr><th>Composant</th><th>Technologie</th><th>Rôle</th></tr>
+      <tr><td>Serveur API</td><td>Node.js + Express</td><td>Traite toutes les requêtes, authentification JWT</td></tr>
+      <tr><td>Base de données</td><td>SQLite 3</td><td>Stockage de toutes les données (fichier <code>database.db</code>)</td></tr>
+      <tr><td>Interface web</td><td>HTML5 + Tailwind CSS</td><td>Page principale <code>plateforme-forage.html</code></td></tr>
+      <tr><td>Graphiques</td><td>Chart.js</td><td>Visualisations de performance et revenus</td></tr>
+      <tr><td>Authentification</td><td>JWT (JSON Web Token)</td><td>Sessions sécurisées, expiration 7 jours</td></tr>
+    </table>
+    <div class="box warn">
+      <div class="box-icon">⚠️</div>
+      <div class="box-content">
+        <strong>Important</strong>
+        L'application ne peut pas fonctionner en ouvrant simplement le fichier <code>plateforme-forage.html</code> par double-clic. Le serveur Node.js doit être démarré au préalable pour que l'API fonctionne.
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════ CH 2 -->
+<div class="page" id="ch2">
+  <div class="chapter"><span class="chapter-num">2</span><h2>Installation et démarrage</h2></div>
+
+  <div class="section" id="ch2-1">
+    <h3>2.1 Prérequis</h3>
+    <table>
+      <tr><th>Logiciel</th><th>Version minimale</th><th>Téléchargement</th></tr>
+      <tr><td>Node.js</td><td>16 ou supérieure</td><td>https://nodejs.org</td></tr>
+      <tr><td>Navigateur web</td><td>Chrome, Firefox, Edge (récent)</td><td>—</td></tr>
+    </table>
+    <p>Pour vérifier que Node.js est installé, ouvrez un terminal et tapez :</p>
+    <pre>node --version
+npm --version</pre>
+    <p>Ces commandes doivent afficher un numéro de version. Si ce n'est pas le cas, installez Node.js depuis nodejs.org.</p>
+  </div>
+
+  <div class="section" id="ch2-2">
+    <h3>2.2 Lancement rapide sous Windows</h3>
+    <ol class="steps">
+      <li><span class="step-n">1</span><div class="step-text"><strong>Double-cliquez sur LANCER.bat</strong><br>Ce fichier se trouve dans le dossier du projet. Il installe automatiquement les dépendances et démarre le serveur.</div></li>
+      <li><span class="step-n">2</span><div class="step-text"><strong>Une fenêtre noire s'ouvre</strong><br>Attendez le message <code>✅ Serveur démarré sur le port 3000</code>. Ne fermez pas cette fenêtre.</div></li>
+      <li><span class="step-n">3</span><div class="step-text"><strong>Ouvrez votre navigateur</strong><br>Accédez à l'adresse : <strong>http://localhost:3000</strong></div></li>
+    </ol>
+    <div class="box tip">
+      <div class="box-icon">✅</div>
+      <div class="box-content">
+        <strong>Conseil</strong>
+        Si le serveur affiche <code>⚠️ Base de données non trouvée</code>, exécutez d'abord <code>npm run init-db</code> dans le terminal depuis le dossier du projet.
+      </div>
+    </div>
+  </div>
+
+  <div class="section" id="ch2-3">
+    <h3>2.3 Lancement manuel (terminal)</h3>
+    <p>Ouvrez un terminal dans le dossier du projet et exécutez ces commandes dans l'ordre :</p>
+    <pre># Étape 1 : installer les dépendances (une seule fois)
+npm install
+
+# Étape 2 : créer la base de données (une seule fois)
+npm run init-db
+
+# Étape 3 : démarrer le serveur
+npm start</pre>
+    <p>Pour le développement (rechargement automatique) :</p>
+    <pre>npm run dev</pre>
+    <p>L'application est alors accessible sur <strong>http://localhost:3000</strong>.</p>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════ CH 3 -->
+<div class="page" id="ch3">
+  <div class="chapter"><span class="chapter-num">3</span><h2>Connexion et rôles utilisateurs</h2></div>
+
+  <div class="section" id="ch3-1">
+    <h3>3.1 Écran de connexion</h3>
+    <p>Au chargement de l'application, un écran de connexion s'affiche. Saisissez votre <strong>nom d'utilisateur</strong> et votre <strong>mot de passe</strong>, puis cliquez sur <strong>Se connecter</strong>.</p>
+    <div class="screen">
+      <div class="screen-bar"><span class="dot dot-r"></span><span class="dot dot-y"></span><span class="dot dot-g"></span>&nbsp; GEDRILLING — Connexion</div>
+      <div class="screen-body">
+        <div style="text-align:center;padding:10px 0 16px;">
+          <div style="font-weight:800;font-size:14pt;color:#2E1503;">GOOD ENGINEERS</div>
+          <div style="font-size:8pt;color:#78350f;letter-spacing:.2em;">DISCIPLINE · RIGUEUR · PERFORMANCE</div>
+        </div>
+        <div class="screen-row"><span class="screen-label">Nom d'utilisateur</span><span style="color:#555;">admin</span></div>
+        <div class="screen-row"><span class="screen-label">Mot de passe</span><span style="color:#555;">••••••</span></div>
+        <div style="margin-top:10px;text-align:center;">
+          <span style="background:#FFCD00;color:#1A0900;padding:6px 24px;border-radius:6px;font-weight:700;font-size:10pt;">Se connecter</span>
+        </div>
+      </div>
+    </div>
+    <p>Après une connexion réussie, le système stocke votre session dans le navigateur pour 7 jours. Vous n'aurez pas à vous reconnecter à chaque visite.</p>
+  </div>
+
+  <div class="section" id="ch3-2">
+    <h3>3.2 Rôles et permissions</h3>
+    <p>Chaque utilisateur possède un <strong>rôle</strong> qui détermine les modules accessibles et les actions autorisées :</p>
+    <table>
+      <tr><th>Rôle</th><th>Niveau d'accès</th><th>Fonctions principales</th></tr>
+      <tr>
+        <td><span class="badge badge-admin">admin</span></td>
+        <td>Accès total à l'entreprise</td>
+        <td>Tous les modules, gestion des comptes, configuration</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-owner">platform_owner</span></td>
+        <td>Administration plateforme</td>
+        <td>Gestion de toutes les entreprises (mode multi-tenant)</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-gest">gestionnaire</span></td>
+        <td>Accès opérationnel complet</td>
+        <td>Contrats, facturation, RH, rapports, annonces</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-gest">gestionnaire_site</span></td>
+        <td>Gestion des chantiers</td>
+        <td>Sites, foreuses, assignations, maintenance, consommables</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-foreur">ingenieur</span></td>
+        <td>Suivi technique</td>
+        <td>Performance, plan de forage, pilotage projet</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-foreur">superviseur</span></td>
+        <td>Supervision terrain</td>
+        <td>Foreuses, assignations, saisie journalière</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-all">foreur</span></td>
+        <td>Saisie opérationnelle</td>
+        <td>Saisie journalière, consommables, chat équipe</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-all">aideforeur</span></td>
+        <td>Accès limité</td>
+        <td>Saisie journalière, consultation</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-all">santesecurite</span></td>
+        <td>HSE</td>
+        <td>Module HSE, rapports sécurité</td>
+      </tr>
+    </table>
+    <div class="box info">
+      <div class="box-icon">ℹ️</div>
+      <div class="box-content"><strong>Restriction par onglet</strong><br>L'administrateur peut restreindre l'accès de chaque utilisateur à des onglets précis, indépendamment du rôle, depuis la section <strong>Comptes</strong>.</div>
+    </div>
+  </div>
+
+  <div class="section" id="ch3-3">
+    <h3>3.3 Comptes par défaut</h3>
+    <table>
+      <tr><th>Mode</th><th>Identifiant</th><th>Mot de passe initial</th><th>Rôle</th></tr>
+      <tr><td>Dédié (1 entreprise)</td><td>Créé par l’administrateur</td><td><code>INITIAL_PLATFORM_PASSWORD</code></td><td>admin</td></tr>
+      <tr><td>Multi-tenant (partagé)</td><td><code>gestion_abonnements</code></td><td><code>INITIAL_PLATFORM_PASSWORD</code></td><td>platform_owner</td></tr>
+      <tr><td>Tous modes</td><td>Créé dans l’interface</td><td>Défini lors de la création</td><td>foreur</td></tr>
+    </table>
+    <div class="box danger">
+      <div class="box-icon">🔒</div>
+      <div class="box-content"><strong>Sécurité obligatoire en production</strong><br>Définissez <code>JWT_SECRET</code>, <code>INITIAL_PLATFORM_PASSWORD</code> et <code>CORS_ORIGINS</code> avant le déploiement. Ne placez jamais de mots de passe dans la documentation.</div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════ CH 4 -->
+<div class="page" id="ch4">
+  <div class="chapter"><span class="chapter-num">4</span><h2>Navigation générale</h2></div>
+
+  <p>L'interface de GEDRILLING est organisée en trois zones principales :</p>
+  <table>
+    <tr><th>Zone</th><th>Description</th></tr>
+    <tr><td><strong>Barre latérale gauche</strong></td><td>Menu de navigation principal. Cliquez sur un élément pour changer de module. L'élément actif est mis en surbrillance en jaune.</td></tr>
+    <tr><td><strong>En-tête supérieur</strong></td><td>Logo de l'entreprise, sélecteur d'entreprise (mode multi-tenant), langue de l'interface, nom de l'utilisateur connecté, déconnexion.</td></tr>
+    <tr><td><strong>Zone de travail centrale</strong></td><td>Contenu du module sélectionné : tableaux, formulaires, graphiques.</td></tr>
+  </table>
+
+  <div style="overflow:hidden;margin:16px 0;">
+    <div class="sidebar-mock">
+      <div class="sidebar-item active">📊 Tableau de bord</div>
+      <div class="sidebar-item">🔌 Connexions</div>
+      <div class="sidebar-item">👥 Assignations</div>
+      <div class="sidebar-item">🔧 Maintenance</div>
+      <div class="sidebar-item">🧾 Factures</div>
+      <div class="sidebar-item">📄 Contrats</div>
+      <div class="sidebar-item">📍 Sites</div>
+      <div class="sidebar-item">💰 Revenus</div>
+      <div class="sidebar-item">📦 Stocks</div>
+      <div class="sidebar-item">👥 RH</div>
+      <div class="sidebar-item">🦺 HSE</div>
+    </div>
+    <div style="overflow:hidden;">
+      <p style="font-weight:700;margin-bottom:8px;">Modules disponibles (barre latérale)</p>
+      <div class="module-grid">
+        <div class="module-card"><div class="mod-title">📊 Tableau de bord</div><p>Vue synthétique de l'activité</p></div>
+        <div class="module-card"><div class="mod-title">🔌 Connexions</div><p>État et gestion des foreuses</p></div>
+        <div class="module-card"><div class="mod-title">👥 Assignations</div><p>Affectations opérateur / machine</p></div>
+        <div class="module-card"><div class="mod-title">🔧 Maintenance</div><p>Préventif et correctif</p></div>
+        <div class="module-card"><div class="mod-title">🧾 Factures</div><p>Émission et suivi des factures</p></div>
+        <div class="module-card"><div class="mod-title">📄 Contrats</div><p>Gestion contractuelle clients</p></div>
+      </div>
+    </div>
+  </div>
+  <div style="clear:both;"></div>
+
+  <p>La liste complète des modules est présentée dans les chapitres 5 à 24. L'accès à chaque module dépend du rôle de l'utilisateur et des restrictions configurées par l'administrateur.</p>
+
+  <div class="box tip">
+    <div class="box-icon">💡</div>
+    <div class="box-content"><strong>Astuce</strong><br>Sur un écran de petite taille, la barre latérale peut se réduire. Cliquez sur l'icône ☰ en haut à gauche pour l'afficher ou la masquer.</div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════ CH 5 -->
+<div class="page" id="ch5">
+  <div class="chapter"><span class="chapter-num">5</span><h2>Tableau de bord</h2></div>
+
+  <p>Le <strong>Tableau de bord</strong> est la page d'accueil après connexion. Il offre une vue synthétique et en temps réel de l'ensemble des opérations de l'entreprise.</p>
+
+  <div class="section">
+    <h3>Indicateurs clés (KPI)</h3>
+    <table>
+      <tr><th>Indicateur</th><th>Description</th></tr>
+      <tr><td>Foreuses actives</td><td>Nombre de machines en cours d'opération ce jour</td></tr>
+      <tr><td>Chiffre d'affaires (mois)</td><td>Total facturé sur le mois en cours</td></tr>
+      <tr><td>Contrats actifs</td><td>Nombre de contrats en cours d'exécution</td></tr>
+      <tr><td>Alertes maintenance</td><td>Équipements en attente d'entretien ou dépassés</td></tr>
+      <tr><td>Mètres forés (mois)</td><td>Production cumulée sur le mois en cours</td></tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <h3>Graphiques</h3>
+    <p>Le tableau de bord affiche plusieurs graphiques interactifs :</p>
+    <ul style="margin:8px 0 8px 20px;">
+      <li><strong>Revenus mensuels</strong> : courbe sur les 12 derniers mois</li>
+      <li><strong>Mètres forés par foreuse</strong> : comparaison de la productivité par machine</li>
+      <li><strong>Répartition des contrats</strong> : par client et par site</li>
+      <li><strong>Alertes actives</strong> : liste des interventions en attente</li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <h3>Activité récente</h3>
+    <p>En bas de page, un flux d'activité liste les dernières opérations enregistrées : nouvelles saisies journalières, factures émises, modifications de contrats, incidents HSE.</p>
+  </div>
+
+  <div class="box info">
+    <div class="box-icon">ℹ️</div>
+    <div class="box-content"><strong>Actualisation automatique</strong><br>Les données du tableau de bord sont actualisées à chaque ouverture de la page. Pour forcer une actualisation, cliquez sur le nom de l'onglet <em>Tableau de bord</em> dans la barre latérale.</div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════ CH 6 -->
+<div class="page" id="ch6">
+  <div class="chapter"><span class="chapter-num">6</span><h2>Foreuses et connexions</h2></div>
+
+  <p>Le module <strong>Connexions</strong> centralise la gestion de toutes les machines de forage (foreuses, sondeuses) de l'entreprise.</p>
+
+  <div class="section">
+    <h3>Liste des foreuses</h3>
+    <p>Chaque foreuse est représentée par une carte affichant :</p>
+    <ul style="margin:8px 0 8px 20px;">
+      <li>Le <strong>nom / identifiant</strong> de la machine</li>
+      <li>Le <strong>modèle</strong> et le <strong>numéro de série</strong></li>
+      <li>Le <strong>site d'affectation</strong> actuel</li>
+      <li>Le <strong>statut</strong> : <span style="color:green;font-weight:700;">Active</span>, <span style="color:orange;font-weight:700;">En maintenance</span>, <span style="color:red;font-weight:700;">Hors service</span></li>
+      <li>L'<strong>opérateur assigné</strong></li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <h3>Ajouter une foreuse</h3>
+    <ol class="steps">
+      <li><span class="step-n">1</span><div class="step-text"><strong>Cliquez sur « Ajouter une foreuse »</strong><br>Le bouton se trouve en haut à droite de la liste.</div></li>
+      <li><span class="step-n">2</span><div class="step-text"><strong>Remplissez le formulaire</strong><br>Champs requis : nom de la machine, modèle, numéro de série, site d'affectation, statut initial.</div></li>
+      <li><span class="step-n">3</span><div class="step-text"><strong>Enregistrez</strong><br>La foreuse apparaît immédiatement dans la liste.</div></li>
+    </ol>
+  </div>
+
+  <div class="section">
+    <h3>Modifier ou supprimer une foreuse</h3>
+    <p>Cliquez sur la carte de la foreuse pour ouvrir sa fiche détaillée. Vous pouvez y :</p>
+    <ul style="margin:8px 0 8px 20px;">
+      <li>Modifier les informations (modèle, site, statut)</li>
+      <li>Consulter l'historique de maintenance</li>
+      <li>Voir les assignations en cours et passées</li>
+      <li>Supprimer la machine (action irréversible — les données liées sont conservées)</li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <h3>Statuts de machine</h3>
+    <table>
+      <tr><th>Statut</th><th>Signification</th><th>Impact</th></tr>
+      <tr><td style="color:green;font-weight:700;">Active</td><td>Machine en service, opérations normales</td><td>Comptabilisée dans la production</td></tr>
+      <tr><td style="color:orange;font-weight:700;">En maintenance</td><td>Arrêt planifié ou curatif</td><td>Signalée dans les alertes du tableau de bord</td></tr>
+      <tr><td style="color:red;font-weight:700;">Hors service</td><td>Indisponible (panne grave, attente pièce)</td><td>Exclue du calcul de disponibilité</td></tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <h3>Assignations</h3>
+    <p>Le module <strong>Assignations</strong> (accessible depuis la barre latérale) permet de lier un opérateur à une foreuse pour une période définie :</p>
+    <ol class="steps">
+      <li><span class="step-n">1</span><div class="step-text"><strong>Cliquez sur « Nouvelle assignation »</strong></div></li>
+      <li><span class="step-n">2</span><div class="step-text"><strong>Sélectionnez la foreuse, l'opérateur, le site et les dates de début/fin</strong></div></li>
+      <li><span class="step-n">3</span><div class="step-text"><strong>Enregistrez</strong> — l'assignation apparaît dans le calendrier et la fiche de la foreuse.</div></li>
+    </ol>
+    <div class="box warn">
+      <div class="box-icon">⚠️</div>
+      <div class="box-content"><strong>Conflits d'assignation</strong><br>Le système détecte automatiquement si un opérateur est déjà assigné à une autre machine sur la même période et affiche un avertissement.</div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════ CH 7 -->
+<div class="page" id="ch7">
+  <div class="chapter"><span class="chapter-num">7</span><h2>Clients</h2></div>
+
+  <p>Le module <strong>Clients</strong> est le répertoire de toutes les entreprises minières clientes. Chaque client peut être associé à plusieurs contrats et factures.</p>
+
+  <div class="section">
+    <h3>Informations d'un client</h3>
+    <table>
+      <tr><th>Champ</th><th>Description</th></tr>
+      <tr><td>Nom commercial</td><td>Nom affiché dans les listes et les documents</td></tr>
+      <tr><td>Raison sociale</td><td>Nom légal utilisé sur les factures</td></tr>
+      <tr><td>Adresse complète</td><td>Adresse postale, code postal, ville, pays</td></tr>
+      <tr><td>N° fiscal / TVA</td><td>Identifiants fiscaux pour la facturation</td></tr>
+      <tr><td>Contact principal</td><td>Nom, e-mail, téléphone du correspondant</td></tr>
+      <tr><td>Signataire</td><td>Prénom, nom, titre du signataire des contrats</td></tr>
+      <tr><td>Devise</td><td>Monnaie utilisée pour ce client (EUR, USD, DZD…)</td></tr>
+      <tr><td>Conditions de paiement</td><td>Ex. : Net 30 jours, paiement à réception…</td></tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <h3>Ajouter un client</h3>
+    <ol class="steps">
+      <li><span class="step-n">1</span><div class="step-text">Cliquez sur <strong>« Nouveau client »</strong> en haut de la liste.</div></li>
+      <li><span class="step-n">2</span><div class="step-text">Remplissez au minimum le nom commercial, le pays et l'adresse e-mail.</div></li>
+      <li><span class="step-n">3</span><div class="step-text">Cliquez sur <strong>Enregistrer</strong>.</div></li>
+    </ol>
+    <p>Une fois enregistré, le client est disponible dans les listes déroulantes de création de contrats et de factures.</p>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════ CH 8 -->
+<div class="page" id="ch8">
+  <div class="chapter"><span class="chapter-num">8</span><h2>Sites de forage</h2></div>
+
+  <p>Un <strong>site</strong> est un chantier physique où des opérations de forage sont menées. Il est rattaché à un client et peut accueillir plusieurs foreuses et équipes.</p>
+
+  <div class="section">
+    <h3>Informations d'un site</h3>
+    <table>
+      <tr><th>Champ</th><th>Description</th></tr>
+      <tr><td>Nom du site</td><td>Libellé court utilisé dans tous les modules</td></tr>
+      <tr><td>Client associé</td><td>Entreprise minière à qui appartient le chantier</td></tr>
+      <tr><td>Localisation</td><td>Coordonnées GPS ou description géographique</td></tr>
+      <tr><td>Foreuses affectées</td><td>Machines en opération sur ce site</td></tr>
+      <tr><td>Contrats liés</td><td>Contrats en cours sur ce site</td></tr>
+      <tr><td>Statut</td><td>Actif, Terminé, En pause</td></tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <h3>Créer un site</h3>
+    <ol class="steps">
+      <li><span class="step-n">1</span><div class="step-text">Accédez au module <strong>Sites</strong> depuis la barre latérale.</div></li>
+      <li><span class="step-n">2</span><div class="step-text">Cliquez sur <strong>« Nouveau site »</strong>.</div></li>
+      <li><span class="step-n">3</span><div class="step-text">Sélectionnez le client associé et remplissez les informations.</div></li>
+      <li><span class="step-n">4</span><div class="step-text">Enregistrez. Le site est désormais disponible dans tous les modules.</div></li>
+    </ol>
+    <div class="box info">
+      <div class="box-icon">ℹ️</div>
+      <div class="box-content"><strong>Accès restreint par site</strong><br>L'administrateur peut restreindre un utilisateur (ex. un chef de chantier) à ne voir que les données d'un ou plusieurs sites précis, depuis la section Comptes → Restrictions par site.</div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════ CH 9 -->
+<div class="page" id="ch9">
+  <div class="chapter"><span class="chapter-num">9</span><h2>Contrats</h2></div>
+
+  <p>Le module <strong>Contrats</strong> gère le cycle de vie complet des accords commerciaux avec vos clients : de la création à la clôture, en passant par le suivi de l'avancement.</p>
+
+  <div class="section">
+    <h3>Informations d'un contrat</h3>
+    <table>
+      <tr><th>Champ</th><th>Description</th></tr>
+      <tr><td>Numéro de contrat</td><td>Référence unique générée automatiquement ou saisie</td></tr>
+      <tr><td>Client</td><td>Entreprise cliente (choisie dans le répertoire)</td></tr>
+      <tr><td>Site</td><td>Chantier concerné par ce contrat</td></tr>
+      <tr><td>Date de début / fin</td><td>Durée prévue du contrat</td></tr>
+      <tr><td>Type de prestation</td><td>Forage au mètre, à la journée, forfait…</td></tr>
+      <tr><td>Prix unitaire</td><td>Tarif par mètre foré ou par jour de prestation</td></tr>
+      <tr><td>Quantité contractée</td><td>Nombre de mètres ou de jours prévus</td></tr>
+      <tr><td>Montant total</td><td>Calculé automatiquement (prix × quantité)</td></tr>
+      <tr><td>Statut</td><td>En cours, Suspendu, Terminé, Résilié</td></tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <h3>Créer un contrat</h3>
+    <ol class="steps">
+      <li><span class="step-n">1</span><div class="step-text">Accédez à <strong>Gestion des Contrats</strong> dans la barre latérale.</div></li>
+      <li><span class="step-n">2</span><div class="step-text">Cliquez sur <strong>« Nouveau contrat »</strong>.</div></li>
+      <li><span class="step-n">3</span><div class="step-text">Sélectionnez le client et le site, renseignez les dates, le type de prestation et le prix unitaire.</div></li>
+      <li><span class="step-n">4</span><div class="step-text">Enregistrez. Le contrat est immédiatement disponible pour la facturation.</div></li>
+    </ol>
+  </div>
+
+  <div class="section">
+    <h3>Suivi de l'avancement</h3>
+    <p>Pour chaque contrat, GEDRILLING calcule automatiquement :</p>
+    <ul style="margin:8px 0 8px 20px;">
+      <li><strong>Mètres réalisés</strong> : somme des saisies journalières liées à ce contrat</li>
+      <li><strong>Taux d'avancement</strong> : (réalisé / contracté) × 100 %</li>
+      <li><strong>Montant facturé</strong> : total des factures émises sur ce contrat</li>
+      <li><strong>Reste à facturer</strong> : différence entre la valeur contractuelle et le facturé</li>
+    </ul>
+    <div class="box warn">
+      <div class="box-icon">⚠️</div>
+      <div class="box-content"><strong>Alerte fin de contrat</strong><br>Le tableau de bord signale automatiquement les contrats qui arrivent à expiration dans les 30 jours ou dont l'avancement dépasse 90 %.</div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════ CH 10 -->
+<div class="page" id="ch10">
+  <div class="chapter"><span class="chapter-num">10</span><h2>Facturation</h2></div>
+
+  <p>Le module <strong>Factures</strong> permet de créer, envoyer et suivre toutes les factures de l'entreprise. Les factures sont liées aux contrats et peuvent être exportées en PDF.</p>
+
+  <div class="section">
+    <h3>Créer une facture</h3>
+    <ol class="steps">
+      <li><span class="step-n">1</span><div class="step-text"><strong>Ouvrez le module Factures</strong> depuis la barre latérale.</div></li>
+      <li><span class="step-n">2</span><div class="step-text"><strong>Cliquez sur « Nouvelle facture »</strong></div></li>
+      <li><span class="step-n">3</span><div class="step-text"><strong>Sélectionnez le client et le contrat</strong><br>Les informations du client (adresse, devise) sont remplies automatiquement.</div></li>
+      <li><span class="step-n">4</span><div class="step-text"><strong>Ajoutez les lignes de facturation</strong><br>Chaque ligne comprend : description, quantité, prix unitaire, TVA (optionnel).</div></li>
+      <li><span class="step-n">5</span><div class="step-text"><strong>Vérifiez le total HT / TVA / TTC</strong><br>Calculé automatiquement.</div></li>
+      <li><span class="step-n">6</span><div class="step-text"><strong>Enregistrez</strong> — statut initial : <em>Émise</em>.</div></li>
+    </ol>
+  </div>
+
+  <div class="section">
+    <h3>Statuts des factures</h3>
+    <table>
+      <tr><th>Statut</th><th>Description</th></tr>
+      <tr><td><span style="color:#2563EB;font-weight:700;">Brouillon</span></td><td>Facture en cours de préparation, non envoyée</td></tr>
+      <tr><td><span style="color:#D97706;font-weight:700;">Émise</span></td><td>Facture envoyée au client, paiement en attente</td></tr>
+      <tr><td><span style="color:#059669;font-weight:700;">Payée</span></td><td>Paiement reçu et enregistré</td></tr>
+      <tr><td><span style="color:#DC2626;font-weight:700;">En retard</span></td><td>Date d'échéance dépassée sans paiement</td></tr>
+      <tr><td><span style="color:#6B7280;font-weight:700;">Annulée</span></td><td>Facture invalidée (avoir émis)</td></tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <h3>Imprimer / exporter en PDF</h3>
+    <ol class="steps">
+      <li><span class="step-n">1</span><div class="step-text">Ouvrez la facture souhaitée en cliquant dessus dans la liste.</div></li>
+      <li><span class="step-n">2</span><div class="step-text">Cliquez sur le bouton <strong>« Imprimer »</strong> ou <strong>« Voir PDF »</strong>.</div></li>
+      <li><span class="step-n">3</span><div class="step-text">La facture s'ouvre dans une fenêtre d'aperçu. Utilisez <strong>Ctrl+P</strong> → <em>Enregistrer en PDF</em> dans votre navigateur.</div></li>
+    </ol>
+    <p>La facture PDF inclut : logo de l'entreprise, coordonnées client, lignes détaillées, totaux HT/TVA/TTC, conditions de paiement, mentions légales.</p>
+  </div>
+
+  <div class="section">
+    <h3>Enregistrer un paiement</h3>
+    <p>Une fois le paiement reçu, ouvrez la facture et cliquez sur <strong>« Marquer comme payée »</strong>. Vous pouvez saisir la date de paiement, le mode (virement, chèque, espèces) et une référence bancaire.</p>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════ CH 11 -->
+<div class="page" id="ch11">
+  <div class="chapter"><span class="chapter-num">11</span><h2>Revenus</h2></div>
+
+  <p>Le module <strong>Revenus</strong> offre un tableau de bord financier détaillé pour suivre la performance commerciale de l'entreprise.</p>
+
+  <div class="section">
+    <h3>Vues disponibles</h3>
+    <table>
+      <tr><th>Vue</th><th>Contenu</th></tr>
+      <tr><td>Par mois</td><td>Revenus facturés mois par mois sur l'année en cours</td></tr>
+      <tr><td>Par client</td><td>Répartition du chiffre d'affaires par client</td></tr>
+      <tr><td>Par site</td><td>Revenus générés site par site</td></tr>
+      <tr><td>Par foreuse</td><td>Contribution de chaque machine aux revenus</td></tr>
+      <tr><td>Budget vs Réalisé</td><td>Comparaison des objectifs et des résultats effectifs</td></tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <h3>Saisie mensuelle par foreuse</h3>
+    <p>Pour chaque foreuse et chaque mois, vous pouvez saisir les données de facturation : mètres forés facturés, prix unitaire appliqué, montant total. Ces données alimentent les graphiques et le tableau de bord.</p>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════ CH 12 -->
+<div class="page" id="ch12">
+  <div class="chapter"><span class="chapter-num">12</span><h2>Consommables et stocks</h2></div>
+
+  <div class="section">
+    <h3>Module Consommables</h3>
+    <p>Ce module suit la consommation des fournitures liées aux opérations de forage. Chaque sortie de stock est liée à une foreuse et à une date.</p>
+    <table>
+      <tr><th>Type de consommable</th><th>Exemples</th></tr>
+      <tr><td>Outillage de fond</td><td>Trépans (bits), couronnes, stabilisateurs</td></tr>
+      <tr><td>Tiges et équipements</td><td>Tiges de forage, massettes, raccords</td></tr>
+      <tr><td>Fluides et produits</td><td>Eau, bentonite, additifs de boue</td></tr>
+      <tr><td>Énergie</td><td>Carburant (gasoil), lubrifiants</td></tr>
+      <tr><td>Consommables divers</td><td>Filtres, joints, pièces d'usure</td></tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <h3>Module Stocks</h3>
+    <p>Le module <strong>Stocks</strong> (accessible via <em>Stocks</em> dans la barre latérale) gère l'inventaire physique de l'entreprise :</p>
+    <ul style="margin:8px 0 8px 20px;">
+      <li><strong>Entrées de stock</strong> : réception de commandes fournisseurs</li>
+      <li><strong>Sorties de stock</strong> : consommation sur chantier, casse, perte</li>
+      <li><strong>Niveau de stock</strong> : quantité disponible en temps réel</li>
+      <li><strong>Seuil d'alerte</strong> : notification lorsque le stock passe sous un seuil minimum</li>
+      <li><strong>Valorisation</strong> : valeur monétaire du stock (FIFO ou prix moyen)</li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <h3>Enregistrer une entrée ou sortie de stock</h3>
+    <ol class="steps">
+      <li><span class="step-n">1</span><div class="step-text">Accédez à <strong>Stocks</strong> dans la barre latérale.</div></li>
+      <li><span class="step-n">2</span><div class="step-text">Cliquez sur <strong>« Nouvelle entrée »</strong> ou <strong>« Nouvelle sortie »</strong>.</div></li>
+      <li><span class="step-n">3</span><div class="step-text">Sélectionnez l'article, saisissez la quantité, la date et éventuellement la foreuse ou le site concerné.</div></li>
+      <li><span class="step-n">4</span><div class="step-text">Enregistrez. Le stock est mis à jour en temps réel.</div></li>
+    </ol>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════ CH 13 -->
+<div class="page" id="ch13">
+  <div class="chapter"><span class="chapter-num">13</span><h2>Ressources Humaines</h2></div>
+
+  <p>Le module <strong>Ressources Humaines</strong> (RH) gère tout le cycle de vie du personnel : du recrutement à la paie, en passant par le suivi des présences.</p>
+
+  <div class="section">
+    <h3>Gestion des employés</h3>
+    <table>
+      <tr><th>Champ</th><th>Description</th></tr>
+      <tr><td>Identité</td><td>Nom, prénom, date de naissance, N° d'identité</td></tr>
+      <tr><td>Poste / Qualification</td><td>Titre du poste, niveau de qualification, certifications</td></tr>
+      <tr><td>Contact</td><td>Téléphone, adresse, e-mail</td></tr>
+      <tr><td>Contrat de travail</td><td>Type (CDI, CDD, intérim), date d'embauche, date de fin</td></tr>
+      <tr><td>Salaire de base</td><td>Rémunération mensuelle brute</td></tr>
+      <tr><td>Indemnités</td><td>Primes, indemnités de déplacement, heures supplémentaires</td></tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <h3>Fiches de paie</h3>
+    <p>GEDRILLING génère automatiquement les fiches de paie mensuelles pour chaque employé :</p>
+    <ol class="steps">
+      <li><span class="step-n">1</span><div class="step-text">Accédez à <strong>Ressources Humaines</strong> → onglet <strong>Salaires</strong>.</div></li>
+      <li><span class="step-n">2</span><div class="step-text">Sélectionnez le mois et l'année de paie.</div></li>
+      <li><span class="step-n">3</span><div class="step-text">Vérifiez les données (heures, primes, retenues) pour chaque employé.</div></li>
+      <li><span class="step-n">4</span><div class="step-text">Cliquez sur <strong>« Générer les fiches »</strong> puis <strong>« Imprimer »</strong> pour chaque employé.</div></li>
+    </ol>
+    <p>La fiche de paie inclut : revenus bruts, cotisations sociales (part employé et employeur), salaire net à payer.</p>
+  </div>
+
+  <div class="section">
+    <h3>Suivi des présences</h3>
+    <p>Le module enregistre les présences journalières, les absences (maladie, congé, absence injustifiée) et les heures supplémentaires. Ces données sont utilisées pour le calcul du salaire mensuel.</p>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════ CH 14 -->
+<div class="page" id="ch14">
+  <div class="chapter"><span class="chapter-num">14</span><h2>Maintenance</h2></div>
+
+  <p>Le module <strong>Maintenance</strong> gère l'entretien préventif et correctif de toutes les machines de l'entreprise. Un bon suivi de la maintenance prolonge la durée de vie des équipements et réduit les arrêts imprévus.</p>
+
+  <div class="section">
+    <h3>Types de maintenance</h3>
+    <table>
+      <tr><th>Type</th><th>Description</th><th>Planification</th></tr>
+      <tr><td>Préventive</td><td>Entretien planifié avant la panne</td><td>Par heure-machine ou par date calendaire</td></tr>
+      <tr><td>Corrective</td><td>Réparation suite à une panne ou défaillance</td><td>À la demande, suite à un incident</td></tr>
+      <tr><td>Réglementaire</td><td>Contrôle obligatoire (vérification annuelle, etc.)</td><td>Par date légale</td></tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <h3>Planifier une intervention</h3>
+    <ol class="steps">
+      <li><span class="step-n">1</span><div class="step-text">Accédez au module <strong>Maintenance</strong>.</div></li>
+      <li><span class="step-n">2</span><div class="step-text">Cliquez sur <strong>« Planifier une maintenance »</strong>.</div></li>
+      <li><span class="step-n">3</span><div class="step-text">Sélectionnez la foreuse, le type d'intervention, la date prévue et le technicien responsable.</div></li>
+      <li><span class="step-n">4</span><div class="step-text">Saisissez les opérations à réaliser et les pièces nécessaires (liées au stock).</div></li>
+      <li><span class="step-n">5</span><div class="step-text">Enregistrez. L'intervention apparaît dans le planning et génère une alerte sur le tableau de bord.</div></li>
+    </ol>
+  </div>
+
+  <div class="section">
+    <h3>Enregistrer une intervention réalisée</h3>
+    <p>Après l'exécution d'une maintenance, ouvrez l'ordre de travail et renseignez :</p>
+    <ul style="margin:8px 0 8px 20px;">
+      <li>Date et heure réelles de début et de fin</li>
+      <li>Technicien(s) ayant réalisé l'intervention</li>
+      <li>Pièces remplacées (sorties de stock automatiquement)</li>
+      <li>Coût total de l'intervention (main-d'œuvre + pièces)</li>
+      <li>Observations et recommandations</li>
+    </ul>
+    <p>Le statut passe automatiquement à <strong>Terminée</strong> et l'historique est conservé pour analyse.</p>
+  </div>
+
+  <div class="section">
+    <h3>Alertes de maintenance</h3>
+    <div class="box warn">
+      <div class="box-icon">🔔</div>
+      <div class="box-content"><strong>Alertes automatiques</strong><br>GEDRILLING génère des alertes lorsqu'une maintenance prévue approche (J-7, J-1) ou est dépassée. Ces alertes apparaissent sur le tableau de bord et peuvent déclencher des notifications.</div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════ CH 15 -->
+<div class="page" id="ch15">
+  <div class="chapter"><span class="chapter-num">15</span><h2>Plan de Forage</h2></div>
+
+  <p>Le module <strong>Plan de Forage</strong> est l'outil de planification du programme de trous à forer. Il permet de définir le patron de forage, puis de suivre l'avancement trou par trou.</p>
+
+  <div class="section">
+    <h3>Créer un plan de forage</h3>
+    <ol class="steps">
+      <li><span class="step-n">1</span><div class="step-text">Accédez à <strong>Plan de Forage</strong> dans la barre latérale.</div></li>
+      <li><span class="step-n">2</span><div class="step-text">Cliquez sur <strong>« Nouveau plan »</strong> et sélectionnez le site et le contrat associés.</div></li>
+      <li><span class="step-n">3</span><div class="step-text">Définissez les paramètres globaux : grille de forage, espacement, densité, profondeur cible uniforme (si applicable).</div></li>
+      <li><span class="step-n">4</span><div class="step-text">Importez ou saisissez manuellement les trous : identifiant, coordonnées, profondeur cible, azimut, inclinaison.</div></li>
+      <li><span class="step-n">5</span><div class="step-text">Enregistrez le plan.</div></li>
+    </ol>
+  </div>
+
+  <div class="section">
+    <h3>Suivi de l'avancement</h3>
+    <p>Pour chaque trou du plan, vous pouvez enregistrer :</p>
+    <table>
+      <tr><th>Champ</th><th>Description</th></tr>
+      <tr><td>Statut</td><td>Prévu / En cours / Terminé / Abandonné</td></tr>
+      <tr><td>Profondeur atteinte</td><td>Mètres réellement forés</td></tr>
+      <tr><td>Date de début / fin</td><td>Chronologie réelle du trou</td></tr>
+      <tr><td>Observations</td><td>Incidents, variations géologiques, déviations</td></tr>
+    </table>
+    <p>Un indicateur visuel (vert / orange / rouge) permet de voir d'un coup d'œil l'état du programme de forage.</p>
+  </div>
+
+  <div class="section">
+    <h3>Export du plan</h3>
+    <p>Le plan de forage peut être exporté en PDF pour transmission au client ou à l'équipe terrain. Le document inclut la liste des trous avec leurs paramètres et l'état d'avancement à la date d'export.</p>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════ CH 16 -->
+<div class="page" id="ch16">
+  <div class="chapter"><span class="chapter-num">16</span><h2>Pilotage projet et Performance</h2></div>
+
+  <div class="section">
+    <h3>Pilotage projet</h3>
+    <p>Le module <strong>Pilotage projet</strong> offre une vue de synthèse pour les responsables et chefs de projet. Il consolide les données opérationnelles de tous les chantiers en cours.</p>
+    <table>
+      <tr><th>Indicateur</th><th>Description</th></tr>
+      <tr><td>Avancement global</td><td>% réalisé vs. objectif contractuel</td></tr>
+      <tr><td>Productivité journalière</td><td>Mètres forés par jour et par foreuse</td></tr>
+      <tr><td>Taux de disponibilité</td><td>(Heures productives / Heures totales) × 100</td></tr>
+      <tr><td>Dérive calendaire</td><td>Écart entre planning prévu et réalisé</td></tr>
+      <tr><td>Dérive budgétaire</td><td>Coûts engagés vs. budget alloué</td></tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <h3>Module Performance (Analytics)</h3>
+    <p>Le module <strong>Performance</strong> analyse les indicateurs opérationnels en détail :</p>
+    <ul style="margin:8px 0 8px 20px;">
+      <li><strong>ROP (Rate of Penetration)</strong> : vitesse de pénétration en m/h, par foreuse et par période</li>
+      <li><strong>Temps non-productifs (TNP)</strong> : répartition des arrêts — panne, météo, attente logistique, congé</li>
+      <li><strong>Graphiques temporels</strong> : évolution de la ROP sur 24h, 7 jours, 30 jours</li>
+      <li><strong>Comparaison inter-foreuses</strong> : identification des écarts de performance</li>
+    </ul>
+    <div class="box tip">
+      <div class="box-icon">💡</div>
+      <div class="box-content"><strong>Utilisation</strong><br>Analysez la ROP pour identifier les formations géologiques difficiles ou les problèmes d'outillage. Un TNP élevé peut indiquer un problème d'organisation ou d'approvisionnement à corriger.</div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════ CH 17 -->
+<div class="page" id="ch17">
+  <div class="chapter"><span class="chapter-num">17</span><h2>Rentabilité et Dépenses PM</h2></div>
+
+  <div class="section">
+    <h3>Rentabilité Consommables</h3>
+    <p>Ce module calcule le <strong>coût réel des consommables par mètre foré</strong>, afin d'identifier les postes de dépenses excessifs et d'optimiser les achats.</p>
+    <table>
+      <tr><th>Métrique</th><th>Formule</th></tr>
+      <tr><td>Coût/mètre (trépan)</td><td>Coût total des trépans ÷ Mètres forés</td></tr>
+      <tr><td>Coût/mètre (carburant)</td><td>Consommation carburant × Prix litre ÷ Mètres forés</td></tr>
+      <tr><td>Coût/mètre (total)</td><td>Somme de tous les consommables ÷ Mètres forés</td></tr>
+      <tr><td>Durée de vie trépan</td><td>Mètres forés par trépan (optimisation des achats)</td></tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <h3>Dépenses PM (Preventive Maintenance)</h3>
+    <p>Ce module suit le <strong>budget de maintenance</strong> par foreuse :</p>
+    <ul style="margin:8px 0 8px 20px;">
+      <li>Coût total des interventions par machine sur la période</li>
+      <li>Répartition main-d'œuvre / pièces / sous-traitance</li>
+      <li>Graphique de tendance : coûts mensuels sur 12 mois</li>
+      <li>Comparaison budget de maintenance prévu vs. réel</li>
+    </ul>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════ CH 18 -->
+<div class="page" id="ch18">
+  <div class="chapter"><span class="chapter-num">18</span><h2>Santé &amp; Sécurité (HSE)</h2></div>
+
+  <p>Le module <strong>HSE</strong> (Hygiène, Sécurité, Environnement) centralise toute la gestion sécurité du chantier. Il est essentiel pour respecter les obligations légales et prévenir les accidents.</p>
+
+  <div class="section">
+    <h3>Enregistrement des incidents</h3>
+    <ol class="steps">
+      <li><span class="step-n">1</span><div class="step-text">Accédez au module <strong>Santé &amp; Sécurité</strong>.</div></li>
+      <li><span class="step-n">2</span><div class="step-text">Cliquez sur <strong>« Déclarer un incident »</strong>.</div></li>
+      <li><span class="step-n">3</span><div class="step-text">Remplissez : date, heure, lieu, nature de l'incident (accident, presque-accident, incident environnemental…).</div></li>
+      <li><span class="step-n">4</span><div class="step-text">Décrivez les circonstances, les personnes impliquées, les dommages matériels et corporels.</div></li>
+      <li><span class="step-n">5</span><div class="step-text">Saisissez les mesures correctives prises et préventives à mettre en place.</div></li>
+    </ol>
+  </div>
+
+  <div class="section">
+    <h3>Indicateurs sécurité</h3>
+    <table>
+      <tr><th>Indicateur</th><th>Formule</th></tr>
+      <tr><td>Taux de fréquence (TF)</td><td>(Nb accidents avec arrêt × 10⁶) ÷ Heures travaillées</td></tr>
+      <tr><td>Taux de gravité (TG)</td><td>(Nb jours perdus × 10³) ÷ Heures travaillées</td></tr>
+      <tr><td>Jours sans accident</td><td>Compteur depuis le dernier accident avec arrêt</td></tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <h3>Habilitations et formations</h3>
+    <p>Le module suit les <strong>habilitations obligatoires</strong> de chaque employé (certificats, CACES, formations sécurité) avec leur date d'expiration. Des alertes sont générées 30 jours avant l'expiration d'une habilitation.</p>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════ CH 19-20 -->
+<div class="page" id="ch19">
+  <div class="chapter"><span class="chapter-num">19</span><h2>Rapports</h2></div>
+
+  <p>Le module <strong>Rapports</strong> permet de générer des documents de synthèse imprimables ou exportables pour le client, la direction ou les équipes terrain.</p>
+
+  <div class="section">
+    <h3>Types de rapports disponibles</h3>
+    <table>
+      <tr><th>Rapport</th><th>Contenu</th><th>Destinataire type</th></tr>
+      <tr><td>Rapport journalier de production</td><td>Mètres forés, TNP, consommables, incidents</td><td>Client, direction</td></tr>
+      <tr><td>Rapport mensuel</td><td>Synthèse du mois : production, facturation, maintenance</td><td>Direction, comptabilité</td></tr>
+      <tr><td>Rapport de maintenance</td><td>Interventions réalisées, coûts, pièces changées</td><td>Responsable technique</td></tr>
+      <tr><td>Rapport HSE</td><td>Incidents, indicateurs TF/TG, formations</td><td>Direction HSE, client</td></tr>
+      <tr><td>Rapport de facturation</td><td>Factures émises, encaissées, en retard</td><td>Comptabilité</td></tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <h3>Générer un rapport</h3>
+    <ol class="steps">
+      <li><span class="step-n">1</span><div class="step-text">Sélectionnez le type de rapport et la période.</div></li>
+      <li><span class="step-n">2</span><div class="step-text">Choisissez les filtres : site, foreuse, client (selon le rapport).</div></li>
+      <li><span class="step-n">3</span><div class="step-text">Cliquez sur <strong>« Générer »</strong>. Le rapport s'affiche à l'écran.</div></li>
+      <li><span class="step-n">4</span><div class="step-text">Cliquez sur <strong>« Imprimer »</strong> ou <strong>« Exporter PDF »</strong> (Ctrl+P → Enregistrer en PDF).</div></li>
+    </ol>
+  </div>
+
+  <div class="chapter" id="ch20"><span class="chapter-num">20</span><h2>Repas chantier</h2></div>
+
+  <p>Le module <strong>Repas chantier</strong> permet de suivre la restauration des équipes sur site et de maîtriser les coûts alimentaires.</p>
+
+  <div class="section">
+    <h3>Fonctionnement</h3>
+    <ul style="margin:8px 0 8px 20px;">
+      <li><strong>Saisie journalière</strong> : nombre de repas par équipe et par poste (matin, midi, soir)</li>
+      <li><strong>Coût par repas</strong> : paramétrable par site selon le prestataire de restauration</li>
+      <li><strong>Total mensuel</strong> : coût cumulé par site, inclus dans l'analyse des dépenses</li>
+      <li><strong>Rapport mensuel</strong> : synthèse des repas et des coûts pour la comptabilité</li>
+    </ul>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════ CH 21-22 -->
+<div class="page" id="ch21">
+  <div class="chapter"><span class="chapter-num">21</span><h2>Traducteur intégré</h2></div>
+
+  <p>Le <strong>Traducteur</strong> est un outil de traduction automatique intégré, utile pour les échanges avec des clients ou partenaires étrangers et pour la rédaction de documents multilingues.</p>
+
+  <div class="section">
+    <h3>Utiliser le traducteur</h3>
+    <ol class="steps">
+      <li><span class="step-n">1</span><div class="step-text">Accédez au module <strong>Traducteur</strong> dans la barre latérale.</div></li>
+      <li><span class="step-n">2</span><div class="step-text">Sélectionnez la <strong>langue source</strong> (gauche) et la <strong>langue cible</strong> (droite) : FR, EN, AR, ES, DE, PT.</div></li>
+      <li><span class="step-n">3</span><div class="step-text">Saisissez ou collez le texte à traduire (max. 4 500 caractères) dans la zone de gauche.</div></li>
+      <li><span class="step-n">4</span><div class="step-text">Cochez <em>Registre professionnel</em> si le document est un rapport, un e-mail officiel ou un contrat.</div></li>
+      <li><span class="step-n">5</span><div class="step-text">Cliquez sur <strong>« Traduire »</strong>. Le résultat apparaît à droite.</div></li>
+    </ol>
+  </div>
+
+  <div class="section">
+    <h3>Services de traduction utilisés</h3>
+    <table>
+      <tr><th>Service</th><th>Qualité</th><th>Activation</th></tr>
+      <tr><td>DeepL</td><td>Excellente (recommandé)</td><td>Configurer <code>DEEPL_API_KEY</code> sur le serveur</td></tr>
+      <tr><td>LibreTranslate</td><td>Bonne</td><td>Automatique (si DeepL absent)</td></tr>
+      <tr><td>MyMemory</td><td>Correcte (5 000 car./jour)</td><td>Automatique (si les deux ci-dessus échouent)</td></tr>
+    </table>
+    <div class="box warn">
+      <div class="box-icon">⚠️</div>
+      <div class="box-content"><strong>Limite quotidienne</strong><br>Sans clé DeepL, le traducteur utilise MyMemory qui est limité à 5 000 caractères par jour. Au-delà, un message d'erreur clair s'affiche. Pour un usage intensif, configurez <code>DEEPL_API_KEY</code> dans les paramètres serveur.</div>
+    </div>
+  </div>
+
+  <div class="chapter" id="ch22"><span class="chapter-num">22</span><h2>Messagerie équipe (Chat)</h2></div>
+
+  <p>Le module <strong>Messagerie équipe</strong> est un système de messagerie interne permettant aux membres de l'entreprise de communiquer en temps réel, sans quitter la plateforme.</p>
+
+  <div class="section">
+    <h3>Envoyer un message</h3>
+    <ol class="steps">
+      <li><span class="step-n">1</span><div class="step-text">Accédez au module <strong>Équipe</strong> (icône 💬) dans la barre latérale.</div></li>
+      <li><span class="step-n">2</span><div class="step-text"><strong>Choisissez le destinataire</strong> dans la liste déroulante : <em>Tout le monde</em> (message visible par tous) ou un utilisateur précis (message privé).</div></li>
+      <li><span class="step-n">3</span><div class="step-text">Tapez votre message dans la zone de texte et cliquez sur <strong>Envoyer</strong> (ou appuyez sur Entrée).</div></li>
+    </ol>
+  </div>
+
+  <div class="section">
+    <h3>Envoyer un fichier</h3>
+    <p>Cliquez sur <strong>Choisir un fichier</strong>, sélectionnez le document à partager (taille max. 18 Mo), ajoutez un commentaire optionnel, puis cliquez sur <strong>Envoyer</strong>.</p>
+  </div>
+
+  <div class="section">
+    <h3>Notifications</h3>
+    <p>Dans le panneau de droite, configurez les alertes sonores et les notifications navigateur pour être averti des nouveaux messages même lorsque vous êtes dans un autre onglet :</p>
+    <ul style="margin:8px 0 8px 20px;">
+      <li><strong>Son</strong> : choisissez parmi bip court, carillon, cloche ou signal digital</li>
+      <li><strong>Notification navigateur</strong> : une alerte apparaît dans Windows, même si le navigateur est en arrière-plan (nécessite votre autorisation)</li>
+      <li><strong>Filtre</strong> : optionnellement, ne notifier que si l'onglet n'est pas actif</li>
+    </ul>
+    <div class="box info">
+      <div class="box-icon">ℹ️</div>
+      <div class="box-content"><strong>Actualisation automatique</strong><br>Le chat vérifie les nouveaux messages toutes les 5 secondes. Les messages s'affichent sans rechargement de page.</div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════ CH 23-24 -->
+<div class="page" id="ch23">
+  <div class="chapter"><span class="chapter-num">23</span><h2>Infos entreprise</h2></div>
+
+  <p>Le module <strong>Infos</strong> est un tableau d'affichage interne pour partager des annonces, des rapports et des informations importantes avec toute l'équipe.</p>
+
+  <div class="section">
+    <h3>Publier une annonce (gestionnaires)</h3>
+    <ol class="steps">
+      <li><span class="step-n">1</span><div class="step-text">Accédez au module <strong>Infos</strong>.</div></li>
+      <li><span class="step-n">2</span><div class="step-text">Cliquez sur <strong>« Nouvelle annonce »</strong> (visible uniquement pour les gestionnaires et administrateurs).</div></li>
+      <li><span class="step-n">3</span><div class="step-text">Saisissez le titre et le contenu de l'annonce.</div></li>
+      <li><span class="step-n">4</span><div class="step-text">Cochez <strong>« Épingler »</strong> pour maintenir l'annonce en haut de la liste.</div></li>
+      <li><span class="step-n">5</span><div class="step-text">Cliquez sur <strong>Publier</strong>.</div></li>
+    </ol>
+  </div>
+
+  <div class="section">
+    <h3>Diffusion de rapports</h3>
+    <p>Un gestionnaire peut envoyer un rapport à des destinataires précis (par adresse e-mail). Le rapport apparaît dans la boîte de réception <em>Rapports reçus</em> de chaque destinataire dans ce module.</p>
+  </div>
+
+  <div class="chapter" id="ch24"><span class="chapter-num">24</span><h2>Gestion des comptes utilisateurs</h2></div>
+
+  <p>Le module <strong>Comptes</strong> permet à l'administrateur de créer et gérer tous les accès à la plateforme.</p>
+
+  <div class="section">
+    <h3>Créer un compte utilisateur</h3>
+    <ol class="steps">
+      <li><span class="step-n">1</span><div class="step-text">Accédez au module <strong>Comptes</strong>.</div></li>
+      <li><span class="step-n">2</span><div class="step-text">Cliquez sur <strong>« Ajouter un compte »</strong>.</div></li>
+      <li><span class="step-n">3</span><div class="step-text">Renseignez : nom complet, identifiant de connexion, mot de passe initial, rôle.</div></li>
+      <li><span class="step-n">4</span><div class="step-text">Cochez les <strong>onglets accessibles</strong> pour cet utilisateur (personnalisation fine des accès).</div></li>
+      <li><span class="step-n">5</span><div class="step-text">Optionnel : restreignez l'accès à certains sites uniquement.</div></li>
+      <li><span class="step-n">6</span><div class="step-text">Cliquez sur <strong>Enregistrer</strong>. L'utilisateur peut se connecter immédiatement.</div></li>
+    </ol>
+  </div>
+
+  <div class="section">
+    <h3>Modifier le mot de passe d'un utilisateur</h3>
+    <p>Ouvrez la fiche de l'utilisateur → champ <em>Nouveau mot de passe</em> → Enregistrer. Le changement est effectif immédiatement (la session existante n'est pas invalidée).</p>
+  </div>
+
+  <div class="section">
+    <h3>Désactiver / Supprimer un compte</h3>
+    <ul style="margin:8px 0 8px 20px;">
+      <li><strong>Désactiver</strong> : l'utilisateur ne peut plus se connecter mais ses données sont conservées.</li>
+      <li><strong>Supprimer</strong> : action irréversible. Les données liées à cet utilisateur (messages, saisies) sont conservées mais l'identifiant est supprimé.</li>
+    </ul>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════ CH 25 -->
+<div class="page" id="ch25">
+  <div class="chapter"><span class="chapter-num">25</span><h2>Gestion multi-entreprises</h2></div>
+
+  <p>GEDRILLING supporte deux modes de déploiement pour s'adapter à votre organisation :</p>
+
+  <div class="section">
+    <h3>Mode dédié (par défaut)</h3>
+    <p>Une instance du serveur = une entreprise. C'est le mode recommandé pour la plupart des utilisations. Chaque client dispose de son propre serveur (ou conteneur Docker) avec sa propre base de données.</p>
+    <div class="box tip">
+      <div class="box-icon">✅</div>
+      <div class="box-content"><strong>Avantages</strong><br>Isolation totale des données. Performance optimale. Simplicité d'administration. Mise à jour indépendante par client.</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h3>Mode partagé (multi-tenant)</h3>
+    <p>Une seule installation héberge plusieurs entreprises clientes. Le compte <code>gestion_abonnements</code> (rôle <em>platform_owner</em>) gère toutes les entreprises depuis l'onglet <strong>Entreprises</strong>.</p>
+    <table>
+      <tr><th>Action</th><th>Comment</th></tr>
+      <tr><td>Créer une nouvelle entreprise cliente</td><td>Onglet Entreprises → Nouvelle entreprise → définir nom, plan, quotas</td></tr>
+      <tr><td>Définir les modules accessibles</td><td>Sélectionner les onglets autorisés dans le plan de l'entreprise</td></tr>
+      <tr><td>Créer les utilisateurs clients</td><td>Onglet Comptes → associer l'<code>enterpriseId</code> correspondant</td></tr>
+      <tr><td>Suspendre un client</td><td>Onglet Entreprises → passer le statut à Inactif</td></tr>
+      <tr><td>Basculer entre entreprises</td><td>Menu déroulant "Entreprise" dans l'en-tête</td></tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <h3>Isolation des données</h3>
+    <p>Chaque utilisateur ne voit <strong>que les données de son entreprise</strong>. L'isolation est garantie par le serveur côté API : toutes les requêtes filtrent sur l'<code>enterpriseId</code> issu du token JWT. Un utilisateur d'une entreprise A ne peut jamais accéder aux données d'une entreprise B.</p>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════ CH 26 -->
+<div class="page" id="ch26">
+  <div class="chapter"><span class="chapter-num">26</span><h2>Fiche opérateur — Saisie journalière</h2></div>
+
+  <p>La <strong>fiche opérateur</strong> (<code>fiche-operateur-saisie-journaliere.html</code>) est un formulaire A4 imprimable destiné aux foreurs sur le terrain. L'opérateur la remplit à la main en fin de poste, et les données sont ensuite ressaisies dans la plateforme.</p>
+
+  <div class="section">
+    <h3>Comment utiliser la fiche</h3>
+    <ol class="steps">
+      <li><span class="step-n">1</span><div class="step-text"><strong>Ouvrez le fichier</strong> <code>fiche-operateur-saisie-journaliere.html</code> dans un navigateur web (Chrome ou Edge recommandé).</div></li>
+      <li><span class="step-n">2</span><div class="step-text"><strong>Imprimez</strong> en appuyant sur <strong>Ctrl+P</strong>. Sélectionnez une imprimante ou choisissez « Enregistrer en PDF ».</div></li>
+      <li><span class="step-n">3</span><div class="step-text"><strong>Distribuez</strong> les fiches imprimées aux opérateurs avant le début du poste.</div></li>
+      <li><span class="step-n">4</span><div class="step-text"><strong>L'opérateur remplit</strong> la fiche tout au long du poste.</div></li>
+      <li><span class="step-n">5</span><div class="step-text"><strong>En fin de poste</strong>, le superviseur vérifie et signe la fiche, puis la remet au bureau.</div></li>
+      <li><span class="step-n">6</span><div class="step-text"><strong>Les données</strong> sont ressaisies dans la plateforme (module saisie journalière).</div></li>
+    </ol>
+  </div>
+
+  <div class="section">
+    <h3>Contenu de la fiche</h3>
+    <table>
+      <tr><th>Section</th><th>Données à renseigner</th></tr>
+      <tr><td>En-tête</td><td>Date, foreuse, site, opérateur, superviseur, poste (matin / soir)</td></tr>
+      <tr><td>Trous forés</td><td>Tableau : N° trou, profondeur début, profondeur fin, mètres forés, observations</td></tr>
+      <tr><td>Consommables</td><td>Trépans utilisés (type, série, mètres forés), carburant (litres), fluides</td></tr>
+      <tr><td>Arrêts / TNP</td><td>Heure début, heure fin, durée, catégorie (panne mécanique / électrique / météo / attente logistique / autre), description</td></tr>
+      <tr><td>Check-list HSE</td><td>Cases à cocher : EPI portés, zone de sécurité balisée, extincteur disponible, briefing sécurité effectué…</td></tr>
+      <tr><td>Signatures</td><td>Opérateur + Superviseur</td></tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <h3>Saisie dans la plateforme</h3>
+    <p>Les données de la fiche papier sont saisies dans le module <strong>Connexions</strong> → fiche de la foreuse → <strong>Saisie journalière</strong>. Chaque enregistrement alimente automatiquement les modules Performance, Consommables et Plan de Forage.</p>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════ CH 27 -->
+<div class="page" id="ch27">
+  <div class="chapter"><span class="chapter-num">27</span><h2>Sauvegarde et restauration</h2></div>
+
+  <p>La base de données est le cœur de GEDRILLING. Il est impératif de la sauvegarder régulièrement pour éviter toute perte de données.</p>
+
+  <div class="section">
+    <h3>Sauvegarder la base de données</h3>
+    <p>Ouvrez un terminal dans le dossier du projet et exécutez l'une des commandes suivantes :</p>
+    <table>
+      <tr><th>Commande</th><th>Action</th></tr>
+      <tr><td><code>npm run backup</code></td><td>Sauvegarde rapide — copie du fichier SQLite dans le dossier <code>backups/</code></td></tr>
+      <tr><td><code>npm run backup:full</code></td><td>Sauvegarde complète avec compression (recommandé)</td></tr>
+      <tr><td><code>npm run backup:list</code></td><td>Liste toutes les sauvegardes disponibles avec leur date</td></tr>
+      <tr><td><code>npm run backup:prune</code></td><td>Supprime les sauvegardes anciennes (conserve les N plus récentes)</td></tr>
+    </table>
+    <pre>npm run backup:full</pre>
+    <p>La sauvegarde est stockée dans le sous-dossier <code>backups/</code> avec un nom incluant la date et l'heure : <code>backup-2025-06-15-14h30.db.gz</code></p>
+  </div>
+
+  <div class="section">
+    <h3>Restaurer une sauvegarde</h3>
+    <div class="box danger">
+      <div class="box-icon">🔴</div>
+      <div class="box-content"><strong>Attention</strong><br>La restauration remplace la base de données actuelle par la sauvegarde choisie. Toutes les données enregistrées après la sauvegarde seront perdues. Effectuez toujours une sauvegarde avant de restaurer.</div>
+    </div>
+    <ol class="steps">
+      <li><span class="step-n">1</span><div class="step-text">Arrêtez le serveur (fermez la fenêtre du terminal ou Ctrl+C).</div></li>
+      <li><span class="step-n">2</span><div class="step-text">Exécutez <code>npm run restore-backup</code>. Le script affiche la liste des sauvegardes disponibles.</div></li>
+      <li><span class="step-n">3</span><div class="step-text">Saisissez le numéro de la sauvegarde à restaurer et confirmez.</div></li>
+      <li><span class="step-n">4</span><div class="step-text">Redémarrez le serveur : <code>npm start</code>.</div></li>
+    </ol>
+  </div>
+
+  <div class="section">
+    <h3>Recommandations</h3>
+    <ul style="margin:8px 0 8px 20px;">
+      <li>Effectuez une sauvegarde <strong>quotidienne</strong> (automatisez via le Planificateur de tâches Windows ou cron Linux)</li>
+      <li>Conservez des copies sur un <strong>disque externe ou dans le cloud</strong> (ne pas stocker uniquement sur le même serveur)</li>
+      <li>Testez périodiquement la restauration pour valider l'intégrité des sauvegardes</li>
+      <li>Sauvegardez toujours avant une mise à jour de la plateforme</li>
+    </ul>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════ CH 28 -->
+<div class="page" id="ch28">
+  <div class="chapter"><span class="chapter-num">28</span><h2>Hébergement et déploiement</h2></div>
+
+  <div class="section">
+    <h3>Variables d'environnement</h3>
+    <p>Ces variables configurent le comportement du serveur. Elles sont définies dans un fichier <code>.env</code> ou dans les paramètres du serveur :</p>
+    <table>
+      <tr><th>Variable</th><th>Description</th><th>Valeur par défaut</th></tr>
+      <tr><td><code>PORT</code></td><td>Port d'écoute du serveur</td><td><code>3000</code></td></tr>
+      <tr><td><code>JWT_SECRET</code></td><td>Clé secrète pour signer les tokens (changer en production !)</td><td>Valeur par défaut non sécurisée</td></tr>
+      <tr><td><code>JWT_EXPIRES_IN</code></td><td>Durée de validité des sessions</td><td><code>7d</code></td></tr>
+      <tr><td><code>TRUST_PROXY</code></td><td>Mettre à <code>1</code> si derrière Nginx / Cloudflare</td><td>non défini</td></tr>
+      <tr><td><code>DEPLOYMENT_MODE</code></td><td><code>dedicated</code> ou <code>shared</code></td><td><code>dedicated</code></td></tr>
+      <tr><td><code>DB_PATH</code></td><td>Chemin vers le fichier SQLite</td><td><code>./database.db</code></td></tr>
+      <tr><td><code>DEEPL_API_KEY</code></td><td>Clé API DeepL pour le traducteur (optionnel)</td><td>non défini</td></tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <h3>Déploiement avec Docker</h3>
+    <pre>docker-compose up -d --build</pre>
+    <p>Docker gère automatiquement les dépendances, la migration de base de données et le redémarrage du serveur. Les données sont persistées dans un volume Docker.</p>
+    <p>Pour mettre à jour une instance Docker :</p>
+    <pre># Windows
+.\scripts\deploy-docker.ps1
+
+# Linux / macOS
+./scripts/deploy-docker.sh</pre>
+  </div>
+
+  <div class="section">
+    <h3>Déploiement sans Docker (VPS)</h3>
+    <ol class="steps">
+      <li><span class="step-n">1</span><div class="step-text">Sauvegardez la base : <code>npm run backup</code></div></li>
+      <li><span class="step-n">2</span><div class="step-text">Copiez les nouveaux fichiers sur le serveur (Git pull ou FTP) — <strong>ne pas écraser <code>database.db</code></strong></div></li>
+      <li><span class="step-n">3</span><div class="step-text">Installez les dépendances : <code>npm ci --omit=dev</code></div></li>
+      <li><span class="step-n">4</span><div class="step-text">Appliquez les migrations : <code>npm run migrate</code></div></li>
+      <li><span class="step-n">5</span><div class="step-text">Redémarrez le serveur : <code>pm2 restart all</code> ou <code>systemctl restart gedrilling</code></div></li>
+    </ol>
+  </div>
+
+  <div class="section">
+    <h3>Sécurité en production</h3>
+    <div class="box danger">
+      <div class="box-icon">🔒</div>
+      <div class="box-content">
+        <strong>Liste de contrôle sécurité obligatoire</strong><br>
+        ☐ Changer <code>JWT_SECRET</code> par une valeur longue et aléatoire<br>
+        ☐ Activer HTTPS (certificat SSL via Let's Encrypt / Nginx / Caddy)<br>
+        ☐ Définir <code>TRUST_PROXY=1</code> si derrière un reverse proxy<br>
+        ☐ Changer tous les mots de passe par défaut<br>
+        ☐ Configurer les sauvegardes automatiques<br>
+        ☐ Restreindre l'accès au port 3000 (ne l'exposer qu'à Nginx)
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════ CH 29 -->
+<div class="page" id="ch29">
+  <div class="chapter"><span class="chapter-num">29</span><h2>Dépannage</h2></div>
+
+  <div class="section">
+    <h3>Problèmes courants et solutions</h3>
+    <table>
+      <tr><th>Problème</th><th>Cause probable</th><th>Solution</th></tr>
+      <tr>
+        <td>Le serveur ne démarre pas</td>
+        <td>Node.js non installé ou dépendances manquantes</td>
+        <td>Vérifiez : <code>node --version</code><br>Exécutez : <code>npm install</code></td>
+      </tr>
+      <tr>
+        <td>Message « Base de données non trouvée »</td>
+        <td>Le fichier <code>database.db</code> n'existe pas</td>
+        <td>Exécutez : <code>npm run init-db</code></td>
+      </tr>
+      <tr>
+        <td>Impossible de se connecter (identifiants refusés)</td>
+        <td>Mot de passe changé ou compte désactivé</td>
+        <td>Un administrateur réinitialise le mot de passe depuis Comptes</td>
+      </tr>
+      <tr>
+        <td>Les données ne se chargent pas</td>
+        <td>Serveur Node.js non démarré</td>
+        <td>Lancez <code>npm start</code> ou double-cliquez <code>LANCER.bat</code></td>
+      </tr>
+      <tr>
+        <td>Le traducteur affiche une erreur</td>
+        <td>Quota MyMemory atteint ou services indisponibles</td>
+        <td>Attendez le lendemain ou configurez <code>DEEPL_API_KEY</code></td>
+      </tr>
+      <tr>
+        <td>Le chat ne charge pas les messages</td>
+        <td>Table <code>worker_chat_messages</code> absente (ancienne BDD)</td>
+        <td>Exécutez : <code>npm run migrate</code></td>
+      </tr>
+      <tr>
+        <td>La facture ne s'imprime pas correctement</td>
+        <td>Paramètres d'impression incorrects</td>
+        <td>Ctrl+P → décocher « En-têtes et pieds de page » → Format A4</td>
+      </tr>
+      <tr>
+        <td>Erreur « Session invalide ou expirée »</td>
+        <td>Token JWT expiré (après 7 jours)</td>
+        <td>Se reconnecter. Augmenter <code>JWT_EXPIRES_IN</code> si nécessaire</td>
+      </tr>
+      <tr>
+        <td>Le port 3000 est déjà utilisé</td>
+        <td>Une autre instance du serveur tourne</td>
+        <td>Fermez l'autre instance ou changez <code>PORT=3001</code> dans les variables d'environnement</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <h3>Réinitialiser les données d'une entreprise</h3>
+    <div class="box danger">
+      <div class="box-icon">🔴</div>
+      <div class="box-content"><strong>Irréversible</strong><br>Cette commande supprime toutes les données opérationnelles d'une entreprise. Sauvegardez d'abord avec <code>npm run backup</code>.</div>
+    </div>
+    <pre>npm run clear-enterprise-data</pre>
+  </div>
+
+  <div class="section">
+    <h3>Migration de base de données</h3>
+    <p>Après chaque mise à jour de la plateforme, exécutez la migration pour appliquer les nouveaux schémas sans perte de données :</p>
+    <pre>npm run migrate</pre>
+    <p>Ce script est idempotent : il peut être exécuté plusieurs fois sans problème. Il applique uniquement les changements manquants.</p>
+  </div>
+
+  <div class="section">
+    <h3>Consulter les logs du serveur</h3>
+    <p>Les messages du serveur s'affichent dans le terminal où il a été lancé. En cas d'erreur, la ligne <code style="color:red;">❌ Erreur :</code> indique la cause. Copiez le message d'erreur complet pour faciliter le diagnostic.</p>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="footer-bar">
+    <span>GEDRILLING — Manuel d'utilisation v1.0.0</span>
+    <span>Good Engineers Drilling &copy; 2025</span>
+  </div>
+</div>
+
+</body>
+</html>

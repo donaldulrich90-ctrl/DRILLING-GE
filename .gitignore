@@ -1,0 +1,43 @@
+node_modules/
+dist/
+
+# Bases de données
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Sauvegardes
+backups/
+
+# Environnement
+.env
+.env.*
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Fichiers temporaires
+*.tmp
+*.tmp.*
+
+# Dossiers outils internes
+.claude/
+graphify-out/
+
+# Médias non-versionnés
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+
+# Fichiers de déploiement locaux
+ecosystem.config.js
+nginx-forage.conf
+scripts/setup-vps.sh

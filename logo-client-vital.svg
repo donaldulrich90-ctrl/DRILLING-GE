@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 72" role="img" aria-label="VITAL">
+  <rect width="280" height="72" rx="6" fill="#f8fafc" stroke="#0f172a" stroke-width="1"/>
+  <text x="140" y="46" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="26" font-weight="700" fill="#0f172a" letter-spacing="0.12em">VITAL</text>
+  <text x="140" y="62" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="9" fill="#64748b" letter-spacing="0.08em">CLIENT</text>
+</svg>

@@ -1,0 +1,31 @@
+# GOOD ENGINEERS-DRILL - Déploiement instance dédiée par entreprise
+# Mise à jour recommandée : scripts/deploy-docker.sh (Linux) ou scripts/deploy-docker.ps1 (Windows)
+# Manuel : docker compose up -d --build
+# Accès : http://localhost:3000
+
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    volumes:
+      - drill-data:/data
+    environment:
+      - NODE_ENV=production
+      - DEPLOYMENT_MODE=dedicated
+      - DB_PATH=/data/database.db
+      - BACKUP_DIR=/data/backups
+      - PORT=3000
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET obligatoire}
+      - INITIAL_PLATFORM_PASSWORD=${INITIAL_PLATFORM_PASSWORD:-}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    restart: unless-stopped
+
+volumes:
+  drill-data:

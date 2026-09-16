@@ -1,0 +1,49 @@
+{
+  "name": "good-engineers-drill-backend",
+  "version": "1.0.0",
+  "description": "Backend API pour GOOD ENGINEERS-DRILL",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "dev:frontend": "vite",
+    "test": "npm run test:syntax && npm run test:smoke",
+    "test:syntax": "node --check server.js && node --check middleware/saas-auth.js && node --check routes/auth.js && node --check routes/users.js && node --check routes/drilling-plan.js && node --check scripts/smoke-test.js && node scripts/check-inline-scripts.js",
+    "build": "vite build",
+    "preview": "vite preview",
+    "build:start": "npm run build && npm start",
+    "init-db": "node init-db.js",
+    "init-db:force": "node init-db.js --force",
+    "migrate": "node migrate-db.js",
+    "backup": "node backup-db.js",
+    "backup:full": "node backup-full.js",
+    "backup:list": "node list-backups.js",
+    "backup:prune": "node backup-prune.js",
+    "restore-backup": "node restore-backup.js",
+    "clear-enterprise-data": "node clear-enterprise-data.js",
+    "test:smoke": "node scripts/smoke-test.js"
+  },
+  "keywords": ["drill", "mining", "monitoring"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "jsonwebtoken": "^9.0.2",
+    "sqlite3": "^5.1.6",
+    "body-parser": "^1.20.2",
+    "multer": "^1.4.5-lts.1",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "recharts": "^2.8.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1",
+    "@vitejs/plugin-react": "^4.2.1",
+    "vite": "^5.1.0",
+    "tailwindcss": "^3.4.0",
+    "autoprefixer": "^10.4.16",
+    "postcss": "^8.4.32"
+  }
+}

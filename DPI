@@ -1,0 +1,95 @@
+import React, { useState, useEffect } from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+
+// Données mockées pour le graphique
+const generateMockChartData = () => {
+  const data = [];
+  const now = new Date();
+  for (let i = 23; i >= 0; i--) {
+    const time = new Date(now.getTime() - i * 60 * 60 * 1000);
+    data.push({
+      time: time.getHours() + 'h',
+      rop: Math.random() * 5 + 2.5 // Vitesse de pénétration entre 2.5 et 7.5 m/h
+    });
+  }
+  return data;
+};
+
+// Simulation de données en temps réel
+const DrillMonitor = ({ machineId }) => {
+  const [telemetry, setTelemetry] = useState({
+    rotation_pressure: 120,
+    hyd_temp: 75,
+    depth: 45.2
+  });
+
+  const [mockChartData] = useState(generateMockChartData());
+
+  // Simulation de mise à jour des données en temps réel
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTelemetry(prev => ({
+        rotation_pressure: prev.rotation_pressure + (Math.random() * 10 - 5),
+        hyd_temp: Math.max(70, Math.min(95, prev.hyd_temp + (Math.random() * 2 - 1))),
+        depth: prev.depth + (Math.random() * 0.1)
+      }));
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  return (
+    <div className="p-6 bg-slate-900 text-white min-h-screen">
+      {/* En-tête de la machine */}
+      <div className="flex justify-between items-center mb-8 border-b border-slate-700 pb-4">
+        <h1 className="text-3xl font-bold">Foreuse: {machineId} <span className="text-sm bg-green-500 px-2 py-1 rounded ml-2">EN FORAGE</span></h1>
+        <div className="text-right">
+          <p className="text-slate-400">Profondeur Actuelle</p>
+          <p className="text-4xl font-mono text-blue-400">{telemetry.depth} m</p>
+        </div>
+      </div>
+
+      {/* Cartes d'indicateurs (Gauges) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
+          <p className="text-slate-400 mb-2">Pression Rotation</p>
+          <p className="text-3xl font-bold">{telemetry.rotation_pressure} bar</p>
+          <div className="w-full bg-slate-700 h-2 mt-4 rounded">
+            <div className="bg-blue-500 h-2 rounded" style={{width: '60%'}}></div>
+          </div>
+        </div>
+
+        <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
+          <p className="text-slate-400 mb-2">Température Hydraulique</p>
+          <p className={`text-3xl font-bold ${telemetry.hyd_temp > 90 ? 'text-red-500' : 'text-green-400'}`}>
+            {telemetry.hyd_temp} °C
+          </p>
+          <p className="text-xs text-slate-500 mt-2">Seuil critique: 95°C</p>
+        </div>
+
+        <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 text-orange-400">
+          <p className="text-slate-400 mb-2">Alerte Prochaine Révision</p>
+          <p className="text-3xl font-bold text-white">48 h</p>
+        </div>
+      </div>
+
+      {/* Graphique de performance (Vitesse de pénétration) */}
+      <div className="bg-slate-800 p-6 rounded-xl border border-slate-700">
+        <h3 className="mb-4 font-semibold">Vitesse de Pénétration (ROP) - Dernières 24h</h3>
+        <div className="h-64">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={mockChartData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+              <XAxis dataKey="time" stroke="#94a3b8" />
+              <YAxis stroke="#94a3b8" />
+              <Tooltip contentStyle={{backgroundColor: '#1e293b', border: 'none'}} />
+              <Line type="monotone" dataKey="rop" stroke="#3b82f6" strokeWidth={3} dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default DrillMonitor;

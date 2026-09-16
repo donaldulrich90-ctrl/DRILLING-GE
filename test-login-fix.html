@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Connexion - Forage Minier</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-900 text-white">
+    <!-- Modal de Connexion -->
+    <div id="loginModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-slate-800 p-8 rounded-xl border border-slate-700 w-96">
+            <h2 class="text-2xl font-bold mb-6 text-center">Connexion</h2>
+            <div class="mb-4">
+                <label class="block text-slate-400 mb-2">Nom d'utilisateur</label>
+                <input type="text" id="loginUsername" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white" value="admin">
+            </div>
+            <div class="mb-4">
+                <label class="block text-slate-400 mb-2">Mot de passe</label>
+                <input type="password" id="loginPassword" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white" value="admin">
+            </div>
+            <button onclick="login()" class="w-full bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg font-semibold mb-2">
+                Se connecter
+            </button>
+            <button onclick="loginAuto()" class="w-full bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg font-semibold mb-2">
+                Connexion automatique (Admin)
+            </button>
+        </div>
+    </div>
+
+    <div id="app" class="p-6 hidden">
+        <h1 class="text-4xl font-bold">Application chargée!</h1>
+        <p class="mt-4">Connexion réussie!</p>
+    </div>
+
+    <script>
+        // Variables globales
+        let currentUser = null;
+        let users = [
+            { username: 'admin', password: 'admin', role: 'admin', name: 'Administrateur' }
+        ];
+
+        // Fonction de connexion
+        function login() {
+            try {
+                const username = document.getElementById('loginUsername').value.trim();
+                const password = document.getElementById('loginPassword').value.trim();
+                const user = users.find(u => u.username === username && u.password === password);
+                
+                if (user) {
+                    currentUser = user;
+                    document.getElementById('loginModal').classList.add('hidden');
+                    document.getElementById('app').classList.remove('hidden');
+                    alert('Connexion réussie!');
+                } else {
+                    alert('Identifiants incorrects');
+                }
+            } catch (error) {
+                console.error('Erreur:', error);
+                alert('Erreur: ' + error.message);
+            }
+        }
+
+        // Fonction de connexion automatique
+        function loginAuto() {
+            try {
+                document.getElementById('loginUsername').value = 'admin';
+                document.getElementById('loginPassword').value = 'admin';
+                login();
+            } catch (error) {
+                console.error('Erreur:', error);
+                alert('Erreur: ' + error.message);
+            }
+        }
+
+        // Exposer globalement
+        window.login = login;
+        window.loginAuto = loginAuto;
+
+        console.log('Script chargé');
+        console.log('login défini?', typeof login);
+        console.log('loginAuto défini?', typeof loginAuto);
+    </script>
+</body>
+</html>
+

@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plateforme de Monitoring - Forage Minier</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        body { margin: 0; padding: 0; }
+        .drill-card { transition: all 0.3s ease; cursor: pointer; }
+        .drill-card:hover { transform: translateY(-2px); box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3); }
+        .drill-card.selected { border-color: #3b82f6; border-width: 2px; }
+        .tab-button { transition: all 0.2s; }
+        .tab-button.active { background-color: #3b82f6; color: white; }
+        .main-nav-btn.active { background-color: #3b82f6; color: white; }
+        .revenue-tab-btn.active { background-color: #3b82f6; color: white; }
+        .revenue-content { display: block; }
+        .main-view { display: block; }
+    </style>
+</head>
+<body>
+    <div id="loading" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #0f172a; color: white; display: flex; align-items: center; justify-content: center; z-index: 9999;">
+        <div style="text-align: center;">
+            <h1 style="font-size: 24px; margin-bottom: 20px;">Chargement de l'application...</h1>
+            <p id="loadingStatus" style="color: #94a3b8;">Initialisation...</p>
+        </div>
+    </div>
+
+    <script>
+        // Vérifier que les CDN sont chargés
+        function checkCDN() {
+            const statusEl = document.getElementById('loadingStatus');
+            if (typeof tailwind !== 'undefined' || window.tailwind) {
+                statusEl.textContent = '✓ Tailwind CSS chargé';
+            } else {
+                statusEl.textContent = '⚠ Attente de Tailwind CSS...';
+                setTimeout(checkCDN, 100);
+                return false;
+            }
+            
+            if (typeof Chart !== 'undefined' || window.Chart) {
+                statusEl.textContent = '✓ Chart.js chargé';
+            } else {
+                statusEl.textContent = '⚠ Attente de Chart.js...';
+                setTimeout(checkCDN, 100);
+                return false;
+            }
+            
+            return true;
+        }
+
+        // Charger le reste de l'application
+        function loadApp() {
+            const loadingDiv = document.getElementById('loading');
+            if (loadingDiv) {
+                loadingDiv.style.display = 'none';
+            }
+            
+            // Charger le contenu principal depuis test-simple.html
+            fetch('test-simple.html')
+                .then(response => response.text())
+                .then(html => {
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(html, 'text/html');
+                    const appContent = doc.getElementById('app');
+                    if (appContent) {
+                        document.body.innerHTML = appContent.outerHTML;
+                        // Réexécuter les scripts
+                        const scripts = doc.querySelectorAll('script');
+                        scripts.forEach(script => {
+                            const newScript = document.createElement('script');
+                            newScript.textContent = script.textContent;
+                            document.body.appendChild(newScript);
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Erreur lors du chargement:', error);
+                    document.body.innerHTML = '<div style="padding: 20px; color: white; background: #1e293b;"><h1>Erreur de chargement</h1><p>Impossible de charger l\'application. Veuillez ouvrir directement test-simple.html</p></div>';
+                });
+        }
+
+        // Attendre que tout soit chargé
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                if (checkCDN()) {
+                    setTimeout(loadApp, 500);
+                }
+            }, 1000);
+        });
+    </script>
+</body>
+</html>
+
+

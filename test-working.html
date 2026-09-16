@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plateforme de Monitoring - Forage Minier</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body class="bg-slate-900 text-white min-h-screen">
+    <!-- Modal de Connexion -->
+    <div id="loginModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-slate-800 p-8 rounded-xl border border-slate-700 w-96">
+            <h2 class="text-2xl font-bold mb-6 text-center">Connexion</h2>
+            <div class="mb-4">
+                <label class="block text-slate-400 mb-2">Nom d'utilisateur</label>
+                <input type="text" id="loginUsername" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white" value="admin">
+            </div>
+            <div class="mb-4">
+                <label class="block text-slate-400 mb-2">Mot de passe</label>
+                <input type="password" id="loginPassword" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white" value="admin">
+            </div>
+            <button onclick="login()" class="w-full bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg font-semibold mb-2">
+                Se connecter
+            </button>
+            <button onclick="loginAuto()" class="w-full bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg font-semibold">
+                Connexion automatique
+            </button>
+        </div>
+    </div>
+
+    <div id="app" class="p-6 hidden">
+        <div class="mb-8 border-b border-slate-700 pb-4">
+            <h1 class="text-4xl font-bold mb-2">Plateforme de Monitoring - Forage Minier</h1>
+            <p class="text-slate-400">Surveillance en temps réel</p>
+        </div>
+
+        <div class="mb-6 flex gap-2 border-b border-slate-700 pb-4">
+            <button onclick="showView('dashboard')" class="px-4 py-2 rounded-lg bg-slate-800" id="nav-dashboard">
+                📊 Tableau de bord
+            </button>
+            <button onclick="showView('assignments')" class="px-4 py-2 rounded-lg bg-slate-800" id="nav-assignments">
+                👥 Assignations
+            </button>
+            <button onclick="showView('inventory')" class="px-4 py-2 rounded-lg bg-slate-800" id="nav-inventory">
+                📦 Stocks
+            </button>
+        </div>
+
+        <div id="view-dashboard" class="view">
+            <h2 class="text-2xl font-semibold mb-4">Tableau de bord</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="bg-slate-800 p-6 rounded-xl border border-slate-700">
+                    <p class="text-slate-400 text-sm mb-2">Foreuses actives</p>
+                    <p class="text-3xl font-bold text-green-400" id="activeCount">4</p>
+                </div>
+                <div class="bg-slate-800 p-6 rounded-xl border border-slate-700">
+                    <p class="text-slate-400 text-sm mb-2">Profondeur totale</p>
+                    <p class="text-3xl font-bold text-blue-400" id="totalDepth">350.0 m</p>
+                </div>
+                <div class="bg-slate-800 p-6 rounded-xl border border-slate-700">
+                    <p class="text-slate-400 text-sm mb-2">ROP moyen</p>
+                    <p class="text-3xl font-bold text-purple-400" id="avgROP">4.5 m/h</p>
+                </div>
+            </div>
+            <div id="drillsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
+                <!-- Foreuses -->
+            </div>
+        </div>
+
+        <div id="view-assignments" class="view hidden">
+            <h2 class="text-2xl font-semibold mb-4">Assignations</h2>
+            <div class="bg-slate-800 p-6 rounded-xl border border-slate-700">
+                <p class="text-slate-400">Gestion des assignations</p>
+                <div id="assignmentsList" class="mt-4 space-y-3"></div>
+            </div>
+        </div>
+
+        <div id="view-inventory" class="view hidden">
+            <h2 class="text-2xl font-semibold mb-4">Stocks</h2>
+            <div class="bg-slate-800 p-6 rounded-xl border border-slate-700">
+                <p class="text-slate-400">Gestion des stocks</p>
+                <div id="inventoryList" class="mt-4 space-y-3"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Données de base
+        let currentUser = null;
+        let drills = [
+            { id: 'FOR-2024-001', location: 'Site A', status: 'EN FORAGE', depth: 45.2, rop: 4.2 },
+            { id: 'FOR-2024-002', location: 'Site B', status: 'EN FORAGE', depth: 38.5, rop: 3.8 },
+            { id: 'FOR-2024-003', location: 'Site C', status: 'EN PAUSE', depth: 52.1, rop: 0 },
+            { id: 'FOR-2024-004', location: 'Site D', status: 'EN FORAGE', depth: 28.3, rop: 4.5 }
+        ];
+        let users = [
+            { username: 'admin', password: 'admin', role: 'admin', name: 'Administrateur' }
+        ];
+        let assignments = [];
+        let inventory = [
+            { id: 1, name: 'Filtres Hydrauliques', quantity: 8, minStock: 10, unit: 'unité' },
+            { id: 2, name: 'Huile Hydraulique', quantity: 120, minStock: 100, unit: 'L' }
+        ];
+
+        // Fonctions de navigation
+        function showView(view) {
+            document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
+            document.querySelectorAll('[id^="nav-"]').forEach(b => b.classList.remove('bg-blue-600'));
+            document.getElementById('view-' + view).classList.remove('hidden');
+            document.getElementById('nav-' + view).classList.add('bg-blue-600');
+            
+            if (view === 'dashboard') renderDashboard();
+            if (view === 'assignments') renderAssignments();
+            if (view === 'inventory') renderInventory();
+        }
+
+        function renderDashboard() {
+            const grid = document.getElementById('drillsGrid');
+            if (!grid) return;
+            
+            grid.innerHTML = drills.map(drill => `
+                <div class="bg-slate-800 p-6 rounded-xl border border-slate-700">
+                    <h3 class="text-xl font-bold mb-2">${drill.id}</h3>
+                    <p class="text-slate-400 text-sm mb-4">${drill.location}</p>
+                    <div class="space-y-2">
+                        <div class="flex justify-between">
+                            <span class="text-slate-400">Profondeur</span>
+                            <span class="font-bold">${drill.depth.toFixed(1)} m</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-400">ROP</span>
+                            <span class="font-bold">${drill.rop} m/h</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-400">Statut</span>
+                            <span class="px-2 py-1 rounded text-xs ${drill.status === 'EN FORAGE' ? 'bg-green-500' : 'bg-yellow-500'}">${drill.status}</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+            
+            // Stats globales
+            const active = drills.filter(d => d.status === 'EN FORAGE').length;
+            const totalDepth = drills.reduce((sum, d) => sum + d.depth, 0);
+            const avgROP = drills.filter(d => d.status === 'EN FORAGE').reduce((sum, d) => sum + d.rop, 0) / active || 0;
+            
+            document.getElementById('activeCount').textContent = active;
+            document.getElementById('totalDepth').textContent = totalDepth.toFixed(1) + ' m';
+            document.getElementById('avgROP').textContent = avgROP.toFixed(1) + ' m/h';
+        }
+
+        function renderAssignments() {
+            const list = document.getElementById('assignmentsList');
+            if (!list) return;
+            list.innerHTML = assignments.length > 0 
+                ? assignments.map(a => `<div class="bg-slate-700 p-4 rounded">${a.employeeName} - ${a.drillId}</div>`).join('')
+                : '<p class="text-slate-400">Aucune assignation</p>';
+        }
+
+        function renderInventory() {
+            const list = document.getElementById('inventoryList');
+            if (!list) return;
+            list.innerHTML = inventory.map(item => `
+                <div class="bg-slate-700 p-4 rounded">
+                    <div class="flex justify-between">
+                        <span class="font-semibold">${item.name}</span>
+                        <span class="${item.quantity < item.minStock ? 'text-red-400' : 'text-green-400'}">${item.quantity} ${item.unit}</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Connexion
+        function login() {
+            const username = document.getElementById('loginUsername').value;
+            const password = document.getElementById('loginPassword').value;
+            const user = users.find(u => u.username === username && u.password === password);
+            
+            if (user) {
+                currentUser = user;
+                document.getElementById('loginModal').classList.add('hidden');
+                document.getElementById('app').classList.remove('hidden');
+                showView('dashboard');
+            } else {
+                alert('Identifiants incorrects');
+            }
+        }
+
+        function loginAuto() {
+            document.getElementById('loginUsername').value = 'admin';
+            document.getElementById('loginPassword').value = 'admin';
+            login();
+        }
+
+        // Initialisation
+        window.addEventListener('load', () => {
+            console.log('Page chargée');
+            document.getElementById('loginModal').classList.remove('hidden');
+        });
+
+        // Gestion des erreurs
+        window.addEventListener('error', (e) => {
+            console.error('Erreur:', e.error);
+        });
+    </script>
+</body>
+</html>
+
+

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test - Plateforme de Monitoring</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-white min-h-screen p-6">
+    <div id="app">
+        <h1 class="text-4xl font-bold mb-4">Test de la Plateforme</h1>
+        <p class="text-slate-400 mb-4">Si vous voyez ce message, le fichier HTML fonctionne.</p>
+        <button onclick="testFunction()" class="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg">
+            Tester JavaScript
+        </button>
+        <div id="result" class="mt-4"></div>
+    </div>
+
+    <script>
+        function testFunction() {
+            document.getElementById('result').innerHTML = '<p class="text-green-400">✓ JavaScript fonctionne correctement!</p>';
+        }
+
+        window.addEventListener('load', () => {
+            console.log('Page chargée avec succès');
+            document.getElementById('result').innerHTML = '<p class="text-blue-400">Page chargée - Vérifiez la console (F12)</p>';
+        });
+
+        window.addEventListener('error', (event) => {
+            console.error('Erreur détectée:', event.error);
+            document.getElementById('result').innerHTML = '<p class="text-red-400">Erreur: ' + event.error.message + '</p>';
+        });
+    </script>
+</body>
+</html>
+
+
