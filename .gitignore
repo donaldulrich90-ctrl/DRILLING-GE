@@ -37,6 +37,9 @@ graphify-out/
 *.gif
 *.webp
 
+# Logo public requis par plateforme-forage.html et server.js
+!logo-good-engineers.png
+
 # Fichiers de déploiement locaux
 ecosystem.config.js
 nginx-forage.conf
