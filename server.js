@@ -62,7 +62,9 @@ app.use(cors({
     origin(origin, callback) {
         if (!origin || allowedCorsOrigins.has(origin)) return callback(null, true);
         return callback(new Error('Origine CORS non autorisée'));
-    }
+    },
+    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Enterprise-Id']
 }));
 app.use(bodyParser.json({ limit: '5mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '5mb' }));
@@ -480,7 +482,7 @@ app.use('/api/auth/login', loginRateLimit);
 // JWT requis pour toutes les routes /api sauf login et health
 app.use((req, res, next) => {
     if (!req.path.startsWith('/api')) return next();
-    if (req.path === '/api/auth/login' || req.path === '/api/health') return next();
+    if (req.path === '/api/auth/login' || req.path === '/api/auth/logout' || req.path === '/api/health') return next();
     return verifyAuth(req, res, () => {
         const isPlatform = !!(
             req.auth &&

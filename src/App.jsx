@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import DrillMonitor from './DPI';
 import DrillDashboard from './DrillDashboard';
-import { apiFetch, getToken } from './api';
+import { apiFetch } from './api';
 
 function HeaderClock() {
   const [now, setNow] = useState(new Date());
@@ -26,11 +26,6 @@ function App() {
   const [error,         setError]         = useState(null);
 
   useEffect(() => {
-    if (!getToken()) {
-      setError('non_auth');
-      setLoading(false);
-      return;
-    }
     apiFetch('/api/drills')
       .then(data => { setDrills(data); setLoading(false); })
       .catch(err => {

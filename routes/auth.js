@@ -1,5 +1,13 @@
 const bcrypt = require('bcryptjs');
-const { signUserToken } = require('../middleware/saas-auth');
+const { signUserToken, JWT_EXPIRES_IN } = require('../middleware/saas-auth');
+
+function jwtExpiresInToMs(expiresIn) {
+    const match = String(expiresIn).match(/^(\d+)([smhd])$/);
+    if (!match) return 7 * 24 * 60 * 60 * 1000;
+    const n = parseInt(match[1], 10);
+    const factors = { s: 1000, m: 60000, h: 3600000, d: 86400000 };
+    return n * (factors[match[2]] || 86400000);
+}
 
 module.exports = function registerAuthRoutes(app, options) {
     const { db, deploymentMode, parseUserSiteIds } = options;
@@ -20,8 +28,17 @@ module.exports = function registerAuthRoutes(app, options) {
         return { isSuperAdmin, isPlatformOwner, tokenUser, token };
     }
 
+    const COOKIE_OPTIONS = {
+        httpOnly: true,
+        sameSite: 'strict',
+        secure: process.env.NODE_ENV === 'production',
+        path: '/',
+        maxAge: jwtExpiresInToMs(JWT_EXPIRES_IN)
+    };
+
     function sendSessionResponse(res, session) {
         const { user, token, includeToken } = session;
+        if (token) res.cookie('forage_jwt', token, COOKIE_OPTIONS);
         const payload = buildSessionPayload(user, token);
 
         db.all('SELECT * FROM enterprises ORDER BY name', [], (err, enterprises) => {
@@ -112,6 +129,11 @@ module.exports = function registerAuthRoutes(app, options) {
             if (!user) return res.status(401).json({ error: 'Utilisateur inconnu' });
             return sendSessionResponse(res, { user, includeToken: false });
         });
+    });
+
+    app.post('/api/auth/logout', (req, res) => {
+        res.clearCookie('forage_jwt', { path: '/' });
+        return res.json({ message: 'Déconnecté' });
     });
 
     app.post('/api/auth/change-password', (req, res) => {

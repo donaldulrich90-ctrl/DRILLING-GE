@@ -25,29 +25,31 @@ function getApiBaseUrl() {
 // Contexte entreprise (multi-tenant) - utilisé par l'administrateur général
 let currentEnterpriseId = null;
 
-let authToken = null;
+// Le JWT est désormais stocké dans un cookie httpOnly (inaccessible au JS).
+// On garde un drapeau de session en localStorage pour savoir si tenter Auth.me au chargement.
+let _isAuthenticated = false;
 if (typeof window !== 'undefined') {
-    try {
-        authToken = localStorage.getItem('forage_jwt');
-    } catch (e) {
-        /* ignore */
-    }
+    try { _isAuthenticated = localStorage.getItem('forage_session') === '1'; } catch (e) {}
 }
 
 function setAuthToken(token) {
-    authToken = token || null;
+    const wasAuthenticated = _isAuthenticated;
+    _isAuthenticated = !!token;
     if (typeof window !== 'undefined') {
         try {
-            if (token) localStorage.setItem('forage_jwt', token);
-            else localStorage.removeItem('forage_jwt');
-        } catch (e) {
-            /* ignore */
-        }
+            if (token) localStorage.setItem('forage_session', '1');
+            else localStorage.removeItem('forage_session');
+        } catch (e) {}
+    }
+    // Effacer le cookie httpOnly côté serveur lors de la déconnexion
+    if (!token && wasAuthenticated) {
+        fetch(`${getApiBaseUrl()}/auth/logout`, { method: 'POST', credentials: 'include' }).catch(() => {});
     }
 }
 
 function getAuthToken() {
-    return authToken;
+    // Retourne un sentinel truthy si une session est connue — ne jamais retourner le token réel
+    return _isAuthenticated ? '__session__' : null;
 }
 
 function setEnterpriseId(id) {
@@ -58,18 +60,14 @@ function getEnterpriseId() {
     return currentEnterpriseId;
 }
 
-// Fonction utilitaire pour les requêtes (JWT Bearer requis sauf login)
+// Fonction utilitaire pour les requêtes (cookie httpOnly envoyé automatiquement)
 async function apiRequest(endpoint, method = 'GET', data = null, enterpriseId = undefined) {
     try {
         const options = {
             method,
-            headers: {
-                'Content-Type': 'application/json',
-            }
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' }
         };
-        if (authToken) {
-            options.headers['Authorization'] = 'Bearer ' + authToken;
-        }
         const entId = enterpriseId !== undefined ? enterpriseId : currentEnterpriseId;
         if (entId !== null && entId !== undefined && entId !== '') {
             options.headers['X-Enterprise-Id'] = String(entId);
@@ -78,7 +76,7 @@ async function apiRequest(endpoint, method = 'GET', data = null, enterpriseId = 
             options.body = JSON.stringify(data);
         }
         const response = await fetch(`${getApiBaseUrl()}${endpoint}`, options);
-        if (response.status === 401 && authToken && endpoint !== '/auth/me') {
+        if (response.status === 401 && _isAuthenticated && endpoint !== '/auth/me') {
             setAuthToken(null);
         }
         if (!response.ok) {
@@ -102,6 +100,7 @@ const AuthAPI = {
     login: async (username, password) => {
         const response = await fetch(`${getApiBaseUrl()}/auth/login`, {
             method: 'POST',
+            credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, password })
         });
@@ -109,10 +108,12 @@ const AuthAPI = {
         if (!response.ok) {
             throw new Error(data.error || 'Identifiants incorrects');
         }
-        if (data.token) setAuthToken(data.token);
+        // Le cookie httpOnly est posé par le serveur — marquer la session active côté JS
+        setAuthToken(true);
         return data;
     },
     me: () => apiRequest('/auth/me', 'GET'),
+    logout: () => apiRequest('/auth/logout', 'POST'),
     changePassword: (currentPassword, newPassword) =>
         apiRequest('/auth/change-password', 'POST', { currentPassword, newPassword })
 };
@@ -126,12 +127,11 @@ const EnterprisesAPI = {
     create: (data) => apiRequest('/enterprises', 'POST', data),
     remove: (id) => apiRequest(`/enterprises/${id}`, 'DELETE'),
     uploadLogo: async (id, file) => {
-        const token = getAuthToken();
         const fd = new FormData();
         fd.append('logo', file);
         const res = await fetch(`${getApiBaseUrl()}/enterprises/${id}/logo`, {
             method: 'POST',
-            headers: token ? { Authorization: 'Bearer ' + token } : {},
+            credentials: 'include',
             body: fd
         });
         const data = await res.json().catch(() => ({}));
@@ -330,11 +330,10 @@ const WorkerChatAPI = {
     uploadFormData: async (formData) => {
         const url = `${getApiBaseUrl()}/worker-chat/messages/upload`;
         const headers = {};
-        if (authToken) headers['Authorization'] = 'Bearer ' + authToken;
         if (currentEnterpriseId !== null && currentEnterpriseId !== undefined && currentEnterpriseId !== '') {
             headers['X-Enterprise-Id'] = String(currentEnterpriseId);
         }
-        const response = await fetch(url, { method: 'POST', headers, body: formData });
+        const response = await fetch(url, { method: 'POST', credentials: 'include', headers, body: formData });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.error || `HTTP error! status: ${response.status}`);
         return data;
@@ -567,6 +566,7 @@ if (typeof window !== 'undefined') {
         setAuthToken,
         getAuthToken,
         Auth: AuthAPI,
+        logout: AuthAPI.logout,
         Enterprises: EnterprisesAPI,
         EnterpriseRolePolicy: EnterpriseRolePolicyAPI,
         PlanRoles: PlanRolesAPI,

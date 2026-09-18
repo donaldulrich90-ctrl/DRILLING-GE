@@ -29,13 +29,28 @@ function signUserToken(user, meta) {
     );
 }
 
+function extractToken(req) {
+    const cookieHeader = req.headers.cookie;
+    if (cookieHeader) {
+        for (const part of cookieHeader.split(';')) {
+            const trimmed = part.trim();
+            if (trimmed.startsWith('forage_jwt=')) {
+                return decodeURIComponent(trimmed.slice('forage_jwt='.length));
+            }
+        }
+    }
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) return authHeader.slice(7);
+    return null;
+}
+
 function verifyAuth(req, res, next) {
-    const header = req.headers.authorization;
-    if (!header || !header.startsWith('Bearer ')) {
-        return res.status(401).json({ error: 'Authentification requise (token Bearer manquant)' });
+    const token = extractToken(req);
+    if (!token) {
+        return res.status(401).json({ error: 'Authentification requise (token manquant)' });
     }
     try {
-        const payload = jwt.verify(header.slice(7), JWT_SECRET);
+        const payload = jwt.verify(token, JWT_SECRET);
         req.auth = payload;
         next();
     } catch (e) {
