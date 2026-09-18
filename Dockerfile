@@ -9,7 +9,7 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 
 # Toutes les dépendances (devDeps nécessaires pour vite build)
-RUN npm ci
+RUN npm ci --include=dev
 
 COPY . .
 
