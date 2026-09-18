@@ -1,6 +1,8 @@
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const path = require('path');
 const fs = require('fs');
 const https = require('https');
@@ -51,14 +53,28 @@ const allowedCorsOrigins = new Set(
         .map((origin) => origin.trim())
         .filter(Boolean)
 );
+// En-têtes de sécurité HTTP (XSS, clickjacking, MIME sniffing, etc.)
+app.use(helmet({
+    contentSecurityPolicy: false // désactivé car la plateforme charge CDN externes (Chart.js, Tailwind, Google Fonts)
+}));
+
 app.use(cors({
     origin(origin, callback) {
         if (!origin || allowedCorsOrigins.has(origin)) return callback(null, true);
         return callback(new Error('Origine CORS non autorisée'));
     }
 }));
-app.use(bodyParser.json({ limit: '50mb' }));
-app.use(bodyParser.urlencoded({ extended: true, limit: '50mb' }));
+app.use(bodyParser.json({ limit: '5mb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: '5mb' }));
+
+// Rate limiting anti brute-force sur le login
+const loginRateLimit = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 20,                   // 20 tentatives par IP par fenêtre
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Trop de tentatives de connexion. Réessayez dans 15 minutes.' }
+});
 
 // ── Routes explicites AVANT les middlewares statiques ──────────────────────
 // (express.static('dist') servirait dist/index.html à '/' sinon)
@@ -72,12 +88,8 @@ app.get('/monitor', (req, res) => res.sendFile(path.join(__dirname, 'dist', 'ind
 // ── Fichiers statiques ─────────────────────────────────────────────────────
 app.use(express.static('dist')); // Assets JS/CSS du build React
 app.use(express.static('public'));
-// Les pages de test historiques ne doivent pas être publiées par le serveur de production.
-app.use((req, res, next) => {
-    if (/^\/test(?:-[^/]+)?\.html$/i.test(req.path)) return res.status(404).end();
-    return next();
-});
-app.use(express.static(__dirname));
+// Fichiers statiques servis explicitement — pas de express.static(__dirname)
+// pour éviter d'exposer database.db, server.js, etc.
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.get('/logo-good-engineers.png', (req, res) => res.sendFile(path.join(__dirname, 'logo-good-engineers.png')));
 app.get('/logo-sahara-mining-services.png', (req, res) => res.sendFile(path.join(__dirname, 'logo-sahara-mining-services.png')));
@@ -461,6 +473,9 @@ function getDailyDataActorFromRequest(req, cb) {
         cb(null, { username, name });
     });
 }
+
+// Rate limit appliqué sur la route login uniquement
+app.use('/api/auth/login', loginRateLimit);
 
 // JWT requis pour toutes les routes /api sauf login et health
 app.use((req, res, next) => {

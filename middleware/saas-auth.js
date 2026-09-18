@@ -56,6 +56,5 @@ module.exports = {
     signUserToken,
     verifyAuth,
     requirePlatformAdmin,
-    JWT_SECRET,
     JWT_EXPIRES_IN
 };
