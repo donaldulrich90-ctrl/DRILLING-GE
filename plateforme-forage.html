@@ -14,8 +14,8 @@
                 extend: {
                     colors: {
                         komatsu: {
-                            yellow: '#FFCD00',
-                            gold: '#FFBE21',
+                            yellow: '#F59E0B',
+                            gold: '#FBBF24',
                             black: '#111827',
                             blue: '#1e293b',
                             surface: '#F4F5F7',
@@ -545,28 +545,28 @@
             color: #cbd5e1 !important;
         }
 
-        /* ── Refonte Control Room 2026 ────────────────────────────── */
+        /* ── Dark Industrial Control Room ──────────────────────────── */
         :root {
-            --ged-yellow:       #F4B400;
-            --ged-black:        #0B1220;
-            --ged-blue:         #102A43;
-            --ged-accent:       #F4B400;
-            --ged-accent-hover: #FFD04A;
-            --ged-accent-soft:  rgba(244, 180, 0, 0.22);
-            --ged-accent-faint: rgba(244, 180, 0, 0.08);
-            --ged-charcoal:     #334155;
-            --ged-surface:      #EEF2F6;
-            --ged-border:       #D7DEE7;
-            --ged-success:      #0F9D67;
-            --ged-danger:       #D64545;
-            --ged-sidebar-bg:   #08111F;
-            --ged-sidebar-top:  #102A43;
-            --ged-panel-bg:     #FFFFFF;
-            --ged-card-bg:      #FFFFFF;
+            --ged-yellow:       #F59E0B;
+            --ged-black:        #E8EDF2;
+            --ged-blue:         #F59E0B;
+            --ged-accent:       #F59E0B;
+            --ged-accent-hover: #FBBF24;
+            --ged-accent-soft:  rgba(245, 158, 11, 0.22);
+            --ged-accent-faint: rgba(245, 158, 11, 0.08);
+            --ged-charcoal:     #A7B4C0;
+            --ged-surface:      #0B1117;
+            --ged-border:       #2B3945;
+            --ged-success:      #22C55E;
+            --ged-danger:       #EF4444;
+            --ged-sidebar-bg:   #080D12;
+            --ged-sidebar-top:  #141C24;
+            --ged-panel-bg:     #141C24;
+            --ged-card-bg:      #141C24;
         }
         body {
-            background: #EEF2F6;
-            color: #0B1220;
+            background: #0B1117;
+            color: #E8EDF2;
         }
         .ged-sidebar {
             background:
@@ -1040,7 +1040,7 @@
     <link rel="stylesheet" href="/gedrilling-login.css">
     <link rel="stylesheet" href="/gedrilling-platform-theme.css">
 </head>
-<body>
+<body class="ged-theme-control ged-motion-full">
     <!-- Page de connexion GEDRILLING -->
     <div id="loginModal" class="ged-login-root">
         <div class="ged-login-layout">
@@ -1056,7 +1056,7 @@
                     <span class="ged-login-eyebrow">MINING OPERATIONS CONTROL</span>
                     <h1>GEDRILLING</h1>
                     <h2>Mining Drilling Operations<br>&amp; Performance</h2>
-                    <p class="ged-login-hero-description" data-i18n="header.tagline">Pilotage du forage, des équipements et de la performance terrain</p>
+                    <p class="ged-login-hero-description" data-i18n="header.tagline">Pilotez vos opérations de forage, vos équipements et la performance de vos sites miniers depuis un seul système.</p>
                     <div class="ged-login-metrics" aria-label="GEDRILLING">
                         <div class="ged-login-metric"><strong>24/7</strong><span>Monitoring</span></div>
                         <div class="ged-login-metric"><strong>Multi-sites</strong><span>Operations</span></div>
@@ -1080,8 +1080,8 @@
 
                 <div class="ged-login-card">
                     <span class="ged-login-secure" data-i18n="login.secure">ACCÈS SÉCURISÉ</span>
-                    <h2 data-i18n="login.welcome">Bienvenue sur GEDRILLING</h2>
-                    <p class="ged-login-intro" data-i18n="login.intro">Connectez-vous à votre centre de contrôle des opérations de forage.</p>
+                    <h2 data-i18n="login.welcome">Bienvenue</h2>
+                    <p class="ged-login-intro" data-i18n="login.intro">Connectez-vous à votre centre de contrôle GEDRILLING.</p>
                     <div id="loginError" class="ged-login-error" role="alert" aria-live="polite"></div>
 
                     <div class="ged-login-field">
@@ -1099,7 +1099,13 @@
                             <button type="button" class="ged-login-password-toggle" onclick="toggleLoginPassword()" aria-controls="loginPassword">Afficher</button>
                         </div>
                     </div>
-                    <button type="button" id="loginSubmitButton" onclick="handleLogin()" class="ged-login-submit" data-i18n="login.submit">Se connecter</button>
+                    <div class="ged-login-remember">
+                        <label class="ged-login-remember-label">
+                            <input type="checkbox" id="loginRememberMe" class="ged-login-remember-check">
+                            <span data-i18n="login.remember">Se souvenir de moi</span>
+                        </label>
+                    </div>
+                    <button type="button" id="loginSubmitButton" onclick="handleLogin()" class="ged-login-submit" data-i18n="login.submit">SE CONNECTER</button>
                     <p class="ged-login-support" data-i18n="login.support">Mot de passe oublié ? Contactez votre administrateur.</p>
                 </div>
 
@@ -1134,6 +1140,7 @@
                     <button type="button" onclick="showMainView('connections')" class="ged-nav-item main-nav-btn" id="nav-connections">⌁ &nbsp;Connexions machines</button>
                     <button type="button" onclick="showMainView('assignments')" class="ged-nav-item main-nav-btn" id="nav-assignments">◉ &nbsp;Affectations terrain</button>
                     <button type="button" onclick="showMainView('maintenance')" class="ged-nav-item main-nav-btn" id="nav-maintenance">◆ &nbsp;Maintenance</button>
+                    <button type="button" onclick="showMainView('bit_sharpening')" class="ged-nav-item main-nav-btn" id="nav-bit_sharpening">⬡ &nbsp;Affûtage des bits</button>
                     <button type="button" onclick="showMainView('consumables')" class="ged-nav-item main-nav-btn" id="nav-consumables">◫ &nbsp;Consommables</button>
                     <button type="button" onclick="showMainView('inventory')" class="ged-nav-item main-nav-btn" id="nav-inventory">▣ &nbsp;Stocks</button>
                     <button type="button" onclick="showMainView('hse')" class="ged-nav-item main-nav-btn" id="nav-hse">✚ &nbsp;Santé &amp; sécurité</button>
@@ -1174,7 +1181,7 @@
                             <p class="text-[11px] text-gray-500 font-semibold truncate">Industrial drilling suite · GEDRILLING</p>
                         </div>
                         <div class="hidden md:flex flex-col items-center px-3 py-1 rounded-lg" style="background:#111;min-width:90px">
-                            <span id="headerClock" class="font-mono font-black text-lg" style="color:#FFCD00;letter-spacing:0.05em">00:00:00</span>
+                            <span id="headerClock" class="font-mono font-black text-lg" style="color:var(--ged-yellow);letter-spacing:0.05em">00:00:00</span>
                             <span id="headerDate" class="font-mono text-[10px]" style="color:#94A3B8"></span>
                         </div>
                     </div>
@@ -1266,6 +1273,11 @@
         <div id="mainView-maintenance" class="main-view hidden">
             <h2 class="text-2xl font-semibold mb-4" data-i18n="view.maintenance">Planification de Maintenance</h2>
             <div id="maintenanceContent" class="ged-content-panel p-6 rounded-xl"></div>
+        </div>
+
+        <!-- ═══ MODULE AFFÛTAGE DES BITS ════════════════════════════════════ -->
+        <div id="mainView-bit_sharpening" class="main-view hidden">
+            <div id="bitSharpeningContent"></div>
         </div>
 
         <div id="mainView-invoices" class="main-view hidden">
@@ -3987,14 +3999,14 @@
         // ============================================
         var GED_NATIVE_ALERT = window.alert.bind(window);
         var GED_THEME_DEFAULTS = {
-            control: '#F4B400',
+            control: '#F59E0B',
             night: '#38BDF8',
             sand: '#D97706',
             forest: '#10B981'
         };
         var GED_EXPERIENCE_DEFAULTS = {
             theme: 'control',
-            accent: '#F4B400',
+            accent: '#F59E0B',
             motion: 'full',
             voiceEnabled: false,
             voiceURI: '',
@@ -5438,7 +5450,7 @@
                 view !== 'enterprises' && subNav.indexOf(view) < 0) {
                 view = 'dashboard';
             }
-            var views = ['consumables', 'dashboard', 'connections', 'assignments', 'maintenance', 'invoices', 'contracts', 'sites', 'enterprises', 'revenue', 'site_meals', 'reports', 'project_overview', 'rh', 'inventory', 'accounts', 'clients', 'translator', 'team_chat', 'company_info', 'forage_plan', 'rentabilite', 'depenses_pm', 'analytics', 'hse'];
+            var views = ['consumables', 'dashboard', 'connections', 'assignments', 'maintenance', 'bit_sharpening', 'invoices', 'contracts', 'sites', 'enterprises', 'revenue', 'site_meals', 'reports', 'project_overview', 'rh', 'inventory', 'accounts', 'clients', 'translator', 'team_chat', 'company_info', 'forage_plan', 'rentabilite', 'depenses_pm', 'analytics', 'hse'];
             views.forEach(function(v) {
                 var el = document.getElementById('mainView-' + v);
                 if (el) el.classList.add('hidden');
@@ -7929,7 +7941,22 @@
                 renderAnalytics();
             } else if (view === 'hse') {
                 renderHSE();
+            } else if (view === 'bit_sharpening') {
+                renderBitSharpening();
             }
+        }
+
+        // ============================================
+        // AFFÛTAGE DES BITS — Module (Phase 3)
+        // ============================================
+        function renderBitSharpening() {
+            var el = document.getElementById('bitSharpeningContent');
+            if (!el) return;
+            el.innerHTML = '<div class="ged-content-panel p-8 rounded-xl text-center" style="min-height:320px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px">' +
+                '<div style="font-size:3rem">⬡</div>' +
+                '<h2 class="text-2xl font-extrabold" style="color:var(--ged-yellow)">Affûtage des bits</h2>' +
+                '<p style="color:var(--ged-charcoal);max-width:480px;line-height:1.6">Suivez l\'affûtage, la réutilisation, la production et la performance de vos bits de forage.<br><strong style="color:var(--ged-black)">Module en cours de déploiement — Phase 3</strong></p>' +
+                '</div>';
         }
 
         // ============================================

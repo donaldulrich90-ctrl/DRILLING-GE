@@ -1,7 +1,7 @@
 /* Palette par défaut de la salle de contrôle, assortie à la connexion. */
 body.ged-theme-control {
     --ged-black: #e8edf2;
-    --ged-blue: #f5a623;
+    --ged-blue: #F59E0B;
     --ged-charcoal: #a7b4c0;
     --ged-surface: #0b1117;
     --ged-border: #2b3945;
@@ -100,8 +100,8 @@ body.ged-theme-control .ged-stat-card label,
 body.ged-theme-control .ged-modal-panel label { color: #a7b4c0 !important; }
 
 body.ged-theme-control .ged-kpi-icon {
-    background: rgba(245, 166, 35, .12);
-    color: #ffc45a;
+    background: rgba(245, 158, 11, .14);
+    color: #FDE68A;
 }
 
 body.ged-theme-control #ged-workspace input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
