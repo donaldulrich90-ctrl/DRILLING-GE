@@ -1,0 +1,404 @@
+.ged-login-root {
+    --login-bg: #080e14;
+    --login-panel: #111b24;
+    --login-amber: #f5a623;
+    --login-amber-light: #ffc45a;
+    --login-text: #f5f7f9;
+    --login-muted: #a6b3be;
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    min-height: 100vh;
+    overflow-y: auto;
+    background: var(--login-bg);
+    color: var(--login-text);
+    font-family: "Segoe UI", Arial, sans-serif;
+}
+
+.ged-login-root.hidden { display: none; }
+.ged-login-root *, .ged-login-root *::before, .ged-login-root *::after { box-sizing: border-box; }
+
+.ged-login-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 58fr) minmax(430px, 42fr);
+    min-height: 100vh;
+    min-height: 100dvh;
+}
+
+.ged-login-hero {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 100vh;
+    padding: clamp(32px, 4.4vw, 68px);
+    background-image:
+        linear-gradient(180deg, rgba(5, 10, 15, .54) 0%, rgba(5, 10, 15, .16) 37%, rgba(5, 10, 15, .88) 100%),
+        linear-gradient(90deg, rgba(5, 10, 15, .34), transparent 74%),
+        url('/gedrilling-mining-hero.jpg');
+    background-position: center, center, 28% center;
+    background-size: cover;
+    isolation: isolate;
+}
+
+.ged-login-brand {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.ged-login-mark {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    width: 52px;
+    height: 52px;
+    border-radius: 12px;
+    background: var(--login-amber);
+    color: #111820;
+    font: 800 19px/1 "Barlow Semi Condensed", "Segoe UI", sans-serif;
+    letter-spacing: -.04em;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, .3);
+}
+
+.ged-login-brand strong {
+    display: block;
+    font: 800 17px/1.1 "Barlow Semi Condensed", "Segoe UI", sans-serif;
+    letter-spacing: .1em;
+}
+
+.ged-login-brand small {
+    display: block;
+    margin-top: 5px;
+    color: rgba(255, 255, 255, .78);
+    font-size: 10px;
+    letter-spacing: .11em;
+}
+
+.ged-login-hero-content {
+    max-width: 760px;
+    margin: auto 0 0;
+    padding: 96px 0 44px;
+}
+
+.ged-login-eyebrow {
+    display: inline-block;
+    padding: 8px 12px;
+    border: 1px solid rgba(255, 196, 90, .55);
+    border-radius: 100px;
+    background: rgba(10, 19, 27, .6);
+    color: var(--login-amber-light);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .16em;
+}
+
+.ged-login-hero h1 {
+    margin: 23px 0 12px;
+    color: #fff;
+    font: 800 clamp(54px, 6.3vw, 100px)/.93 "Barlow Semi Condensed", "Segoe UI", sans-serif;
+    letter-spacing: -.045em;
+    text-shadow: 0 8px 32px rgba(0, 0, 0, .4);
+}
+
+.ged-login-hero h2 {
+    max-width: 620px;
+    margin: 0;
+    color: #fff;
+    font: 700 clamp(23px, 2.5vw, 35px)/1.13 "Barlow Semi Condensed", "Segoe UI", sans-serif;
+}
+
+.ged-login-hero-description {
+    max-width: 550px;
+    margin: 18px 0 0;
+    color: rgba(255, 255, 255, .84);
+    font-size: 15px;
+    line-height: 1.6;
+}
+
+.ged-login-metrics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 32px;
+}
+
+.ged-login-metric {
+    min-width: 132px;
+    padding: 13px 16px;
+    border: 1px solid rgba(255, 255, 255, .17);
+    border-radius: 11px;
+    background: rgba(8, 16, 23, .56);
+    backdrop-filter: blur(8px);
+}
+
+.ged-login-metric strong {
+    display: block;
+    color: var(--login-amber-light);
+    font-size: 15px;
+    font-weight: 800;
+}
+
+.ged-login-metric span {
+    display: block;
+    margin-top: 3px;
+    color: rgba(255, 255, 255, .73);
+    font-size: 10px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+
+.ged-login-hero-bottom {
+    margin: 0;
+    color: rgba(255, 255, 255, .66);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .18em;
+}
+
+.ged-login-panel {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 100vh;
+    padding: 37px clamp(30px, 4.1vw, 72px) 28px;
+    background: radial-gradient(circle at 100% 0%, rgba(245, 166, 35, .09), transparent 38%), var(--login-bg);
+}
+
+.ged-login-panel-top, .ged-login-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.ged-login-panel-brand {
+    color: #f2f5f7;
+    font: 800 13px/1 "Barlow Semi Condensed", "Segoe UI", sans-serif;
+    letter-spacing: .17em;
+}
+
+.ged-login-panel-brand span { color: var(--login-amber); }
+
+.ged-login-language {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+}
+
+.ged-login-language label {
+    color: var(--login-muted);
+    font-size: 12px;
+}
+
+.ged-login-language select {
+    min-height: 36px;
+    padding: 6px 11px;
+    border: 1px solid rgba(255, 255, 255, .17);
+    border-radius: 8px;
+    background: #121c25;
+    color: #fff;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.ged-login-card {
+    width: 100%;
+    max-width: 450px;
+    margin: auto;
+    padding: clamp(27px, 3vw, 40px);
+    border: 1px solid rgba(255, 255, 255, .1);
+    border-radius: 18px;
+    background: linear-gradient(145deg, rgba(23, 34, 44, .98), rgba(12, 19, 27, .98));
+    box-shadow: 0 24px 72px rgba(0, 0, 0, .38);
+}
+
+.ged-login-secure {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: #6fe1a2;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .13em;
+}
+
+.ged-login-secure::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #50d88f;
+    box-shadow: 0 0 0 4px rgba(80, 216, 143, .12);
+}
+
+.ged-login-card h2 {
+    margin: 15px 0 8px;
+    color: #fff;
+    font: 800 clamp(29px, 3vw, 37px)/1.1 "Barlow Semi Condensed", "Segoe UI", sans-serif;
+}
+
+.ged-login-intro {
+    margin: 0 0 29px;
+    color: var(--login-muted);
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+.ged-login-error {
+    display: none;
+    margin: 0 0 17px;
+    padding: 11px 13px;
+    border: 1px solid rgba(239, 104, 104, .55);
+    border-left: 3px solid #ef6868;
+    border-radius: 8px;
+    background: rgba(130, 31, 31, .22);
+    color: #ffd1d1;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.ged-login-field { margin-bottom: 19px; }
+.ged-login-field-password { margin-bottom: 25px; }
+
+.ged-login-field label {
+    display: block;
+    margin-bottom: 9px;
+    color: #d6dfe5;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.ged-login-input-wrap {
+    display: flex;
+    align-items: center;
+    height: 54px;
+    border: 1px solid rgba(255, 255, 255, .15);
+    border-radius: 10px;
+    background: #0a1219;
+    color: #8d9ca8;
+    transition: border-color .18s, box-shadow .18s;
+}
+
+.ged-login-input-wrap:focus-within {
+    border-color: var(--login-amber);
+    box-shadow: 0 0 0 3px rgba(245, 166, 35, .13);
+}
+
+.ged-login-input-wrap svg {
+    flex: 0 0 auto;
+    width: 18px;
+    height: 18px;
+    margin-left: 16px;
+}
+
+.ged-login-input {
+    width: 100%;
+    min-width: 0;
+    height: 100%;
+    padding: 0 14px;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: #fff;
+    font: 400 14px/1 "Segoe UI", Arial, sans-serif;
+}
+
+.ged-login-input::placeholder { color: #758490; opacity: 1; }
+.ged-login-password-wrap { position: relative; }
+.ged-login-password-wrap .ged-login-input { padding-right: 78px; }
+
+.ged-login-password-toggle {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    padding: 8px 2px;
+    border: 0;
+    background: transparent;
+    color: var(--login-amber-light);
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.ged-login-password-toggle:hover { color: #fff; }
+
+.ged-login-submit {
+    display: block;
+    width: 100%;
+    min-height: 55px;
+    padding: 13px 46px;
+    border: 0;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #f5a623, #ffbf48);
+    color: #111820;
+    font: 800 13px/1 "Segoe UI", Arial, sans-serif;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: transform .18s, box-shadow .18s;
+}
+
+.ged-login-submit::after {
+    content: '→';
+    margin-left: 12px;
+    font-size: 18px;
+    line-height: 0;
+    vertical-align: -1px;
+}
+
+.ged-login-submit:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 30px rgba(245, 166, 35, .24);
+}
+
+.ged-login-submit:disabled { cursor: wait; }
+.ged-login-root :is(button, select, input):focus-visible { outline: 2px solid var(--login-amber-light); outline-offset: 3px; }
+
+.ged-login-support {
+    margin: 24px 0 0;
+    padding-top: 21px;
+    border-top: 1px solid rgba(255, 255, 255, .1);
+    color: var(--login-muted);
+    font-size: 12px;
+    line-height: 1.5;
+    text-align: center;
+}
+
+.ged-login-footer {
+    color: #74828e;
+    font-size: 10px;
+    letter-spacing: .03em;
+}
+
+@media (max-width: 960px) {
+    .ged-login-layout { display: block; }
+    .ged-login-hero { min-height: 320px; padding: 30px 5vw; background-position: center, center, 34% 48%; }
+    .ged-login-hero-content { padding: 35px 0 25px; }
+    .ged-login-hero h1 { font-size: clamp(48px, 8vw, 76px); }
+    .ged-login-hero h2 { font-size: 25px; }
+    .ged-login-hero-description, .ged-login-metrics, .ged-login-hero-bottom { display: none; }
+    .ged-login-panel { min-height: 0; padding: 27px 5vw; }
+    .ged-login-card { margin: 30px auto 34px; }
+}
+
+@media (max-width: 560px) {
+    .ged-login-hero { min-height: 235px; padding: 22px 20px; }
+    .ged-login-mark { width: 42px; height: 42px; font-size: 16px; }
+    .ged-login-brand strong { font-size: 15px; }
+    .ged-login-brand small { font-size: 9px; letter-spacing: .06em; }
+    .ged-login-eyebrow { font-size: 8px; padding: 6px 9px; }
+    .ged-login-hero-content { padding: 20px 0 0; }
+    .ged-login-hero h1 { margin: 13px 0 0; font-size: clamp(43px, 12vw, 58px); }
+    .ged-login-hero h2 { display: none; }
+    .ged-login-panel { padding: 21px 16px 27px; }
+    .ged-login-panel-brand { font-size: 11px; }
+    .ged-login-card { margin: 22px auto 26px; padding: 27px 22px; }
+    .ged-login-footer { flex-direction: column; justify-content: center; text-align: center; gap: 5px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ged-login-root * { transition: none !important; }
+}

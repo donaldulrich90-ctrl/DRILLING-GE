@@ -319,97 +319,6 @@
             border-color: var(--ged-yellow) !important;
         }
 
-        /* Écran de connexion — maquette GOOD ENGINEERS (noir / jaune / bleu données) */
-        .ged-login-root {
-            background: #0a0a0a;
-            color: #fff;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-        .ged-login-header {
-            background: #000;
-            border-bottom: 3px solid var(--ged-yellow);
-            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
-        }
-        .ged-login-card {
-            background: rgba(28, 28, 28, 0.92);
-            border: 1px solid rgba(255, 205, 0, 0.4);
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 205, 0, 0.08);
-        }
-        .ged-login-input {
-            background: rgba(0, 0, 0, 0.55);
-            border: 1px solid rgba(255, 205, 0, 0.28);
-            color: #fff;
-        }
-        .ged-login-input::placeholder { color: rgba(255, 255, 255, 0.35); }
-        .ged-login-input:focus {
-            outline: none;
-            border-color: var(--ged-yellow);
-            box-shadow: 0 0 0 2px rgba(255, 205, 0, 0.2);
-        }
-        .ged-login-submit {
-            background: var(--ged-yellow) !important;
-            color: var(--ged-black) !important;
-            font-weight: 800 !important;
-            letter-spacing: 0.12em;
-            border: 2px solid var(--ged-accent-hover) !important;
-            text-transform: uppercase;
-        }
-        .ged-login-submit:hover { background: var(--ged-accent-hover) !important; filter: brightness(1.06); }
-        .ged-login-commandbar {
-            display: flex;
-            justify-content: space-between;
-            gap: 10px;
-            padding: 10px 12px;
-            margin-bottom: 18px;
-            background: #141414;
-            border: 1px solid rgba(255, 205, 0, 0.24);
-            border-left: 3px solid var(--ged-yellow);
-            border-radius: 8px;
-            color: rgba(255,255,255,0.72);
-            font-size: 0.72rem;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-        }
-        .ged-login-commandbar strong { color: var(--ged-yellow); font-weight: 800; }
-        .ged-login-error {
-            display: none;
-            margin: 0 0 16px;
-            padding: 10px 12px;
-            border: 1px solid rgba(220, 38, 38, 0.55);
-            border-left: 3px solid #DC2626;
-            border-radius: 6px;
-            background: rgba(127, 29, 29, 0.25);
-            color: #fecaca;
-            font-size: 0.82rem;
-        }
-        .ged-login-password-wrap { position: relative; }
-        .ged-login-password-toggle {
-            position: absolute;
-            right: 10px;
-            top: 50%;
-            transform: translateY(-50%);
-            border: 0;
-            background: transparent;
-            color: rgba(255,255,255,0.68);
-            font-size: 0.72rem;
-            letter-spacing: 0.04em;
-            cursor: pointer;
-        }
-        .ged-login-password-toggle:hover { color: var(--ged-yellow); }
-        .ged-login-kpi { color: rgba(255,255,255,0.68); font-size: 0.78rem; }
-        .ged-login-kpi strong { color: #fff; font-size: 1rem; margin-right: 4px; }
-        .ged-login-machine {
-            background: #141414;
-            border: 1px solid rgba(255, 205, 0, 0.55);
-            min-height: 100px;
-        }
-        .ged-login-mission {
-            background: #1e293b;
-            border: 1px solid rgba(255, 205, 0, 0.35);
-            border-left: 4px solid var(--ged-yellow);
-        }
         .ged-logout-btn {
             background: var(--ged-black) !important;
             color: #fff !important;
@@ -1128,110 +1037,78 @@
             *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
         }
  </style>
+    <link rel="stylesheet" href="/gedrilling-login.css">
+    <link rel="stylesheet" href="/gedrilling-platform-theme.css">
 </head>
 <body>
-    <!-- Écran de connexion — style maquette GOOD ENGINEERS -->
-    <div id="loginModal" class="ged-login-root fixed inset-0 z-50 overflow-y-auto font-ged">
-        <header class="ged-login-header px-4 py-8 md:py-10">
-            <div class="max-w-3xl mx-auto text-center">
-                <img src="logo-good-engineers.png" alt="GOOD ENGINEERS" class="h-20 md:h-28 w-auto mx-auto object-contain" onerror="this.style.display='none'">
-                <h1 class="text-[#FFCC00] text-2xl md:text-4xl font-black tracking-tight mt-4">GOOD ENGINEERS</h1>
-                <p class="text-[#FFCC00] text-[10px] md:text-xs font-bold tracking-[0.35em] mt-3 uppercase">Discipline • Rigueur • Performance</p>
-                <p class="text-gray-300 text-sm md:text-base mt-4 font-medium">Mine Control · Gestion des opérations de forage</p>
-                <p class="text-[#FFCC00]/90 text-xs font-semibold tracking-widest mt-2 uppercase">GEDRILLING / CONTROL ROOM</p>
-            </div>
-        </header>
-
-        <div class="flex-1 flex justify-center px-4 py-8 md:py-12">
-            <div class="ged-login-card w-full max-w-md rounded-xl p-6 md:p-8">
-                <div class="flex justify-end items-center gap-2 mb-4">
-                    <label class="text-gray-400 text-xs font-semibold" data-i18n="header.lang">Langue</label>
-                    <select id="uiLangSelectLogin" class="bg-black/60 border border-[#FFCC00]/35 rounded px-2 py-1.5 text-sm text-white" onchange="onUiLangChange(this.value)">
-                        <option value="fr">FR</option>
-                        <option value="en">EN</option>
-                    </select>
-                </div>
-                <div class="ged-login-commandbar">
-                    <span><strong>CONTROL ROOM</strong> · accès vérifié</span>
-                    <span>AUTH <strong>GATE</strong></span>
-                </div>
-                <h2 class="text-xl md:text-2xl font-bold text-white mb-6 flex items-center justify-center gap-2">
-                    <span class="text-[#FFCC00] text-xs tracking-[0.2em]" aria-hidden="true">SECURE ACCESS</span>
-                    <span data-i18n="login.title">Connexion</span>
-                </h2>
-                <div id="loginError" class="ged-login-error" role="alert" aria-live="polite"></div>
-                <div class="mb-4">
-                    <label class="block text-white mb-2 text-sm font-semibold" data-i18n="login.username">Identifiant</label>
-                    <input type="text" id="loginUsername" class="ged-login-input w-full rounded-lg px-4 py-3 text-sm md:text-base" autocomplete="username" placeholder="Entrez votre identifiant" onkeypress="if(event.key==='Enter') handleLogin()">
-                </div>
-                <div class="mb-6">
-                    <label class="block text-white mb-2 text-sm font-semibold" data-i18n="login.password">Mot de passe</label>
-                    <div class="ged-login-password-wrap">
-                        <input type="password" id="loginPassword" class="ged-login-input w-full rounded-lg px-4 py-3 pr-20 text-sm md:text-base" autocomplete="current-password" placeholder="Entrez votre mot de passe" onkeypress="if(event.key==='Enter') handleLogin()">
-                        <button type="button" class="ged-login-password-toggle" onclick="toggleLoginPassword()" aria-controls="loginPassword">Afficher</button>
+    <!-- Page de connexion GEDRILLING -->
+    <div id="loginModal" class="ged-login-root">
+        <div class="ged-login-layout">
+            <section class="ged-login-hero" aria-label="GEDRILLING">
+                <div class="ged-login-brand">
+                    <span class="ged-login-mark" aria-hidden="true">GE</span>
+                    <div>
+                        <strong>GOOD ENGINEERS</strong>
+                        <small>Discipline • Rigueur • Performance</small>
                     </div>
                 </div>
-                <button type="button" id="loginSubmitButton" onclick="handleLogin()" class="ged-login-submit w-full px-4 py-3.5 rounded-lg mb-2" data-i18n="login.submit">Connexion</button>
-                <div class="grid grid-cols-3 gap-3 mt-5 text-center">
-                    <div class="ged-login-kpi"><strong>API</strong><br>JWT</div>
-                    <div class="ged-login-kpi"><strong>24/7</strong><br>suivi</div>
-                    <div class="ged-login-kpi"><strong>1</strong><br>session</div>
+                <div class="ged-login-hero-content">
+                    <span class="ged-login-eyebrow">MINING OPERATIONS CONTROL</span>
+                    <h1>GEDRILLING</h1>
+                    <h2>Mining Drilling Operations<br>&amp; Performance</h2>
+                    <p class="ged-login-hero-description" data-i18n="header.tagline">Pilotage du forage, des équipements et de la performance terrain</p>
+                    <div class="ged-login-metrics" aria-label="GEDRILLING">
+                        <div class="ged-login-metric"><strong>24/7</strong><span>Monitoring</span></div>
+                        <div class="ged-login-metric"><strong>Multi-sites</strong><span>Operations</span></div>
+                        <div class="ged-login-metric"><strong>Real-time</strong><span>Performance</span></div>
+                    </div>
                 </div>
-                <p class="text-xs text-gray-400 text-center mt-5 leading-relaxed">Les données et les sites accessibles apparaissent uniquement après vérification de votre compte.</p>
-            </div>
+                <p class="ged-login-hero-bottom">CONTROL • PERFORMANCE • SAFETY</p>
+            </section>
+
+            <section class="ged-login-panel" aria-label="Connexion GEDRILLING">
+                <div class="ged-login-panel-top">
+                    <div class="ged-login-panel-brand">GOOD ENGINEERS <span>• GEDRILLING</span></div>
+                    <div class="ged-login-language">
+                        <label for="uiLangSelectLogin" data-i18n="header.lang">Langue</label>
+                        <select id="uiLangSelectLogin" onchange="onUiLangChange(this.value)">
+                            <option value="fr">FR</option>
+                            <option value="en">EN</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="ged-login-card">
+                    <span class="ged-login-secure" data-i18n="login.secure">ACCÈS SÉCURISÉ</span>
+                    <h2 data-i18n="login.welcome">Bienvenue sur GEDRILLING</h2>
+                    <p class="ged-login-intro" data-i18n="login.intro">Connectez-vous à votre centre de contrôle des opérations de forage.</p>
+                    <div id="loginError" class="ged-login-error" role="alert" aria-live="polite"></div>
+
+                    <div class="ged-login-field">
+                        <label for="loginUsername" data-i18n="login.username">Identifiant</label>
+                        <div class="ged-login-input-wrap">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+                            <input type="text" id="loginUsername" class="ged-login-input" autocomplete="username" placeholder="Entrez votre identifiant" data-i18n-placeholder="login.username_placeholder" onkeypress="if(event.key==='Enter') handleLogin()">
+                        </div>
+                    </div>
+                    <div class="ged-login-field ged-login-field-password">
+                        <label for="loginPassword" data-i18n="login.password">Mot de passe</label>
+                        <div class="ged-login-input-wrap ged-login-password-wrap">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+                            <input type="password" id="loginPassword" class="ged-login-input" autocomplete="current-password" placeholder="Entrez votre mot de passe" data-i18n-placeholder="login.password_placeholder" onkeypress="if(event.key==='Enter') handleLogin()">
+                            <button type="button" class="ged-login-password-toggle" onclick="toggleLoginPassword()" aria-controls="loginPassword">Afficher</button>
+                        </div>
+                    </div>
+                    <button type="button" id="loginSubmitButton" onclick="handleLogin()" class="ged-login-submit" data-i18n="login.submit">Se connecter</button>
+                    <p class="ged-login-support" data-i18n="login.support">Mot de passe oublié ? Contactez votre administrateur.</p>
+                </div>
+
+                <footer class="ged-login-footer">
+                    <span data-i18n="login.footer">Accès sécurisé · Données protégées</span>
+                    <span>© GOOD ENGINEERS · GEDRILLING</span>
+                </footer>
+            </section>
         </div>
-
-        <section class="border-t border-[#FFCC00]/25 bg-black/35 px-4 py-10 md:py-14 mt-auto">
-            <div class="max-w-6xl mx-auto grid md:grid-cols-2 gap-10 md:gap-12">
-                <div>
-                    <h3 class="text-[#FFCC00] font-extrabold text-lg md:text-xl mb-5 uppercase tracking-wide">Nos Engins de Travail</h3>
-                    <div class="grid grid-cols-2 gap-3">
-                        <div class="ged-login-machine rounded-lg p-3 flex flex-col items-center justify-center text-center">
-                            <span class="text-sm font-black tracking-[0.2em] text-[#FFCC00] mb-2" aria-hidden="true">TRK</span>
-                            <span class="text-white font-bold text-sm">Camions</span>
-                        </div>
-                        <div class="ged-login-machine rounded-lg p-3 flex flex-col items-center justify-center text-center">
-                            <span class="text-sm font-black tracking-[0.2em] text-[#FFCC00] mb-2" aria-hidden="true">EXC</span>
-                            <span class="text-white font-bold text-sm">Excavatrices</span>
-                        </div>
-                        <div class="ged-login-machine rounded-lg p-3 flex flex-col items-center justify-center text-center">
-                            <span class="text-sm font-black tracking-[0.2em] text-[#FFCC00] mb-2" aria-hidden="true">BLD</span>
-                            <span class="text-white font-bold text-sm">Bulldozer</span>
-                        </div>
-                        <div class="ged-login-machine rounded-lg p-3 flex flex-col items-center justify-center text-center">
-                            <span class="text-sm font-black tracking-[0.2em] text-[#FFCC00] mb-2" aria-hidden="true">DMP</span>
-                            <span class="text-white font-bold text-sm">Dumper</span>
-                        </div>
-                    </div>
-                </div>
-                <div>
-                    <h3 class="text-[#FFCC00] font-extrabold text-lg md:text-xl mb-5 uppercase tracking-wide">Nos Missions</h3>
-                    <div class="space-y-3">
-                        <div class="ged-login-mission rounded-r-lg p-4 flex gap-4 items-start">
-                            <span class="text-sm font-black tracking-[0.16em] text-[#FFCC00] shrink-0" aria-hidden="true">01</span>
-                            <div>
-                                <p class="text-[#FFCC00] font-bold text-sm uppercase tracking-wide">Excellence</p>
-                                <p class="text-gray-200 text-sm mt-1">Standards élevés sur chaque chantier et chaque rapport.</p>
-                            </div>
-                        </div>
-                        <div class="ged-login-mission rounded-r-lg p-4 flex gap-4 items-start">
-                            <span class="text-sm font-black tracking-[0.16em] text-[#FFCC00] shrink-0" aria-hidden="true">02</span>
-                            <div>
-                                <p class="text-[#FFCC00] font-bold text-sm uppercase tracking-wide">Efficacité</p>
-                                <p class="text-gray-200 text-sm mt-1">Optimisation des ressources, délais et coûts opérationnels.</p>
-                            </div>
-                        </div>
-                        <div class="ged-login-mission rounded-r-lg p-4 flex gap-4 items-start">
-                            <span class="text-sm font-black tracking-[0.16em] text-[#FFCC00] shrink-0" aria-hidden="true">03</span>
-                            <div>
-                                <p class="text-[#FFCC00] font-bold text-sm uppercase tracking-wide">Sécurité</p>
-                                <p class="text-gray-200 text-sm mt-1">Priorité absolue aux équipes et à l'environnement de travail.</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
     </div>
 
     <div id="app" class="ged-app-shell min-h-screen hidden bg-ged-surface text-ged-black font-ged">

@@ -44,3 +44,6 @@ graphify-out/
 ecosystem.config.js
 nginx-forage.conf
 scripts/setup-vps.sh
+
+# Visuel de la page de connexion GEDRILLING
+!public/gedrilling-mining-hero.jpg
