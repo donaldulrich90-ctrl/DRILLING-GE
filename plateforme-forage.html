@@ -8424,20 +8424,30 @@
 
         function _gedBitRenderSharpeningCycles(rows) {
             if (rows.length===0) return '<div style="text-align:center;padding:20px;color:var(--ged-charcoal);font-size:13px">Aucun cycle d\'affûtage enregistré.</div>';
-            var th='padding:7px 10px;text-align:left;font-size:10px;font-weight:800;letter-spacing:.07em;color:var(--ged-charcoal);text-transform:uppercase';
-            return '<table style="width:100%;border-collapse:collapse;font-size:12px">' +
-                '<thead><tr style="border-bottom:1px solid rgba(255,255,255,.08)">'+['N°','Demandé le','Démarré','Terminé','Technicien','Mètres avant'].map(function(h){return '<th style="'+th+'">'+h+'</th>';}).join('')+'</tr></thead>' +
+            var th='padding:7px 10px;text-align:left;font-size:10px;font-weight:800;letter-spacing:.07em;color:var(--ged-charcoal);text-transform:uppercase;white-space:nowrap';
+            var hdrs=['N°','Demandé le','Terminé','Technicien','M. avant','Durée (h)','Coût','Type','Ø après','Dents','Recommandation'];
+            var teethLabel={'bon':'<span style="color:#4ade80">Bon</span>','use':'<span style="color:#fbbf24">Usé</span>','critique':'<span style="color:#f87171">Critique</span>'};
+            var typeLabel={'standard':'Standard','complet':'<span style="color:#c084fc">Complet</span>','urgence':'<span style="color:#f87171">Urgence</span>'};
+            return '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">' +
+                '<thead><tr style="border-bottom:1px solid rgba(255,255,255,.08)">'+hdrs.map(function(h){return '<th style="'+th+'">'+h+'</th>';}).join('')+'</tr></thead>' +
                 '<tbody>'+rows.map(function(r){
                     var done=!!r.completedAt;
+                    var tLabel=teethLabel[r.teethCondition]||'—';
+                    var sType=typeLabel[r.sharpeningType]||(r.sharpeningType?_gedBitEsc(r.sharpeningType):'Standard');
                     return '<tr style="border-bottom:1px solid rgba(255,255,255,.04)">' +
-                        '<td style="padding:7px 10px;font-weight:700;color:#fbbf24">#'+r.sharpeningNumber+'</td>' +
-                        '<td style="padding:7px 10px;color:var(--ged-charcoal)">'+(r.requestedAt||'').slice(0,10)+'</td>' +
-                        '<td style="padding:7px 10px;color:var(--ged-charcoal)">'+(r.startedAt?(r.startedAt||'').slice(0,10):'<span style="opacity:.4">—</span>')+'</td>' +
-                        '<td style="padding:7px 10px">'+(done?'<span style="color:#4ade80">'+(r.completedAt||'').slice(0,10)+'</span>':'<span style="color:#fbbf24;font-size:11px">En cours</span>')+'</td>' +
+                        '<td style="padding:7px 10px;font-weight:700;color:#fbbf24;white-space:nowrap">#'+r.sharpeningNumber+'</td>' +
+                        '<td style="padding:7px 10px;color:var(--ged-charcoal);white-space:nowrap">'+(r.requestedAt||'').slice(0,10)+'</td>' +
+                        '<td style="padding:7px 10px;white-space:nowrap">'+(done?'<span style="color:#4ade80">'+(r.completedAt||'').slice(0,10)+'</span>':'<span style="color:#fbbf24;font-size:11px">En cours</span>')+'</td>' +
                         '<td style="padding:7px 10px">'+_gedBitEsc(r.technicianName||'—')+'</td>' +
-                        '<td style="padding:7px 10px;font-weight:700">'+(r.metersBeforeSharpening!=null?Number(r.metersBeforeSharpening).toFixed(1)+' m':'—')+'</td>' +
+                        '<td style="padding:7px 10px;font-weight:700;white-space:nowrap">'+(r.metersBeforeSharpening!=null?Number(r.metersBeforeSharpening).toFixed(1)+' m':'—')+'</td>' +
+                        '<td style="padding:7px 10px;white-space:nowrap">'+(r.sharpeningDuration!=null?Number(r.sharpeningDuration).toFixed(1)+'h':'—')+'</td>' +
+                        '<td style="padding:7px 10px;white-space:nowrap">'+(r.sharpeningCost?Number(r.sharpeningCost).toLocaleString()+' XOF':'—')+'</td>' +
+                        '<td style="padding:7px 10px">'+sType+'</td>' +
+                        '<td style="padding:7px 10px;white-space:nowrap">'+(r.diameterAfter!=null?Number(r.diameterAfter).toFixed(1)+' mm':'—')+'</td>' +
+                        '<td style="padding:7px 10px">'+tLabel+'</td>' +
+                        '<td style="padding:7px 10px;color:var(--ged-charcoal);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+_gedBitEsc(r.recommendation||'')+'">'+_gedBitEsc(r.recommendation||'—')+'</td>' +
                     '</tr>';
-                }).join('')+'</tbody></table>';
+                }).join('')+'</tbody></table></div>';
         }
 
         function _gedBitRenderStatusHistory(rows) {
@@ -8466,17 +8476,46 @@
                 fields = '<div><label style="font-size:12px;font-weight:700;color:var(--ged-charcoal);display:block;margin-bottom:6px">Nom du technicien</label>' +
                     '<input id="gedBitAct_tech" type="text" placeholder="ex: Jean Kaboré" style="width:100%;border-radius:8px;padding:8px 12px;font-size:13px;border:1px solid rgba(255,255,255,.15);background:#0d1720;color:#f4f6f8"></div>';
             } else if (action==='complete-sharpening') {
-                fields = '<div><label style="font-size:12px;font-weight:700;color:var(--ged-charcoal);display:block;margin-bottom:6px">Nom du technicien</label>' +
-                    '<input id="gedBitAct_tech" type="text" placeholder="ex: Jean Kaboré" style="width:100%;border-radius:8px;padding:8px 12px;font-size:13px;border:1px solid rgba(255,255,255,.15);background:#0d1720;color:#f4f6f8"></div>' +
-                    '<div style="margin-top:10px"><label style="font-size:12px;font-weight:700;color:var(--ged-charcoal);display:block;margin-bottom:6px">Notes</label>' +
-                    '<textarea id="gedBitAct_reason" rows="2" placeholder="Observations post-affûtage…" style="width:100%;border-radius:8px;padding:8px 12px;font-size:13px;border:1px solid rgba(255,255,255,.15);background:#0d1720;color:#f4f6f8;resize:none"></textarea></div>';
+                var _inp='width:100%;border-radius:8px;padding:8px 12px;font-size:13px;border:1px solid rgba(255,255,255,.15);background:#0d1720;color:#f4f6f8';
+                var _lbl='font-size:12px;font-weight:700;color:var(--ged-charcoal);display:block;margin-bottom:6px';
+                fields =
+                    '<div><label style="'+_lbl+'">Nom du technicien <span style="color:#f87171">*</span></label>' +
+                    '<input id="gedBitAct_tech" type="text" placeholder="ex: Jean Kaboré" style="'+_inp+'"></div>' +
+                    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">' +
+                        '<div><label style="'+_lbl+'">Durée affûtage (h)</label>' +
+                        '<input id="gedBitAct_duration" type="number" min="0" step="0.5" placeholder="ex: 2.5" style="'+_inp+'"></div>' +
+                        '<div><label style="'+_lbl+'">Coût (XOF)</label>' +
+                        '<input id="gedBitAct_cost" type="number" min="0" step="500" placeholder="ex: 15000" style="'+_inp+'"></div>' +
+                    '</div>' +
+                    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">' +
+                        '<div><label style="'+_lbl+'">Type d\'affûtage</label>' +
+                        '<select id="gedBitAct_type" style="'+_inp+'">' +
+                            '<option value="standard">Standard</option>' +
+                            '<option value="complet">Complet (rechargement)</option>' +
+                            '<option value="urgence">Urgence</option>' +
+                        '</select></div>' +
+                        '<div><label style="'+_lbl+'">Diamètre après (mm)</label>' +
+                        '<input id="gedBitAct_diam" type="number" min="0" step="0.1" placeholder="ex: 114.3" style="'+_inp+'"></div>' +
+                    '</div>' +
+                    '<div style="margin-top:10px"><label style="'+_lbl+'">État des dents</label>' +
+                    '<select id="gedBitAct_teeth" style="'+_inp+'">' +
+                        '<option value="">— Sélectionner —</option>' +
+                        '<option value="bon">Bon</option>' +
+                        '<option value="use">Usé</option>' +
+                        '<option value="critique">Critique</option>' +
+                    '</select></div>' +
+                    '<div style="margin-top:10px"><label style="'+_lbl+'">Recommandation technicien</label>' +
+                    '<input id="gedBitAct_reco" type="text" placeholder="ex: Remettre en service après 50 m" style="'+_inp+'"></div>' +
+                    '<div style="margin-top:10px"><label style="'+_lbl+'">Notes / Observations</label>' +
+                    '<textarea id="gedBitAct_reason" rows="2" placeholder="Observations post-affûtage…" style="'+_inp+';resize:none"></textarea></div>';
             } else {
                 fields = '<div><label style="font-size:12px;font-weight:700;color:var(--ged-charcoal);display:block;margin-bottom:6px">Raison / Notes</label>' +
                     '<textarea id="gedBitAct_reason" rows="2" placeholder="Raison (optionnel)…" style="width:100%;border-radius:8px;padding:8px 12px;font-size:13px;border:1px solid rgba(255,255,255,.15);background:#0d1720;color:#f4f6f8;resize:none"></textarea></div>';
             }
             var accentCol = action==='reform'?'#f87171':action==='complete-sharpening'||action==='start-service'?'#4ade80':action==='start-sharpening'?'#c084fc':'#fbbf24';
-            var html = '<div id="gedBitActOverlay" class="fixed inset-0 flex items-center justify-center z-[300] p-4" style="background:rgba(0,0,0,.65)">' +
-                '<div class="ged-modal-panel rounded-xl w-full max-w-sm">' +
+            var modalW = action==='complete-sharpening' ? 'max-w-md' : 'max-w-sm';
+            var html = '<div id="gedBitActOverlay" class="fixed inset-0 flex items-center justify-center z-[300] p-4" style="background:rgba(0,0,0,.65);overflow-y:auto">' +
+                '<div class="ged-modal-panel rounded-xl w-full '+modalW+'">' +
                 '<div class="ged-section-header px-5 py-3 flex justify-between items-center rounded-t-xl">' +
                     '<h3 style="margin:0;font-size:1rem;font-weight:800">'+_gedBitEsc(labels[action]||action)+'</h3>' +
                     '<button onclick="document.getElementById(\'gedBitActOverlay\').remove()" style="background:none;border:none;font-size:1.5rem;cursor:pointer;color:rgba(255,255,255,.7);line-height:1">&times;</button>' +
@@ -8492,12 +8531,24 @@
 
         function gedBitDoAction(bitId, action) {
             var payload = {};
-            var drillEl  = document.getElementById('gedBitAct_drillId');
-            var techEl   = document.getElementById('gedBitAct_tech');
-            var reasonEl = document.getElementById('gedBitAct_reason');
-            if (drillEl)  payload.drillId = drillEl.value.trim()||null;
-            if (techEl)   payload.technicianName = techEl.value.trim();
-            if (reasonEl) { payload.reason = reasonEl.value.trim(); payload.notes = reasonEl.value.trim(); }
+            var drillEl    = document.getElementById('gedBitAct_drillId');
+            var techEl     = document.getElementById('gedBitAct_tech');
+            var reasonEl   = document.getElementById('gedBitAct_reason');
+            var durationEl = document.getElementById('gedBitAct_duration');
+            var costEl     = document.getElementById('gedBitAct_cost');
+            var typeEl     = document.getElementById('gedBitAct_type');
+            var diamEl     = document.getElementById('gedBitAct_diam');
+            var teethEl    = document.getElementById('gedBitAct_teeth');
+            var recoEl     = document.getElementById('gedBitAct_reco');
+            if (drillEl)    payload.drillId = drillEl.value.trim()||null;
+            if (techEl)     payload.technicianName = techEl.value.trim();
+            if (reasonEl)   { payload.reason = reasonEl.value.trim(); payload.notes = reasonEl.value.trim(); }
+            if (durationEl && durationEl.value !== '') payload.sharpeningDuration = parseFloat(durationEl.value) || null;
+            if (costEl && costEl.value !== '')         payload.sharpeningCost = parseFloat(costEl.value) || null;
+            if (typeEl)     payload.sharpeningType = typeEl.value;
+            if (diamEl && diamEl.value !== '')         payload.diameterAfter = parseFloat(diamEl.value) || null;
+            if (teethEl)    payload.teethCondition = teethEl.value;
+            if (recoEl)     payload.recommendation = recoEl.value.trim();
             var btn = document.getElementById('gedBitActConfirmBtn');
             if (btn) { btn.textContent='…'; btn.disabled=true; }
             apiRequest('/bits/'+bitId+'/'+action,'POST',payload).then(function(updatedBit){

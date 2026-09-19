@@ -3324,9 +3324,24 @@ app.post('/api/bits/:id/complete-sharpening', (req, res) => {
                 db.run(
                     `UPDATE bit_sharpening_cycles SET completedAt = CURRENT_TIMESTAMP,
                        technicianName = COALESCE(NULLIF(?, ''), technicianName),
-                       notes = COALESCE(NULLIF(?, ''), notes)
+                       notes = COALESCE(NULLIF(?, ''), notes),
+                       sharpeningDuration = COALESCE(?, sharpeningDuration),
+                       sharpeningCost = COALESCE(?, sharpeningCost),
+                       sharpeningType = COALESCE(NULLIF(?, ''), sharpeningType),
+                       diameterAfter = COALESCE(?, diameterAfter),
+                       teethCondition = COALESCE(NULLIF(?, ''), teethCondition),
+                       recommendation = COALESCE(NULLIF(?, ''), recommendation)
                      WHERE id = (SELECT id FROM bit_sharpening_cycles WHERE bitId = ? AND enterpriseId = ? AND completedAt IS NULL ORDER BY id DESC LIMIT 1)`,
-                    [req.body.technicianName || '', req.body.notes || '', req.params.id, eid],
+                    [
+                        req.body.technicianName || '', req.body.notes || '',
+                        req.body.sharpeningDuration != null ? parseFloat(req.body.sharpeningDuration) || null : null,
+                        req.body.sharpeningCost != null ? parseFloat(req.body.sharpeningCost) || null : null,
+                        req.body.sharpeningType || '',
+                        req.body.diameterAfter != null ? parseFloat(req.body.diameterAfter) || null : null,
+                        req.body.teethCondition || '',
+                        req.body.recommendation || '',
+                        req.params.id, eid
+                    ],
                     (err3) => {
                         if (err3) return res.status(500).json({ error: err3.message });
                         recordBitStatusChange(eid, req.params.id, 'EN_AFFÛTAGE', 'EN_SERVICE', req.auth.username, req.body.reason || '', () => {

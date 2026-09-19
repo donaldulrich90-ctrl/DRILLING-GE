@@ -696,6 +696,12 @@ db.serialize(() => {
             );
         }
     });
+    migrateIgnoreDup("ALTER TABLE bit_sharpening_cycles ADD COLUMN sharpeningDuration REAL", 'bit_sharpening_cycles.sharpeningDuration');
+    migrateIgnoreDup("ALTER TABLE bit_sharpening_cycles ADD COLUMN sharpeningCost REAL DEFAULT 0", 'bit_sharpening_cycles.sharpeningCost');
+    migrateIgnoreDup("ALTER TABLE bit_sharpening_cycles ADD COLUMN sharpeningType TEXT DEFAULT 'standard'", 'bit_sharpening_cycles.sharpeningType');
+    migrateIgnoreDup("ALTER TABLE bit_sharpening_cycles ADD COLUMN diameterAfter REAL", 'bit_sharpening_cycles.diameterAfter');
+    migrateIgnoreDup("ALTER TABLE bit_sharpening_cycles ADD COLUMN teethCondition TEXT DEFAULT ''", 'bit_sharpening_cycles.teethCondition');
+    migrateIgnoreDup("ALTER TABLE bit_sharpening_cycles ADD COLUMN recommendation TEXT DEFAULT ''", 'bit_sharpening_cycles.recommendation');
 
     db.run(
         `
@@ -774,6 +780,12 @@ db.serialize(() => {
             technicianName TEXT DEFAULT '',
             sharpeningNumber INTEGER NOT NULL DEFAULT 1,
             metersBeforeSharpening REAL,
+            sharpeningDuration REAL,
+            sharpeningCost REAL DEFAULT 0,
+            sharpeningType TEXT DEFAULT 'standard',
+            diameterAfter REAL,
+            teethCondition TEXT DEFAULT '',
+            recommendation TEXT DEFAULT '',
             notes TEXT DEFAULT '',
             createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (enterpriseId) REFERENCES enterprises(id),
