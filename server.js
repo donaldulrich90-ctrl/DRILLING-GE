@@ -132,8 +132,8 @@ function canManageSitesWrite(req) {
 function requireUserManagementRole(req, res, next) {
     if (!req.auth) return res.status(401).json({ error: 'Non authentifié' });
     if (req.auth.isSuperAdmin || req.auth.isPlatformOwner) return next();
-    if (req.auth.role === 'platform_owner' || req.auth.role === 'admin') return next();
-    return res.status(403).json({ error: 'Accès réservé aux administrateurs des comptes' });
+    if (['platform_owner', 'admin', 'gestionnaire', 'gestionnaire_site'].includes(req.auth.role)) return next();
+    return res.status(403).json({ error: 'Accès réservé aux gestionnaires et administrateurs' });
 }
 
 function enrichEnterpriseRows(rows) {
