@@ -2739,7 +2739,7 @@ app.get('/api/consumables-cost-summary', (req, res) => {
     }
     let sql = `
         SELECT dc.machineId, dc.date, SUM(dc.totalCost) as totalCost, dc.currency,
-               JSON_GROUP_ARRAY(JSON_OBJECT('consumableName', i.name, 'quantityUsed', dc.quantityUsed, 'unitPrice', dc.unitPrice, 'totalCost', dc.totalCost)) as consumables,
+               JSON_GROUP_ARRAY(JSON_OBJECT('consumableName', i.name, 'category', i.category, 'quantityUsed', dc.quantityUsed, 'unitPrice', dc.unitPrice, 'totalCost', dc.totalCost)) as consumables,
                ddr.data as productionData
         FROM dailyConsumables dc
         JOIN inventory i ON dc.consumableId = i.id
@@ -2771,6 +2771,692 @@ app.get('/api/consumables-cost-summary', (req, res) => {
             row.costPerMeter = production > 0 ? row.totalCost / production : 0;
         });
         res.json(rows);
+    });
+});
+
+// ── Phase 5 — Maintenance ──────────────────────────────────────────────────
+
+function _calcNextMaintenanceDate(lastDate, intervalType, intervalValue) {
+    if (!lastDate) return null;
+    const d = new Date(lastDate);
+    const v = Number(intervalValue) || 0;
+    if (intervalType === 'days') d.setDate(d.getDate() + v);
+    else if (intervalType === 'months') d.setMonth(d.getMonth() + v);
+    else d.setDate(d.getDate() + Math.ceil(v / 24));
+    return d.toISOString().split('T')[0];
+}
+
+app.get('/api/maintenance-schedules', (req, res) => {
+    const eid = getEnterpriseId(req);
+    const params = [];
+    let where = '';
+    if (eid !== null) {
+        where = 'WHERE ms.enterpriseId = ?';
+        params.push(eid);
+    }
+    db.all(`
+        SELECT ms.*,
+            CASE WHEN ms.nextMaintenanceDate < DATE('now') AND ms.status = 'scheduled'
+                 THEN 'overdue' ELSE ms.status END AS status
+        FROM maintenanceSchedules ms
+        ${where}
+        ORDER BY ms.nextMaintenanceDate ASC
+    `, params, (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(rows);
+    });
+});
+
+app.post('/api/maintenance-schedules', (req, res) => {
+    const eid = getEnterpriseId(req);
+    const { machineId, type, description, priority, intervalType, intervalValue,
+            lastMaintenanceDate, lastMaintenanceHours, assignedTo, notes } = req.body;
+    if (!machineId || !description) {
+        return res.status(400).json({ error: 'machineId et description sont requis' });
+    }
+    const nextDate = _calcNextMaintenanceDate(lastMaintenanceDate, intervalType, intervalValue);
+    const nextHours = (Number(lastMaintenanceHours) || 0) + (Number(intervalValue) || 0);
+    db.run(
+        `INSERT INTO maintenanceSchedules
+         (enterpriseId, machineId, type, description, priority, intervalType, intervalValue,
+          lastMaintenanceDate, lastMaintenanceHours, nextMaintenanceDate, nextMaintenanceHours,
+          status, assignedTo, notes)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'scheduled', ?, ?)`,
+        [eid || 1, machineId, type || 'preventive', description, priority || 'medium',
+         intervalType || 'days', Number(intervalValue) || 0,
+         lastMaintenanceDate || null, Number(lastMaintenanceHours) || 0,
+         nextDate, nextHours, assignedTo || '', notes || ''],
+        function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ id: this.lastID, message: 'Planification créée' });
+        }
+    );
+});
+
+app.put('/api/maintenance-schedules/:id', (req, res) => {
+    const eid = getEnterpriseId(req);
+    const id = parseInt(req.params.id);
+    const { machineId, type, description, priority, intervalType, intervalValue,
+            lastMaintenanceDate, lastMaintenanceHours, assignedTo, notes } = req.body;
+    const nextDate = _calcNextMaintenanceDate(lastMaintenanceDate, intervalType, intervalValue);
+    const nextHours = (Number(lastMaintenanceHours) || 0) + (Number(intervalValue) || 0);
+    const params = [machineId, type || 'preventive', description, priority || 'medium',
+                    intervalType || 'days', Number(intervalValue) || 0,
+                    lastMaintenanceDate || null, Number(lastMaintenanceHours) || 0,
+                    nextDate, nextHours, assignedTo || '', notes || '', id];
+    let sql = `UPDATE maintenanceSchedules SET machineId=?, type=?, description=?, priority=?,
+               intervalType=?, intervalValue=?, lastMaintenanceDate=?, lastMaintenanceHours=?,
+               nextMaintenanceDate=?, nextMaintenanceHours=?, assignedTo=?, notes=?, status='scheduled'
+               WHERE id=?`;
+    if (eid !== null) { sql += ' AND enterpriseId=?'; params.push(eid); }
+    db.run(sql, params, function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        if (this.changes === 0) return res.status(404).json({ error: 'Non trouvé' });
+        res.json({ message: 'Planification mise à jour' });
+    });
+});
+
+app.delete('/api/maintenance-schedules/:id', (req, res) => {
+    const eid = getEnterpriseId(req);
+    const id = parseInt(req.params.id);
+    const params = [id];
+    let sql = 'DELETE FROM maintenanceSchedules WHERE id=?';
+    if (eid !== null) { sql += ' AND enterpriseId=?'; params.push(eid); }
+    db.run(sql, params, function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        if (this.changes === 0) return res.status(404).json({ error: 'Non trouvé' });
+        res.json({ message: 'Planification supprimée' });
+    });
+});
+
+app.post('/api/maintenance-schedules/:id/complete', (req, res) => {
+    const eid = getEnterpriseId(req);
+    const scheduleId = parseInt(req.params.id);
+    const { date, duration, cost, technician, notes } = req.body;
+    if (!date) return res.status(400).json({ error: 'date est requis' });
+    const findSql = eid !== null
+        ? 'SELECT * FROM maintenanceSchedules WHERE id=? AND enterpriseId=?'
+        : 'SELECT * FROM maintenanceSchedules WHERE id=?';
+    const findParams = eid !== null ? [scheduleId, eid] : [scheduleId];
+    db.get(findSql, findParams, (err, schedule) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!schedule) return res.status(404).json({ error: 'Planification non trouvée' });
+        const nextDate = _calcNextMaintenanceDate(date, schedule.intervalType, schedule.intervalValue);
+        const nextHours = (Number(schedule.lastMaintenanceHours) || 0) + (Number(schedule.intervalValue) || 0);
+        db.run(
+            `INSERT INTO maintenanceHistory
+             (enterpriseId, scheduleId, machineId, date, type, description, cost, duration, technician, notes)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [eid || 1, scheduleId, schedule.machineId, date, schedule.type, schedule.description,
+             Number(cost) || 0, Number(duration) || 0, technician || '', notes || ''],
+            function(err2) {
+                if (err2) return res.status(500).json({ error: err2.message });
+                const histId = this.lastID;
+                const upSql = eid !== null
+                    ? `UPDATE maintenanceSchedules SET lastMaintenanceDate=?, lastMaintenanceHours=?,
+                       nextMaintenanceDate=?, nextMaintenanceHours=?, status='scheduled' WHERE id=? AND enterpriseId=?`
+                    : `UPDATE maintenanceSchedules SET lastMaintenanceDate=?, lastMaintenanceHours=?,
+                       nextMaintenanceDate=?, nextMaintenanceHours=?, status='scheduled' WHERE id=?`;
+                const upParams = eid !== null
+                    ? [date, Number(duration) || 0, nextDate, nextHours, scheduleId, eid]
+                    : [date, Number(duration) || 0, nextDate, nextHours, scheduleId];
+                db.run(upSql, upParams, (err3) => {
+                    if (err3) return res.status(500).json({ error: err3.message });
+                    res.json({ message: 'Maintenance complétée', historyId: histId, nextMaintenanceDate: nextDate });
+                });
+            }
+        );
+    });
+});
+
+app.get('/api/maintenance-history', (req, res) => {
+    const eid = getEnterpriseId(req);
+    const machineId = req.query.machineId;
+    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+    const params = [];
+    const conditions = [];
+    if (eid !== null) { conditions.push('mh.enterpriseId = ?'); params.push(eid); }
+    if (machineId) { conditions.push('mh.machineId = ?'); params.push(machineId); }
+    const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
+    params.push(limit);
+    db.all(`
+        SELECT mh.* FROM maintenanceHistory mh
+        ${where}
+        ORDER BY mh.date DESC, mh.id DESC
+        LIMIT ?
+    `, params, (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(rows);
+    });
+});
+
+// ── Dépenses diverses (miscellaneousExpenses) ─────────────────────────────
+
+app.get('/api/misc-expenses', (req, res) => {
+    const eid = getEnterpriseId(req);
+    if (!eid) return res.status(400).json({ error: 'Contexte entreprise requis' });
+    db.all('SELECT * FROM miscellaneousExpenses WHERE enterpriseId = ? ORDER BY date DESC, id DESC', [eid], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(rows);
+    });
+});
+
+app.post('/api/misc-expenses', (req, res) => {
+    const eid = getEnterpriseId(req);
+    if (!eid) return res.status(400).json({ error: 'Contexte entreprise requis' });
+    const { date, description, amount, category, notes } = req.body;
+    if (!date || !description || amount == null) return res.status(400).json({ error: 'date, description et amount requis' });
+    db.run(
+        'INSERT INTO miscellaneousExpenses (enterpriseId, date, description, amount, category, notes) VALUES (?, ?, ?, ?, ?, ?)',
+        [eid, date, description, Number(amount), category || 'Autre', notes || ''],
+        function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ id: this.lastID });
+        }
+    );
+});
+
+app.put('/api/misc-expenses/:id', (req, res) => {
+    const eid = getEnterpriseId(req);
+    if (!eid) return res.status(400).json({ error: 'Contexte entreprise requis' });
+    const { date, description, amount, category, notes } = req.body;
+    db.run(
+        'UPDATE miscellaneousExpenses SET date=?, description=?, amount=?, category=?, notes=? WHERE id=? AND enterpriseId=?',
+        [date, description, Number(amount), category || 'Autre', notes || '', req.params.id, eid],
+        function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+            if (this.changes === 0) return res.status(404).json({ error: 'Non trouvé' });
+            res.json({ ok: true });
+        }
+    );
+});
+
+app.delete('/api/misc-expenses/:id', (req, res) => {
+    const eid = getEnterpriseId(req);
+    if (!eid) return res.status(400).json({ error: 'Contexte entreprise requis' });
+    db.run('DELETE FROM miscellaneousExpenses WHERE id=? AND enterpriseId=?', [req.params.id, eid], function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ ok: true });
+    });
+});
+
+// ── Dépenses repas chantier (siteMealExpenses) ────────────────────────────
+
+app.get('/api/site-meal-expenses', (req, res) => {
+    const eid = getEnterpriseId(req);
+    if (!eid) return res.status(400).json({ error: 'Contexte entreprise requis' });
+    db.all('SELECT * FROM siteMealExpenses WHERE enterpriseId = ? ORDER BY date DESC, id DESC', [eid], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(rows);
+    });
+});
+
+app.post('/api/site-meal-expenses', (req, res) => {
+    const eid = getEnterpriseId(req);
+    if (!eid) return res.status(400).json({ error: 'Contexte entreprise requis' });
+    const { date, siteId, drillId, mealPeriod, headcount, amount, currency, label, notes } = req.body;
+    if (!date || amount == null) return res.status(400).json({ error: 'date et amount requis' });
+    db.run(
+        'INSERT INTO siteMealExpenses (enterpriseId, date, siteId, drillId, mealPeriod, headcount, amount, currency, label, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [eid, date, siteId != null ? String(siteId) : '', drillId || '', mealPeriod || 'lunch',
+         headcount != null ? Number(headcount) : null, Number(amount), currency || 'XOF', label || '', notes || ''],
+        function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ id: this.lastID });
+        }
+    );
+});
+
+app.put('/api/site-meal-expenses/:id', (req, res) => {
+    const eid = getEnterpriseId(req);
+    if (!eid) return res.status(400).json({ error: 'Contexte entreprise requis' });
+    const { date, siteId, drillId, mealPeriod, headcount, amount, currency, label, notes } = req.body;
+    db.run(
+        'UPDATE siteMealExpenses SET date=?, siteId=?, drillId=?, mealPeriod=?, headcount=?, amount=?, currency=?, label=?, notes=? WHERE id=? AND enterpriseId=?',
+        [date, siteId != null ? String(siteId) : '', drillId || '', mealPeriod || 'lunch',
+         headcount != null ? Number(headcount) : null, Number(amount), currency || 'XOF', label || '', notes || '',
+         req.params.id, eid],
+        function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+            if (this.changes === 0) return res.status(404).json({ error: 'Non trouvé' });
+            res.json({ ok: true });
+        }
+    );
+});
+
+app.delete('/api/site-meal-expenses/:id', (req, res) => {
+    const eid = getEnterpriseId(req);
+    if (!eid) return res.status(400).json({ error: 'Contexte entreprise requis' });
+    db.run('DELETE FROM siteMealExpenses WHERE id=? AND enterpriseId=?', [req.params.id, eid], function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ ok: true });
+    });
+});
+
+// ── Mouvements de stock (stockMovements) ─────────────────────────────────
+
+app.get('/api/stock-movements', (req, res) => {
+    const eid = getEnterpriseId(req);
+    if (!eid) return res.status(400).json({ error: 'Contexte entreprise requis' });
+    const articleId = req.query.articleId;
+    const params = [eid];
+    let extra = '';
+    if (articleId) { extra = 'AND sm.articleId = ?'; params.push(articleId); }
+    db.all(
+        `SELECT sm.* FROM stockMovements sm WHERE sm.enterpriseId = ? ${extra} ORDER BY sm.date DESC, sm.id DESC`,
+        params,
+        (err, rows) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json(rows);
+        }
+    );
+});
+
+app.post('/api/stock-movements', (req, res) => {
+    const eid = getEnterpriseId(req);
+    if (!eid) return res.status(400).json({ error: 'Contexte entreprise requis' });
+    const { type, articleId, quantity, unitPrice, date, supplier, person, personId, authorizedBy, authorizedById, reason, machineId, notes } = req.body;
+    if (!type || !articleId || !quantity || !date) return res.status(400).json({ error: 'type, articleId, quantity et date requis' });
+    const qty = Number(quantity);
+    const delta = type === 'entry' ? qty : -qty;
+    db.serialize(() => {
+        db.run('BEGIN');
+        db.run(
+            `INSERT INTO stockMovements (enterpriseId, type, articleId, quantity, unitPrice, total, date, supplier, person, personId, authorizedBy, authorizedById, reason, machineId, notes)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [eid, type, articleId, qty, Number(unitPrice) || 0, qty * (Number(unitPrice) || 0),
+             date, supplier || '', person || '', personId || null, authorizedBy || '', authorizedById || null,
+             reason || '', machineId || '', notes || ''],
+            function(err) {
+                if (err) { db.run('ROLLBACK'); return res.status(500).json({ error: err.message }); }
+                const movId = this.lastID;
+                db.run(
+                    'UPDATE inventory SET quantity = MAX(0, quantity + ?) WHERE id = ? AND enterpriseId = ?',
+                    [delta, articleId, eid],
+                    function(err2) {
+                        if (err2) { db.run('ROLLBACK'); return res.status(500).json({ error: err2.message }); }
+                        db.run('COMMIT', (err3) => {
+                            if (err3) return res.status(500).json({ error: err3.message });
+                            db.get('SELECT * FROM inventory WHERE id = ? AND enterpriseId = ?', [articleId, eid], (err4, inv) => {
+                                res.json({ id: movId, inventory: inv || null });
+                            });
+                        });
+                    }
+                );
+            }
+        );
+    });
+});
+
+app.delete('/api/stock-movements/:id', (req, res) => {
+    const eid = getEnterpriseId(req);
+    if (!eid) return res.status(400).json({ error: 'Contexte entreprise requis' });
+    db.get('SELECT * FROM stockMovements WHERE id=? AND enterpriseId=?', [req.params.id, eid], (err, row) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!row) return res.status(404).json({ error: 'Non trouvé' });
+        const delta = row.type === 'entry' ? -row.quantity : row.quantity;
+        db.serialize(() => {
+            db.run('BEGIN');
+            db.run('DELETE FROM stockMovements WHERE id=? AND enterpriseId=?', [req.params.id, eid], (err2) => {
+                if (err2) { db.run('ROLLBACK'); return res.status(500).json({ error: err2.message }); }
+                db.run('UPDATE inventory SET quantity = MAX(0, quantity + ?) WHERE id=? AND enterpriseId=?', [delta, row.articleId, eid], (err3) => {
+                    if (err3) { db.run('ROLLBACK'); return res.status(500).json({ error: err3.message }); }
+                    db.run('COMMIT', (err4) => {
+                        if (err4) return res.status(500).json({ error: err4.message });
+                        res.json({ ok: true });
+                    });
+                });
+            });
+        });
+    });
+});
+
+// ── Phase 3 — Affûtage des bits ────────────────────────────────────────────
+
+function recordBitStatusChange(eid, bitId, fromStatus, toStatus, changedBy, reason, cb) {
+    db.run(
+        `INSERT INTO bit_status_history (enterpriseId, bitId, fromStatus, toStatus, changedBy, reason)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [eid, bitId, fromStatus, toStatus, changedBy || '', reason || ''],
+        cb
+    );
+}
+
+app.get('/api/bits', (req, res) => {
+    const eid = getEnterpriseId(req);
+    if (!eid) return res.status(400).json({ error: 'Contexte entreprise requis' });
+    db.all(
+        `SELECT b.*,
+                (SELECT COUNT(*) FROM bit_sharpening_cycles sc WHERE sc.bitId = b.id AND sc.completedAt IS NOT NULL) AS completedSharpenings
+         FROM bits b WHERE b.enterpriseId = ? ORDER BY b.createdAt DESC`,
+        [eid],
+        (err, rows) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json(rows);
+        }
+    );
+});
+
+app.post('/api/bits', (req, res) => {
+    const eid = resolveCreateEnterpriseId(req, req.body);
+    if (!eid) return res.status(400).json({ error: 'Contexte entreprise requis' });
+    const { serialNumber, type, diameter, brand, maxSharpenings, maxMetersPerSharpening, notes } = req.body || {};
+    if (!serialNumber) return res.status(400).json({ error: 'serialNumber requis' });
+    db.run(
+        `INSERT INTO bits (enterpriseId, serialNumber, type, diameter, brand, maxSharpenings, maxMetersPerSharpening, notes)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [eid, String(serialNumber).trim(), type || '', diameter != null ? parseFloat(diameter) : null,
+         brand || '', maxSharpenings != null ? parseInt(maxSharpenings, 10) : null,
+         maxMetersPerSharpening != null ? parseFloat(maxMetersPerSharpening) : null, notes || ''],
+        function(err) {
+            if (err) {
+                if (String(err.message).includes('UNIQUE')) return res.status(409).json({ error: 'Ce numéro de série existe déjà' });
+                return res.status(500).json({ error: err.message });
+            }
+            db.get('SELECT * FROM bits WHERE id = ?', [this.lastID], (err2, row) => {
+                if (err2) return res.status(500).json({ error: err2.message });
+                res.status(201).json(row);
+            });
+        }
+    );
+});
+
+app.get('/api/bits/:id', (req, res) => {
+    const eid = getEnterpriseId(req);
+    if (!eid) return res.status(400).json({ error: 'Contexte entreprise requis' });
+    db.get('SELECT * FROM bits WHERE id = ? AND enterpriseId = ?', [req.params.id, eid], (err, row) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!row) return res.status(404).json({ error: 'Bit non trouvé' });
+        res.json(row);
+    });
+});
+
+app.put('/api/bits/:id', (req, res) => {
+    const eid = getEnterpriseId(req);
+    if (!eid) return res.status(400).json({ error: 'Contexte entreprise requis' });
+    db.get('SELECT * FROM bits WHERE id = ? AND enterpriseId = ?', [req.params.id, eid], (err, existing) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!existing) return res.status(404).json({ error: 'Bit non trouvé' });
+        const body = req.body || {};
+        db.run(
+            `UPDATE bits SET serialNumber = ?, type = ?, diameter = ?, brand = ?, maxSharpenings = ?,
+             maxMetersPerSharpening = ?, notes = ?, currentDrillId = ?, updatedAt = CURRENT_TIMESTAMP
+             WHERE id = ? AND enterpriseId = ?`,
+            [
+                body.serialNumber !== undefined ? String(body.serialNumber).trim() : existing.serialNumber,
+                body.type !== undefined ? body.type : existing.type,
+                body.diameter !== undefined ? (body.diameter != null ? parseFloat(body.diameter) : null) : existing.diameter,
+                body.brand !== undefined ? body.brand : existing.brand,
+                body.maxSharpenings !== undefined ? (body.maxSharpenings != null ? parseInt(body.maxSharpenings, 10) : null) : existing.maxSharpenings,
+                body.maxMetersPerSharpening !== undefined ? (body.maxMetersPerSharpening != null ? parseFloat(body.maxMetersPerSharpening) : null) : existing.maxMetersPerSharpening,
+                body.notes !== undefined ? body.notes : existing.notes,
+                body.currentDrillId !== undefined ? body.currentDrillId : existing.currentDrillId,
+                req.params.id, eid
+            ],
+            (err2) => {
+                if (err2) {
+                    if (String(err2.message).includes('UNIQUE')) return res.status(409).json({ error: 'Ce numéro de série existe déjà' });
+                    return res.status(500).json({ error: err2.message });
+                }
+                db.get('SELECT * FROM bits WHERE id = ?', [req.params.id], (err3, row) => res.json(row));
+            }
+        );
+    });
+});
+
+app.delete('/api/bits/:id', (req, res) => {
+    const eid = getEnterpriseId(req);
+    if (!eid) return res.status(400).json({ error: 'Contexte entreprise requis' });
+    db.get('SELECT id, status FROM bits WHERE id = ? AND enterpriseId = ?', [req.params.id, eid], (err, row) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!row) return res.status(404).json({ error: 'Bit non trouvé' });
+        if (row.status === 'EN_SERVICE' || row.status === 'EN_AFFÛTAGE') {
+            return res.status(409).json({ error: 'Impossible de supprimer un bit en service ou en affûtage actif' });
+        }
+        db.run('DELETE FROM bits WHERE id = ? AND enterpriseId = ?', [req.params.id, eid], function(err2) {
+            if (err2) return res.status(500).json({ error: err2.message });
+            res.json({ deleted: this.changes });
+        });
+    });
+});
+
+// ── Lifecycle transitions ──────────────────────────────────────────────────
+
+app.post('/api/bits/:id/start-service', (req, res) => {
+    const eid = getEnterpriseId(req);
+    if (!eid) return res.status(400).json({ error: 'Contexte entreprise requis' });
+    const { drillId } = req.body || {};
+    db.get('SELECT * FROM bits WHERE id = ? AND enterpriseId = ?', [req.params.id, eid], (err, bit) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!bit) return res.status(404).json({ error: 'Bit non trouvé' });
+        if (bit.status !== 'NEUF' && bit.status !== 'EN_ATTENTE_AFFÛTAGE') {
+            return res.status(409).json({ error: `Transition invalide depuis ${bit.status}` });
+        }
+        db.run(
+            `UPDATE bits SET status = 'EN_SERVICE', currentDrillId = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ? AND enterpriseId = ?`,
+            [drillId || null, req.params.id, eid],
+            (err2) => {
+                if (err2) return res.status(500).json({ error: err2.message });
+                recordBitStatusChange(eid, req.params.id, bit.status, 'EN_SERVICE', req.auth.username, req.body.reason || '', () => {
+                    db.get('SELECT * FROM bits WHERE id = ?', [req.params.id], (e, row) => res.json(row));
+                });
+            }
+        );
+    });
+});
+
+app.post('/api/bits/:id/request-sharpening', (req, res) => {
+    const eid = getEnterpriseId(req);
+    if (!eid) return res.status(400).json({ error: 'Contexte entreprise requis' });
+    db.get('SELECT * FROM bits WHERE id = ? AND enterpriseId = ?', [req.params.id, eid], (err, bit) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!bit) return res.status(404).json({ error: 'Bit non trouvé' });
+        if (bit.status !== 'EN_SERVICE') {
+            return res.status(409).json({ error: `Transition invalide depuis ${bit.status}` });
+        }
+        db.run(
+            `UPDATE bits SET status = 'EN_ATTENTE_AFFÛTAGE', updatedAt = CURRENT_TIMESTAMP WHERE id = ? AND enterpriseId = ?`,
+            [req.params.id, eid],
+            (err2) => {
+                if (err2) return res.status(500).json({ error: err2.message });
+                const sharpeningNum = (bit.sharpeningCount || 0) + 1;
+                db.run(
+                    `INSERT INTO bit_sharpening_cycles (enterpriseId, bitId, sharpeningNumber, metersBeforeSharpening, notes)
+                     VALUES (?, ?, ?, ?, ?)`,
+                    [eid, req.params.id, sharpeningNum, bit.totalMeters || 0, req.body.notes || ''],
+                    (err3) => {
+                        if (err3) return res.status(500).json({ error: err3.message });
+                        recordBitStatusChange(eid, req.params.id, 'EN_SERVICE', 'EN_ATTENTE_AFFÛTAGE', req.auth.username, req.body.reason || '', () => {
+                            db.get('SELECT * FROM bits WHERE id = ?', [req.params.id], (e, row) => res.json(row));
+                        });
+                    }
+                );
+            }
+        );
+    });
+});
+
+app.post('/api/bits/:id/start-sharpening', (req, res) => {
+    const eid = getEnterpriseId(req);
+    if (!eid) return res.status(400).json({ error: 'Contexte entreprise requis' });
+    db.get('SELECT * FROM bits WHERE id = ? AND enterpriseId = ?', [req.params.id, eid], (err, bit) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!bit) return res.status(404).json({ error: 'Bit non trouvé' });
+        if (bit.status !== 'EN_ATTENTE_AFFÛTAGE') {
+            return res.status(409).json({ error: `Transition invalide depuis ${bit.status}` });
+        }
+        db.run(
+            `UPDATE bits SET status = 'EN_AFFÛTAGE', currentDrillId = NULL, updatedAt = CURRENT_TIMESTAMP WHERE id = ? AND enterpriseId = ?`,
+            [req.params.id, eid],
+            (err2) => {
+                if (err2) return res.status(500).json({ error: err2.message });
+                db.run(
+                    `UPDATE bit_sharpening_cycles SET startedAt = CURRENT_TIMESTAMP, technicianName = ?
+                     WHERE id = (SELECT id FROM bit_sharpening_cycles WHERE bitId = ? AND enterpriseId = ? AND startedAt IS NULL ORDER BY id DESC LIMIT 1)`,
+                    [req.body.technicianName || '', req.params.id, eid],
+                    (err3) => {
+                        if (err3) return res.status(500).json({ error: err3.message });
+                        recordBitStatusChange(eid, req.params.id, 'EN_ATTENTE_AFFÛTAGE', 'EN_AFFÛTAGE', req.auth.username, req.body.reason || '', () => {
+                            db.get('SELECT * FROM bits WHERE id = ?', [req.params.id], (e, row) => res.json(row));
+                        });
+                    }
+                );
+            }
+        );
+    });
+});
+
+app.post('/api/bits/:id/complete-sharpening', (req, res) => {
+    const eid = getEnterpriseId(req);
+    if (!eid) return res.status(400).json({ error: 'Contexte entreprise requis' });
+    db.get('SELECT * FROM bits WHERE id = ? AND enterpriseId = ?', [req.params.id, eid], (err, bit) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!bit) return res.status(404).json({ error: 'Bit non trouvé' });
+        if (bit.status !== 'EN_AFFÛTAGE') {
+            return res.status(409).json({ error: `Transition invalide depuis ${bit.status}` });
+        }
+        const newCount = (bit.sharpeningCount || 0) + 1;
+        db.run(
+            `UPDATE bits SET status = 'EN_SERVICE', sharpeningCount = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ? AND enterpriseId = ?`,
+            [newCount, req.params.id, eid],
+            (err2) => {
+                if (err2) return res.status(500).json({ error: err2.message });
+                db.run(
+                    `UPDATE bit_sharpening_cycles SET completedAt = CURRENT_TIMESTAMP,
+                       technicianName = COALESCE(NULLIF(?, ''), technicianName),
+                       notes = COALESCE(NULLIF(?, ''), notes)
+                     WHERE id = (SELECT id FROM bit_sharpening_cycles WHERE bitId = ? AND enterpriseId = ? AND completedAt IS NULL ORDER BY id DESC LIMIT 1)`,
+                    [req.body.technicianName || '', req.body.notes || '', req.params.id, eid],
+                    (err3) => {
+                        if (err3) return res.status(500).json({ error: err3.message });
+                        recordBitStatusChange(eid, req.params.id, 'EN_AFFÛTAGE', 'EN_SERVICE', req.auth.username, req.body.reason || '', () => {
+                            db.get('SELECT * FROM bits WHERE id = ?', [req.params.id], (e, row) => res.json(row));
+                        });
+                    }
+                );
+            }
+        );
+    });
+});
+
+app.post('/api/bits/:id/reform', (req, res) => {
+    const eid = getEnterpriseId(req);
+    if (!eid) return res.status(400).json({ error: 'Contexte entreprise requis' });
+    db.get('SELECT * FROM bits WHERE id = ? AND enterpriseId = ?', [req.params.id, eid], (err, bit) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!bit) return res.status(404).json({ error: 'Bit non trouvé' });
+        if (bit.status === 'RÉFORMÉ') return res.status(409).json({ error: 'Ce bit est déjà réformé' });
+        const fromStatus = bit.status;
+        db.run(
+            `UPDATE bits SET status = 'RÉFORMÉ', currentDrillId = NULL, updatedAt = CURRENT_TIMESTAMP WHERE id = ? AND enterpriseId = ?`,
+            [req.params.id, eid],
+            (err2) => {
+                if (err2) return res.status(500).json({ error: err2.message });
+                db.run(
+                    `INSERT INTO bit_reform_logs (enterpriseId, bitId, reason, reformedBy, totalMeters, totalSharpenings, notes)
+                     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                    [eid, req.params.id, req.body.reason || '', (req.auth && req.auth.username) || '', bit.totalMeters || 0, bit.sharpeningCount || 0, req.body.notes || ''],
+                    (err3) => {
+                        if (err3) return res.status(500).json({ error: err3.message });
+                        recordBitStatusChange(eid, req.params.id, fromStatus, 'RÉFORMÉ', (req.auth && req.auth.username) || '', req.body.reason || '', () => {
+                            db.get('SELECT * FROM bits WHERE id = ?', [req.params.id], (e, row) => res.json(row));
+                        });
+                    }
+                );
+            }
+        );
+    });
+});
+
+// ── Production logs ────────────────────────────────────────────────────────
+
+app.get('/api/bits/:id/production', (req, res) => {
+    const eid = getEnterpriseId(req);
+    if (!eid) return res.status(400).json({ error: 'Contexte entreprise requis' });
+    db.get('SELECT id FROM bits WHERE id = ? AND enterpriseId = ?', [req.params.id, eid], (err, bit) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!bit) return res.status(404).json({ error: 'Bit non trouvé' });
+        const limit = Math.min(parseInt(req.query.limit, 10) || 90, 365);
+        db.all(
+            `SELECT * FROM bit_production_logs WHERE bitId = ? AND enterpriseId = ? ORDER BY date DESC LIMIT ?`,
+            [req.params.id, eid, limit],
+            (err2, rows) => {
+                if (err2) return res.status(500).json({ error: err2.message });
+                res.json(rows);
+            }
+        );
+    });
+});
+
+app.post('/api/bits/:id/production', (req, res) => {
+    const eid = getEnterpriseId(req);
+    if (!eid) return res.status(400).json({ error: 'Contexte entreprise requis' });
+    const { date, drillId, metersDrilled, hoursUsed, notes } = req.body || {};
+    if (!date || !drillId) return res.status(400).json({ error: 'date et drillId requis' });
+    db.get('SELECT id FROM bits WHERE id = ? AND enterpriseId = ?', [req.params.id, eid], (err, bit) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!bit) return res.status(404).json({ error: 'Bit non trouvé' });
+        const meters = parseFloat(metersDrilled) || 0;
+        const hours = parseFloat(hoursUsed) || 0;
+        db.run(
+            `INSERT INTO bit_production_logs (enterpriseId, bitId, date, drillId, metersDrilled, hoursUsed, notes)
+             VALUES (?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(enterpriseId, bitId, date) DO UPDATE SET
+               drillId = excluded.drillId, metersDrilled = excluded.metersDrilled,
+               hoursUsed = excluded.hoursUsed, notes = excluded.notes`,
+            [eid, req.params.id, date, String(drillId), meters, hours, notes || ''],
+            function(err2) {
+                if (err2) return res.status(500).json({ error: err2.message });
+                db.run(
+                    `UPDATE bits SET totalMeters = (SELECT COALESCE(SUM(metersDrilled), 0) FROM bit_production_logs WHERE bitId = ? AND enterpriseId = ?), updatedAt = CURRENT_TIMESTAMP WHERE id = ? AND enterpriseId = ?`,
+                    [req.params.id, eid, req.params.id, eid],
+                    (err3) => {
+                        if (err3) return res.status(500).json({ error: err3.message });
+                        db.get(
+                            'SELECT * FROM bit_production_logs WHERE bitId = ? AND date = ? AND enterpriseId = ?',
+                            [req.params.id, date, eid],
+                            (e, row) => res.json(row)
+                        );
+                    }
+                );
+            }
+        );
+    });
+});
+
+// ── Sharpening & status history ────────────────────────────────────────────
+
+app.get('/api/bits/:id/sharpening-cycles', (req, res) => {
+    const eid = getEnterpriseId(req);
+    if (!eid) return res.status(400).json({ error: 'Contexte entreprise requis' });
+    db.get('SELECT id FROM bits WHERE id = ? AND enterpriseId = ?', [req.params.id, eid], (err, bit) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!bit) return res.status(404).json({ error: 'Bit non trouvé' });
+        db.all(
+            `SELECT * FROM bit_sharpening_cycles WHERE bitId = ? AND enterpriseId = ? ORDER BY id DESC`,
+            [req.params.id, eid],
+            (err2, rows) => {
+                if (err2) return res.status(500).json({ error: err2.message });
+                res.json(rows);
+            }
+        );
+    });
+});
+
+app.get('/api/bits/:id/status-history', (req, res) => {
+    const eid = getEnterpriseId(req);
+    if (!eid) return res.status(400).json({ error: 'Contexte entreprise requis' });
+    db.get('SELECT id FROM bits WHERE id = ? AND enterpriseId = ?', [req.params.id, eid], (err, bit) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!bit) return res.status(404).json({ error: 'Bit non trouvé' });
+        db.all(
+            `SELECT * FROM bit_status_history WHERE bitId = ? AND enterpriseId = ? ORDER BY changedAt DESC LIMIT 100`,
+            [req.params.id, eid],
+            (err2, rows) => {
+                if (err2) return res.status(500).json({ error: err2.message });
+                res.json(rows);
+            }
+        );
     });
 });
 

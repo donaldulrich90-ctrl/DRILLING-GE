@@ -1220,29 +1220,46 @@
 
         <!-- Vue Dashboard -->
         <div id="mainView-dashboard" class="main-view">
-            <div class="mb-6">
+            <div class="mb-5">
                 <p class="text-[10px] font-bold tracking-[0.2em] uppercase text-slate-500 mb-2">Operations control room</p>
                 <h2 class="ged-page-title text-2xl md:text-3xl font-extrabold tracking-tight" data-i18n="dashboard.title">Centre de pilotage des opérations</h2>
-                <p class="text-slate-500 text-sm mt-2">État du parc, production et disponibilité en temps réel.</p>
+                <p class="text-slate-500 text-sm mt-1">État du parc, production et disponibilité en temps réel.</p>
             </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+            <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-4">
                 <div class="ged-kpi-card bg-slate-800 p-4 rounded-xl border border-slate-700">
-                    <div class="flex items-center justify-between mb-3"><p class="text-slate-400 text-xs uppercase tracking-wide font-semibold" data-i18n="dashboard.active_drills">Foreuses actives</p><span class="ged-kpi-icon">●</span></div>
+                    <div class="flex items-center justify-between mb-3">
+                        <p class="text-slate-400 text-xs uppercase tracking-wide font-semibold" data-i18n="dashboard.active_drills">Foreuses actives</p>
+                        <span class="ged-kpi-icon" style="font-size:18px">⛏</span>
+                    </div>
                     <p class="text-3xl font-bold text-ged-success" id="activeDrillsCount">0</p>
+                    <p class="text-xs text-slate-500 mt-1" id="activeDrillsTotal">/ 0 total</p>
                 </div>
                 <div class="ged-kpi-card bg-slate-800 p-4 rounded-xl border border-slate-700">
-                    <div class="flex items-center justify-between mb-3"><p class="text-slate-400 text-xs uppercase tracking-wide font-semibold" data-i18n="dashboard.total_depth">Profondeur totale</p><span class="ged-kpi-icon">↧</span></div>
-                    <p class="text-3xl font-bold text-ged-black" id="totalDepth">0 m</p>
+                    <div class="flex items-center justify-between mb-3">
+                        <p class="text-slate-400 text-xs uppercase tracking-wide font-semibold">Métrage du jour</p>
+                        <span class="ged-kpi-icon" style="font-size:18px">↧</span>
+                    </div>
+                    <p class="text-3xl font-bold text-ged-black" id="dailyMeterage">0 m</p>
+                    <p class="text-xs text-slate-500 mt-1">Saisies journalières</p>
                 </div>
                 <div class="ged-kpi-card bg-slate-800 p-4 rounded-xl border border-slate-700">
-                    <div class="flex items-center justify-between mb-3"><p class="text-slate-400 text-xs uppercase tracking-wide font-semibold" data-i18n="dashboard.avg_rop">ROP moyen</p><span class="ged-kpi-icon">↗</span></div>
-                    <p class="text-3xl font-bold text-ged-black" id="avgROP">0 m/h</p>
+                    <div class="flex items-center justify-between mb-3">
+                        <p class="text-slate-400 text-xs uppercase tracking-wide font-semibold" data-i18n="dashboard.avg_rop">ROP moyen</p>
+                        <span class="ged-kpi-icon" style="font-size:18px">↗</span>
+                    </div>
+                    <p class="text-3xl font-bold text-ged-black" id="avgROP">— m/h</p>
+                    <p class="text-xs text-slate-500 mt-1">Mètres / heures forées</p>
                 </div>
                 <div class="ged-kpi-card bg-slate-800 p-4 rounded-xl border border-slate-700">
-                    <div class="flex items-center justify-between mb-3"><p class="text-slate-400 text-xs uppercase tracking-wide font-semibold" data-i18n="dashboard.availability">Disponibilité</p><span class="ged-kpi-icon">◷</span></div>
+                    <div class="flex items-center justify-between mb-3">
+                        <p class="text-slate-400 text-xs uppercase tracking-wide font-semibold" data-i18n="dashboard.availability">Disponibilité flotte</p>
+                        <span class="ged-kpi-icon" style="font-size:18px">◷</span>
+                    </div>
                     <p class="text-3xl font-bold text-ged-yellow" id="availabilityRate">0%</p>
+                    <p class="text-xs text-slate-500 mt-1">Foreuses / parc total</p>
                 </div>
             </div>
+            <div id="dashStatusBar" class="flex flex-wrap gap-3 mb-5"></div>
             <div class="mb-4 flex flex-wrap justify-between items-center gap-2">
                 <p class="text-slate-400 text-sm" data-i18n="dashboard.filter_hint">Foreuses rattachées à votre entreprise. Filtrez par site avec le menu en haut à droite.</p>
                 <div class="flex flex-wrap gap-2">
@@ -1250,7 +1267,35 @@
                     <button type="button" onclick="showAddDrillModal()" class="ged-btn-primary px-4 py-2 rounded-lg text-sm" data-i18n="dashboard.add_drill">+ Ajouter une foreuse</button>
                 </div>
             </div>
-            <div id="drillsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+            <div id="drillsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8"></div>
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                <div class="lg:col-span-2 ged-content-panel p-5 rounded-xl border border-slate-700">
+                    <p class="text-[10px] font-bold tracking-[0.15em] uppercase text-slate-500 mb-4">Production — 7 derniers jours</p>
+                    <canvas id="dashProductionChart" style="max-height:220px"></canvas>
+                </div>
+                <div class="ged-content-panel p-5 rounded-xl border border-slate-700">
+                    <p class="text-[10px] font-bold tracking-[0.15em] uppercase text-slate-500 mb-3">Alertes actives</p>
+                    <div id="dashAlerts" class="flex flex-col gap-2"></div>
+                </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
+                <div class="ged-content-panel p-5 rounded-xl border border-slate-700">
+                    <p class="text-[10px] font-bold tracking-[0.15em] uppercase text-slate-500 mb-3">Disponibilité &amp; Utilisation</p>
+                    <div id="dashDispoContent" class="text-slate-500 text-sm py-4 text-center">Module en développement</div>
+                </div>
+                <div class="ged-content-panel p-5 rounded-xl border border-slate-700">
+                    <p class="text-[10px] font-bold tracking-[0.15em] uppercase text-slate-500 mb-3">Interventions maintenance</p>
+                    <div id="dashMaintenanceContent" class="text-slate-500 text-sm py-4 text-center">Module en développement</div>
+                </div>
+                <div class="ged-content-panel p-5 rounded-xl border border-slate-700">
+                    <p class="text-[10px] font-bold tracking-[0.15em] uppercase text-slate-500 mb-3">Coût par mètre</p>
+                    <div id="dashCostContent" class="text-slate-500 text-sm py-4 text-center">Module en développement</div>
+                </div>
+                <div class="ged-content-panel p-5 rounded-xl border border-slate-700">
+                    <p class="text-[10px] font-bold tracking-[0.15em] uppercase text-slate-500 mb-3">Consommation carburant</p>
+                    <div id="dashFuelContent" class="text-slate-500 text-sm py-4 text-center">Module en développement</div>
+                </div>
+            </div>
         </div>
 
         <!-- Vue Consommables -->
@@ -5916,42 +5961,46 @@
         function renderDashboard() {
             var grid = document.getElementById('drillsGrid');
             if (!grid) return;
-            
+
             var drillsToShow = getDrillsForSite();
-                if (drillsToShow.length === 0) {
+            if (drillsToShow.length === 0) {
                 grid.innerHTML = '<div class="col-span-full text-center py-12 text-slate-400 border border-dashed border-slate-600 rounded-xl">' +
                     '<p class="mb-2">' + String(tUi('dashboard.no_drills')).replace(/</g, '&lt;') + '</p>' +
                     '<p class="text-sm">' + String(tUi('dashboard.no_drills_hint')).replace(/</g, '&lt;') + '</p></div>';
                 updateGlobalStats();
+                renderDashboardExtras();
                 return;
             }
+            var todayStr = getLocalDateYYYYMMDD(new Date());
             grid.innerHTML = drillsToShow.map(function(drill) {
-                var statusColor = drill.status === 'EN FORAGE' ? 'bg-green-500' :
-                                 drill.status === 'EN PAUSE' ? 'bg-yellow-500' : 'bg-red-500';
-                var statusBorder = drill.status === 'EN FORAGE' ? '#15803D' :
-                                  drill.status === 'EN PAUSE' ? '#B45309' : '#DC2626';
+                var statusColor = drill.status === 'EN FORAGE' ? '#22c55e' :
+                                  drill.status === 'EN PAUSE'  ? '#f59e0b' :
+                                  drill.status === 'EN MAINTENANCE' ? '#3b82f6' : '#ef4444';
+                var statusBorder = statusColor;
+                var statusBg     = drill.status === 'EN FORAGE' ? 'rgba(34,197,94,0.15)' :
+                                   drill.status === 'EN PAUSE'  ? 'rgba(245,158,11,0.15)' :
+                                   drill.status === 'EN MAINTENANCE' ? 'rgba(59,130,246,0.15)' : 'rgba(239,68,68,0.15)';
                 var site = drill.siteId && sites ? sites.find(function(s) { return s.id == drill.siteId; }) : null;
-                var siteInfo = site ? '<span style="color:var(--ged-blue);font-size:12px">📍 ' + String(site.name).replace(/</g,'&lt;') + '</span>' : '';
+                var siteInfo = site ? '<span style="color:#F59E0B;font-size:12px">📍 ' + String(site.name).replace(/</g,'&lt;') + '</span>' : '';
                 var idJs = JSON.stringify(drill.id);
                 var ctInfo = '';
                 if (drill.contractId) {
                     var ct0 = contracts.find(function(c) { return c.id === drill.contractId; });
                     var cl0 = ct0 ? clients.find(function(c) { return c.id === ct0.clientId; }) : null;
-                    ctInfo = '<p style="font-size:11px;color:#B45309;margin-bottom:4px">📄 ' + String(drill.contractId).replace(/</g,'&lt;') + (cl0 ? ' · ' + String(cl0.name).replace(/</g,'&lt;') : '') + '</p>';
+                    ctInfo = '<p style="font-size:11px;color:#F59E0B;margin-bottom:4px">📄 ' + String(drill.contractId).replace(/</g,'&lt;') + (cl0 ? ' · ' + String(cl0.name).replace(/</g,'&lt;') : '') + '</p>';
                 }
                 // Fuel
                 var fuelPct = (drill.fuel && drill.fuel.capacity > 0) ? Math.min(100, Math.round(drill.fuel.level / drill.fuel.capacity * 100)) : 0;
-                var fuelColor = fuelPct > 50 ? '#15803D' : fuelPct > 25 ? '#B45309' : '#DC2626';
+                var fuelColor = fuelPct > 50 ? '#22c55e' : fuelPct > 25 ? '#f59e0b' : '#ef4444';
                 var fuelLevel = drill.fuel ? Math.round(drill.fuel.level) : 0;
                 var fuelCap   = drill.fuel ? Math.round(drill.fuel.capacity) : 0;
                 // Temp
                 var temp = (drill.telemetry && drill.telemetry.hyd_temp != null) ? Math.round(drill.telemetry.hyd_temp) : 0;
-                var tempColor = temp > 90 ? '#DC2626' : temp > 70 ? '#B45309' : '#15803D';
+                var tempColor = temp > 90 ? '#ef4444' : temp > 70 ? '#f59e0b' : '#22c55e';
                 // Depth & pressure
                 var depth = (drill.telemetry && drill.telemetry.depth != null) ? drill.telemetry.depth.toFixed(1) : '0';
                 var press = (drill.telemetry && drill.telemetry.rotation_pressure != null) ? Math.round(drill.telemetry.rotation_pressure) : 0;
                 // Today's production
-                var todayStr = getLocalDateYYYYMMDD(new Date());
                 var todayRecs = (dailyDataRecords || []).filter(function(r){ return r.date === todayStr && drillIdsMatch(r.machineId, drill.id); });
                 var todayM = todayRecs.reduce(function(s,r){ return s+( parseFloat((r.data||{}).metersDrilled)||0); }, 0);
                 var todayH = todayRecs.reduce(function(s,r){ return s+( parseFloat((r.data||{}).hours)||0); }, 0);
@@ -5968,41 +6017,46 @@
                 var nextPMHtml = '';
                 if (macPMs.length > 0) {
                     var lastPM = macPMs.sort(function(a,b){return b.hoursAt-a.hoursAt;})[0];
-                    nextPMHtml = '<div style="font-size:11px;color:#B45309;margin-top:8px;padding:6px 10px;background:#FEF3C7;border-radius:6px;border:1px solid #FDE68A">🔧 Dernier PM: '+String(lastPM.type).replace(/</g,'&lt;')+' à '+lastPM.hoursAt+'h</div>';
+                    nextPMHtml = '<div style="font-size:11px;color:#F59E0B;margin-top:8px;padding:6px 10px;background:rgba(245,158,11,0.1);border-radius:6px;border:1px solid rgba(245,158,11,0.3)">🔧 Dernier PM: '+String(lastPM.type).replace(/</g,'&lt;')+' à '+lastPM.hoursAt+'h</div>';
                 }
+                var cellStyle = 'background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:10px 12px';
+                var cellLabel = 'font-size:9px;color:#94A3B8;text-transform:uppercase;letter-spacing:0.08em;font-weight:700';
+                var cellVal   = 'font-size:18px;font-weight:900;font-family:monospace;margin-top:2px';
+                var cellUnit  = 'font-size:11px;font-weight:400;color:#94A3B8';
                 return '<div class="drill-card rounded-xl relative shadow-sm" style="border-top:3px solid '+statusBorder+' !important" onclick=\'showDrillDetails(' + idJs + ')\'>' +
                     '<div style="padding:16px 18px 0">' +
                     '<div class="flex justify-between items-start gap-2">' +
                     '<div>' +
                     '<h3 class="text-xl font-black" style="letter-spacing:-0.02em">' + String(drill.id).replace(/</g,'&lt;') + '</h3>' +
-                    (opName ? '<p style="font-size:11px;color:#64748B;margin-top:2px">👤 '+String(opName).replace(/</g,'&lt;')+'</p>' : '') +
+                    (opName ? '<p style="font-size:11px;color:#8fa3b0;margin-top:2px">👤 '+String(opName).replace(/</g,'&lt;')+'</p>' : '') +
                     '</div>' +
                     '<div class="flex items-center gap-1 flex-wrap justify-end" style="max-width:60%">' +
                     '<button type="button" class="text-xs ged-btn-primary px-2 py-1 rounded cursor-pointer" onclick=\'event.stopPropagation();openDrillManualDataEntry('+idJs+');\'>' + String(tUi('drill.data')).replace(/</g,'&lt;') + '</button>' +
                     '<button type="button" class="text-xs ged-btn-secondary px-2 py-1 rounded cursor-pointer" onclick=\'event.stopPropagation();showLinkDrillContractModal('+idJs+');\'>' + String(tUi('drill.contract_btn')).replace(/</g,'&lt;') + '</button>' +
                     '<button type="button" style="font-size:11px;background:#DC2626;color:#fff;padding:2px 8px;border-radius:4px;border:none;cursor:pointer" onclick=\'event.stopPropagation();removeDrillByIdSafe('+idJs+');\'>' + String(tUi('drill.remove')).replace(/</g,'&lt;') + '</button>' +
-                    '<span class="' + statusColor + ' px-2 py-1 rounded text-xs font-bold text-white" style="color:#fff!important">' + String(drill.status).replace(/</g,'&lt;') + '</span>' +
+                    '<span style="background:'+statusBg+';color:'+statusColor+';border:1px solid '+statusColor+'44;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700">' + String(drill.status).replace(/</g,'&lt;') + '</span>' +
                     '</div></div>' +
-                    '<p style="font-size:12px;color:#64748B;margin:6px 0 2px">' + String(drill.location||'').replace(/</g,'&lt;') + '</p>' +
+                    '<p style="font-size:12px;color:#8fa3b0;margin:6px 0 2px">' + String(drill.location||'').replace(/</g,'&lt;') + '</p>' +
                     ctInfo + (siteInfo ? '<p style="margin-bottom:4px">'+siteInfo+'</p>' : '') +
                     '</div>' +
                     // Fuel bar
                     '<div style="padding:10px 18px 0">' +
                     '<div style="display:flex;justify-content:space-between;font-size:10px;color:#94A3B8;margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em"><span>Carburant</span><span style="color:'+fuelColor+'">'+fuelPct+'% · '+fuelLevel+'/'+fuelCap+' L</span></div>' +
-                    '<div style="width:100%;height:7px;border-radius:999px;background:#E2E8F0;overflow:hidden"><div style="width:'+fuelPct+'%;height:7px;background:'+fuelColor+';border-radius:999px;transition:width 0.4s"></div></div>' +
+                    '<div style="width:100%;height:7px;border-radius:999px;background:rgba(255,255,255,0.1);overflow:hidden"><div style="width:'+fuelPct+'%;height:7px;background:'+fuelColor+';border-radius:999px;transition:width 0.4s"></div></div>' +
                     '</div>' +
                     // KPIs 2x2
                     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:12px 18px">' +
-                    '<div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:10px 12px"><p style="font-size:9px;color:#94A3B8;text-transform:uppercase;letter-spacing:0.08em;font-weight:700">'+String(tUi('drill.depth')).replace(/</g,'&lt;')+'</p><p style="font-size:18px;font-weight:900;font-family:monospace;margin-top:2px">'+depth+' <span style="font-size:11px;font-weight:400;color:#94A3B8">m</span></p></div>' +
-                    '<div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:10px 12px"><p style="font-size:9px;color:#94A3B8;text-transform:uppercase;letter-spacing:0.08em;font-weight:700">'+String(tUi('drill.pressure')).replace(/</g,'&lt;')+'</p><p style="font-size:18px;font-weight:900;font-family:monospace;margin-top:2px">'+press+' <span style="font-size:11px;font-weight:400;color:#94A3B8">bar</span></p></div>' +
-                    '<div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:10px 12px"><p style="font-size:9px;color:#94A3B8;text-transform:uppercase;letter-spacing:0.08em;font-weight:700">Temp. hydraulique</p><p style="font-size:18px;font-weight:900;font-family:monospace;margin-top:2px;color:'+tempColor+'">'+temp+' <span style="font-size:11px;font-weight:400;color:#94A3B8">°C</span></p></div>' +
-                    '<div style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:10px 12px"><p style="font-size:9px;color:#94A3B8;text-transform:uppercase;letter-spacing:0.08em;font-weight:700">Auj. · ROP</p><p style="font-size:18px;font-weight:900;font-family:monospace;margin-top:2px">'+todayM.toFixed(1)+' <span style="font-size:11px;font-weight:400;color:#94A3B8">m · '+todayROP+' m/h</span></p></div>' +
+                    '<div style="'+cellStyle+'"><p style="'+cellLabel+'">'+String(tUi('drill.depth')).replace(/</g,'&lt;')+'</p><p style="'+cellVal+'">'+depth+' <span style="'+cellUnit+'">m</span></p></div>' +
+                    '<div style="'+cellStyle+'"><p style="'+cellLabel+'">'+String(tUi('drill.pressure')).replace(/</g,'&lt;')+'</p><p style="'+cellVal+'">'+press+' <span style="'+cellUnit+'">bar</span></p></div>' +
+                    '<div style="'+cellStyle+'"><p style="'+cellLabel+'">Temp. hydraulique</p><p style="'+cellVal+';color:'+tempColor+'">'+temp+' <span style="'+cellUnit+'">°C</span></p></div>' +
+                    '<div style="'+cellStyle+'"><p style="'+cellLabel+'">Auj. · ROP</p><p style="'+cellVal+'">'+todayM.toFixed(1)+' <span style="'+cellUnit+'">m · '+todayROP+' m/h</span></p></div>' +
                     '</div>' +
                     (nextPMHtml ? '<div style="padding:0 18px 14px">'+nextPMHtml+'</div>' : '<div style="height:14px"></div>') +
                     '</div>';
             }).join('');
-            
+
             updateGlobalStats();
+            renderDashboardExtras();
         }
 
         function showAddDrillModal() {
@@ -6198,19 +6252,113 @@
         function updateGlobalStats() {
             var drillsToShow = getDrillsForSite();
             var activeDrills = drillsToShow.filter(function(d) { return d.status === 'EN FORAGE'; });
-            var totalDepth = drillsToShow.reduce(function(sum, d) { return sum + (d.telemetry && d.telemetry.depth != null ? d.telemetry.depth : 0); }, 0);
-            var avgROP = activeDrills.length > 0 ? (4 + Math.random() * 2).toFixed(1) : '0.0';
             var availability = drillsToShow.length > 0 ? (activeDrills.length / drillsToShow.length) * 100 : 0;
-            
+
+            // Métrage du jour from dailyDataRecords
+            var todayStr = getLocalDateYYYYMMDD(new Date());
+            var todayRecs = (dailyDataRecords || []).filter(function(r) { return r.date === todayStr; });
+            var dailyM = todayRecs.reduce(function(s, r) { return s + (parseFloat((r.data || {}).metersDrilled) || 0); }, 0);
+            var dailyH = todayRecs.reduce(function(s, r) { return s + (parseFloat((r.data || {}).hours) || 0); }, 0);
+            var avgROP = dailyH > 0 ? (dailyM / dailyH).toFixed(1) : null;
+
             var countEl = document.getElementById('activeDrillsCount');
-            var depthEl = document.getElementById('totalDepth');
-            var ropEl = document.getElementById('avgROP');
+            var totalEl = document.getElementById('activeDrillsTotal');
+            var meterEl = document.getElementById('dailyMeterage');
+            var ropEl   = document.getElementById('avgROP');
             var availEl = document.getElementById('availabilityRate');
-            
+
             if (countEl) countEl.textContent = activeDrills.length;
-            if (depthEl) depthEl.textContent = totalDepth.toFixed(1) + ' m';
-            if (ropEl) ropEl.textContent = avgROP + ' m/h';
+            if (totalEl) totalEl.textContent = '/ ' + drillsToShow.length + ' total';
+            if (meterEl) meterEl.textContent = dailyM.toFixed(1) + ' m';
+            if (ropEl)   ropEl.textContent = avgROP ? avgROP + ' m/h' : '— m/h';
             if (availEl) availEl.textContent = Math.round(availability) + '%';
+
+            renderDashStatusBar(drillsToShow);
+        }
+
+        function renderDashStatusBar(drills) {
+            var bar = document.getElementById('dashStatusBar');
+            if (!bar) return;
+            var statuses = [
+                { key: 'EN FORAGE',      color: '#22c55e', bg: 'rgba(34,197,94,0.1)',   label: 'En forage' },
+                { key: 'EN PAUSE',       color: '#f59e0b', bg: 'rgba(245,158,11,0.1)',  label: 'En pause' },
+                { key: 'EN MAINTENANCE', color: '#3b82f6', bg: 'rgba(59,130,246,0.1)',  label: 'Maintenance' },
+                { key: 'HORS SERVICE',   color: '#ef4444', bg: 'rgba(239,68,68,0.1)',   label: 'Hors service' }
+            ];
+            bar.innerHTML = statuses.map(function(s) {
+                var n = drills.filter(function(d) { return d.status === s.key; }).length;
+                return '<span style="display:inline-flex;align-items:center;gap:7px;padding:5px 12px;border-radius:20px;' +
+                       'border:1px solid '+s.color+'33;background:'+s.bg+';font-size:11px;font-weight:700">' +
+                       '<span style="width:7px;height:7px;border-radius:50%;background:'+s.color+';display:inline-block"></span>' +
+                       '<span style="color:'+s.color+'">'+n+'</span>' +
+                       '<span style="color:#a7b4c0">'+s.label+'</span>' +
+                       '</span>';
+            }).join('');
+        }
+
+        function renderDashboardExtras() {
+            renderDashAlerts();
+            initDashProductionChart();
+        }
+
+        function renderDashAlerts() {
+            var el = document.getElementById('dashAlerts');
+            if (!el) return;
+            var alerts = [];
+            getDrillsForSite().forEach(function(drill) {
+                var temp = (drill.telemetry && drill.telemetry.hyd_temp != null) ? drill.telemetry.hyd_temp : 0;
+                if (temp > 90) alerts.push({ level: 'critical', msg: drill.id + ' — Temp. hyd. critique : ' + Math.round(temp) + '°C' });
+                else if (temp > 70) alerts.push({ level: 'warning', msg: drill.id + ' — Temp. hyd. élevée : ' + Math.round(temp) + '°C' });
+                var fuelPct = (drill.fuel && drill.fuel.capacity > 0) ? Math.round(drill.fuel.level / drill.fuel.capacity * 100) : 0;
+                if (fuelPct > 0 && fuelPct <= 20) alerts.push({ level: 'critical', msg: drill.id + ' — Carburant bas : ' + fuelPct + '%' });
+                else if (fuelPct > 20 && fuelPct <= 30) alerts.push({ level: 'warning', msg: drill.id + ' — Carburant faible : ' + fuelPct + '%' });
+            });
+            if (alerts.length === 0) {
+                el.innerHTML = '<div style="text-align:center;padding:24px 0;color:#a7b4c0;font-size:12px">' +
+                               '<div style="font-size:22px;margin-bottom:8px">✓</div>Aucune alerte active</div>';
+                return;
+            }
+            el.innerHTML = alerts.map(function(a) {
+                var color = a.level === 'critical' ? '#ef4444' : '#f59e0b';
+                var bg    = a.level === 'critical' ? 'rgba(239,68,68,0.1)' : 'rgba(245,158,11,0.1)';
+                var icon  = a.level === 'critical' ? '🔴' : '⚠️';
+                return '<div style="padding:8px 11px;border-radius:8px;border:1px solid '+color+'44;background:'+bg+';font-size:11px;color:'+color+';font-weight:600">'+icon+' '+String(a.msg).replace(/</g,'&lt;')+'</div>';
+            }).join('');
+        }
+
+        function initDashProductionChart() {
+            var canvas = document.getElementById('dashProductionChart');
+            if (!canvas || typeof Chart === 'undefined') return;
+            if (window._dashChart) { try { window._dashChart.destroy(); } catch(e){} window._dashChart = null; }
+            var labels = [], data = [];
+            for (var i = 6; i >= 0; i--) {
+                var d = new Date(); d.setDate(d.getDate() - i);
+                var dayStr = getLocalDateYYYYMMDD(d);
+                var recs = (dailyDataRecords || []).filter(function(r) { return r.date === dayStr; });
+                var total = recs.reduce(function(s, r) { return s + (parseFloat((r.data || {}).metersDrilled) || 0); }, 0);
+                labels.push(d.toLocaleDateString('fr-CA', { weekday: 'short', day: '2-digit', month: 'short' }));
+                data.push(parseFloat(total.toFixed(1)));
+            }
+            window._dashChart = new Chart(canvas, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{ label: 'Mètres forés', data: data,
+                        backgroundColor: 'rgba(245,158,11,0.65)', borderColor: '#F59E0B',
+                        borderWidth: 1, borderRadius: 5, borderSkipped: false }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: true,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { callbacks: { label: function(ctx) { return ctx.parsed.y + ' m'; } } }
+                    },
+                    scales: {
+                        x: { ticks: { color: '#a7b4c0', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                        y: { ticks: { color: '#a7b4c0', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.05)' }, beginAtZero: true }
+                    }
+                }
+            });
         }
 
         // ============================================
@@ -7947,16 +8095,422 @@
         }
 
         // ============================================
-        // AFFÛTAGE DES BITS — Module (Phase 3)
+        // AFFÛTAGE DES BITS — Module complet (Phase 3)
         // ============================================
+
+        var _gedBitsStatusMeta = {
+            'NEUF':                { bg:'rgba(59,130,246,.15)',  color:'#60a5fa', label:'Neuf' },
+            'EN_SERVICE':          { bg:'rgba(34,197,94,.15)',   color:'#4ade80', label:'En service' },
+            'EN_ATTENTE_AFFÛTAGE': { bg:'rgba(245,158,11,.15)', color:'#fbbf24', label:'En attente' },
+            'EN_AFFÛTAGE':         { bg:'rgba(168,85,247,.15)', color:'#c084fc', label:'En affûtage' },
+            'RÉFORMÉ':             { bg:'rgba(107,114,128,.15)', color:'#9ca3af', label:'Réformé' }
+        };
+        function _gedBitStyle(s) { return _gedBitsStatusMeta[s] || {bg:'rgba(100,100,100,.15)',color:'#aaa',label:s||'—'}; }
+        function _gedBitEsc(s) {
+            return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+        }
+
         function renderBitSharpening() {
             var el = document.getElementById('bitSharpeningContent');
             if (!el) return;
-            el.innerHTML = '<div class="ged-content-panel p-8 rounded-xl text-center" style="min-height:320px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px">' +
-                '<div style="font-size:3rem">⬡</div>' +
-                '<h2 class="text-2xl font-extrabold" style="color:var(--ged-yellow)">Affûtage des bits</h2>' +
-                '<p style="color:var(--ged-charcoal);max-width:480px;line-height:1.6">Suivez l\'affûtage, la réutilisation, la production et la performance de vos bits de forage.<br><strong style="color:var(--ged-black)">Module en cours de déploiement — Phase 3</strong></p>' +
+            el.innerHTML = '<div style="padding:40px;text-align:center;color:var(--ged-charcoal)">Chargement…</div>';
+            apiRequest('/bits').then(function(data) {
+                window._gedBitsData = data || [];
+                _gedBitsRender();
+            }).catch(function(err) {
+                var el2 = document.getElementById('bitSharpeningContent');
+                if (el2) el2.innerHTML = '<div class="ged-content-panel p-6 rounded-xl" style="border-left:3px solid #ef4444;color:#fca5a5">Erreur : '+_gedBitEsc(err.message||'Impossible de charger')+'</div>';
+            });
+        }
+
+        function _gedBitsRender() {
+            var el = document.getElementById('bitSharpeningContent');
+            if (!el) return;
+            var bits = window._gedBitsData || [];
+            var filter = window._gedBitsFilter || 'all';
+            var filtered = filter === 'all' ? bits : bits.filter(function(b){return b.status===filter;});
+            var counts = {NEUF:0,EN_SERVICE:0,'EN_ATTENTE_AFFÛTAGE':0,'EN_AFFÛTAGE':0,'RÉFORMÉ':0};
+            bits.forEach(function(b){if(b.status in counts)counts[b.status]++;});
+
+            var kpiHtml = '<div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3 mb-5">' +
+                [{label:'Total',value:bits.length,color:'#e8edf2'},
+                 {label:'En service',value:counts['EN_SERVICE'],color:'#4ade80'},
+                 {label:'En attente',value:counts['EN_ATTENTE_AFFÛTAGE'],color:'#fbbf24'},
+                 {label:'En affûtage',value:counts['EN_AFFÛTAGE'],color:'#c084fc'},
+                 {label:'Réformés',value:counts['RÉFORMÉ'],color:'#9ca3af'}
+                ].map(function(k){
+                    return '<div class="ged-content-panel p-4 rounded-xl text-center">' +
+                        '<div style="font-size:1.75rem;font-weight:900;color:'+k.color+'">'+k.value+'</div>' +
+                        '<div style="font-size:10px;font-weight:700;letter-spacing:.07em;color:var(--ged-charcoal);margin-top:3px;text-transform:uppercase">'+k.label+'</div>' +
+                    '</div>';
+                }).join('')+'</div>';
+
+            var tabDefs = [
+                {id:'all',label:'Tous ('+bits.length+')',color:'#e8edf2'},
+                {id:'NEUF',label:'Neufs ('+counts['NEUF']+')',color:'#60a5fa'},
+                {id:'EN_SERVICE',label:'En service ('+counts['EN_SERVICE']+')',color:'#4ade80'},
+                {id:'EN_ATTENTE_AFFÛTAGE',label:'En attente ('+counts['EN_ATTENTE_AFFÛTAGE']+')',color:'#fbbf24'},
+                {id:'EN_AFFÛTAGE',label:'En affûtage ('+counts['EN_AFFÛTAGE']+')',color:'#c084fc'},
+                {id:'RÉFORMÉ',label:'Réformés ('+counts['RÉFORMÉ']+')',color:'#9ca3af'}
+            ];
+            var tabsHtml = '<div class="flex flex-wrap gap-2 mb-5">' +
+                tabDefs.map(function(t){
+                    var a = t.id===filter;
+                    return '<button onclick="window._gedBitsFilter=\''+t.id+'\';_gedBitsRender()" style="padding:6px 13px;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid '+(a?t.color:'rgba(255,255,255,.12)')+';background:'+(a?'rgba(255,255,255,.07)':'transparent')+';color:'+(a?t.color:'var(--ged-charcoal)')+'">'+t.label+'</button>';
+                }).join('')+'</div>';
+
+            var tableHtml;
+            if (filtered.length === 0) {
+                tableHtml = '<div class="ged-content-panel p-10 rounded-xl text-center">' +
+                    '<div style="font-size:2.5rem;margin-bottom:12px;opacity:.35">⬡</div>' +
+                    '<div style="font-weight:700;color:var(--ged-black)">Aucun bit'+(filter!=='all'?' pour ce statut':'')+'</div>' +
+                    '<div style="font-size:12px;margin-top:6px;color:var(--ged-charcoal)">Cliquez sur « + Enregistrer un bit » pour commencer.</div>' +
                 '</div>';
+            } else {
+                var ch=function(t){return '<th style="padding:10px 14px;text-align:left;font-size:10px;font-weight:800;letter-spacing:.08em;color:var(--ged-charcoal);text-transform:uppercase;white-space:nowrap">'+t+'</th>';};
+                tableHtml = '<div class="ged-content-panel rounded-xl" style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:680px">' +
+                    '<thead><tr style="border-bottom:1px solid rgba(255,255,255,.08)">'+[ch('Série'),ch('Type / Marque'),ch('Ø mm'),ch('Statut'),ch('Foreuse'),ch('Mètres'),ch('Affûtages'),ch('')].join('')+'</tr></thead>' +
+                    '<tbody>'+filtered.map(function(b,i){
+                        var st=_gedBitStyle(b.status);
+                        var sb=(b.sharpeningCount||0)+(b.maxSharpenings?'/'+b.maxSharpenings:'');
+                        var ws=b.maxSharpenings&&(b.sharpeningCount||0)>=b.maxSharpenings;
+                        return '<tr style="border-bottom:1px solid rgba(255,255,255,.05);'+(i%2===0?'':'background:rgba(255,255,255,.02)')+'">' +
+                            '<td style="padding:10px 14px;font-weight:700;font-size:13px">'+_gedBitEsc(b.serialNumber||'—')+'</td>' +
+                            '<td style="padding:10px 14px;font-size:12px;color:var(--ged-charcoal)">'+_gedBitEsc((b.type||'—')+(b.brand?' · '+b.brand:''))+'</td>' +
+                            '<td style="padding:10px 14px;font-size:13px">'+(b.diameter!=null?b.diameter:'—')+'</td>' +
+                            '<td style="padding:10px 14px"><span style="background:'+st.bg+';color:'+st.color+';border:1px solid '+st.color+'44;border-radius:20px;padding:3px 10px;font-size:11px;font-weight:700;white-space:nowrap">'+st.label+'</span></td>' +
+                            '<td style="padding:10px 14px;font-size:12px;color:var(--ged-charcoal)">'+_gedBitEsc(b.currentDrillId||'—')+'</td>' +
+                            '<td style="padding:10px 14px;font-size:13px;font-weight:700">'+(b.totalMeters!=null?Number(b.totalMeters).toFixed(1)+' m':'0 m')+'</td>' +
+                            '<td style="padding:10px 14px;font-size:13px;text-align:center;font-weight:700;color:'+(ws?'#f87171':'var(--ged-black)')+'">'+sb+'</td>' +
+                            '<td style="padding:10px 14px;white-space:nowrap"><button onclick="gedBitOpenDetail('+b.id+')" style="padding:5px 12px;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.35);color:#fbbf24;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer">Détail ▸</button></td>' +
+                        '</tr>';
+                    }).join('')+'</tbody></table></div>';
+            }
+
+            el.innerHTML =
+                '<div class="flex flex-wrap justify-between items-center gap-3 mb-5">' +
+                    '<div>' +
+                        '<h2 style="color:var(--ged-black);font-size:1.45rem;font-weight:900;letter-spacing:-.01em;margin:0;line-height:1.1">⬡ Affûtage des bits</h2>' +
+                        '<div style="color:var(--ged-charcoal);font-size:12px;margin-top:3px">Cycle de vie, production et performance par bit de forage</div>' +
+                    '</div>' +
+                    '<button onclick="gedBitOpenCreate()" style="padding:9px 18px;background:linear-gradient(135deg,#F59E0B,#FBBF24);color:#111820;border:none;border-radius:9px;font-size:12px;font-weight:800;letter-spacing:.04em;cursor:pointer;flex-shrink:0">+ Enregistrer un bit</button>' +
+                '</div>' + kpiHtml + tabsHtml + tableHtml;
+        }
+
+        function gedBitOpenCreate() { _gedBitOpenForm(null); }
+        function gedBitOpenEdit(bitId) {
+            var bit = (window._gedBitsData||[]).find(function(b){return b.id===bitId;});
+            _gedBitOpenForm(bit||null);
+        }
+
+        function _gedBitOpenForm(bit) {
+            var v = bit||{}, isEdit = !!bit;
+            var bitTypes = ['Tricône','PDC','Imprégné diamants','Drag bit','Autre'];
+            var html = '<div id="gedBitFormOverlay" class="fixed inset-0 flex items-center justify-center z-[200] p-4" style="background:rgba(0,0,0,.6)">' +
+                '<div class="ged-modal-panel rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">' +
+                '<div class="ged-section-header px-5 py-3 flex justify-between items-center rounded-t-xl">' +
+                    '<h3 class="font-bold text-lg">'+(isEdit?'Modifier — '+_gedBitEsc(v.serialNumber||''):'Enregistrer un bit')+'</h3>' +
+                    '<button onclick="document.getElementById(\'gedBitFormOverlay\').remove()" style="background:none;border:none;font-size:1.5rem;cursor:pointer;color:rgba(255,255,255,.7);line-height:1">&times;</button>' +
+                '</div>' +
+                '<div class="p-6 space-y-4">' +
+                    '<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">' +
+                        '<div><label class="block text-sm font-semibold mb-1">Numéro de série *</label>' +
+                        '<input id="gedBit_serial" type="text" value="'+_gedBitEsc(v.serialNumber||'')+'" placeholder="ex: BIT-001" class="w-full border rounded px-3 py-2"></div>' +
+                        '<div><label class="block text-sm font-semibold mb-1">Type</label>' +
+                        '<select id="gedBit_type" class="w-full border rounded px-3 py-2">'+bitTypes.map(function(t){return '<option value="'+t+'"'+(v.type===t?' selected':'')+'>'+t+'</option>';}).join('')+'</select></div>' +
+                    '</div>' +
+                    '<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">' +
+                        '<div><label class="block text-sm font-semibold mb-1">Diamètre (mm)</label>' +
+                        '<input id="gedBit_diameter" type="number" step="0.1" min="0" value="'+(v.diameter!=null?v.diameter:'')+'" placeholder="ex: 152.4" class="w-full border rounded px-3 py-2"></div>' +
+                        '<div><label class="block text-sm font-semibold mb-1">Marque</label>' +
+                        '<input id="gedBit_brand" type="text" value="'+_gedBitEsc(v.brand||'')+'" placeholder="ex: Smith Int." class="w-full border rounded px-3 py-2"></div>' +
+                    '</div>' +
+                    '<div class="grid grid-cols-1 sm:grid-cols-2 gap-4">' +
+                        '<div><label class="block text-sm font-semibold mb-1">Affûtages max</label>' +
+                        '<input id="gedBit_maxSharp" type="number" min="1" value="'+(v.maxSharpenings!=null?v.maxSharpenings:'')+'" placeholder="ex: 5" class="w-full border rounded px-3 py-2"></div>' +
+                        '<div><label class="block text-sm font-semibold mb-1">Mètres max / affûtage</label>' +
+                        '<input id="gedBit_maxMPS" type="number" step="0.1" min="0" value="'+(v.maxMetersPerSharpening!=null?v.maxMetersPerSharpening:'')+'" placeholder="ex: 500" class="w-full border rounded px-3 py-2"></div>' +
+                    '</div>' +
+                    '<div><label class="block text-sm font-semibold mb-1">Notes</label>' +
+                    '<textarea id="gedBit_notes" rows="2" class="w-full border rounded px-3 py-2">'+_gedBitEsc(v.notes||'')+'</textarea></div>' +
+                '</div>' +
+                '<div class="px-6 pb-5 flex gap-3 justify-end items-center">' +
+                    (isEdit?'<button onclick="gedBitDelete('+v.id+')" style="margin-right:auto;padding:7px 14px;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.4);color:#f87171;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">Supprimer</button>':'') +
+                    '<button onclick="document.getElementById(\'gedBitFormOverlay\').remove()" class="ged-btn-secondary px-4 py-2 rounded-lg text-sm">Annuler</button>' +
+                    '<button id="gedBitSaveBtn" onclick="gedBitSave('+(isEdit?v.id:'null')+')" class="ged-btn-primary px-5 py-2 rounded-lg text-sm font-bold">Enregistrer</button>' +
+                '</div>' +
+            '</div></div>';
+            document.body.insertAdjacentHTML('beforeend', html);
+        }
+
+        function gedBitSave(bitId) {
+            var serial = (document.getElementById('gedBit_serial').value||'').trim();
+            if (!serial) { alert('Le numéro de série est obligatoire.'); return; }
+            var payload = {
+                serialNumber: serial,
+                type: document.getElementById('gedBit_type').value,
+                diameter: document.getElementById('gedBit_diameter').value ? parseFloat(document.getElementById('gedBit_diameter').value) : null,
+                brand: (document.getElementById('gedBit_brand').value||'').trim(),
+                maxSharpenings: document.getElementById('gedBit_maxSharp').value ? parseInt(document.getElementById('gedBit_maxSharp').value,10) : null,
+                maxMetersPerSharpening: document.getElementById('gedBit_maxMPS').value ? parseFloat(document.getElementById('gedBit_maxMPS').value) : null,
+                notes: (document.getElementById('gedBit_notes').value||'').trim()
+            };
+            var btn = document.getElementById('gedBitSaveBtn');
+            if (btn) { btn.textContent = '…'; btn.disabled = true; }
+            var req = (bitId && bitId !== 'null' && bitId !== null)
+                ? apiRequest('/bits/'+bitId,'PUT',payload)
+                : apiRequest('/bits','POST',payload);
+            req.then(function() {
+                var ov = document.getElementById('gedBitFormOverlay');
+                if (ov) ov.remove();
+                renderBitSharpening();
+            }).catch(function(err) {
+                if (btn) { btn.textContent = 'Enregistrer'; btn.disabled = false; }
+                alert('Erreur : '+(err.message||'Sauvegarde échouée'));
+            });
+        }
+
+        function gedBitDelete(bitId) {
+            if (!confirm('Supprimer définitivement ce bit et tout son historique ?')) return;
+            apiRequest('/bits/'+bitId,'DELETE').then(function() {
+                ['gedBitFormOverlay','gedBitDetailOverlay'].forEach(function(id){
+                    var ov=document.getElementById(id); if(ov)ov.remove();
+                });
+                renderBitSharpening();
+            }).catch(function(err){alert('Erreur : '+(err.message||'Suppression échouée'));});
+        }
+
+        function gedBitOpenDetail(bitId) {
+            var bit = (window._gedBitsData||[]).find(function(b){return b.id===bitId;});
+            if (!bit) return;
+            var st = _gedBitStyle(bit.status);
+            var sBtn = 'padding:7px 14px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid ';
+            var actions = [];
+            if (bit.status==='NEUF'||bit.status==='EN_ATTENTE_AFFÛTAGE') {
+                actions.push('<button onclick="gedBitActionPrompt('+bitId+',\'start-service\')" style="'+sBtn+'rgba(34,197,94,.4);background:rgba(34,197,94,.15);color:#4ade80">▶ Mettre en service</button>');
+            }
+            if (bit.status==='EN_SERVICE') {
+                actions.push('<button onclick="gedBitActionPrompt('+bitId+',\'request-sharpening\')" style="'+sBtn+'rgba(245,158,11,.4);background:rgba(245,158,11,.15);color:#fbbf24">⬡ Demander affûtage</button>');
+            }
+            if (bit.status==='EN_ATTENTE_AFFÛTAGE') {
+                actions.push('<button onclick="gedBitActionPrompt('+bitId+',\'start-sharpening\')" style="'+sBtn+'rgba(168,85,247,.4);background:rgba(168,85,247,.15);color:#c084fc">🔧 Démarrer affûtage</button>');
+            }
+            if (bit.status==='EN_AFFÛTAGE') {
+                actions.push('<button onclick="gedBitActionPrompt('+bitId+',\'complete-sharpening\')" style="'+sBtn+'rgba(34,197,94,.4);background:rgba(34,197,94,.15);color:#4ade80">✓ Affûtage terminé</button>');
+            }
+            if (bit.status!=='RÉFORMÉ') {
+                actions.push('<button onclick="gedBitActionPrompt('+bitId+',\'reform\')" style="'+sBtn+'rgba(239,68,68,.4);background:rgba(239,68,68,.1);color:#f87171">🗑 Réformer</button>');
+            }
+            var infoGrid = '<div class="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-5">' +
+                [{l:'Diamètre',v:bit.diameter!=null?bit.diameter+' mm':'—'},
+                 {l:'Marque',v:bit.brand||'—'},
+                 {l:'Mètres total',v:bit.totalMeters!=null?Number(bit.totalMeters).toFixed(1)+' m':'0 m'},
+                 {l:'Affûtages',v:(bit.sharpeningCount||0)+(bit.maxSharpenings?'/'+bit.maxSharpenings:'')},
+                 {l:'Foreuse actuelle',v:bit.currentDrillId||'En stock'},
+                 {l:'Ajouté le',v:(bit.createdAt||'').slice(0,10)||'—'}
+                ].map(function(r){
+                    return '<div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:10px 12px">' +
+                        '<div style="font-size:10px;font-weight:700;letter-spacing:.07em;color:var(--ged-charcoal);text-transform:uppercase;margin-bottom:3px">'+r.l+'</div>' +
+                        '<div style="font-size:14px;font-weight:700;color:var(--ged-black)">'+_gedBitEsc(String(r.v))+'</div>' +
+                    '</div>';
+                }).join('')+'</div>';
+            var detTabs = [{id:'production',label:'📊 Production'},{id:'sharpening',label:'⬡ Affûtages'},{id:'history',label:'📋 Historique'}];
+            var tabBar = '<div class="flex flex-wrap gap-2 mb-4" id="gedBitDetTabs">' +
+                detTabs.map(function(t){
+                    var a=t.id==='production';
+                    return '<button onclick="gedBitLoadDetailTab('+bitId+',\''+t.id+'\')" style="padding:7px 14px;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;border:1px solid '+(a?'#fbbf24':'rgba(255,255,255,.12)')+';background:'+(a?'rgba(245,158,11,.12)':'transparent')+';color:'+(a?'#fbbf24':'var(--ged-charcoal)')+'">'+t.label+'</button>';
+                }).join('')+'</div>';
+            var html = '<div id="gedBitDetailOverlay" class="fixed inset-0 flex items-center justify-center z-[200] p-4" style="background:rgba(0,0,0,.6)">' +
+                '<div class="ged-modal-panel rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">' +
+                '<div class="ged-section-header px-5 py-3 flex justify-between items-center rounded-t-xl">' +
+                    '<div class="flex items-center gap-3">' +
+                        '<h3 class="font-bold text-lg" style="margin:0">'+_gedBitEsc(bit.serialNumber||'Bit')+'</h3>' +
+                        '<span style="background:'+st.bg+';color:'+st.color+';border:1px solid '+st.color+'44;border-radius:20px;padding:2px 10px;font-size:11px;font-weight:700">'+st.label+'</span>' +
+                    '</div>' +
+                    '<div class="flex items-center gap-2">' +
+                        '<button onclick="gedBitOpenEdit('+bit.id+')" style="background:rgba(255,255,255,.1);border:none;border-radius:6px;color:rgba(255,255,255,.7);padding:4px 10px;font-size:12px;cursor:pointer">✎ Modifier</button>' +
+                        '<button onclick="document.getElementById(\'gedBitDetailOverlay\').remove()" style="background:none;border:none;font-size:1.5rem;cursor:pointer;color:rgba(255,255,255,.7);line-height:1">&times;</button>' +
+                    '</div>' +
+                '</div>' +
+                '<div class="p-5">' +
+                    (actions.length?'<div class="flex flex-wrap gap-2 mb-5">'+actions.join('')+'</div>':'') +
+                    infoGrid + tabBar +
+                    '<div id="gedBitDetailContent"><div style="padding:20px;text-align:center;color:var(--ged-charcoal)">Chargement…</div></div>' +
+                '</div>' +
+            '</div></div>';
+            window._gedBitDetailTab = 'production';
+            document.body.insertAdjacentHTML('beforeend', html);
+            gedBitLoadDetailTab(bitId, 'production');
+        }
+
+        function gedBitLoadDetailTab(bitId, tab) {
+            window._gedBitDetailTab = tab;
+            var btns = document.querySelectorAll('#gedBitDetTabs button');
+            var tabIds = ['production','sharpening','history'];
+            btns.forEach(function(btn,i){
+                var a = tabIds[i]===tab;
+                btn.style.borderColor = a?'#fbbf24':'rgba(255,255,255,.12)';
+                btn.style.background  = a?'rgba(245,158,11,.12)':'transparent';
+                btn.style.color       = a?'#fbbf24':'var(--ged-charcoal)';
+            });
+            var el = document.getElementById('gedBitDetailContent');
+            if (!el) return;
+            el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--ged-charcoal)">Chargement…</div>';
+            var ep = tab==='production'?'/bits/'+bitId+'/production':tab==='sharpening'?'/bits/'+bitId+'/sharpening-cycles':'/bits/'+bitId+'/status-history';
+            apiRequest(ep).then(function(data){
+                var el2=document.getElementById('gedBitDetailContent'); if(!el2)return;
+                if(tab==='production') el2.innerHTML=_gedBitRenderProduction(bitId,data);
+                else if(tab==='sharpening') el2.innerHTML=_gedBitRenderSharpeningCycles(data);
+                else el2.innerHTML=_gedBitRenderStatusHistory(data);
+            }).catch(function(err){
+                var el2=document.getElementById('gedBitDetailContent');
+                if(el2)el2.innerHTML='<div style="color:#f87171;padding:12px;font-size:13px">Erreur : '+_gedBitEsc(err.message||'')+'</div>';
+            });
+        }
+
+        function _gedBitRenderProduction(bitId, rows) {
+            var today = new Date().toISOString().slice(0,10);
+            var formHtml =
+                '<div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.1);border-radius:10px;padding:14px 16px;margin-bottom:14px">' +
+                '<div style="font-size:11px;font-weight:800;letter-spacing:.07em;color:var(--ged-charcoal);margin-bottom:10px;text-transform:uppercase">Saisir production journalière</div>' +
+                '<div class="grid grid-cols-2 sm:grid-cols-4 gap-3">' +
+                    '<div><label style="font-size:10px;font-weight:700;color:var(--ged-charcoal);display:block;margin-bottom:4px">Date *</label>' +
+                    '<input id="gedBitProd_date" type="date" value="'+today+'" style="width:100%;border-radius:6px;padding:5px 8px;font-size:12px;border:1px solid rgba(255,255,255,.15);background:#0d1720;color:#f4f6f8"></div>' +
+                    '<div><label style="font-size:10px;font-weight:700;color:var(--ged-charcoal);display:block;margin-bottom:4px">Foreuse *</label>' +
+                    '<input id="gedBitProd_drill" type="text" placeholder="ID foreuse" style="width:100%;border-radius:6px;padding:5px 8px;font-size:12px;border:1px solid rgba(255,255,255,.15);background:#0d1720;color:#f4f6f8"></div>' +
+                    '<div><label style="font-size:10px;font-weight:700;color:var(--ged-charcoal);display:block;margin-bottom:4px">Mètres forés</label>' +
+                    '<input id="gedBitProd_meters" type="number" step="0.1" min="0" placeholder="0.0" style="width:100%;border-radius:6px;padding:5px 8px;font-size:12px;border:1px solid rgba(255,255,255,.15);background:#0d1720;color:#f4f6f8"></div>' +
+                    '<div><label style="font-size:10px;font-weight:700;color:var(--ged-charcoal);display:block;margin-bottom:4px">Heures utilisées</label>' +
+                    '<input id="gedBitProd_hours" type="number" step="0.1" min="0" placeholder="0.0" style="width:100%;border-radius:6px;padding:5px 8px;font-size:12px;border:1px solid rgba(255,255,255,.15);background:#0d1720;color:#f4f6f8"></div>' +
+                '</div>' +
+                '<div style="margin-top:10px;text-align:right">' +
+                    '<button onclick="gedBitSaveProdLog('+bitId+')" style="padding:6px 16px;background:linear-gradient(135deg,#F59E0B,#FBBF24);color:#111820;border:none;border-radius:7px;font-size:11px;font-weight:800;cursor:pointer">Enregistrer</button>' +
+                '</div></div>';
+            if (rows.length === 0) return formHtml + '<div style="text-align:center;padding:20px;color:var(--ged-charcoal);font-size:13px">Aucune production enregistrée.</div>';
+            var thStyle = 'padding:7px 10px;text-align:left;font-size:10px;font-weight:800;letter-spacing:.07em;color:var(--ged-charcoal);text-transform:uppercase';
+            return formHtml + '<table style="width:100%;border-collapse:collapse;font-size:12px">' +
+                '<thead><tr style="border-bottom:1px solid rgba(255,255,255,.08)">' +
+                ['Date','Foreuse','Mètres','Heures','m/h'].map(function(h){return '<th style="'+thStyle+'">'+h+'</th>';}).join('')+
+                '</tr></thead><tbody>' +
+                rows.slice(0,30).map(function(r){
+                    var rop=r.hoursUsed>0?(r.metersDrilled/r.hoursUsed).toFixed(1):'—';
+                    return '<tr style="border-bottom:1px solid rgba(255,255,255,.04)">' +
+                        '<td style="padding:7px 10px;color:var(--ged-charcoal)">'+(r.date||'').slice(0,10)+'</td>' +
+                        '<td style="padding:7px 10px">'+_gedBitEsc(r.drillId||'—')+'</td>' +
+                        '<td style="padding:7px 10px;font-weight:700">'+(r.metersDrilled!=null?Number(r.metersDrilled).toFixed(1):'—')+' m</td>' +
+                        '<td style="padding:7px 10px">'+(r.hoursUsed!=null?Number(r.hoursUsed).toFixed(1):'—')+' h</td>' +
+                        '<td style="padding:7px 10px;color:#fbbf24;font-weight:700">'+rop+'</td>' +
+                    '</tr>';
+                }).join('')+'</tbody></table>';
+        }
+
+        function gedBitSaveProdLog(bitId) {
+            var date  = document.getElementById('gedBitProd_date').value;
+            var drill = (document.getElementById('gedBitProd_drill').value||'').trim();
+            if (!date||!drill) { alert('Date et Foreuse sont obligatoires.'); return; }
+            var payload = {
+                date: date, drillId: drill,
+                metersDrilled: parseFloat(document.getElementById('gedBitProd_meters').value)||0,
+                hoursUsed:     parseFloat(document.getElementById('gedBitProd_hours').value)||0
+            };
+            apiRequest('/bits/'+bitId+'/production','POST',payload).then(function(){
+                apiRequest('/bits/'+bitId,'GET').then(function(upd){
+                    var idx=(window._gedBitsData||[]).findIndex(function(b){return b.id===bitId;});
+                    if(idx>=0)window._gedBitsData[idx]=upd;
+                }).catch(function(){});
+                gedBitLoadDetailTab(bitId,'production');
+            }).catch(function(err){alert('Erreur : '+(err.message||'Sauvegarde échouée'));});
+        }
+
+        function _gedBitRenderSharpeningCycles(rows) {
+            if (rows.length===0) return '<div style="text-align:center;padding:20px;color:var(--ged-charcoal);font-size:13px">Aucun cycle d\'affûtage enregistré.</div>';
+            var th='padding:7px 10px;text-align:left;font-size:10px;font-weight:800;letter-spacing:.07em;color:var(--ged-charcoal);text-transform:uppercase';
+            return '<table style="width:100%;border-collapse:collapse;font-size:12px">' +
+                '<thead><tr style="border-bottom:1px solid rgba(255,255,255,.08)">'+['N°','Demandé le','Démarré','Terminé','Technicien','Mètres avant'].map(function(h){return '<th style="'+th+'">'+h+'</th>';}).join('')+'</tr></thead>' +
+                '<tbody>'+rows.map(function(r){
+                    var done=!!r.completedAt;
+                    return '<tr style="border-bottom:1px solid rgba(255,255,255,.04)">' +
+                        '<td style="padding:7px 10px;font-weight:700;color:#fbbf24">#'+r.sharpeningNumber+'</td>' +
+                        '<td style="padding:7px 10px;color:var(--ged-charcoal)">'+(r.requestedAt||'').slice(0,10)+'</td>' +
+                        '<td style="padding:7px 10px;color:var(--ged-charcoal)">'+(r.startedAt?(r.startedAt||'').slice(0,10):'<span style="opacity:.4">—</span>')+'</td>' +
+                        '<td style="padding:7px 10px">'+(done?'<span style="color:#4ade80">'+(r.completedAt||'').slice(0,10)+'</span>':'<span style="color:#fbbf24;font-size:11px">En cours</span>')+'</td>' +
+                        '<td style="padding:7px 10px">'+_gedBitEsc(r.technicianName||'—')+'</td>' +
+                        '<td style="padding:7px 10px;font-weight:700">'+(r.metersBeforeSharpening!=null?Number(r.metersBeforeSharpening).toFixed(1)+' m':'—')+'</td>' +
+                    '</tr>';
+                }).join('')+'</tbody></table>';
+        }
+
+        function _gedBitRenderStatusHistory(rows) {
+            if (rows.length===0) return '<div style="text-align:center;padding:20px;color:var(--ged-charcoal);font-size:13px">Aucun changement de statut enregistré.</div>';
+            var th='padding:7px 10px;text-align:left;font-size:10px;font-weight:800;letter-spacing:.07em;color:var(--ged-charcoal);text-transform:uppercase';
+            return '<table style="width:100%;border-collapse:collapse;font-size:12px">' +
+                '<thead><tr style="border-bottom:1px solid rgba(255,255,255,.08)">'+['Date','De → Vers','Par','Raison'].map(function(h){return '<th style="'+th+'">'+h+'</th>';}).join('')+'</tr></thead>' +
+                '<tbody>'+rows.map(function(r){
+                    var fs=_gedBitStyle(r.fromStatus), ts=_gedBitStyle(r.toStatus);
+                    return '<tr style="border-bottom:1px solid rgba(255,255,255,.04)">' +
+                        '<td style="padding:7px 10px;color:var(--ged-charcoal)">'+(r.changedAt||'').slice(0,16).replace('T',' ')+'</td>' +
+                        '<td style="padding:7px 10px;white-space:nowrap"><span style="color:'+fs.color+';font-size:11px;font-weight:700">'+fs.label+'</span> <span style="color:var(--ged-charcoal)">→</span> <span style="color:'+ts.color+';font-size:11px;font-weight:700">'+ts.label+'</span></td>' +
+                        '<td style="padding:7px 10px">'+_gedBitEsc(r.changedBy||'—')+'</td>' +
+                        '<td style="padding:7px 10px;color:var(--ged-charcoal)">'+_gedBitEsc(r.reason||'—')+'</td>' +
+                    '</tr>';
+                }).join('')+'</tbody></table>';
+        }
+
+        function gedBitActionPrompt(bitId, action) {
+            var labels = {'start-service':'Mettre en service','request-sharpening':'Demander affûtage','start-sharpening':'Démarrer affûtage','complete-sharpening':'Affûtage terminé','reform':'Réformer ce bit'};
+            var fields = '';
+            if (action==='start-service') {
+                fields = '<div><label style="font-size:12px;font-weight:700;color:var(--ged-charcoal);display:block;margin-bottom:6px">ID de la foreuse assignée</label>' +
+                    '<input id="gedBitAct_drillId" type="text" placeholder="ex: F-001 (vide = en stock)" style="width:100%;border-radius:8px;padding:8px 12px;font-size:13px;border:1px solid rgba(255,255,255,.15);background:#0d1720;color:#f4f6f8"></div>';
+            } else if (action==='start-sharpening') {
+                fields = '<div><label style="font-size:12px;font-weight:700;color:var(--ged-charcoal);display:block;margin-bottom:6px">Nom du technicien</label>' +
+                    '<input id="gedBitAct_tech" type="text" placeholder="ex: Jean Kaboré" style="width:100%;border-radius:8px;padding:8px 12px;font-size:13px;border:1px solid rgba(255,255,255,.15);background:#0d1720;color:#f4f6f8"></div>';
+            } else if (action==='complete-sharpening') {
+                fields = '<div><label style="font-size:12px;font-weight:700;color:var(--ged-charcoal);display:block;margin-bottom:6px">Nom du technicien</label>' +
+                    '<input id="gedBitAct_tech" type="text" placeholder="ex: Jean Kaboré" style="width:100%;border-radius:8px;padding:8px 12px;font-size:13px;border:1px solid rgba(255,255,255,.15);background:#0d1720;color:#f4f6f8"></div>' +
+                    '<div style="margin-top:10px"><label style="font-size:12px;font-weight:700;color:var(--ged-charcoal);display:block;margin-bottom:6px">Notes</label>' +
+                    '<textarea id="gedBitAct_reason" rows="2" placeholder="Observations post-affûtage…" style="width:100%;border-radius:8px;padding:8px 12px;font-size:13px;border:1px solid rgba(255,255,255,.15);background:#0d1720;color:#f4f6f8;resize:none"></textarea></div>';
+            } else {
+                fields = '<div><label style="font-size:12px;font-weight:700;color:var(--ged-charcoal);display:block;margin-bottom:6px">Raison / Notes</label>' +
+                    '<textarea id="gedBitAct_reason" rows="2" placeholder="Raison (optionnel)…" style="width:100%;border-radius:8px;padding:8px 12px;font-size:13px;border:1px solid rgba(255,255,255,.15);background:#0d1720;color:#f4f6f8;resize:none"></textarea></div>';
+            }
+            var accentCol = action==='reform'?'#f87171':action==='complete-sharpening'||action==='start-service'?'#4ade80':action==='start-sharpening'?'#c084fc':'#fbbf24';
+            var html = '<div id="gedBitActOverlay" class="fixed inset-0 flex items-center justify-center z-[300] p-4" style="background:rgba(0,0,0,.65)">' +
+                '<div class="ged-modal-panel rounded-xl w-full max-w-sm">' +
+                '<div class="ged-section-header px-5 py-3 flex justify-between items-center rounded-t-xl">' +
+                    '<h3 style="margin:0;font-size:1rem;font-weight:800">'+_gedBitEsc(labels[action]||action)+'</h3>' +
+                    '<button onclick="document.getElementById(\'gedBitActOverlay\').remove()" style="background:none;border:none;font-size:1.5rem;cursor:pointer;color:rgba(255,255,255,.7);line-height:1">&times;</button>' +
+                '</div>' +
+                '<div class="p-5">'+fields+'</div>' +
+                '<div class="px-5 pb-5 flex gap-3 justify-end">' +
+                    '<button onclick="document.getElementById(\'gedBitActOverlay\').remove()" class="ged-btn-secondary px-4 py-2 rounded-lg text-sm">Annuler</button>' +
+                    '<button id="gedBitActConfirmBtn" onclick="gedBitDoAction('+bitId+',\''+action+'\')" style="padding:8px 18px;background:'+accentCol+';color:#0a0f14;border:none;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer">Confirmer</button>' +
+                '</div>' +
+            '</div></div>';
+            document.body.insertAdjacentHTML('beforeend', html);
+        }
+
+        function gedBitDoAction(bitId, action) {
+            var payload = {};
+            var drillEl  = document.getElementById('gedBitAct_drillId');
+            var techEl   = document.getElementById('gedBitAct_tech');
+            var reasonEl = document.getElementById('gedBitAct_reason');
+            if (drillEl)  payload.drillId = drillEl.value.trim()||null;
+            if (techEl)   payload.technicianName = techEl.value.trim();
+            if (reasonEl) { payload.reason = reasonEl.value.trim(); payload.notes = reasonEl.value.trim(); }
+            var btn = document.getElementById('gedBitActConfirmBtn');
+            if (btn) { btn.textContent='…'; btn.disabled=true; }
+            apiRequest('/bits/'+bitId+'/'+action,'POST',payload).then(function(updatedBit){
+                var idx=(window._gedBitsData||[]).findIndex(function(b){return b.id===bitId;});
+                if(idx>=0)window._gedBitsData[idx]=updatedBit;
+                var actOv=document.getElementById('gedBitActOverlay'); if(actOv)actOv.remove();
+                var detOv=document.getElementById('gedBitDetailOverlay');
+                if(detOv){ detOv.remove(); gedBitOpenDetail(bitId); }
+                _gedBitsRender();
+            }).catch(function(err){
+                if(btn){btn.textContent='Confirmer';btn.disabled=false;}
+                alert('Erreur : '+(err.message||'Action échouée'));
+            });
         }
 
         // ============================================
@@ -9391,45 +9945,20 @@
         function renderConsumables() {
             var content = document.getElementById('consumablesContent');
             if (!content) return;
-            
-            var html = '<div class="mb-4">' +
-                '<h3 class="text-xl font-bold mb-2">Consommables & Coûts</h3>' +
-                '<p class="text-slate-400 text-sm">Suivi des consommables utilisés par machine et calcul des coûts alignés avec la production.</p>' +
-                '</div>';
-            
-            // Section pour saisir de nouveaux consommables
-            html += '<div class="bg-slate-700 p-4 rounded-lg border border-slate-600 mb-6">' +
-                '<h4 class="text-lg font-bold mb-4">Ajouter un consommable journalier</h4>' +
-                '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">' +
-                '<input type="date" id="consumableDate" class="bg-slate-600 border border-slate-500 rounded px-3 py-2" value="' + new Date().toISOString().split('T')[0] + '">' +
-                '<select id="consumableMachine" class="bg-slate-600 border border-slate-500 rounded px-3 py-2">' +
-                '<option value="">Sélectionner machine</option>' +
-                getDrillsForSite().map(d => '<option value="' + d.id + '">' + d.id + '</option>').join('') +
-                '</select>' +
-                '<select id="consumableId" class="bg-slate-600 border border-slate-500 rounded px-3 py-2">' +
-                '<option value="">Sélectionner article</option>' +
-                '</select>' +
-                '<input type="number" id="consumableQty" placeholder="Quantité" class="bg-slate-600 border border-slate-500 rounded px-3 py-2" step="0.01">' +
-                '</div>' +
-                '<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">' +
-                '<input type="number" id="consumablePrice" placeholder="Prix unitaire" class="bg-slate-600 border border-slate-500 rounded px-3 py-2" step="0.01">' +
-                '<input type="text" id="consumableNotes" placeholder="Notes" class="bg-slate-600 border border-slate-500 rounded px-3 py-2">' +
-                '</div>' +
-                '<button onclick="addConsumable()" class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded">➕ Ajouter</button>' +
-                '</div>';
-            
-            // Section pour afficher le résumé des coûts
-            html += '<div id="consumablesSummary" class="space-y-4">' +
-                '<h4 class="text-lg font-bold">Résumé des coûts (7 derniers jours)</h4>' +
-                '<div class="text-center text-slate-400">Chargement...</div>' +
-                '</div>';
-            
-            content.innerHTML = html;
-            
-            // Charger les articles d'inventaire
-            loadInventoryForConsumables();
-            // Charger le résumé
-            loadConsumablesSummary();
+            content.innerHTML = '<div class="text-center py-12" style="color:var(--ged-charcoal);">Chargement...</div>';
+            var today = new Date();
+            var d30 = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+            var dateFrom = d30.toISOString().split('T')[0];
+            var dateTo = today.toISOString().split('T')[0];
+            Promise.all([
+                apiRequest('/inventory'),
+                apiRequest('/consumables-cost-summary?dateFrom=' + dateFrom + '&dateTo=' + dateTo)
+            ]).then(function(results) {
+                window._gedConsData = { inventory: results[0], costSummary: results[1] };
+                _gedConsumablesRender();
+            }).catch(function(err) {
+                content.innerHTML = '<div class="text-center py-12" style="color:#f87171;">Erreur: ' + ((err && err.message) || 'Chargement impossible') + '</div>';
+            });
         }
 
         function configureConnection(machineId) {
@@ -13980,55 +14509,37 @@
 
         function saveExpense(event) {
             event.preventDefault();
-            
             var description = document.getElementById('expenseDescription').value.trim();
             var amount = parseFloat(document.getElementById('expenseAmount').value) || 0;
             var date = document.getElementById('expenseDate').value;
             var category = document.getElementById('expenseCategory').value;
             var notes = document.getElementById('expenseNotes').value.trim();
-            
             if (!description || amount <= 0 || !date || !category) {
                 alert('Veuillez remplir tous les champs obligatoires');
                 return;
             }
-            
-            var expenseData = {
-                description: description,
-                amount: amount,
-                date: date,
-                category: category,
-                notes: notes
-            };
-            
-            if (currentEditingExpenseId) {
-                // Modification
-                var expense = miscellaneousExpenses.find(function(e) { return e.id === currentEditingExpenseId; });
-                if (expense) {
-                    Object.assign(expense, expenseData);
-                    saveData();
-                    renderRevenue();
-                    closeExpenseModal();
-                    alert('Dépense modifiée avec succès!');
+            var payload = { description: description, amount: amount, date: date, category: category, notes: notes };
+            var req = currentEditingExpenseId
+                ? apiRequest('/misc-expenses/' + currentEditingExpenseId, 'PUT', payload)
+                : apiRequest('/misc-expenses', 'POST', payload);
+            req.then(function(res) {
+                if (!currentEditingExpenseId && res && res.id) {
+                    miscellaneousExpenses.push(Object.assign({ id: res.id }, payload));
+                } else if (currentEditingExpenseId) {
+                    var exp = miscellaneousExpenses.find(function(e) { return e.id === currentEditingExpenseId; });
+                    if (exp) Object.assign(exp, payload);
                 }
-            } else {
-                // Nouvelle dépense
-                var newExpense = {
-                    id: miscellaneousExpenses.length > 0 ? Math.max.apply(null, miscellaneousExpenses.map(function(e) { return e.id; })) + 1 : 1
-                };
-                Object.assign(newExpense, expenseData);
-                miscellaneousExpenses.push(newExpense);
-                saveData();
                 renderRevenue();
                 closeExpenseModal();
-                alert('Dépense ajoutée avec succès!');
-            }
+            }).catch(function(err) { alert('Erreur enregistrement: ' + (err && err.message ? err.message : err)); });
         }
 
         function deleteExpense(id) {
             if (confirm('Supprimer cette dépense?')) {
-                miscellaneousExpenses = miscellaneousExpenses.filter(function(e) { return e.id !== id; });
-                saveData();
-                renderRevenue();
+                apiRequest('/misc-expenses/' + id, 'DELETE').then(function() {
+                    miscellaneousExpenses = miscellaneousExpenses.filter(function(e) { return e.id !== id; });
+                    renderRevenue();
+                }).catch(function(err) { alert('Erreur suppression: ' + (err && err.message ? err.message : err)); });
             }
         }
 
@@ -14140,25 +14651,29 @@
                 alert('Date et montant valides requis');
                 return;
             }
-            if (currentEditingSiteMealId) {
-                var ex = siteMealExpenses.find(function(r) { return r.id === currentEditingSiteMealId; });
-                if (ex) Object.assign(ex, payload);
-            } else {
-                var nid = siteMealExpenses.length ? Math.max.apply(null, siteMealExpenses.map(function(r) { return r.id; })) + 1 : 1;
-                siteMealExpenses.push(Object.assign({ id: nid }, payload));
-            }
-            saveData();
-            closeSiteMealModal();
-            renderSiteMeals();
-            if (typeof renderRevenue === 'function') renderRevenue();
+            var smReq = currentEditingSiteMealId
+                ? apiRequest('/site-meal-expenses/' + currentEditingSiteMealId, 'PUT', payload)
+                : apiRequest('/site-meal-expenses', 'POST', payload);
+            smReq.then(function(res) {
+                if (!currentEditingSiteMealId && res && res.id) {
+                    siteMealExpenses.push(Object.assign({ id: res.id }, payload));
+                } else if (currentEditingSiteMealId) {
+                    var ex = siteMealExpenses.find(function(r) { return r.id === currentEditingSiteMealId; });
+                    if (ex) Object.assign(ex, payload);
+                }
+                closeSiteMealModal();
+                renderSiteMeals();
+                if (typeof renderRevenue === 'function') renderRevenue();
+            }).catch(function(err) { alert('Erreur enregistrement: ' + (err && err.message ? err.message : err)); });
         }
 
         function deleteSiteMeal(id) {
             if (!confirm('Supprimer cette dépense repas ?')) return;
-            siteMealExpenses = siteMealExpenses.filter(function(r) { return r.id !== id; });
-            saveData();
-            renderSiteMeals();
-            if (typeof renderRevenue === 'function') renderRevenue();
+            apiRequest('/site-meal-expenses/' + id, 'DELETE').then(function() {
+                siteMealExpenses = siteMealExpenses.filter(function(r) { return r.id !== id; });
+                renderSiteMeals();
+                if (typeof renderRevenue === 'function') renderRevenue();
+            }).catch(function(err) { alert('Erreur suppression: ' + (err && err.message ? err.message : err)); });
         }
 
         function renderSiteMeals() {
@@ -16393,80 +16908,61 @@
 
         function saveStockEntry(event) {
             event.preventDefault();
-            
-            var articleId = parseInt(document.getElementById('entryArticle').value);
-            var isNewArticle = document.getElementById('entryArticle').value === 'new';
+            var articleSelectVal = document.getElementById('entryArticle').value;
+            var isNewArticle = articleSelectVal === 'new';
+            var articleId = isNewArticle ? null : parseInt(articleSelectVal);
             var quantity = parseFloat(document.getElementById('entryQuantity').value) || 0;
             var unitPrice = parseFloat(document.getElementById('entryPrice').value) || 0;
             var date = document.getElementById('entryDate').value;
             var supplier = document.getElementById('entrySupplier').value.trim();
             var notes = document.getElementById('entryNotes').value.trim();
-            
             if (quantity <= 0 || unitPrice <= 0 || !date) {
                 alert('Veuillez remplir tous les champs obligatoires avec des valeurs valides');
                 return;
             }
-            
             var article;
             if (isNewArticle) {
                 var name = document.getElementById('newArticleName').value.trim();
-                if (!name) {
-                    alert('Veuillez saisir un nom pour le nouvel article');
-                    return;
-                }
-                
+                if (!name) { alert('Veuillez saisir un nom pour le nouvel article'); return; }
+                articleId = inventory.length > 0 ? Math.max.apply(null, inventory.map(function(a) { return a.id; })) + 1 : 1;
                 article = {
-                    id: inventory.length > 0 ? Math.max.apply(null, inventory.map(function(a) { return a.id; })) + 1 : 1,
+                    id: articleId,
                     name: name,
                     category: document.getElementById('newArticleCategory').value || 'Autre',
                     quantity: 0,
                     minStock: parseInt(document.getElementById('newArticleMinStock').value) || 5,
-                    unit: document.getElementById('newArticleUnit').value.trim() || 'unité',
+                    unit: document.getElementById('newArticleUnit').value.trim() || 'unite',
                     price: unitPrice,
                     averagePrice: unitPrice,
                     alert: false
                 };
                 inventory.push(article);
-                articleId = article.id;
             } else {
                 article = inventory.find(function(a) { return a.id === articleId; });
-                if (!article) {
-                    alert('Article introuvable');
-                    return;
-                }
+                if (!article) { alert('Article introuvable'); return; }
+                // prix moyen pondéré (pour persistance via saveData)
+                var currentValue = (article.quantity || 0) * (article.averagePrice || 0);
+                var totalQty = (article.quantity || 0) + quantity;
+                article.averagePrice = totalQty > 0 ? (currentValue + quantity * unitPrice) / totalQty : unitPrice;
             }
-            
-            // Calculer le nouveau prix moyen (moyenne pondérée)
-            var currentValue = (article.quantity || 0) * (article.averagePrice || 0);
-            var newValue = quantity * unitPrice;
-            var totalQuantity = (article.quantity || 0) + quantity;
-            article.averagePrice = totalQuantity > 0 ? (currentValue + newValue) / totalQuantity : unitPrice;
-            
-            // Mettre à jour la quantité
-            article.quantity = (article.quantity || 0) + quantity;
-            article.alert = article.quantity < article.minStock;
-            
-            // Enregistrer le mouvement
-            var movement = {
-                id: stockMovements.length > 0 ? Math.max.apply(null, stockMovements.map(function(m) { return m.id; })) + 1 : 1,
-                type: 'entry',
-                articleId: articleId,
-                quantity: quantity,
-                unitPrice: unitPrice,
-                total: quantity * unitPrice,
-                date: date,
-                supplier: supplier,
-                person: '',
-                reason: '',
-                machineId: '',
-                notes: notes
+            var movPayload = {
+                type: 'entry', articleId: articleId, quantity: quantity, unitPrice: unitPrice,
+                date: date, supplier: supplier, notes: notes
             };
-            stockMovements.push(movement);
-            
-            saveData();
-            renderInventory();
-            closeStockEntryModal();
-            alert('Entrée de stock enregistrée!\n\n' + quantity + ' ' + article.unit + ' de ' + article.name + '\nMontant: ' + formatCurrency(quantity * unitPrice, 'EUR'));
+            saveData().then(function() {
+                return apiRequest('/stock-movements', 'POST', movPayload);
+            }).then(function(res) {
+                if (res && res.inventory) {
+                    var inv = inventory.find(function(a) { return a.id == res.inventory.id; });
+                    if (inv) { inv.quantity = res.inventory.quantity; inv.alert = inv.quantity < (inv.minStock || 0); }
+                }
+                if (res && res.id) {
+                    stockMovements.unshift(Object.assign({ id: res.id, total: quantity * unitPrice, person: '', reason: '', machineId: '' }, movPayload));
+                }
+                renderInventory();
+                closeStockEntryModal();
+                alert('Entree de stock enregistree!\n\n' + quantity + ' ' + (article.unit || '') + ' de ' + article.name + '\nMontant: ' + formatCurrency(quantity * unitPrice, 'EUR'));
+            }).catch(function(err) { alert('Erreur mouvement: ' + (err && err.message ? err.message : err)); });
         }
 
         function showStockExitModal(articleId) {
@@ -16590,34 +17086,24 @@
             // L'autorisation est automatiquement le gestionnaire qui saisit (utilisateur connecté)
             var authorizedByName = (currentUser && currentUser.name) ? currentUser.name : (currentUser && currentUser.username) ? currentUser.username : 'Gestionnaire';
             
-            // Mettre à jour la quantité
-            article.quantity = article.quantity - quantity;
-            article.alert = article.quantity < article.minStock;
-            
-            // Enregistrer le mouvement
-            var movement = {
-                id: stockMovements.length > 0 ? Math.max.apply(null, stockMovements.map(function(m) { return m.id; })) + 1 : 1,
-                type: 'exit',
-                articleId: articleId,
-                quantity: quantity,
-                unitPrice: article.averagePrice || article.price || 0,
-                total: quantity * (article.averagePrice || article.price || 0),
-                date: date,
-                supplier: '',
-                person: personName,
-                personId: personId || null,
-                authorizedBy: authorizedByName,
-                authorizedById: null,
-                reason: reason || '',
-                machineId: machineId || '',
-                notes: notes
+            var exitUnitPrice = article.averagePrice || article.price || 0;
+            var movExitPayload = {
+                type: 'exit', articleId: articleId, quantity: quantity, unitPrice: exitUnitPrice,
+                date: date, person: personName, personId: personId || null,
+                authorizedBy: authorizedByName, reason: reason || '', machineId: machineId || '', notes: notes
             };
-            stockMovements.push(movement);
-            
-            saveData();
-            renderInventory();
-            closeStockExitModal();
-            alert('Sortie de stock enregistrée!\n\n' + quantity + ' ' + article.unit + ' de ' + article.name + '\nRetiré par: ' + personName + '\nAutorisé par: ' + authorizedByName);
+            apiRequest('/stock-movements', 'POST', movExitPayload).then(function(res) {
+                if (res && res.inventory) {
+                    var inv = inventory.find(function(a) { return a.id == res.inventory.id; });
+                    if (inv) { inv.quantity = res.inventory.quantity; inv.alert = inv.quantity < (inv.minStock || 0); }
+                }
+                if (res && res.id) {
+                    stockMovements.unshift(Object.assign({ id: res.id, total: quantity * exitUnitPrice, supplier: '' }, movExitPayload));
+                }
+                renderInventory();
+                closeStockExitModal();
+                alert('Sortie de stock enregistree!\n\n' + quantity + ' ' + article.unit + ' de ' + article.name + '\nRetire par: ' + personName + '\nAutorise par: ' + authorizedByName);
+            }).catch(function(err) { alert('Erreur mouvement: ' + (err && err.message ? err.message : err)); });
         }
 
         function viewStockHistory(articleId) {
@@ -17130,39 +17616,57 @@
         // ============================================
         // MAINTENANCE
         // ============================================
+        function _gedMaintFmtCost(n) {
+            return Number(n || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' XOF';
+        }
+
+        function _gedMaintKpi(icon, label, value, color) {
+            return '<div class="ged-stat-card p-4 rounded-xl" style="border-left:3px solid ' + color + '">' +
+                '<div style="font-size:1.3rem;margin-bottom:4px;">' + icon + '</div>' +
+                '<div style="color:var(--ged-charcoal);font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px;">' + label + '</div>' +
+                '<div style="color:' + color + ';font-size:1.3rem;font-weight:800;">' + String(value) + '</div>' +
+                '</div>';
+        }
+
         function renderMaintenanceView() {
             var content = document.getElementById('maintenanceContent');
             if (!content) return;
-            
-            // Calculer les prochaines dates de maintenance
-            updateMaintenanceSchedules();
-            
-            var html = '<div class="mb-4 flex justify-between items-center">' +
-                '<h3 class="text-xl font-bold">Planification de Maintenance</h3>' +
-                '<button onclick="showAddMaintenanceModal()" class="ged-btn-primary px-4 py-2 rounded-lg">+ Nouvelle planification</button>' +
-                '</div>';
-            
+            content.innerHTML = '<div class="text-center py-12" style="color:var(--ged-charcoal);">Chargement...</div>';
+            Promise.all([
+                apiRequest('/maintenance-schedules'),
+                apiRequest('/maintenance-history?limit=200')
+            ]).then(function(results) {
+                maintenanceSchedules = results[0] || [];
+                maintenanceHistory = results[1] || [];
+                _gedMaintRenderSync(content);
+            }).catch(function(err) {
+                content.innerHTML = '<div class="text-center py-12" style="color:#f87171;">Erreur chargement maintenance</div>';
+            });
+        }
+
+        function _gedMaintRenderSync(content) {
             // Statistiques globales (filtrées par site)
             var maintenanceToShow = getMaintenanceForSite();
             var overdue = maintenanceToShow.filter(function(s) { return s.status === 'overdue'; }).length;
             var scheduled = maintenanceToShow.filter(function(s) { return s.status === 'scheduled'; }).length;
             var siteDrillIds = getDrillsForSite().map(function(d) { return d.id; });
-            var totalCost = (maintenanceHistory || []).filter(function(h) { return siteDrillIds.indexOf(h.machineId) >= 0; }).reduce(function(sum, h) { return sum + (h.cost || 0); }, 0);
-            
-            html += '<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">' +
-                '<div class="bg-red-600 bg-opacity-20 border border-red-500 p-4 rounded-lg">' +
-                '<p class="text-sm text-slate-400 mb-1">Maintenances en retard</p>' +
-                '<p class="text-2xl font-bold text-red-400">' + overdue + '</p>' +
-                '</div>' +
-                '<div class="bg-blue-600 bg-opacity-20 border border-blue-500 p-4 rounded-lg">' +
-                '<p class="text-sm text-slate-400 mb-1">Maintenances planifiées</p>' +
-                '<p class="text-2xl font-bold text-blue-400">' + scheduled + '</p>' +
-                '</div>' +
-                '<div class="bg-green-600 bg-opacity-20 border border-green-500 p-4 rounded-lg">' +
-                '<p class="text-sm text-slate-400 mb-1">Coût total (historique)</p>' +
-                '<p class="text-2xl font-bold text-green-400">' + formatCurrency(totalCost, 'EUR') + '</p>' +
-                '</div>' +
+            var d30 = new Date(); d30.setDate(d30.getDate() - 30);
+            var d30Str = d30.toISOString().split('T')[0];
+            var histForKpi = (maintenanceHistory || []).filter(function(h) { return siteDrillIds.indexOf(h.machineId) >= 0; });
+            var completed30 = histForKpi.filter(function(h) { return h.date >= d30Str; }).length;
+            var totalCost = histForKpi.reduce(function(sum, h) { return sum + (h.cost || 0); }, 0);
+
+            var html = '<div class="mb-5 flex justify-between items-center">' +
+                '<h3 class="font-bold" style="font-size:1.2rem;">Planification de Maintenance</h3>' +
+                '<button onclick="showAddMaintenanceModal()" class="ged-btn-primary px-4 py-2 rounded-lg text-sm font-bold">+ Nouvelle planification</button>' +
                 '</div>';
+
+            html += '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">';
+            html += _gedMaintKpi('&#x26A0;', 'EN RETARD', overdue, '#ef4444');
+            html += _gedMaintKpi('&#x1F4C5;', 'PLANIFIEES', scheduled, '#F59E0B');
+            html += _gedMaintKpi('&#x2713;', 'COMPLETEES (30j)', completed30, '#22c55e');
+            html += _gedMaintKpi('&#x1F4B0;', 'COUT TOTAL', _gedMaintFmtCost(totalCost), '#a78bfa');
+            html += '</div>';
 
             var maintRoleHtml = '';
             MAINT_NOTIFY_ROLE_IDS.forEach(function(rolePair) {
@@ -17314,8 +17818,8 @@
                     html += '<div class="bg-slate-800 p-3 rounded-lg flex justify-between items-center">' +
                         '<div>' +
                         '<p class="font-semibold">' + hist.description + '</p>' +
-                        '<p class="text-xs text-slate-400">' + machine.id + ' - ' + hist.date + 
-                        (hist.cost ? ' | Coût: ' + formatCurrency(hist.cost, 'EUR') : '') +
+                        '<p class="text-xs text-slate-400">' + machine.id + ' - ' + hist.date +
+                        (hist.cost ? ' | ' + _gedMaintFmtCost(hist.cost) : '') +
                         (hist.technician ? ' | Technicien: ' + hist.technician : '') + '</p>' +
                         '</div>' +
                         '<span class="bg-green-600 px-2 py-1 rounded text-xs">Effectuée</span>' +
@@ -17375,7 +17879,6 @@
 
         function saveMaintenanceSchedule(event) {
             event.preventDefault();
-            
             var machineId = document.getElementById('maintenanceMachineId').value;
             var type = document.getElementById('maintenanceType').value;
             var description = document.getElementById('maintenanceDescription').value.trim();
@@ -17386,60 +17889,26 @@
             var lastHours = parseFloat(document.getElementById('maintenanceLastHours').value) || 0;
             var assignedTo = document.getElementById('maintenanceAssignedTo').value;
             var notes = document.getElementById('maintenanceNotes').value.trim();
-            
             if (!machineId || !description || intervalValue <= 0) {
                 alert('Veuillez remplir tous les champs obligatoires');
                 return;
             }
-            
-            // Calculer la prochaine date de maintenance
-            var nextDate = calculateNextMaintenanceDate(lastDate, intervalType, intervalValue);
-            var nextHours = lastHours + intervalValue;
-            
-            if (currentEditingMaintenanceId) {
-                // Modification
-                var schedule = maintenanceSchedules.find(function(s) { return s.id === currentEditingMaintenanceId; });
-                if (schedule) {
-                    schedule.machineId = machineId;
-                    schedule.type = type;
-                    schedule.description = description;
-                    schedule.priority = priority;
-                    schedule.intervalType = intervalType;
-                    schedule.intervalValue = intervalValue;
-                    schedule.lastMaintenanceDate = lastDate;
-                    schedule.lastMaintenanceHours = lastHours;
-                    schedule.nextMaintenanceDate = nextDate;
-                    schedule.nextMaintenanceHours = nextHours;
-                    schedule.assignedTo = assignedTo;
-                    schedule.notes = notes;
-                    schedule.status = 'scheduled';
-                }
-            } else {
-                // Nouvelle planification
-                var newId = maintenanceSchedules.length > 0 ? Math.max.apply(null, maintenanceSchedules.map(function(s) { return s.id; })) + 1 : 1;
-                maintenanceSchedules.push({
-                    id: newId,
-                    machineId: machineId,
-                    type: type,
-                    description: description,
-                    intervalType: intervalType,
-                    intervalValue: intervalValue,
-                    lastMaintenanceDate: lastDate,
-                    lastMaintenanceHours: lastHours,
-                    nextMaintenanceDate: nextDate,
-                    nextMaintenanceHours: nextHours,
-                    cost: 0,
-                    status: 'scheduled',
-                    priority: priority,
-                    assignedTo: assignedTo,
-                    notes: notes
-                });
-            }
-            
-            saveData();
-            renderMaintenanceView();
-            closeMaintenanceModal();
-            alert('Planification de maintenance ' + (currentEditingMaintenanceId ? 'modifiée' : 'créée') + ' avec succès!');
+            var payload = {
+                machineId: machineId, type: type, description: description, priority: priority,
+                intervalType: intervalType, intervalValue: intervalValue,
+                lastMaintenanceDate: lastDate, lastMaintenanceHours: lastHours,
+                assignedTo: assignedTo, notes: notes
+            };
+            var isEdit = !!currentEditingMaintenanceId;
+            var req = isEdit
+                ? apiRequest('/maintenance-schedules/' + currentEditingMaintenanceId, 'PUT', payload)
+                : apiRequest('/maintenance-schedules', 'POST', payload);
+            req.then(function() {
+                renderMaintenanceView();
+                closeMaintenanceModal();
+            }).catch(function(err) {
+                alert('Erreur sauvegarde: ' + ((err && err.message) || 'Impossible'));
+            });
         }
 
         function calculateNextMaintenanceDate(lastDate, intervalType, intervalValue) {
@@ -17458,20 +17927,7 @@
             return date.toISOString().split('T')[0];
         }
 
-        function updateMaintenanceSchedules() {
-            var today = new Date();
-            today.setHours(0, 0, 0, 0);
-            
-            maintenanceSchedules.forEach(function(schedule) {
-                if (schedule.status === 'scheduled' && schedule.nextMaintenanceDate) {
-                    var nextDate = new Date(schedule.nextMaintenanceDate);
-                    nextDate.setHours(0, 0, 0, 0);
-                    if (nextDate < today) {
-                        schedule.status = 'overdue';
-                    }
-                }
-            });
-        }
+        function updateMaintenanceSchedules() { /* status computed server-side */ }
 
         // ---------- Notifications sonores / navigateur (maintenance & chat) ----------
         var __maintNotifyTimer = null;
@@ -17657,60 +18113,62 @@
         function runMaintenanceNotifyCheck() {
             if (!currentUser || isPlatformBillingOnlyUser(currentUser)) return;
             if (!userReceivesMaintenanceNotifications()) return;
-            var pol = loadMaintenanceNotifyPolicy();
-            updateMaintenanceSchedules();
-            var list = getMaintenanceForSite();
-            var today = new Date();
-            today.setHours(0, 0, 0, 0);
-            var todayKey = getLocalDateYYYYMMDD(new Date());
+            apiRequest('/maintenance-schedules').then(function(data) {
+                maintenanceSchedules = data || [];
+                var pol = loadMaintenanceNotifyPolicy();
+                var list = getMaintenanceForSite();
+                var today = new Date();
+                today.setHours(0, 0, 0, 0);
+                var todayKey = getLocalDateYYYYMMDD(new Date());
 
-            list.forEach(function(schedule) {
-                if (!schedule.nextMaintenanceDate) return;
-                var nextDate = new Date(schedule.nextMaintenanceDate);
-                nextDate.setHours(0, 0, 0, 0);
-                var daysUntil = Math.ceil((nextDate.getTime() - today.getTime()) / 86400000);
+                list.forEach(function(schedule) {
+                    if (!schedule.nextMaintenanceDate) return;
+                    var nextDate = new Date(schedule.nextMaintenanceDate);
+                    nextDate.setHours(0, 0, 0, 0);
+                    var daysUntil = Math.ceil((nextDate.getTime() - today.getTime()) / 86400000);
 
-                if (schedule.status === 'overdue' && pol.overdueDaily !== false) {
-                    var keyO = 'o-' + schedule.id + '-' + todayKey;
-                    if (!isMaintNotifyDedup(keyO)) {
-                        setMaintNotifyDedupKey(keyO);
-                        playPresetSound(pol.sound || 'chime');
-                        if (pol.browserNotify && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-                            try {
-                                new Notification(tUi('notify.maint_title'), {
-                                    body: (schedule.description || 'Maintenance') + ' — ' + (schedule.machineId || ''),
-                                    tag: 'maint-' + schedule.id
-                                });
-                            } catch (eN) { /* ignore */ }
-                        }
-                    }
-                    return;
-                }
-                if (schedule.status !== 'scheduled') return;
-                var days = pol.alertDays || [7, 3, 1, 0];
-                for (var i = 0; i < days.length; i++) {
-                    if (daysUntil === days[i]) {
-                        var key = 'b-' + schedule.id + '-j' + days[i] + '-' + todayKey;
-                        if (!isMaintNotifyDedup(key)) {
-                            setMaintNotifyDedupKey(key);
+                    if (schedule.status === 'overdue' && pol.overdueDaily !== false) {
+                        var keyO = 'o-' + schedule.id + '-' + todayKey;
+                        if (!isMaintNotifyDedup(keyO)) {
+                            setMaintNotifyDedupKey(keyO);
                             playPresetSound(pol.sound || 'chime');
                             if (pol.browserNotify && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
                                 try {
-                                    var title =
-                                        days[i] === 0
-                                            ? 'Maintenance — ' + tUi('notify.maint_day0')
-                                            : 'Maintenance — J-' + days[i];
-                                    new Notification(title, {
-                                        body: (schedule.description || '') + ' — ' + (schedule.machineId || ''),
-                                        tag: 'maint-pre-' + schedule.id + '-' + days[i]
+                                    new Notification(tUi('notify.maint_title'), {
+                                        body: (schedule.description || 'Maintenance') + ' — ' + (schedule.machineId || ''),
+                                        tag: 'maint-' + schedule.id
                                     });
-                                } catch (eN2) { /* ignore */ }
+                                } catch (eN) { /* ignore */ }
                             }
                         }
-                        break;
+                        return;
                     }
-                }
-            });
+                    if (schedule.status !== 'scheduled') return;
+                    var days = pol.alertDays || [7, 3, 1, 0];
+                    for (var i = 0; i < days.length; i++) {
+                        if (daysUntil === days[i]) {
+                            var key = 'b-' + schedule.id + '-j' + days[i] + '-' + todayKey;
+                            if (!isMaintNotifyDedup(key)) {
+                                setMaintNotifyDedupKey(key);
+                                playPresetSound(pol.sound || 'chime');
+                                if (pol.browserNotify && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+                                    try {
+                                        var title =
+                                            days[i] === 0
+                                                ? 'Maintenance — ' + tUi('notify.maint_day0')
+                                                : 'Maintenance — J-' + days[i];
+                                        new Notification(title, {
+                                            body: (schedule.description || '') + ' — ' + (schedule.machineId || ''),
+                                            tag: 'maint-pre-' + schedule.id + '-' + days[i]
+                                        });
+                                    } catch (eN2) { /* ignore */ }
+                                }
+                            }
+                            break;
+                        }
+                    }
+                });
+            }).catch(function() { /* silent — transient errors on 60s poll */ });
         }
 
         function stopMaintenanceNotifyWatcher() {
@@ -17843,46 +18301,21 @@
 
         function saveCompletedMaintenance(event) {
             event.preventDefault();
-            
             var scheduleId = parseInt(document.getElementById('completeScheduleId').value);
-            var schedule = maintenanceSchedules.find(function(s) { return s.id === scheduleId; });
-            if (!schedule) return;
-            
             var date = document.getElementById('completeDate').value;
-            var hours = parseFloat(document.getElementById('completeHours').value) || 0;
+            if (!date) { alert('Veuillez indiquer la date'); return; }
+            var duration = parseFloat(document.getElementById('completeHours').value) || 0;
             var cost = parseFloat(document.getElementById('completeCost').value) || 0;
             var technician = document.getElementById('completeTechnician').value;
-            var parts = document.getElementById('completeParts').value.trim();
             var notes = document.getElementById('completeNotes').value.trim();
-            
-            // Enregistrer dans l'historique
-            var historyId = maintenanceHistory.length > 0 ? Math.max.apply(null, maintenanceHistory.map(function(h) { return h.id; })) + 1 : 1;
-            maintenanceHistory.push({
-                id: historyId,
-                machineId: schedule.machineId,
-                scheduleId: scheduleId,
-                type: schedule.type,
-                description: schedule.description,
-                date: date,
-                hours: hours,
-                cost: cost,
-                technician: technician,
-                parts: parts ? parts.split(',').map(function(p) { return p.trim(); }) : [],
-                notes: notes,
-                nextMaintenanceDate: calculateNextMaintenanceDate(date, schedule.intervalType, schedule.intervalValue)
+            apiRequest('/maintenance-schedules/' + scheduleId + '/complete', 'POST', {
+                date: date, duration: duration, cost: cost, technician: technician, notes: notes
+            }).then(function() {
+                renderMaintenanceView();
+                closeCompleteMaintenanceModal();
+            }).catch(function(err) {
+                alert('Erreur: ' + ((err && err.message) || 'Sauvegarde impossible'));
             });
-            
-            // Mettre à jour la planification pour la prochaine maintenance
-            schedule.lastMaintenanceDate = date;
-            schedule.lastMaintenanceHours = hours;
-            schedule.nextMaintenanceDate = calculateNextMaintenanceDate(date, schedule.intervalType, schedule.intervalValue);
-            schedule.nextMaintenanceHours = hours + schedule.intervalValue;
-            schedule.status = 'scheduled';
-            
-            saveData();
-            renderMaintenanceView();
-            closeCompleteMaintenanceModal();
-            alert('Maintenance enregistrée avec succès!');
         }
 
         function editMaintenanceSchedule(scheduleId) {
@@ -17909,9 +18342,11 @@
 
         function deleteMaintenanceSchedule(scheduleId) {
             if (confirm('Supprimer cette planification de maintenance?')) {
-                maintenanceSchedules = maintenanceSchedules.filter(function(s) { return s.id !== scheduleId; });
-                saveData();
-                renderMaintenanceView();
+                apiRequest('/maintenance-schedules/' + scheduleId, 'DELETE').then(function() {
+                    renderMaintenanceView();
+                }).catch(function(err) {
+                    alert('Erreur suppression: ' + ((err && err.message) || 'Impossible'));
+                });
             }
         }
 
@@ -20274,14 +20709,8 @@
         function hydrateLocalOnlyStoresFromDisk() {
             if (!allowLocalCache) return;
             try {
-                var lsMisc = localStorage.getItem('forage_miscellaneousExpenses');
-                if (lsMisc) miscellaneousExpenses = JSON.parse(lsMisc);
-                var lsMeals = localStorage.getItem('forage_siteMealExpenses');
-                if (lsMeals) siteMealExpenses = JSON.parse(lsMeals);
                 var lsRev = localStorage.getItem('forage_machineRevenue');
                 if (lsRev) machineRevenue = JSON.parse(lsRev);
-                var lsStock = localStorage.getItem('forage_stockMovements');
-                if (lsStock) stockMovements = JSON.parse(lsStock);
                 var lsMaint = localStorage.getItem('forage_maintenanceSchedules');
                 if (lsMaint) maintenanceSchedules = JSON.parse(lsMaint);
                 var lsHist = localStorage.getItem('forage_maintenanceHistory');
@@ -20354,10 +20783,7 @@
                 localStorage.setItem('forage_contracts', JSON.stringify(contracts));
                 localStorage.setItem('forage_sites', JSON.stringify(sites));
                 localStorage.setItem('forage_inventory', JSON.stringify(inventory));
-                localStorage.setItem('forage_miscellaneousExpenses', JSON.stringify(miscellaneousExpenses));
-                localStorage.setItem('forage_siteMealExpenses', JSON.stringify(siteMealExpenses || []));
                 localStorage.setItem('forage_machineRevenue', JSON.stringify(machineRevenue));
-                localStorage.setItem('forage_stockMovements', JSON.stringify(stockMovements));
                 localStorage.setItem('forage_maintenanceSchedules', JSON.stringify(maintenanceSchedules));
                 localStorage.setItem('forage_maintenanceHistory', JSON.stringify(maintenanceHistory));
                 localStorage.setItem('forage_drills', JSON.stringify(drills));
@@ -20417,7 +20843,21 @@
                         }
                         
                         hydrateLocalOnlyStoresFromDisk();
-                        
+
+                        // Charger les entités migrées vers l'API (pas dans saveAllData)
+                        try {
+                            var _meData = await apiRequest('/misc-expenses');
+                            if (Array.isArray(_meData)) miscellaneousExpenses = _meData;
+                        } catch (e) { /* silent */ }
+                        try {
+                            var _smData = await apiRequest('/site-meal-expenses');
+                            if (Array.isArray(_smData)) siteMealExpenses = _smData;
+                        } catch (e) { /* silent */ }
+                        try {
+                            var _mvData = await apiRequest('/stock-movements');
+                            if (Array.isArray(_mvData)) stockMovements = _mvData;
+                        } catch (e) { /* silent */ }
+
                         // Charger les données journalières (liste API prioritaire même vide, pour refléter suppressions)
                         try {
                             var dailyData = await window.API.DailyData.get({});
@@ -20559,31 +20999,11 @@
                     inventory = JSON.parse(savedInventory);
                 }
                 
-                var savedExpenses = localStorage.getItem('forage_miscellaneousExpenses');
-                if (savedExpenses) {
-                    miscellaneousExpenses = JSON.parse(savedExpenses);
-                }
-
-                var savedSiteMeals = localStorage.getItem('forage_siteMealExpenses');
-                if (savedSiteMeals) {
-                    try {
-                        siteMealExpenses = JSON.parse(savedSiteMeals);
-                        if (!Array.isArray(siteMealExpenses)) siteMealExpenses = [];
-                    } catch (eSm) {
-                        siteMealExpenses = [];
-                    }
-                }
-                
                 var savedMachineRevenue = localStorage.getItem('forage_machineRevenue');
                 if (savedMachineRevenue) {
                     machineRevenue = JSON.parse(savedMachineRevenue);
                 }
-                
-                var savedStockMovements = localStorage.getItem('forage_stockMovements');
-                if (savedStockMovements) {
-                    stockMovements = JSON.parse(savedStockMovements);
-                }
-                
+
                 var savedMaintenanceSchedules = localStorage.getItem('forage_maintenanceSchedules');
                 if (savedMaintenanceSchedules) {
                     maintenanceSchedules = JSON.parse(savedMaintenanceSchedules);
@@ -20902,104 +21322,273 @@
         window.deleteExpense = deleteExpense;
 
         // ============================================
-        // FONCTIONS CONSOMMABLES
+        // FONCTIONS CONSOMMABLES — Phase 4
         // ============================================
-        function loadInventoryForConsumables() {
-            apiCall('/api/inventory', 'GET', null, function(data) {
-                var select = document.getElementById('consumableId');
-                if (!select) return;
-                select.innerHTML = '<option value="">Sélectionner article</option>';
-                data.forEach(function(item) {
-                    select.innerHTML += '<option value="' + item.id + '">' + item.name + ' (' + item.category + ')</option>';
-                });
+        function _gedConsEsc(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function _gedConsFmt(n, dec) {
+            return Number(n || 0).toLocaleString('fr-FR', {
+                minimumFractionDigits: dec != null ? dec : 0,
+                maximumFractionDigits: dec != null ? dec : 0
             });
         }
 
-        function loadConsumablesSummary() {
-            var today = new Date();
-            var lastWeek = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-            var dateFrom = lastWeek.toISOString().split('T')[0];
-            var dateTo = today.toISOString().split('T')[0];
-            
-            apiCall('/api/consumables-cost-summary?dateFrom=' + dateFrom + '&dateTo=' + dateTo, 'GET', null, function(data) {
-                var container = document.getElementById('consumablesSummary');
-                if (!container) return;
-                
-                if (data.length === 0) {
-                    container.innerHTML = '<h4 class="text-lg font-bold">Résumé des coûts (7 derniers jours)</h4>' +
-                        '<div class="text-center text-slate-400">Aucun consommable enregistré</div>';
-                    return;
-                }
-                
-                var html = '<h4 class="text-lg font-bold">Résumé des coûts (7 derniers jours)</h4>';
-                data.forEach(function(item) {
-                    html += '<div class="ged-content-panel p-4 rounded-lg">' +
-                        '<h5 class="text-lg font-bold mb-2">' + item.machineId + ' - ' + item.date + '</h5>' +
-                        '<div class="grid grid-cols-1 md:grid-cols-3 gap-4">' +
-                        '<div class="text-center">' +
-                        '<p class="text-2xl font-bold text-green-400">' + item.production.toFixed(1) + ' m</p>' +
-                        '<p class="text-sm text-slate-400">Production</p>' +
-                        '</div>' +
-                        '<div class="text-center">' +
-                        '<p class="text-2xl font-bold text-red-400">' + item.totalCost.toFixed(2) + ' ' + item.currency + '</p>' +
-                        '<p class="text-sm text-slate-400">Coût Total</p>' +
-                        '</div>' +
-                        '<div class="text-center">' +
-                        '<p class="text-2xl font-bold text-blue-400">' + item.costPerMeter.toFixed(2) + ' ' + item.currency + '/m</p>' +
-                        '<p class="text-sm text-slate-400">Coût/mètre</p>' +
-                        '</div>' +
-                        '</div>' +
-                        '<details class="mt-4">' +
-                        '<summary class="cursor-pointer text-slate-400">Détails des consommables</summary>' +
-                        '<div class="mt-2 space-y-1">' +
-                        JSON.parse(item.consumables).map(function(c) {
-                            return '<div class="text-sm">' + c.consumableName + ': ' + c.quantityUsed + ' × ' + c.unitPrice + ' = ' + c.totalCost.toFixed(2) + ' ' + item.currency + '</div>';
-                        }).join('') +
-                        '</div>' +
-                        '</details>' +
+        function _gedConsKpiCard(icon, label, value, color) {
+            return '<div class="ged-stat-card" style="padding:16px;border-radius:12px;">' +
+                '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">' +
+                '<span style="font-size:18px;">' + icon + '</span>' +
+                '<span style="font-size:11px;color:var(--ged-charcoal);text-transform:uppercase;letter-spacing:.06em;">' + label + '</span>' +
+                '</div>' +
+                '<div style="font-size:20px;font-weight:800;color:' + color + ';">' + value + '</div>' +
+                '</div>';
+        }
+
+        function _gedConsumablesRender() {
+            var content = document.getElementById('consumablesContent');
+            if (!content) return;
+            var inv = (window._gedConsData || {}).inventory || [];
+            var summary = (window._gedConsData || {}).costSummary || [];
+
+            var sousSeuil = inv.filter(function(i) { return (i.quantity || 0) < (i.minStock || 0) && (i.minStock || 0) > 0; });
+            var valeurStock = inv.reduce(function(s, i) { return s + (i.quantity || 0) * (i.averagePrice || i.price || 0); }, 0);
+            var coutTotal30j = summary.reduce(function(s, r) { return s + (r.totalCost || 0); }, 0);
+            var totalMeters = summary.reduce(function(s, r) { return s + (r.production || 0); }, 0);
+            var coutParMetre = totalMeters > 0 ? coutTotal30j / totalMeters : 0;
+
+            var html = '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px;">';
+            html += _gedConsKpiCard('&#x1F4E6;', 'Total articles', inv.length, 'var(--ged-black)');
+            html += _gedConsKpiCard('&#x26A0;', 'Sous seuil', sousSeuil.length, sousSeuil.length > 0 ? '#f87171' : '#4ade80');
+            html += _gedConsKpiCard('&#x1F4B0;', 'Valeur stock', _gedConsFmt(valeurStock) + ' XOF', '#fbbf24');
+            html += _gedConsKpiCard('&#x1F9FE;', 'Cout 30j', _gedConsFmt(coutTotal30j) + ' XOF', '#fbbf24');
+            html += _gedConsKpiCard('&#x1F4CF;', 'Cout/metre', coutParMetre > 0 ? _gedConsFmt(coutParMetre, 2) + ' XOF/m' : '&#x2014;', '#60a5fa');
+            html += '</div>';
+
+            if (sousSeuil.length > 0) {
+                html += '<div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.35);border-left:3px solid #ef4444;border-radius:10px;padding:14px 16px;margin-bottom:20px;">' +
+                    '<div style="font-size:12px;font-weight:800;color:#f87171;letter-spacing:.1em;text-transform:uppercase;margin-bottom:10px;">Alertes stock faible (' + sousSeuil.length + ')</div>' +
+                    '<div style="display:flex;flex-wrap:wrap;gap:8px;">';
+                sousSeuil.forEach(function(item) {
+                    html += '<div style="background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.3);border-radius:7px;padding:6px 12px;font-size:12px;">' +
+                        '<span style="font-weight:700;color:#fca5a5;">' + _gedConsEsc(item.name) + '</span>' +
+                        '<span style="color:#a7b4c0;margin-left:6px;">' + (item.quantity || 0) + '/' + (item.minStock || 0) + ' ' + _gedConsEsc(item.unit || '') + '</span>' +
                         '</div>';
                 });
-                container.innerHTML = html;
-            });
+                html += '</div></div>';
+            }
+
+            html += '<div style="display:flex;gap:8px;margin-bottom:16px;" id="gedConsTabBar">' +
+                '<button onclick="_gedConsShowTab(\'saisir\')" id="gedConsTab_saisir" style="padding:9px 18px;border-radius:8px;font-size:12px;font-weight:700;border:0;cursor:pointer;background:linear-gradient(135deg,#F59E0B,#FBBF24);color:#111820;">Saisir consommation</button>' +
+                '<button onclick="_gedConsShowTab(\'cout-metre\')" id="gedConsTab_cout_metre" style="padding:9px 18px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:var(--ged-panel-bg);color:var(--ged-charcoal);border:1px solid var(--ged-border);">Cout / metre</button>' +
+                '</div>';
+            html += '<div id="gedConsTabContent"></div>';
+
+            content.innerHTML = html;
+            _gedConsShowTab('saisir');
         }
 
-        function addConsumable() {
-            var date = document.getElementById('consumableDate').value;
-            var machineId = document.getElementById('consumableMachine').value;
-            var consumableId = document.getElementById('consumableId').value;
-            var quantityUsed = parseFloat(document.getElementById('consumableQty').value);
-            var unitPrice = parseFloat(document.getElementById('consumablePrice').value);
-            var notes = document.getElementById('consumableNotes').value;
-            
+        function _gedConsShowTab(tab) {
+            var container = document.getElementById('gedConsTabContent');
+            if (!container) return;
+            var tabSaisir = document.getElementById('gedConsTab_saisir');
+            var tabCout = document.getElementById('gedConsTab_cout_metre');
+            var activeStyle = 'padding:9px 18px;border-radius:8px;font-size:12px;font-weight:700;border:0;cursor:pointer;background:linear-gradient(135deg,#F59E0B,#FBBF24);color:#111820;';
+            var inactiveStyle = 'padding:9px 18px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:var(--ged-panel-bg);color:var(--ged-charcoal);border:1px solid var(--ged-border);';
+            if (tabSaisir) tabSaisir.setAttribute('style', tab === 'saisir' ? activeStyle : inactiveStyle);
+            if (tabCout) tabCout.setAttribute('style', tab === 'cout-metre' ? activeStyle : inactiveStyle);
+            if (tab === 'saisir') {
+                container.innerHTML = _gedConsBuildEntryForm();
+                _gedConsLoadInventoryOptions();
+            } else {
+                container.innerHTML = _gedConsRenderCostMeter();
+            }
+        }
+
+        function _gedConsBuildEntryForm() {
+            var machines = (typeof getDrillsForSite === 'function') ? getDrillsForSite() : [];
+            var today = new Date().toISOString().split('T')[0];
+            return '<div class="ged-content-panel" style="padding:20px;border-radius:12px;">' +
+                '<h4 style="font-weight:800;font-size:15px;margin:0 0 16px;color:var(--ged-black);">Saisir une consommation journaliere</h4>' +
+                '<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;margin-bottom:12px;">' +
+                '<div><label style="display:block;font-size:11px;color:var(--ged-charcoal);margin-bottom:6px;">Date *</label>' +
+                '<input type="date" id="gedConsDate" value="' + today + '" style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--ged-border);background:#0d1720;color:#f4f6f8;font-size:13px;"></div>' +
+                '<div><label style="display:block;font-size:11px;color:var(--ged-charcoal);margin-bottom:6px;">Machine *</label>' +
+                '<select id="gedConsMachine" style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--ged-border);background:#0d1720;color:#f4f6f8;font-size:13px;">' +
+                '<option value="">Selectionner...</option>' +
+                machines.map(function(d) { return '<option value="' + _gedConsEsc(d.id) + '">' + _gedConsEsc(d.id) + '</option>'; }).join('') +
+                '</select></div>' +
+                '<div><label style="display:block;font-size:11px;color:var(--ged-charcoal);margin-bottom:6px;">Article *</label>' +
+                '<select id="gedConsArticle" style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--ged-border);background:#0d1720;color:#f4f6f8;font-size:13px;">' +
+                '<option value="">Chargement...</option>' +
+                '</select></div>' +
+                '<div><label style="display:block;font-size:11px;color:var(--ged-charcoal);margin-bottom:6px;">Quantite *</label>' +
+                '<input type="number" id="gedConsQty" placeholder="0.00" step="0.01" min="0" style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--ged-border);background:#0d1720;color:#f4f6f8;font-size:13px;"></div>' +
+                '</div>' +
+                '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px;">' +
+                '<div><label style="display:block;font-size:11px;color:var(--ged-charcoal);margin-bottom:6px;">Prix unitaire (XOF)</label>' +
+                '<input type="number" id="gedConsPrice" placeholder="0" step="1" min="0" style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--ged-border);background:#0d1720;color:#f4f6f8;font-size:13px;"></div>' +
+                '<div><label style="display:block;font-size:11px;color:var(--ged-charcoal);margin-bottom:6px;">Poste</label>' +
+                '<select id="gedConsShift" style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--ged-border);background:#0d1720;color:#f4f6f8;font-size:13px;">' +
+                '<option value="">&#x2014;</option><option value="matin">Matin</option><option value="soir">Soir</option><option value="nuit">Nuit</option>' +
+                '</select></div>' +
+                '<div><label style="display:block;font-size:11px;color:var(--ged-charcoal);margin-bottom:6px;">Notes</label>' +
+                '<input type="text" id="gedConsNotes" placeholder="Optionnel..." style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--ged-border);background:#0d1720;color:#f4f6f8;font-size:13px;"></div>' +
+                '</div>' +
+                '<div id="gedConsFormMsg"></div>' +
+                '<button onclick="_gedConsSaveEntry()" style="padding:10px 28px;background:linear-gradient(135deg,#F59E0B,#FBBF24);color:#111820;font-weight:800;font-size:12px;letter-spacing:.06em;text-transform:uppercase;border:0;border-radius:8px;cursor:pointer;">Enregistrer</button>' +
+                '</div>';
+        }
+
+        function _gedConsLoadInventoryOptions() {
+            var inv = (window._gedConsData || {}).inventory || [];
+            if (inv.length > 0) {
+                _gedConsPopulateArticleSelect(inv);
+            } else {
+                apiRequest('/inventory').then(function(data) {
+                    if (window._gedConsData) window._gedConsData.inventory = data;
+                    _gedConsPopulateArticleSelect(data);
+                }).catch(function() {});
+            }
+        }
+
+        function _gedConsPopulateArticleSelect(items) {
+            var select = document.getElementById('gedConsArticle');
+            if (!select) return;
+            select.innerHTML = '<option value="">Selectionner article...</option>' +
+                items.map(function(item) {
+                    return '<option value="' + item.id + '" data-price="' + (item.price || 0) + '">' +
+                        _gedConsEsc(item.name) + ' (' + _gedConsEsc(item.category || '') + ')</option>';
+                }).join('');
+            select.onchange = function() {
+                var opt = select.options[select.selectedIndex];
+                var priceInput = document.getElementById('gedConsPrice');
+                if (priceInput && opt && opt.dataset && opt.dataset.price) {
+                    priceInput.value = opt.dataset.price;
+                }
+            };
+        }
+
+        function _gedConsSaveEntry() {
+            var dateEl = document.getElementById('gedConsDate');
+            var machineEl = document.getElementById('gedConsMachine');
+            var articleEl = document.getElementById('gedConsArticle');
+            var qtyEl = document.getElementById('gedConsQty');
+            var priceEl = document.getElementById('gedConsPrice');
+            var shiftEl = document.getElementById('gedConsShift');
+            var notesEl = document.getElementById('gedConsNotes');
+            var msgEl = document.getElementById('gedConsFormMsg');
+            var date = dateEl ? dateEl.value : '';
+            var machineId = machineEl ? machineEl.value : '';
+            var consumableId = parseInt(articleEl ? articleEl.value : '');
+            var quantityUsed = parseFloat(qtyEl ? qtyEl.value : '');
+            var unitPrice = parseFloat(priceEl ? priceEl.value : '') || 0;
+            var shift = shiftEl ? shiftEl.value : '';
+            var notes = notesEl ? notesEl.value : '';
             if (!date || !machineId || !consumableId || isNaN(quantityUsed) || quantityUsed <= 0) {
-                alert('Veuillez remplir tous les champs obligatoires');
+                if (msgEl) msgEl.innerHTML = '<div style="color:#f87171;font-size:12px;margin-bottom:10px;">Champs obligatoires: date, machine, article, quantite.</div>';
                 return;
             }
-            
-            var data = {
-                date: date,
-                machineId: machineId,
-                consumableId: parseInt(consumableId),
-                quantityUsed: quantityUsed,
-                unitPrice: unitPrice || 0,
-                currency: 'XOF',
-                notes: notes
-            };
-            
-            apiCall('/api/daily-consumables', 'POST', data, function(response) {
-                alert('Consommable ajouté avec succès');
-                // Réinitialiser le formulaire
-                document.getElementById('consumableQty').value = '';
-                document.getElementById('consumablePrice').value = '';
-                document.getElementById('consumableNotes').value = '';
-                // Recharger le résumé
-                loadConsumablesSummary();
+            if (msgEl) msgEl.innerHTML = '<div style="color:#a7b4c0;font-size:12px;margin-bottom:10px;">Enregistrement...</div>';
+            apiRequest('/daily-consumables', 'POST', {
+                date: date, machineId: machineId, consumableId: consumableId,
+                quantityUsed: quantityUsed, unitPrice: unitPrice, shift: shift,
+                currency: 'XOF', notes: notes
+            }).then(function() {
+                if (msgEl) msgEl.innerHTML = '<div style="color:#4ade80;font-size:12px;margin-bottom:10px;">Consommable enregistre avec succes.</div>';
+                renderConsumables();
+            }).catch(function(err) {
+                if (msgEl) msgEl.innerHTML = '<div style="color:#f87171;font-size:12px;margin-bottom:10px;">' + _gedConsEsc((err && err.message) || 'Erreur') + '</div>';
             });
         }
 
-        window.loadInventoryForConsumables = loadInventoryForConsumables;
-        window.loadConsumablesSummary = loadConsumablesSummary;
-        window.addConsumable = addConsumable;
+        function _gedConsRenderCostMeter() {
+            var summary = (window._gedConsData || {}).costSummary || [];
+            if (summary.length === 0) {
+                return '<div class="ged-content-panel" style="padding:20px;border-radius:12px;text-align:center;color:var(--ged-charcoal);">Aucune donnee de consommation sur les 30 derniers jours.</div>';
+            }
+            var byMachine = {};
+            summary.forEach(function(row) {
+                var mid = row.machineId || 'Inconnu';
+                if (!byMachine[mid]) byMachine[mid] = { cost: 0, meters: 0 };
+                byMachine[mid].cost += row.totalCost || 0;
+                byMachine[mid].meters += row.production || 0;
+            });
+            var byCategory = {};
+            summary.forEach(function(row) {
+                var cons = [];
+                try { cons = JSON.parse(row.consumables || '[]'); } catch(e) {}
+                cons.forEach(function(c) {
+                    var cat = c.category || 'Autre';
+                    if (!byCategory[cat]) byCategory[cat] = { cost: 0 };
+                    byCategory[cat].cost += c.totalCost || 0;
+                });
+            });
+            var totalCost = summary.reduce(function(s, r) { return s + (r.totalCost || 0); }, 0);
+            var totalMeters = summary.reduce(function(s, r) { return s + (r.production || 0); }, 0);
+            var globalCPM = totalMeters > 0 ? totalCost / totalMeters : 0;
+
+            var html = '<div class="ged-content-panel" style="padding:20px;border-radius:12px;margin-bottom:16px;">' +
+                '<div style="font-size:12px;font-weight:800;color:var(--ged-charcoal);text-transform:uppercase;letter-spacing:.1em;margin-bottom:14px;">Cout global &#x2014; 30 derniers jours</div>' +
+                '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;">' +
+                '<div style="text-align:center;"><div style="font-size:26px;font-weight:800;color:#fbbf24;">' + _gedConsFmt(totalCost, 0) + ' XOF</div>' +
+                '<div style="font-size:11px;color:var(--ged-charcoal);text-transform:uppercase;letter-spacing:.08em;margin-top:4px;">Cout total</div></div>' +
+                '<div style="text-align:center;"><div style="font-size:26px;font-weight:800;color:#4ade80;">' + _gedConsFmt(totalMeters, 1) + ' m</div>' +
+                '<div style="font-size:11px;color:var(--ged-charcoal);text-transform:uppercase;letter-spacing:.08em;margin-top:4px;">Metres fores</div></div>' +
+                '<div style="text-align:center;"><div style="font-size:26px;font-weight:800;color:#60a5fa;">' + (globalCPM > 0 ? _gedConsFmt(globalCPM, 2) + ' XOF/m' : '&#x2014;') + '</div>' +
+                '<div style="font-size:11px;color:var(--ged-charcoal);text-transform:uppercase;letter-spacing:.08em;margin-top:4px;">Cout/metre</div></div>' +
+                '</div></div>';
+
+            html += '<div class="ged-content-panel" style="padding:20px;border-radius:12px;margin-bottom:16px;">' +
+                '<div style="font-size:12px;font-weight:800;color:var(--ged-charcoal);text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px;">Par machine</div>' +
+                '<table style="width:100%;border-collapse:collapse;">' +
+                '<thead><tr style="border-bottom:1px solid var(--ged-border);">' +
+                '<th style="text-align:left;padding:8px 12px;font-size:11px;color:var(--ged-charcoal);font-weight:700;">Machine</th>' +
+                '<th style="text-align:right;padding:8px 12px;font-size:11px;color:var(--ged-charcoal);font-weight:700;">Cout total (XOF)</th>' +
+                '<th style="text-align:right;padding:8px 12px;font-size:11px;color:var(--ged-charcoal);font-weight:700;">Metres fores</th>' +
+                '<th style="text-align:right;padding:8px 12px;font-size:11px;color:var(--ged-charcoal);font-weight:700;">Cout/metre</th>' +
+                '</tr></thead><tbody>';
+            Object.keys(byMachine).sort().forEach(function(machineId) {
+                var m = byMachine[machineId];
+                var cpm = m.meters > 0 ? m.cost / m.meters : 0;
+                html += '<tr style="border-bottom:1px solid rgba(255,255,255,.05);">' +
+                    '<td style="padding:10px 12px;font-weight:700;color:var(--ged-black);">' + _gedConsEsc(machineId) + '</td>' +
+                    '<td style="padding:10px 12px;text-align:right;color:#fbbf24;">' + _gedConsFmt(m.cost, 0) + '</td>' +
+                    '<td style="padding:10px 12px;text-align:right;color:#4ade80;">' + _gedConsFmt(m.meters, 1) + '</td>' +
+                    '<td style="padding:10px 12px;text-align:right;color:#60a5fa;">' + (cpm > 0 ? _gedConsFmt(cpm, 2) : '&#x2014;') + '</td>' +
+                    '</tr>';
+            });
+            html += '</tbody></table></div>';
+
+            html += '<div class="ged-content-panel" style="padding:20px;border-radius:12px;">' +
+                '<div style="font-size:12px;font-weight:800;color:var(--ged-charcoal);text-transform:uppercase;letter-spacing:.1em;margin-bottom:12px;">Par categorie</div>' +
+                '<table style="width:100%;border-collapse:collapse;">' +
+                '<thead><tr style="border-bottom:1px solid var(--ged-border);">' +
+                '<th style="text-align:left;padding:8px 12px;font-size:11px;color:var(--ged-charcoal);font-weight:700;">Categorie</th>' +
+                '<th style="text-align:right;padding:8px 12px;font-size:11px;color:var(--ged-charcoal);font-weight:700;">Cout total (XOF)</th>' +
+                '<th style="text-align:right;padding:8px 12px;font-size:11px;color:var(--ged-charcoal);font-weight:700;">Part (%)</th>' +
+                '</tr></thead><tbody>';
+            Object.keys(byCategory).sort(function(a, b) {
+                return byCategory[b].cost - byCategory[a].cost;
+            }).forEach(function(cat) {
+                var c = byCategory[cat];
+                var pct = totalCost > 0 ? (c.cost / totalCost * 100) : 0;
+                html += '<tr style="border-bottom:1px solid rgba(255,255,255,.05);">' +
+                    '<td style="padding:10px 12px;font-weight:700;color:var(--ged-black);">' + _gedConsEsc(cat) + '</td>' +
+                    '<td style="padding:10px 12px;text-align:right;color:#fbbf24;">' + _gedConsFmt(c.cost, 0) + '</td>' +
+                    '<td style="padding:10px 12px;text-align:right;color:#a7b4c0;">' + pct.toFixed(1) + '%</td>' +
+                    '</tr>';
+            });
+            html += '</tbody></table></div>';
+            return html;
+        }
+
+        window._gedConsShowTab = _gedConsShowTab;
+        window._gedConsSaveEntry = _gedConsSaveEntry;
+        window.loadInventoryForConsumables = function() {};
+        window.loadConsumablesSummary = function() { if (typeof renderConsumables === 'function') renderConsumables(); };
+        window.addConsumable = _gedConsSaveEntry;
 
         window.onUiLangChange = onUiLangChange;
         window.refreshForageUiI18n = refreshForageUiI18n;

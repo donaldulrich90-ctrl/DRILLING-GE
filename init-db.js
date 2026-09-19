@@ -489,6 +489,7 @@ db.serialize(() => {
     db.run(`
         CREATE TABLE IF NOT EXISTS stockMovements (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            enterpriseId INTEGER NOT NULL DEFAULT 1,
             type TEXT NOT NULL,
             articleId INTEGER NOT NULL,
             quantity INTEGER NOT NULL,
@@ -504,7 +505,8 @@ db.serialize(() => {
             machineId TEXT DEFAULT '',
             notes TEXT DEFAULT '',
             createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (articleId) REFERENCES inventory(id)
+            FOREIGN KEY (articleId) REFERENCES inventory(id),
+            FOREIGN KEY (enterpriseId) REFERENCES enterprises(id)
         )
     `, (err) => {
         if (err) console.error('Erreur table stockMovements:', err);
@@ -515,6 +517,7 @@ db.serialize(() => {
     db.run(`
         CREATE TABLE IF NOT EXISTS maintenanceSchedules (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            enterpriseId INTEGER NOT NULL DEFAULT 1,
             machineId TEXT NOT NULL,
             type TEXT NOT NULL,
             description TEXT,
@@ -530,7 +533,8 @@ db.serialize(() => {
             assignedTo TEXT DEFAULT '',
             notes TEXT DEFAULT '',
             createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (machineId) REFERENCES drills(id)
+            FOREIGN KEY (machineId) REFERENCES drills(id),
+            FOREIGN KEY (enterpriseId) REFERENCES enterprises(id)
         )
     `, (err) => {
         if (err) console.error('Erreur table maintenanceSchedules:', err);
@@ -541,6 +545,7 @@ db.serialize(() => {
     db.run(`
         CREATE TABLE IF NOT EXISTS maintenanceHistory (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            enterpriseId INTEGER NOT NULL DEFAULT 1,
             scheduleId INTEGER,
             machineId TEXT NOT NULL,
             date TEXT NOT NULL,
@@ -552,7 +557,8 @@ db.serialize(() => {
             notes TEXT DEFAULT '',
             createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (scheduleId) REFERENCES maintenanceSchedules(id),
-            FOREIGN KEY (machineId) REFERENCES drills(id)
+            FOREIGN KEY (machineId) REFERENCES drills(id),
+            FOREIGN KEY (enterpriseId) REFERENCES enterprises(id)
         )
     `, (err) => {
         if (err) console.error('Erreur table maintenanceHistory:', err);
@@ -575,6 +581,27 @@ db.serialize(() => {
     `, (err) => {
         if (err) console.error('Erreur table miscellaneousExpenses:', err);
         else console.log('✅ Table miscellaneousExpenses');
+    });
+
+    db.run(`
+        CREATE TABLE IF NOT EXISTS siteMealExpenses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            enterpriseId INTEGER NOT NULL DEFAULT 1,
+            date TEXT NOT NULL,
+            siteId TEXT DEFAULT '',
+            drillId TEXT DEFAULT '',
+            mealPeriod TEXT DEFAULT 'lunch',
+            headcount INTEGER DEFAULT NULL,
+            amount REAL NOT NULL DEFAULT 0,
+            currency TEXT DEFAULT 'XOF',
+            label TEXT DEFAULT '',
+            notes TEXT DEFAULT '',
+            createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (enterpriseId) REFERENCES enterprises(id)
+        )
+    `, (err) => {
+        if (err) console.error('Erreur table siteMealExpenses:', err);
+        else console.log('✅ Table siteMealExpenses');
     });
 
     db.run(`
@@ -656,6 +683,19 @@ db.serialize(() => {
     migrateIgnoreDup("ALTER TABLE invoices ADD COLUMN signProviderJson TEXT DEFAULT ''", 'invoices.signProviderJson');
     migrateIgnoreDup("ALTER TABLE invoices ADD COLUMN signClientJson TEXT DEFAULT ''", 'invoices.signClientJson');
     migrateIgnoreDup("ALTER TABLE contracts ADD COLUMN billingMonthDefinition TEXT DEFAULT ''", 'contracts.billingMonthDefinition');
+    migrateIgnoreDup("ALTER TABLE maintenanceSchedules ADD COLUMN enterpriseId INTEGER NOT NULL DEFAULT 1", 'maintenanceSchedules.enterpriseId');
+    migrateIgnoreDup("ALTER TABLE maintenanceHistory ADD COLUMN enterpriseId INTEGER NOT NULL DEFAULT 1", 'maintenanceHistory.enterpriseId');
+    // stockMovements.enterpriseId — backfill via inventory JOIN after column creation
+    db.run("ALTER TABLE stockMovements ADD COLUMN enterpriseId INTEGER NOT NULL DEFAULT 1", (e) => {
+        if (e && !String(e.message || '').toLowerCase().includes('duplicate') && !String(e.message || '').includes('already exists')) {
+            console.warn('Migration stockMovements.enterpriseId:', e.message);
+        } else if (!e) {
+            db.run(
+                "UPDATE stockMovements SET enterpriseId = (SELECT enterpriseId FROM inventory WHERE inventory.id = stockMovements.articleId) WHERE enterpriseId = 1",
+                (e2) => { if (e2) console.warn('Backfill stockMovements.enterpriseId:', e2.message); }
+            );
+        }
+    });
 
     db.run(
         `
@@ -677,7 +717,111 @@ db.serialize(() => {
         }
     );
 
-    // Entreprise initiale minimale (sans client ni foreuse fictifs — tout est à créer depuis l’app)
+    // ── Phase 3 — Affûtage des bits ───────────────────────────────────────
+    db.run(`
+        CREATE TABLE IF NOT EXISTS bits (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            enterpriseId INTEGER NOT NULL,
+            serialNumber TEXT NOT NULL,
+            type TEXT NOT NULL DEFAULT '',
+            diameter REAL,
+            brand TEXT DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'NEUF',
+            currentDrillId TEXT,
+            totalMeters REAL NOT NULL DEFAULT 0,
+            sharpeningCount INTEGER NOT NULL DEFAULT 0,
+            maxSharpenings INTEGER,
+            maxMetersPerSharpening REAL,
+            notes TEXT DEFAULT '',
+            createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+            updatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(enterpriseId, serialNumber),
+            FOREIGN KEY (enterpriseId) REFERENCES enterprises(id)
+        )
+    `, (err) => {
+        if (err) console.error('Erreur bits:', err);
+        else console.log('✅ Table bits');
+    });
+
+    db.run(`
+        CREATE TABLE IF NOT EXISTS bit_production_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            enterpriseId INTEGER NOT NULL,
+            bitId INTEGER NOT NULL,
+            date TEXT NOT NULL,
+            drillId TEXT NOT NULL,
+            metersDrilled REAL NOT NULL DEFAULT 0,
+            hoursUsed REAL NOT NULL DEFAULT 0,
+            notes TEXT DEFAULT '',
+            createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(enterpriseId, bitId, date),
+            FOREIGN KEY (enterpriseId) REFERENCES enterprises(id),
+            FOREIGN KEY (bitId) REFERENCES bits(id) ON DELETE CASCADE
+        )
+    `, (err) => {
+        if (err) console.error('Erreur bit_production_logs:', err);
+        else console.log('✅ Table bit_production_logs');
+    });
+
+    db.run(`
+        CREATE TABLE IF NOT EXISTS bit_sharpening_cycles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            enterpriseId INTEGER NOT NULL,
+            bitId INTEGER NOT NULL,
+            requestedAt TEXT DEFAULT CURRENT_TIMESTAMP,
+            startedAt TEXT,
+            completedAt TEXT,
+            technicianName TEXT DEFAULT '',
+            sharpeningNumber INTEGER NOT NULL DEFAULT 1,
+            metersBeforeSharpening REAL,
+            notes TEXT DEFAULT '',
+            createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (enterpriseId) REFERENCES enterprises(id),
+            FOREIGN KEY (bitId) REFERENCES bits(id) ON DELETE CASCADE
+        )
+    `, (err) => {
+        if (err) console.error('Erreur bit_sharpening_cycles:', err);
+        else console.log('✅ Table bit_sharpening_cycles');
+    });
+
+    db.run(`
+        CREATE TABLE IF NOT EXISTS bit_status_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            enterpriseId INTEGER NOT NULL,
+            bitId INTEGER NOT NULL,
+            fromStatus TEXT NOT NULL,
+            toStatus TEXT NOT NULL,
+            changedAt TEXT DEFAULT CURRENT_TIMESTAMP,
+            changedBy TEXT DEFAULT '',
+            reason TEXT DEFAULT '',
+            FOREIGN KEY (enterpriseId) REFERENCES enterprises(id),
+            FOREIGN KEY (bitId) REFERENCES bits(id) ON DELETE CASCADE
+        )
+    `, (err) => {
+        if (err) console.error('Erreur bit_status_history:', err);
+        else console.log('✅ Table bit_status_history');
+    });
+
+    db.run(`
+        CREATE TABLE IF NOT EXISTS bit_reform_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            enterpriseId INTEGER NOT NULL,
+            bitId INTEGER NOT NULL,
+            reformedAt TEXT DEFAULT CURRENT_TIMESTAMP,
+            reason TEXT DEFAULT '',
+            reformedBy TEXT DEFAULT '',
+            totalMeters REAL NOT NULL DEFAULT 0,
+            totalSharpenings INTEGER NOT NULL DEFAULT 0,
+            notes TEXT DEFAULT '',
+            FOREIGN KEY (enterpriseId) REFERENCES enterprises(id),
+            FOREIGN KEY (bitId) REFERENCES bits(id) ON DELETE CASCADE
+        )
+    `, (err) => {
+        if (err) console.error('Erreur bit_reform_logs:', err);
+        else console.log('✅ Table bit_reform_logs');
+    });
+
+    // Entreprise initiale minimale (sans client ni foreuse fictifs — tout est à créer depuis l'app)
     db.get('SELECT COUNT(*) as n FROM enterprises', [], (err, row) => {
         const n = row ? row.n : 1;
         if (err || n === 0) {
@@ -705,10 +849,10 @@ db.serialize(() => {
         }
     });
 
-    // Aucun client ni donnée métier fictive : les tenants créent clients, sites et foreuses dans l’interface.
+    // Aucun client ni donnée métier fictive : les tenants créent clients, sites et foreuses dans l'interface.
 
     db.get('SELECT COUNT(*) as n FROM drills', [], () => {
-        // Pas de foreuses fictives : l’entreprise les ajoute depuis le tableau de bord.
+        // Pas de foreuses fictives : l'entreprise les ajoute depuis le tableau de bord.
         finishInit();
     });
 });
