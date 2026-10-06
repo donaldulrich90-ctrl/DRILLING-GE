@@ -13,6 +13,9 @@ const { getDb, backup, DB_PATH } = require('./db');
 const { verifyAuth, requirePlatformAdmin } = require('./middleware/saas-auth');
 const planRoles = require('./plan-roles');
 const { ensureDailyDataRecordsSchema } = require('./ensure-daily-data-schema');
+// Portail GOOD ENGINEERS : connexion unique (SSO) et API de métriques.
+const { registerSso } = require('./ge-sso');
+const { registerMetrics } = require('./ge-metrics');
 
 // ── Upload logo entreprise ─────────────────────────────────────────────────
 const enterpriseLogoStorage = multer.diskStorage({
@@ -68,6 +71,12 @@ app.use(cors({
 }));
 app.use(bodyParser.json({ limit: '5mb' }));
 app.use(bodyParser.urlencoded({ extended: true, limit: '5mb' }));
+
+// ── Portail GOOD ENGINEERS ─────────────────────────────────────────────────
+// Montées AVANT le gardien « JWT requis pour /api » : /sso est publique et
+// /api/service/* a sa propre vérification (clé de service X-Service-Key).
+registerSso(app);
+registerMetrics(app);
 
 // Rate limiting anti brute-force sur le login
 const loginRateLimit = rateLimit({

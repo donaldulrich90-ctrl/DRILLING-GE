@@ -21676,5 +21676,16 @@
 
         console.log('Application initialisée');
     </script>
+    <!-- Barre de bascule GOOD ENGINEERS (cookie ge_switchbar posé par /sso). -->
+    <script>
+    (function () {
+      try {
+        var m = document.cookie.match(/(?:^|;\s*)ge_switchbar=([^;]+)/);
+        if (!m) return;
+        window.GE_SWITCHBAR = JSON.parse(decodeURIComponent(m[1]));
+      } catch (e) { return; }
+    })();
+    </script>
+    <script src="https://geportail.duckdns.org/static/portal/switchbar.js"></script>
 </body>
 </html>
