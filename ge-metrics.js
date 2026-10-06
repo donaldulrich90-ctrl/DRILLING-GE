@@ -1,27 +1,40 @@
 /*
- * ADAPTATEUR FORAGE (DRILLING-GE) — API de métriques pour le rapport consolidé.
+ * ADAPTATEUR FORAGE (DRILLING-GE) — API de service pour le portail.
  *
- * À déposer dans DRILLING-GE (ex: ./ge-metrics.js) et à monter dans server.js
- * (voir server-snippet.txt). Deux routes, protégées par la clé de service
- * SERVICE_API_KEY (en-tête X-Service-Key) :
+ * Monté dans server.js AVANT le gardien « JWT requis pour /api ». Routes
+ * protégées par la clé de service SERVICE_API_KEY (en-tête X-Service-Key) :
  *
  *   GET  /api/service/metrics?enterpriseId=..&start=YYYY-MM-DD&end=YYYY-MM-DD
  *        -> métriques forage de l'entreprise sur la période.
- *   POST /api/service/module-state   { enterpriseId, active }
- *        -> active / désactive l'entreprise (appelé quand on coche/décoche
- *           le module Forage dans le portail).
+ *   POST /api/service/user          { enterpriseId, username, password, role, name }
+ *        -> crée le compte, ou le met à jour s'il appartient DÉJÀ à cette
+ *           entreprise. Un identifiant pris par une autre entreprise ou par
+ *           un compte plateforme est refusé (409) : jamais d'écrasement.
+ *   POST /api/service/module-state  { enterpriseId, active }
+ *        -> active / désactive l'entreprise (case « module Forage » du portail).
  *
  * Les données de forage sont rattachées à l'entreprise VIA LA FOREUSE :
- * dailyDataRecords.machineId -> drills.id -> drills.enterpriseId.
+ * dailyDataRecords.machineId / dailyConsumables.machineId -> drills.id -> drills.enterpriseId.
+ *
+ * NB : db.js expose des fonctions à promesses (get/all/run sans callback) ;
+ * on utilise donc la connexion sqlite3 brute de getDb(), comme server.js.
  */
-const db = require('./db');
+const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
+const { getDb } = require('./db');
+const { ALL_TENANT_ROLES, PLATFORM_ROLES } = require('./plan-roles');
 
 const SERVICE_API_KEY = process.env.SERVICE_API_KEY || '';
 
+function keyMatches(given) {
+    const a = Buffer.from(String(given || ''), 'utf8');
+    const b = Buffer.from(SERVICE_API_KEY, 'utf8');
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
 function requireServiceKey(req, res, next) {
     if (!SERVICE_API_KEY) return res.status(500).json({ error: 'SERVICE_API_KEY non configurée' });
-    if ((req.headers['x-service-key'] || '') !== SERVICE_API_KEY) {
+    if (!keyMatches(req.headers['x-service-key'])) {
         return res.status(401).json({ error: 'Clé de service invalide' });
     }
     next();
@@ -36,8 +49,9 @@ function registerMetrics(app) {
         if (!enterpriseId || !start || !end) {
             return res.status(400).json({ error: 'enterpriseId, start et end requis' });
         }
+        const db = getDb();
 
-        const sql = `
+        const sqlProd = `
             SELECT d.machineId AS engin,
                    COALESCE(SUM(CAST(json_extract(d.data,'$.metersDrilled') AS REAL)),0) AS metres,
                    AVG(CAST(json_extract(d.data,'$.rop') AS REAL)) AS rop,
@@ -45,27 +59,39 @@ function registerMetrics(app) {
             FROM dailyDataRecords d
             JOIN drills dr ON dr.id = d.machineId
             WHERE dr.enterpriseId = ? AND d.date >= ? AND d.date <= ?
-            GROUP BY d.machineId
-            ORDER BY metres DESC`;
+            GROUP BY d.machineId`;
 
-        db.all(sql, [enterpriseId, start, end], (err, rows) => {
+        db.all(sqlProd, [enterpriseId, start, end], (err, prodRows) => {
             if (err) return res.status(500).json({ error: err.message });
-            rows = rows || [];
 
-            // Coût consommables (best effort — table daily_consumables si présente).
-            consommablesCost(enterpriseId, start, end, (coutConso) => {
-                // Effectif rattaché à l'entreprise.
-                db.get('SELECT COUNT(*) AS n FROM employees WHERE enterpriseId = ?',
-                    [enterpriseId], (e2, r2) => {
-                        const effectif = (r2 && r2.n) || 0;
-                        const parEngin = rows.map((r) => ({
-                            engin: r.engin,
-                            metres: round(r.metres, 1),
-                            rop: round(r.rop, 2),
-                            arrets: 0, // à relier à votre table d'arrêts de poste si besoin
-                            consommables_cout: 0,
-                        }));
+            consommablesParEngin(db, enterpriseId, start, end, (conso) => {
+                db.get(
+                    "SELECT COUNT(*) AS n FROM employees WHERE enterpriseId = ? AND COALESCE(status,'active') = 'active'",
+                    [enterpriseId],
+                    (e2, r2) => {
+                        const effectif = (!e2 && r2 && r2.n) || 0;
+
+                        // Fusion production + consommables, par foreuse.
+                        const parEnginMap = new Map();
+                        for (const r of prodRows || []) {
+                            parEnginMap.set(r.engin, {
+                                engin: r.engin,
+                                metres: round(r.metres, 1),
+                                rop: round(r.rop, 2),
+                                arrets: 0, // à relier à la table des arrêts de poste si besoin
+                                consommables_cout: 0,
+                            });
+                        }
+                        for (const [engin, cout] of conso) {
+                            const row = parEnginMap.get(engin)
+                                || { engin, metres: 0, rop: 0, arrets: 0, consommables_cout: 0 };
+                            row.consommables_cout = round(cout, 2);
+                            parEnginMap.set(engin, row);
+                        }
+                        const parEngin = [...parEnginMap.values()].sort((a, b) => b.metres - a.metres);
                         const metresTotal = parEngin.reduce((s, r) => s + (r.metres || 0), 0);
+                        const coutConso = parEngin.reduce((s, r) => s + (r.consommables_cout || 0), 0);
+
                         res.json({
                             module: 'forage',
                             periode: { start, end },
@@ -78,7 +104,8 @@ function registerMetrics(app) {
                             cout_total: round(coutConso, 2),
                             effectif: effectif,
                         });
-                    });
+                    }
+                );
             });
         });
     });
@@ -89,31 +116,56 @@ function registerMetrics(app) {
         const enterpriseId = parseInt(b.enterpriseId, 10);
         const username = String(b.username || '').trim();
         const password = String(b.password || '');
-        const role = String(b.role || 'foreur');
-        const name = String(b.name || username);
+        const role = String(b.role || 'foreur').trim();
+        const name = String(b.name || username).trim() || username;
         if (!enterpriseId || !username || !password) {
             return res.status(400).json({ error: 'enterpriseId, username et password requis' });
         }
-        const hash = bcrypt.hashSync(password, 10);
-        db.get('SELECT id FROM users WHERE LOWER(TRIM(username)) = LOWER(?)', [username], (err, row) => {
-            if (err) return res.status(500).json({ error: err.message });
-            if (row) {
-                db.run(
-                    'UPDATE users SET password = ?, passwordHash = ?, role = ?, enterpriseId = ? WHERE id = ?',
-                    ['', hash, role, enterpriseId, row.id],
-                    (e2) => e2 ? res.status(500).json({ error: e2.message })
-                                : res.json({ ok: true, updated: true, username })
-                );
-            } else {
-                db.run(
-                    'INSERT INTO users (username, password, passwordHash, role, name, enterpriseId, restrictions, notes, email, siteIds) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                    [username, '', hash, role, name, enterpriseId, '{}', '', '', '[]'],
-                    function (e2) {
-                        if (e2) return res.status(500).json({ error: e2.message });
-                        res.json({ ok: true, created: true, id: this.lastID, username });
+        if (!ALL_TENANT_ROLES.includes(role)) {
+            return res.status(400).json({
+                error: `Rôle Forage non autorisé : « ${role} ». Rôles possibles : ${ALL_TENANT_ROLES.join(', ')}`,
+            });
+        }
+        const db = getDb();
+
+        db.get('SELECT id FROM enterprises WHERE id = ?', [enterpriseId], (e0, ent) => {
+            if (e0) return res.status(500).json({ error: e0.message });
+            if (!ent) return res.status(404).json({ error: `Entreprise Forage n°${enterpriseId} introuvable` });
+
+            db.get(
+                'SELECT id, role, enterpriseId FROM users WHERE LOWER(TRIM(username)) = LOWER(?)',
+                [username],
+                (err, row) => {
+                    if (err) return res.status(500).json({ error: err.message });
+                    const hash = bcrypt.hashSync(password, 10);
+
+                    if (row) {
+                        // Jamais d'écrasement d'un compte d'une autre entreprise
+                        // ou d'un compte plateforme (super_admin / platform_owner).
+                        if (PLATFORM_ROLES.includes(row.role) || parseInt(row.enterpriseId, 10) !== enterpriseId) {
+                            return res.status(409).json({
+                                error: `L'identifiant « ${username} » est déjà utilisé dans Forage par un autre compte. Choisis un autre identifiant.`,
+                            });
+                        }
+                        return db.run(
+                            'UPDATE users SET password = ?, passwordHash = ?, role = ? WHERE id = ?',
+                            ['', hash, role, row.id],
+                            (e2) => (e2
+                                ? res.status(500).json({ error: e2.message })
+                                : res.json({ ok: true, updated: true, username }))
+                        );
                     }
-                );
-            }
+
+                    db.run(
+                        'INSERT INTO users (username, password, passwordHash, role, name, enterpriseId, restrictions, notes, email, siteIds) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                        [username, '', hash, role, name, enterpriseId, '{}', '', '', '[]'],
+                        function (e2) {
+                            if (e2) return res.status(500).json({ error: e2.message });
+                            res.json({ ok: true, created: true, id: this.lastID, username });
+                        }
+                    );
+                }
+            );
         });
     });
 
@@ -122,26 +174,30 @@ function registerMetrics(app) {
         const enterpriseId = parseInt((req.body || {}).enterpriseId, 10);
         const active = (req.body || {}).active ? 1 : 0;
         if (!enterpriseId) return res.status(400).json({ error: 'enterpriseId requis' });
-        db.run(
+        getDb().run(
             "UPDATE enterprises SET isActive = ?, subscriptionStatus = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?",
             [active, active ? 'active' : 'suspended', enterpriseId],
             function (err) {
                 if (err) return res.status(500).json({ error: err.message });
+                if (!this.changes) return res.status(404).json({ error: `Entreprise Forage n°${enterpriseId} introuvable` });
                 res.json({ ok: true, enterpriseId, active: !!active });
             }
         );
     });
 }
 
-function consommablesCost(enterpriseId, start, end, cb) {
-    // Tolérant : si la table n'existe pas, on renvoie 0 sans planter.
+/** Coût des consommables par foreuse (Map engin -> coût). Tolérant : erreur => vide. */
+function consommablesParEngin(db, enterpriseId, start, end, cb) {
     const sql = `
-        SELECT COALESCE(SUM(CAST(totalCost AS REAL)),0) AS cout
-        FROM daily_consumables
-        WHERE enterpriseId = ? AND date >= ? AND date <= ?`;
+        SELECT dc.machineId AS engin, COALESCE(SUM(CAST(dc.totalCost AS REAL)),0) AS cout
+        FROM dailyConsumables dc
+        JOIN drills dr ON dr.id = dc.machineId
+        WHERE dr.enterpriseId = ? AND dc.date >= ? AND dc.date <= ?
+        GROUP BY dc.machineId`;
     db.all(sql, [enterpriseId, start, end], (err, rows) => {
-        if (err || !rows || !rows.length) return cb(0);
-        cb(rows[0].cout || 0);
+        const m = new Map();
+        if (!err) for (const r of rows || []) m.set(r.engin, r.cout || 0);
+        cb(m);
     });
 }
 
