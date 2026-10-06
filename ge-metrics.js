@@ -15,6 +15,7 @@
  * dailyDataRecords.machineId -> drills.id -> drills.enterpriseId.
  */
 const db = require('./db');
+const bcrypt = require('bcryptjs');
 
 const SERVICE_API_KEY = process.env.SERVICE_API_KEY || '';
 
@@ -79,6 +80,40 @@ function registerMetrics(app) {
                         });
                     });
             });
+        });
+    });
+
+    // ---- Création / mise à jour d'un compte (pilotée par le portail) ---
+    app.post('/api/service/user', requireServiceKey, (req, res) => {
+        const b = req.body || {};
+        const enterpriseId = parseInt(b.enterpriseId, 10);
+        const username = String(b.username || '').trim();
+        const password = String(b.password || '');
+        const role = String(b.role || 'foreur');
+        const name = String(b.name || username);
+        if (!enterpriseId || !username || !password) {
+            return res.status(400).json({ error: 'enterpriseId, username et password requis' });
+        }
+        const hash = bcrypt.hashSync(password, 10);
+        db.get('SELECT id FROM users WHERE LOWER(TRIM(username)) = LOWER(?)', [username], (err, row) => {
+            if (err) return res.status(500).json({ error: err.message });
+            if (row) {
+                db.run(
+                    'UPDATE users SET password = ?, passwordHash = ?, role = ?, enterpriseId = ? WHERE id = ?',
+                    ['', hash, role, enterpriseId, row.id],
+                    (e2) => e2 ? res.status(500).json({ error: e2.message })
+                                : res.json({ ok: true, updated: true, username })
+                );
+            } else {
+                db.run(
+                    'INSERT INTO users (username, password, passwordHash, role, name, enterpriseId, restrictions, notes, email, siteIds) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                    [username, '', hash, role, name, enterpriseId, '{}', '', '', '[]'],
+                    function (e2) {
+                        if (e2) return res.status(500).json({ error: e2.message });
+                        res.json({ ok: true, created: true, id: this.lastID, username });
+                    }
+                );
+            }
         });
     });
 
