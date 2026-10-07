@@ -8042,6 +8042,20 @@
                 renderCompanyInfoHub();
                 return;
             }
+            // Ces deux vues utilisent un id de conteneur en camelCase
+            // (bitSharpeningContent / projectOverviewContent) ; on les traite
+            // avant le garde-fou générique "<vue>Content" qui, sinon, sortait
+            // prématurément et laissait l'onglet vide.
+            if (view === 'bit_sharpening') {
+                renderBitSharpening();
+                return;
+            }
+            if (view === 'project_overview') {
+                var poEl = document.getElementById('projectOverviewContent');
+                if (poEl) poEl.innerHTML = '<div class="p-8 text-center text-slate-400">…</div>';
+                setTimeout(function() { renderProjectOverview(); }, 50);
+                return;
+            }
             var contentEl = document.getElementById(view + 'Content');
             if (!contentEl) return;
             
