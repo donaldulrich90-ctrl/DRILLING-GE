@@ -6,6 +6,8 @@
  *
  *   GET  /api/service/metrics?enterpriseId=..&start=YYYY-MM-DD&end=YYYY-MM-DD
  *        -> métriques forage de l'entreprise sur la période.
+ *   POST /api/service/enterprise    { name, slug?, plan? }
+ *        -> crée (ou retrouve par slug) l'entreprise, renvoie son id. Idempotent.
  *   POST /api/service/user          { enterpriseId, username, password, role, name }
  *        -> crée le compte, ou le met à jour s'il appartient DÉJÀ à cette
  *           entreprise. Un identifiant pris par une autre entreprise ou par
@@ -107,6 +109,29 @@ function registerMetrics(app) {
                     }
                 );
             });
+        });
+    });
+
+    // ---- Création d'une entreprise (pilotée par le portail) -------------
+    app.post('/api/service/enterprise', requireServiceKey, (req, res) => {
+        const b = req.body || {};
+        const name = String(b.name || '').trim();
+        const slug = (String(b.slug || '').trim()
+            || name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''));
+        const plan = String(b.plan || 'enterprise');
+        if (!name) return res.status(400).json({ error: 'name requis' });
+        const db = getDb();
+        db.get('SELECT id FROM enterprises WHERE slug = ?', [slug], (err, row) => {
+            if (err) return res.status(500).json({ error: err.message });
+            if (row) return res.json({ ok: true, existing: true, id: row.id, slug });
+            db.run(
+                'INSERT INTO enterprises (name, slug, currency, plan, maxUsers, maxDrills, maxSites) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                [name, slug, 'XOF', plan, 50, 50, 20],
+                function (e2) {
+                    if (e2) return res.status(500).json({ error: e2.message });
+                    res.json({ ok: true, created: true, id: this.lastID, slug });
+                }
+            );
         });
     });
 
