@@ -1540,7 +1540,7 @@
         <div id="mainView-rentabilite" class="main-view hidden">
             <div class="mb-6 pb-4 border-b border-slate-700">
                 <h2 class="text-2xl font-extrabold tracking-tight" style="color:var(--ged-yellow)">📈 Rentabilité des Consommables</h2>
-                <p class="text-slate-400 text-sm mt-1">Rendement réel vs vie planifiée · économies et pertes par consommable</p>
+                <p class="text-slate-400 text-sm mt-1">Coût réel des consommables par mètre foré · par machine et par consommable · montants en FCFA</p>
             </div>
             <div id="rentabiliteContent"></div>
         </div>
@@ -8995,107 +8995,182 @@
         }
 
         // ============================================
-        // RENTABILITÉ CONSOMMABLES
+        // RENTABILITÉ CONSOMMABLES — données réelles (FCFA)
+        // Source : GET /api/consumables-cost-summary (coût réel saisi par
+        // consommable/machine/jour + mètres forés). Montants convertis en XOF.
         // ============================================
-        var RENTABILITE_DATA = [
-            { id:'C001', name:'Trépan DTH QL60 Ø127mm', cat:'Tête de forage', cost:2850, machine:'FOR-2024-001', serial:'BIT-2024-047', status:'EN SERVICE', mProd:342.5, mPlan:400 },
-            { id:'C002', name:'Trépan DTH QL60 Ø127mm', cat:'Tête de forage', cost:2850, machine:'FOR-2024-002', serial:'BIT-2024-043', status:'REMPLACÉ',   mProd:812,   mPlan:800 },
-            { id:'C003', name:'Trépan DTH QL60 Ø127mm', cat:'Tête de forage', cost:2850, machine:'FOR-2024-004', serial:'BIT-2024-051', status:'EN SERVICE', mProd:178,   mPlan:400 },
-            { id:'C004', name:'Tige de forage DTH 3m',  cat:'Tiges',          cost:480,  machine:'FOR-2024-001', serial:'ROD-2024-112', status:'REMPLACÉ',   mProd:2240,  mPlan:2000 },
-            { id:'C005', name:'Tige de forage DTH 3m',  cat:'Tiges',          cost:480,  machine:'FOR-2024-002', serial:'ROD-2024-118', status:'EN SERVICE', mProd:890,   mPlan:2000 },
-            { id:'C006', name:'Shank adaptateur Ø102mm',cat:'Raccords',        cost:620,  machine:'FOR-2024-001', serial:'SHK-2024-023', status:'REMPLACÉ',   mProd:3820,  mPlan:3500 },
-            { id:'C007', name:'Huile hydraulique 210L', cat:'Lubrifiants',     cost:680,  machine:'FOR-2024-001', serial:null,           status:'EN SERVICE', mProd:520,   mPlan:600 },
-            { id:'C008', name:'Filtre air primaire',    cat:'Filtres',         cost:95,   machine:'FOR-2024-003', serial:'FLT-2024-088', status:'REMPLACÉ',   mProd:285,   mPlan:250 },
-            { id:'C009', name:'Courroie entraînement',  cat:'Pièces mécan.',   cost:185,  machine:'FOR-2024-004', serial:'BLT-2024-034', status:'REMPLACÉ',   mProd:1950,  mPlan:2000 },
-            { id:'C010', name:'Joint rotatif principal',cat:'Pièces mécan.',   cost:1250, machine:'FOR-2024-005', serial:'JNT-2024-009', status:'EN SERVICE', mProd:95,    mPlan:5000 },
-            { id:'C011', name:'Filtre carburant',       cat:'Filtres',         cost:42,   machine:'FOR-2024-002', serial:'FCB-2024-044', status:'REMPLACÉ',   mProd:310,   mPlan:300 },
-            { id:'C012', name:'Graisse lithium 10kg',   cat:'Lubrifiants',     cost:55,   machine:'FOR-2024-001', serial:null,           status:'EN SERVICE', mProd:185,   mPlan:200 },
-        ].map(function(c) {
-            var cpm  = c.mProd > 0 ? c.cost / c.mProd : 0;
-            var tCpm = c.mPlan > 0 ? c.cost / c.mPlan : 0;
-            var yld  = c.mPlan > 0 ? (c.mProd / c.mPlan) * 100 : 0;
-            var sav  = (c.mProd - c.mPlan) * tCpm;
-            var grade = yld>=110?'EXCELLENT':yld>=90?'BON':yld>=70?'PASSABLE':'FAIBLE';
-            return Object.assign({}, c, { cpm:cpm, tCpm:tCpm, yld:yld, sav:sav, grade:grade });
-        });
+        var RENTA_STATE = { from: null, to: null };
+        var RENTA_LAST = { byConso: [], byMachine: [], totals: null, range: null };
 
-        var GRADE_CLR = { EXCELLENT:'#22C55E', BON:'#FFCD00', PASSABLE:'#FF6B35', FAIBLE:'#EF4444' };
-        var GRADE_LBL = { EXCELLENT:'Excellent ≥110%', BON:'Bon 90–110%', PASSABLE:'Passable 70–90%', FAIBLE:'Faible <70%' };
+        function rentaIso(d) { return d.toISOString().slice(0, 10); }
+        function rentaDefaultRange() {
+            var to = new Date();
+            var from = new Date(); from.setDate(from.getDate() - 89); // 90 jours glissants
+            return { from: rentaIso(from), to: rentaIso(to) };
+        }
+        function rentaCurrentRange() {
+            var def = rentaDefaultRange();
+            var f = document.getElementById('rentaFrom');
+            var t = document.getElementById('rentaTo');
+            return {
+                from: (f && f.value) ? f.value : (RENTA_STATE.from || def.from),
+                to:   (t && t.value) ? t.value : (RENTA_STATE.to   || def.to)
+            };
+        }
+        function rentaFmt(xof) { return formatCurrency(Math.round(xof || 0), 'XOF'); }
+        function rentaNum(v, d) { return Number(v || 0).toLocaleString('fr-FR', { minimumFractionDigits: d || 0, maximumFractionDigits: d || 0 }); }
+        function rentaEsc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]; }); }
 
-        function rentabiliteExportCSV() {
-            var hdr = ['ID','Consommable','Catégorie','Machine','Statut','Coût (CAD)','Mètres prod.','Vie plan. (m)','Rendement %','$/m réel','$/m cible','Économie (CAD)','Évaluation'].join(';');
-            var body = RENTABILITE_DATA.map(function(c) {
-                return [c.id,'"'+c.name+'"',c.cat,c.machine,c.status,c.cost.toFixed(2),c.mProd.toFixed(1),c.mPlan,c.yld.toFixed(1),c.cpm.toFixed(2),c.tCpm.toFixed(2),c.sav.toFixed(2),c.grade].join(';');
+        function rentaOnRangeChange() {
+            var rg = rentaCurrentRange();
+            RENTA_STATE.from = rg.from; RENTA_STATE.to = rg.to;
+            renderRentabilite();
+        }
+        function rentaPreset(days) {
+            var to = new Date();
+            var from = new Date(); from.setDate(from.getDate() - (days - 1));
+            RENTA_STATE.from = rentaIso(from); RENTA_STATE.to = rentaIso(to);
+            var f = document.getElementById('rentaFrom'); if (f) f.value = RENTA_STATE.from;
+            var t = document.getElementById('rentaTo');   if (t) t.value = RENTA_STATE.to;
+            renderRentabilite();
+        }
+
+        function rentaExportCSV() {
+            var rows = RENTA_LAST.byConso || [];
+            if (!rows.length) { alert('Aucune donnée à exporter sur la période.'); return; }
+            var hdr = ['Consommable','Catégorie','Quantité','Coût total (FCFA)','Part (%)'].join(';');
+            var body = rows.map(function(c) {
+                return ['"'+c.name+'"', c.cat, rentaNum(c.qty, 2), Math.round(c.cost), (c.share).toFixed(1)].join(';');
             }).join('\n');
-            var blob = new Blob(['﻿'+hdr+'\n'+body],{type:'text/csv;charset=utf-8'});
+            var mTot = (RENTA_LAST.totals && RENTA_LAST.totals.cost) || 0;
+            body += '\nTOTAL;;;'+Math.round(mTot)+';100';
+            var blob = new Blob(['﻿'+hdr+'\n'+body], { type: 'text/csv;charset=utf-8' });
             var url = URL.createObjectURL(blob);
-            var a = document.createElement('a'); a.href=url; a.download='rentabilite_consommables.csv'; a.click(); URL.revokeObjectURL(url);
+            var a = document.createElement('a'); a.href = url;
+            a.download = 'rentabilite_consommables_'+(RENTA_LAST.range ? RENTA_LAST.range.from+'_'+RENTA_LAST.range.to : 'export')+'.csv';
+            a.click(); URL.revokeObjectURL(url);
+        }
+
+        function rentaFilterBar(rg) {
+            return [
+                '<div class="bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 mb-5" style="display:flex;flex-wrap:wrap;gap:12px;align-items:end">',
+                  '<div><label class="text-[10px] uppercase tracking-widest text-slate-500 block mb-1">Du</label>',
+                  '<input id="rentaFrom" type="date" value="'+rg.from+'" onchange="rentaOnRangeChange()" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white"></div>',
+                  '<div><label class="text-[10px] uppercase tracking-widest text-slate-500 block mb-1">Au</label>',
+                  '<input id="rentaTo" type="date" value="'+rg.to+'" onchange="rentaOnRangeChange()" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white"></div>',
+                  '<div style="display:flex;gap:6px">',
+                    '<button onclick="rentaPreset(30)" class="ged-btn-secondary px-3 py-1.5 rounded-lg text-xs">30 j</button>',
+                    '<button onclick="rentaPreset(90)" class="ged-btn-secondary px-3 py-1.5 rounded-lg text-xs">90 j</button>',
+                    '<button onclick="rentaPreset(365)" class="ged-btn-secondary px-3 py-1.5 rounded-lg text-xs">12 mois</button>',
+                  '</div>',
+                  '<div style="margin-left:auto"><button onclick="rentaExportCSV()" class="ged-btn-secondary px-4 py-1.5 rounded-lg text-xs font-semibold">⬇ Exporter CSV</button></div>',
+                '</div>'
+            ].join('');
         }
 
         function renderRentabilite() {
             var el = document.getElementById('rentabiliteContent');
             if (!el) return;
-            var data = RENTABILITE_DATA;
-            var fCAD = function(v){ return (v<0?'-':'')+Math.abs(v).toLocaleString('fr-CA',{style:'currency',currency:'CAD',minimumFractionDigits:2}); };
-            var fN = function(v,d){ return Number(v).toFixed(d||2); };
-            // KPI
-            var totCost = data.reduce(function(s,c){ return s+c.cost; },0);
-            var totM    = data.reduce(function(s,c){ return s+c.mProd; },0);
-            var totSav  = data.reduce(function(s,c){ return s+c.sav; },0);
-            var avgCpm  = totCost/totM;
-            var kpi = function(lbl,val,cls){ return '<div class="bg-slate-800 border border-slate-700 rounded-xl px-4 py-3"><p class="text-[10px] uppercase tracking-widest text-slate-500 mb-1">'+lbl+'</p><p class="text-xl font-black font-mono '+cls+'">'+val+'</p></div>'; };
-            // Table
-            var rows = '';
-            data.forEach(function(c,i) {
-                var gc = GRADE_CLR[c.grade]||'#64748B';
-                var bg = i%2?'background:rgba(255,255,255,0.02)':'';
-                var pct = Math.min(130,c.yld);
-                rows += '<tr style="'+bg+';border-bottom:1px solid rgba(255,255,255,0.06)" class="hover:bg-slate-700 cursor-default">';
-                rows += '<td class="px-3 py-2.5"><div class="text-white font-semibold text-sm">'+c.name+'</div>'+(c.serial?'<div class="text-slate-600 text-[10px] font-mono">'+c.serial+'</div>':'')+'</td>';
-                rows += '<td class="px-3 py-2.5 text-slate-400 text-xs">'+c.cat+'</td>';
-                rows += '<td class="px-3 py-2.5 font-mono text-xs" style="color:#FFCD00">'+c.machine+'</td>';
-                rows += '<td class="px-3 py-2.5"><span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;background:rgba(255,255,255,0.08);color:#94A3B8">'+c.status+'</span></td>';
-                rows += '<td class="px-3 py-2.5 text-right font-mono text-white text-sm">'+fCAD(c.cost)+'</td>';
-                rows += '<td class="px-3 py-2.5 text-right font-mono text-sm"><span class="text-slate-300">'+fN(c.mProd,1)+'</span><span class="text-slate-600 text-[10px] ml-1">/ '+c.mPlan+' m</span></td>';
-                rows += '<td class="px-3 py-2.5" style="min-width:110px"><div style="display:flex;align-items:center;gap:8px;justify-content:flex-end"><div style="width:52px;height:6px;background:#1E293B;border-radius:999px;overflow:hidden"><div style="width:'+pct+'%;height:6px;border-radius:999px;background:'+gc+'"></div></div><span style="font-size:11px;font-weight:700;color:'+gc+'">'+fN(c.yld,0)+'%</span></div></td>';
-                rows += '<td class="px-3 py-2.5 text-right font-mono text-slate-300 text-sm">'+fN(c.cpm,2)+'</td>';
-                rows += '<td class="px-3 py-2.5 text-right font-mono text-slate-500 text-sm">'+fN(c.tCpm,2)+'</td>';
-                rows += '<td class="px-3 py-2.5 text-right font-mono font-bold text-sm"><span style="color:'+(c.sav>=0?'#22C55E':'#EF4444')+'">'+(c.sav>=0?'+':'')+fCAD(c.sav)+'</span></td>';
-                rows += '<td class="px-3 py-2.5"><span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:'+gc+'22;color:'+gc+';border:1px solid '+gc+'44">'+c.grade+'</span></td>';
-                rows += '</tr>';
+            var rg = rentaCurrentRange();
+            RENTA_STATE.from = rg.from; RENTA_STATE.to = rg.to;
+            el.innerHTML = rentaFilterBar(rg) + '<div id="rentaBody"><div class="p-8 text-center text-slate-400">Chargement des données réelles…</div></div>';
+            var qs = '?dateFrom=' + encodeURIComponent(rg.from) + '&dateTo=' + encodeURIComponent(rg.to);
+            apiRequest('/consumables-cost-summary' + qs).then(function(data) {
+                rentaRenderBody(Array.isArray(data) ? data : [], rg);
+            }).catch(function(err) {
+                var b = document.getElementById('rentaBody');
+                if (b) b.innerHTML = '<div class="ged-content-panel p-6 rounded-xl" style="border-left:3px solid #ef4444;color:#fca5a5">Erreur : ' + rentaEsc((err && err.message) || 'chargement impossible') + '</div>';
             });
-            // Footer
-            rows += '<tr style="border-top:2px solid rgba(255,205,0,0.3);background:rgba(0,0,0,0.2)">';
-            rows += '<td class="px-3 py-2.5 text-slate-400 text-xs font-bold" colspan="4">TOTAL ('+data.length+' consommables)</td>';
-            rows += '<td class="px-3 py-2.5 text-right font-mono font-bold text-white">'+fCAD(totCost)+'</td>';
-            rows += '<td class="px-3 py-2.5 text-right font-mono font-bold text-white">'+fN(totM,1)+' m</td>';
-            rows += '<td class="px-3 py-2.5 text-right font-mono font-bold" style="color:#FFCD00">'+fN(data.reduce(function(s,c){return s+c.yld},0)/data.length,0)+'%</td>';
-            rows += '<td class="px-3 py-2.5 text-right font-mono font-bold" style="color:#FFCD00">'+fN(avgCpm,2)+'</td>';
-            rows += '<td class="px-3 py-2.5"></td>';
-            rows += '<td class="px-3 py-2.5 text-right font-mono font-black" style="color:'+(totSav>=0?'#22C55E':'#EF4444')+'">'+(totSav>=0?'+':'')+fCAD(totSav)+'</td>';
-            rows += '<td class="px-3 py-2.5"></td></tr>';
-            el.innerHTML = [
-                '<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-5">',
-                kpi('Consommables',data.length,'text-white'),
-                kpi('Coût total',fCAD(totCost),'text-yellow-400'),
-                kpi('Mètres produits',fN(totM,0)+' m','text-white'),
-                kpi('Coût moy./m',fN(avgCpm,2)+' $/m','text-yellow-400'),
-                kpi('Économies nettes',fCAD(totSav),totSav>=0?'text-green-400':'text-red-400'),
-                kpi('Excellent/Faible',data.filter(function(c){return c.grade==='EXCELLENT'}).length+' ✓ / '+data.filter(function(c){return c.grade==='FAIBLE'}).length+' ✗','text-white'),
+        }
+
+        function rentaRenderBody(rows, rg) {
+            var b = document.getElementById('rentaBody');
+            if (!b) return;
+            var byMachine = {}, byConso = {};
+            var totCost = 0, totMeters = 0;
+            rows.forEach(function(row) {
+                var cur = row.currency || 'XOF';
+                var costXof = convertMoneyAmountToCurrency(row.totalCost || 0, cur, 'XOF');
+                var prod = Number(row.production || 0);
+                var mid = row.machineId || '—';
+                if (!byMachine[mid]) byMachine[mid] = { machine: mid, cost: 0, meters: 0 };
+                byMachine[mid].cost += costXof;
+                byMachine[mid].meters += prod;
+                totCost += costXof;
+                totMeters += prod;
+                var list = [];
+                if (row.consumables) { try { list = JSON.parse(row.consumables) || []; } catch (e) { list = []; } }
+                list.forEach(function(c) {
+                    var key = (c.consumableName || '—') + '||' + (c.category || '—');
+                    if (!byConso[key]) byConso[key] = { name: c.consumableName || '—', cat: c.category || '—', qty: 0, cost: 0 };
+                    byConso[key].qty += Number(c.quantityUsed || 0);
+                    byConso[key].cost += convertMoneyAmountToCurrency(c.totalCost || 0, cur, 'XOF');
+                });
+            });
+            var machines = Object.keys(byMachine).map(function(k){ return byMachine[k]; });
+            machines.forEach(function(m){ m.cpm = m.meters > 0 ? m.cost / m.meters : 0; });
+            machines.sort(function(a, b2){ return b2.cost - a.cost; });
+            var consos = Object.keys(byConso).map(function(k){ return byConso[k]; });
+            consos.forEach(function(c){ c.share = totCost > 0 ? (c.cost / totCost) * 100 : 0; });
+            consos.sort(function(a, b2){ return b2.cost - a.cost; });
+            var avgCpm = totMeters > 0 ? totCost / totMeters : 0;
+
+            RENTA_LAST = { byConso: consos, byMachine: machines, totals: { cost: totCost, meters: totMeters, avgCpm: avgCpm }, range: rg };
+
+            if (!rows.length) {
+                b.innerHTML = '<div class="bg-slate-800 border border-slate-700 rounded-xl p-10 text-center">'
+                    + '<p class="text-slate-300 font-semibold mb-1">Aucune consommation enregistrée sur cette période.</p>'
+                    + '<p class="text-slate-500 text-sm">Les coûts proviennent des consommables saisis (onglet Consommables / saisie journalière). Élargissez la période ou saisissez des consommations.</p>'
+                    + '</div>';
+                return;
+            }
+
+            var kpi = function(lbl, val, cls){ return '<div class="bg-slate-800 border border-slate-700 rounded-xl px-4 py-3"><p class="text-[10px] uppercase tracking-widest text-slate-500 mb-1">'+lbl+'</p><p class="text-xl font-black font-mono '+(cls||'text-white')+'">'+val+'</p></div>'; };
+
+            // Tableau par machine (coût/m vs moyenne flotte)
+            var mRows = machines.map(function(m) {
+                var good = m.cpm > 0 && m.cpm <= avgCpm;
+                var clr = m.cpm === 0 ? '#64748B' : (good ? '#22C55E' : '#EF4444');
+                var lbl = m.cpm === 0 ? '—' : (good ? '≤ moyenne' : '> moyenne');
+                return '<tr style="border-bottom:1px solid rgba(255,255,255,0.06)">'
+                    + '<td class="px-3 py-2.5 font-mono text-sm" style="color:#FFCD00">'+rentaEsc(m.machine)+'</td>'
+                    + '<td class="px-3 py-2.5 text-right font-mono text-white text-sm">'+rentaFmt(m.cost)+'</td>'
+                    + '<td class="px-3 py-2.5 text-right font-mono text-slate-300 text-sm">'+rentaNum(m.meters, 1)+' m</td>'
+                    + '<td class="px-3 py-2.5 text-right font-mono font-bold text-sm" style="color:'+clr+'">'+rentaFmt(m.cpm)+'/m</td>'
+                    + '<td class="px-3 py-2.5"><span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;background:'+clr+'22;color:'+clr+';border:1px solid '+clr+'44">'+lbl+'</span></td>'
+                    + '</tr>';
+            }).join('');
+
+            // Tableau par consommable (part de coût)
+            var cRows = consos.map(function(c) {
+                var pct = Math.min(100, c.share);
+                return '<tr style="border-bottom:1px solid rgba(255,255,255,0.06)">'
+                    + '<td class="px-3 py-2.5 text-white font-semibold text-sm">'+rentaEsc(c.name)+'</td>'
+                    + '<td class="px-3 py-2.5 text-slate-400 text-xs">'+rentaEsc(c.cat)+'</td>'
+                    + '<td class="px-3 py-2.5 text-right font-mono text-slate-300 text-sm">'+rentaNum(c.qty, 2)+'</td>'
+                    + '<td class="px-3 py-2.5 text-right font-mono text-white text-sm">'+rentaFmt(c.cost)+'</td>'
+                    + '<td class="px-3 py-2.5" style="min-width:140px"><div style="display:flex;align-items:center;gap:8px;justify-content:flex-end"><div style="width:70px;height:6px;background:#1E293B;border-radius:999px;overflow:hidden"><div style="width:'+pct+'%;height:6px;border-radius:999px;background:#FFCD00"></div></div><span style="font-size:11px;font-weight:700;color:#FFCD00">'+c.share.toFixed(1)+'%</span></div></td>'
+                    + '</tr>';
+            }).join('');
+
+            b.innerHTML = [
+                '<div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-5">',
+                kpi('Coût consommables', rentaFmt(totCost), 'text-yellow-400'),
+                kpi('Mètres forés', rentaNum(totMeters, 0) + ' m', 'text-white'),
+                kpi('Coût moyen / m', rentaFmt(avgCpm) + '/m', 'text-yellow-400'),
+                kpi('Machines', String(machines.length), 'text-white'),
+                kpi('Types consommables', String(consos.length), 'text-white'),
                 '</div>',
-                '<div class="flex justify-end mb-3">',
-                '<button onclick="rentabiliteExportCSV()" class="ged-btn-secondary px-4 py-1.5 rounded-lg text-xs font-semibold">⬇ Exporter CSV</button>',
-                '</div>',
-                '<div class="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">',
-                '<div class="ged-section-header px-5 py-3 flex justify-between items-center">',
-                '<h3 class="font-semibold text-sm">Détail Rentabilité par Consommable</h3>',
-                '<div class="flex gap-4 text-xs text-slate-400">',
-                Object.entries(GRADE_CLR).map(function(e){ return '<span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:50%;background:'+e[1]+';display:inline-block"></span>'+GRADE_LBL[e[0]]+'</span>'; }).join(''),
-                '</div></div>',
+                '<div class="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden mb-5">',
+                '<div class="ged-section-header px-5 py-3"><h3 class="font-semibold text-sm">Coût par machine (coût/m vs moyenne flotte '+rentaFmt(avgCpm)+'/m)</h3></div>',
                 '<div style="overflow-x:auto"><table style="width:100%;font-size:12.5px;border-collapse:collapse">',
-                '<thead><tr style="border-bottom:1px solid rgba(255,255,255,0.1);font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:#64748B;background:rgba(0,0,0,0.2)">',
-                '<th class="px-3 py-2.5 text-left">Consommable</th><th class="px-3 py-2.5 text-left">Catégorie</th><th class="px-3 py-2.5 text-left">Machine</th><th class="px-3 py-2.5 text-left">Statut</th><th class="px-3 py-2.5 text-right">Coût (CAD)</th><th class="px-3 py-2.5 text-right">Mètres</th><th class="px-3 py-2.5 text-right">Rendement</th><th class="px-3 py-2.5 text-right">$/m réel</th><th class="px-3 py-2.5 text-right">$/m cible</th><th class="px-3 py-2.5 text-right">Économie</th><th class="px-3 py-2.5 text-left">Éval.</th>',
-                '</tr></thead><tbody>',rows,'</tbody></table></div></div>'
+                '<thead><tr style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:#64748B;background:rgba(0,0,0,0.2)"><th class="px-3 py-2.5 text-left">Machine</th><th class="px-3 py-2.5 text-right">Coût (FCFA)</th><th class="px-3 py-2.5 text-right">Mètres</th><th class="px-3 py-2.5 text-right">Coût/m</th><th class="px-3 py-2.5 text-left">Éval.</th></tr></thead>',
+                '<tbody>', mRows, '</tbody></table></div></div>',
+                '<div class="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">',
+                '<div class="ged-section-header px-5 py-3"><h3 class="font-semibold text-sm">Détail par consommable</h3></div>',
+                '<div style="overflow-x:auto"><table style="width:100%;font-size:12.5px;border-collapse:collapse">',
+                '<thead><tr style="font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:#64748B;background:rgba(0,0,0,0.2)"><th class="px-3 py-2.5 text-left">Consommable</th><th class="px-3 py-2.5 text-left">Catégorie</th><th class="px-3 py-2.5 text-right">Quantité</th><th class="px-3 py-2.5 text-right">Coût (FCFA)</th><th class="px-3 py-2.5 text-right">Part</th></tr></thead>',
+                '<tbody>', cRows, '</tbody></table></div></div>'
             ].join('');
         }
 
