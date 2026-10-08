@@ -311,6 +311,8 @@ db.serialize(() => {
             currency TEXT DEFAULT 'EUR',
             status TEXT DEFAULT 'pending',
             notes TEXT DEFAULT '',
+            contractId TEXT DEFAULT NULL,
+            site TEXT DEFAULT '',
             createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (enterpriseId) REFERENCES enterprises(id),
             FOREIGN KEY (clientId) REFERENCES clients(id),
@@ -682,6 +684,8 @@ db.serialize(() => {
     migrateIgnoreDup("ALTER TABLE invoices ADD COLUMN billingMonth TEXT DEFAULT ''", 'invoices.billingMonth');
     migrateIgnoreDup("ALTER TABLE invoices ADD COLUMN signProviderJson TEXT DEFAULT ''", 'invoices.signProviderJson');
     migrateIgnoreDup("ALTER TABLE invoices ADD COLUMN signClientJson TEXT DEFAULT ''", 'invoices.signClientJson');
+    migrateIgnoreDup("ALTER TABLE invoices ADD COLUMN contractId TEXT DEFAULT NULL", 'invoices.contractId');
+    migrateIgnoreDup("ALTER TABLE invoices ADD COLUMN site TEXT DEFAULT ''", 'invoices.site');
     migrateIgnoreDup("ALTER TABLE contracts ADD COLUMN billingMonthDefinition TEXT DEFAULT ''", 'contracts.billingMonthDefinition');
     migrateIgnoreDup("ALTER TABLE maintenanceSchedules ADD COLUMN enterpriseId INTEGER NOT NULL DEFAULT 1", 'maintenanceSchedules.enterpriseId');
     migrateIgnoreDup("ALTER TABLE maintenanceHistory ADD COLUMN enterpriseId INTEGER NOT NULL DEFAULT 1", 'maintenanceHistory.enterpriseId');
