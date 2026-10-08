@@ -1924,13 +1924,13 @@ app.post('/api/invoices', (req, res) => {
     const signCli = signatoriesToJsonCol(invoice, 'signClient');
     db.run(
         `INSERT INTO invoices (id, enterpriseId, invoiceNumber, date, dueDate, clientId, items, subtotal, taxRate,
-         taxAmount, total, currency, status, notes, billingMonth, signProviderJson, signClientJson)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         taxAmount, total, currency, status, notes, billingMonth, signProviderJson, signClientJson, contractId, site)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
             invoice.id, entId, invoice.invoiceNumber, invoice.date, invoice.dueDate, invoice.clientId,
             JSON.stringify(invoice.items || []), invoice.subtotal, invoice.taxRate,
             invoice.taxAmount, invoice.total, invoice.currency, invoice.status, invoice.notes || '',
-            billingMonth, signProv, signCli
+            billingMonth, signProv, signCli, invoice.contractId || null, invoice.site || ''
         ],
         function(err) {
             if (err) {
@@ -1961,13 +1961,13 @@ app.put('/api/invoices/:id', (req, res) => {
         const realId = row.id;
         const sql = `UPDATE invoices SET invoiceNumber = ?, date = ?, dueDate = ?, clientId = ?, items = ?,
          subtotal = ?, taxRate = ?, taxAmount = ?, total = ?, currency = ?, status = ?, notes = ?,
-         billingMonth = ?, signProviderJson = ?, signClientJson = ?
+         billingMonth = ?, signProviderJson = ?, signClientJson = ?, contractId = ?, site = ?
          WHERE id = ?`;
         const vals = [
             invoice.invoiceNumber, invoice.date, invoice.dueDate, invoice.clientId,
             JSON.stringify(invoice.items || []), invoice.subtotal, invoice.taxRate,
             invoice.taxAmount, invoice.total, invoice.currency, invoice.status, invoice.notes || '',
-            billingMonthU, signProvU, signCliU, realId
+            billingMonthU, signProvU, signCliU, invoice.contractId || null, invoice.site || '', realId
         ];
         db.run(sql, vals, function(err2) {
             if (err2) return res.status(500).json({ error: err2.message });

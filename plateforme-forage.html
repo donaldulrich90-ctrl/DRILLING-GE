@@ -1801,9 +1801,21 @@
                     </div>
                     <div class="mb-4">
                         <label class="block text-slate-400 mb-2">Client *</label>
-                        <select id="invoiceClient" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white" required onchange="onInvoiceClientOrCurrencyChange()">
+                        <select id="invoiceClient" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white" required onchange="onInvoiceClientOrCurrencyChange(); populateInvoiceContractSelect();">
                             <option value="">Sélectionner un client</option>
                         </select>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label class="block text-slate-400 mb-2">Contrat lié <span class="text-slate-500 text-xs">(référence sur la facture)</span></label>
+                            <select id="invoiceContract" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white" onchange="onInvoiceContractChange()">
+                                <option value="">Aucun / saisie libre</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 mb-2">Site / Lieu des travaux</label>
+                            <input type="text" id="invoiceSite" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white" placeholder="ex: Bomboré">
+                        </div>
                     </div>
                     <div class="mb-4 p-4 rounded-lg bg-slate-700/50 border border-slate-600">
                         <label class="block text-slate-300 mb-2 text-sm font-semibold">Facturation rapide — foreuse liée à un contrat</label>
@@ -10940,7 +10952,10 @@
             renderInvoiceItems();
             calculateInvoiceTotal();
             populateInvoicePrefillDrillSelect();
-            
+            var invSiteNew = document.getElementById('invoiceSite');
+            if (invSiteNew) invSiteNew.value = '';
+            populateInvoiceContractSelect('');
+
             document.getElementById('invoiceModalTitle').textContent = 'Nouvelle Facture';
             document.getElementById('invoiceModal').classList.remove('hidden');
         }
@@ -11259,9 +11274,41 @@
             });
         }
 
+        // Remplit le sélecteur « Contrat lié » avec les contrats du client choisi.
+        function populateInvoiceContractSelect(selectedContractId) {
+            var sel = document.getElementById('invoiceContract');
+            if (!sel) return;
+            var clientId = parseInt(document.getElementById('invoiceClient').value);
+            var keep = selectedContractId != null ? String(selectedContractId) : (sel.value || '');
+            sel.innerHTML = '<option value="">Aucun / saisie libre</option>';
+            (contracts || []).forEach(function(ct) {
+                if (!clientId || ct.clientId == clientId) {
+                    var opt = document.createElement('option');
+                    opt.value = ct.id;
+                    var siteObj = ct.siteId != null && sites ? sites.find(function(s) { return s.id == ct.siteId; }) : null;
+                    opt.textContent = ct.id + (siteObj && siteObj.name ? ' — ' + siteObj.name : '');
+                    sel.appendChild(opt);
+                }
+            });
+            if (keep) sel.value = keep;
+        }
+
+        // Quand un contrat est choisi, pré-remplit le site des travaux si vide.
+        function onInvoiceContractChange() {
+            var sel = document.getElementById('invoiceContract');
+            var siteEl = document.getElementById('invoiceSite');
+            if (!sel || !sel.value) return;
+            var ct = (contracts || []).find(function(c) { return String(c.id) === String(sel.value); });
+            if (!ct) return;
+            if (siteEl && !siteEl.value.trim()) {
+                var siteObj = ct.siteId != null && sites ? sites.find(function(s) { return s.id == ct.siteId; }) : null;
+                if (siteObj && siteObj.name) siteEl.value = siteObj.name;
+            }
+        }
+
         function saveInvoice(event) {
             event.preventDefault();
-            
+
             var clientId = parseInt(document.getElementById('invoiceClient').value);
             if (!clientId) {
                 alert('Veuillez sélectionner un client');
@@ -11322,6 +11369,11 @@
             var statusEl = document.getElementById('invoiceStatus');
             var statusVal = statusEl && ['paid', 'pending', 'overdue'].indexOf(statusEl.value) >= 0 ? statusEl.value : 'pending';
 
+            var invContractEl = document.getElementById('invoiceContract');
+            var invContractId = invContractEl && invContractEl.value ? invContractEl.value : null;
+            var invSiteEl = document.getElementById('invoiceSite');
+            var invSiteVal = invSiteEl ? (invSiteEl.value || '').trim() : '';
+
             var editingIdEl = document.getElementById('invoiceEditingId');
             var editingId = editingIdEl && editingIdEl.value ? String(editingIdEl.value).trim() : '';
             if (editingId) {
@@ -11351,7 +11403,9 @@
                     notes: document.getElementById('invoiceNotes').value,
                     billingMonth: billingMonthVal,
                     signProvider: signProvider,
-                    signClient: signClient
+                    signClient: signClient,
+                    contractId: invContractId,
+                    site: invSiteVal
                 });
                 updated.id = existing.id;
                 if (useAPI && window.API && window.API.Invoices && window.API.Invoices.update) {
@@ -11400,7 +11454,9 @@
                 notes: document.getElementById('invoiceNotes').value,
                 billingMonth: billingMonthVal,
                 signProvider: signProvider,
-                signClient: signClient
+                signClient: signClient,
+                contractId: invContractId,
+                site: invSiteVal
             };
             invoices.push(newInv);
             
@@ -11991,6 +12047,9 @@
                 clientSelect.appendChild(option);
             });
             clientSelect.value = String(invoice.clientId);
+            populateInvoiceContractSelect(invoice.contractId);
+            var invSiteEditEl = document.getElementById('invoiceSite');
+            if (invSiteEditEl) invSiteEditEl.value = invoice.site || '';
 
             document.getElementById('invoiceDate').value = invoice.date || '';
             document.getElementById('invoiceDueDate').value = invoice.dueDate || '';
@@ -12077,6 +12136,17 @@
 
             var coDisplayName = esc(companyInfo.name || companyInfo.legalName || 'Votre entreprise');
             var invNumEsc = esc(invoice.invoiceNumber || '');
+            // Référence contrat / site / période (Phase 2 — détails légaux de la facture)
+            var invContractRefEsc = invoice.contractId ? esc(invoice.contractId) : '';
+            var invSiteEsc = invoice.site ? esc(invoice.site) : '';
+            var invPeriodeEsc = '';
+            if (invoice.billingMonth && String(invoice.billingMonth).length >= 7) {
+                try {
+                    var _bm = String(invoice.billingMonth).slice(0, 7).split('-');
+                    var _moisFr = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+                    invPeriodeEsc = esc(_moisFr[parseInt(_bm[1], 10) - 1] + ' ' + _bm[0]);
+                } catch (eP) { invPeriodeEsc = esc(String(invoice.billingMonth).slice(0, 7)); }
+            }
             var payTermsEsc = esc(invoice.paymentTerms || '');
             var notesEsc = invoice.notes ? esc(invoice.notes) : '';
             var bankEsc = esc(companyInfo.bankName || '');
@@ -12180,8 +12250,8 @@
                 (client.address ? esc(client.address) + '<br>' : '') +
                 (client.postalCode && client.city ? esc(client.postalCode + ' ' + client.city) + '<br>' : (client.city ? esc(client.city) + '<br>' : '')) +
                 (client.country ? esc(client.country) + '<br>' : '') +
-                (client.taxId ? '<br><strong>N° fiscal :</strong> ' + esc(client.taxId) + '<br>' : '') +
-                (client.vatNumber ? '<strong>N° TVA :</strong> ' + esc(client.vatNumber) + '<br>' : '') +
+                (client.taxId ? '<br><strong>RCCM :</strong> ' + esc(client.taxId) + '<br>' : '') +
+                (client.vatNumber ? '<strong>IFU :</strong> ' + esc(client.vatNumber) + '<br>' : '') +
                 (client.email ? '<strong>Email :</strong> ' + esc(client.email) + '<br>' : '') +
                 (client.phone ? '<strong>Tél :</strong> ' + esc(client.phone) : '');
 
@@ -12302,6 +12372,9 @@
                 '<div class="dates">' +
                 '<div><strong>Émission :</strong> ' + esc(formatDate(invoice.date)) + '</div>' +
                 '<div><strong>Échéance :</strong> ' + esc(formatDate(invoice.dueDate)) + '</div>' +
+                (invContractRefEsc ? '<div><strong>Contrat N° :</strong> ' + invContractRefEsc + '</div>' : '') +
+                (invSiteEsc ? '<div><strong>Site :</strong> ' + invSiteEsc + '</div>' : '') +
+                (invPeriodeEsc ? '<div><strong>Période :</strong> ' + invPeriodeEsc + '</div>' : '') +
                 '<div><strong>Devise :</strong> ' + esc(invoice.currency || 'EUR') + '</div>' +
                 '</div>' +
                 '</div>' +
