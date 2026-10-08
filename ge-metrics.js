@@ -73,38 +73,124 @@ function registerMetrics(app) {
                     (e2, r2) => {
                         const effectif = (!e2 && r2 && r2.n) || 0;
 
-                        // Fusion production + consommables, par foreuse.
-                        const parEnginMap = new Map();
-                        for (const r of prodRows || []) {
-                            parEnginMap.set(r.engin, {
-                                engin: r.engin,
-                                metres: round(r.metres, 1),
-                                rop: round(r.rop, 2),
-                                arrets: 0, // à relier à la table des arrêts de poste si besoin
-                                consommables_cout: 0,
-                            });
-                        }
-                        for (const [engin, cout] of conso) {
-                            const row = parEnginMap.get(engin)
-                                || { engin, metres: 0, rop: 0, arrets: 0, consommables_cout: 0 };
-                            row.consommables_cout = round(cout, 2);
-                            parEnginMap.set(engin, row);
-                        }
-                        const parEngin = [...parEnginMap.values()].sort((a, b) => b.metres - a.metres);
-                        const metresTotal = parEngin.reduce((s, r) => s + (r.metres || 0), 0);
-                        const coutConso = parEngin.reduce((s, r) => s + (r.consommables_cout || 0), 0);
+                        // Arrêts par engin + motif, et disponibilité moyenne.
+                        const sqlStop = `
+                            SELECT d.machineId AS engin,
+                                   json_extract(s.value,'$.reason') AS reason,
+                                   json_extract(s.value,'$.detail') AS detail,
+                                   COALESCE(SUM(CAST(json_extract(s.value,'$.hours') AS REAL)),0) AS heures
+                            FROM dailyDataRecords d
+                            JOIN drills dr ON dr.id = d.machineId
+                            JOIN json_each(d.data, '$.stoppages') s
+                            WHERE dr.enterpriseId = ? AND d.date >= ? AND d.date <= ?
+                            GROUP BY d.machineId, reason`;
+                        const sqlDispo = `
+                            SELECT d.machineId AS engin,
+                                   AVG(CAST(json_extract(d.data,'$.availabilityPct') AS REAL)) AS dispo
+                            FROM dailyDataRecords d JOIN drills dr ON dr.id = d.machineId
+                            WHERE dr.enterpriseId = ? AND d.date >= ? AND d.date <= ?
+                            GROUP BY d.machineId`;
+                        const sqlMaint = `
+                            SELECT machineId AS engin, date, type, description, duration, technician
+                            FROM maintenanceHistory
+                            WHERE enterpriseId = ? AND date >= ? AND date <= ?
+                            ORDER BY date DESC, id DESC LIMIT 200`;
 
-                        res.json({
-                            module: 'forage',
-                            periode: { start, end },
-                            par_engin: parEngin,
-                            metres_total: round(metresTotal, 1),
-                            consommables_cout: round(coutConso, 2),
-                            // Le forage ne suit pas encore le carburant en litres
-                            // (fuelPct = niveau de cuve, pas une consommation).
-                            carburant_litres: 0,
-                            cout_total: round(coutConso, 2),
-                            effectif: effectif,
+                        db.all(sqlStop, [enterpriseId, start, end], (eS, stopRowsRaw) => {
+                            const stopRows = eS ? [] : (stopRowsRaw || []);
+                            db.all(sqlDispo, [enterpriseId, start, end], (eD, dispoRowsRaw) => {
+                                const dispoRows = eD ? [] : (dispoRowsRaw || []);
+                                db.all(sqlMaint, [enterpriseId, start, end], (eM, maintRowsRaw) => {
+                                    const maintRows = eM ? [] : (maintRowsRaw || []);
+                                    const dispoByEngin = new Map();
+                                    for (const r of dispoRows || []) dispoByEngin.set(r.engin, r.dispo);
+
+                                    // Agrégation des arrêts par engin et global par motif.
+                                    const CAT = { bdn: 'Panne', stb: 'Attente', gsa: 'Délai' };
+                                    const motifLabel = (code) => {
+                                        if (!code) return 'Autre';
+                                        const parts = String(code).split('-');
+                                        const last = parts[parts.length - 1];
+                                        const cat = CAT[last] || null;
+                                        const base = (cat ? parts.slice(0, -1) : parts).join(' ');
+                                        const lib = base.replace(/\b\w/g, (c) => c.toUpperCase());
+                                        return cat ? (lib + ' (' + cat + ')') : lib;
+                                    };
+                                    const motifCat = (code) => {
+                                        const last = String(code || '').split('-').pop();
+                                        return CAT[last] || 'Autre';
+                                    };
+                                    const arretsParEnginMap = new Map();
+                                    const arretsGlobal = new Map();
+                                    for (const r of stopRows || []) {
+                                        const h = round(r.heures, 1);
+                                        if (!arretsParEnginMap.has(r.engin)) arretsParEnginMap.set(r.engin, { total: 0, motifs: [] });
+                                        const ae = arretsParEnginMap.get(r.engin);
+                                        ae.total += h;
+                                        ae.motifs.push({ motif: motifLabel(r.reason), categorie: motifCat(r.reason), heures: h, detail: (r.detail || '') });
+                                        const key = motifLabel(r.reason);
+                                        const g = arretsGlobal.get(key) || { motif: key, categorie: motifCat(r.reason), heures: 0 };
+                                        g.heures = round(g.heures + h, 1);
+                                        arretsGlobal.set(key, g);
+                                    }
+
+                                    // Fusion production + consommables + arrêts + dispo, par foreuse.
+                                    const parEnginMap = new Map();
+                                    for (const r of prodRows || []) {
+                                        parEnginMap.set(r.engin, {
+                                            engin: r.engin,
+                                            metres: round(r.metres, 1),
+                                            rop: round(r.rop, 2),
+                                            arrets_h: 0,
+                                            arrets_motifs: [],
+                                            metres_perdus_est: 0,
+                                            dispo_pct: dispoByEngin.has(r.engin) ? round(dispoByEngin.get(r.engin), 1) : null,
+                                            consommables_cout: 0,
+                                        });
+                                    }
+                                    for (const [engin, cout] of conso) {
+                                        const row = parEnginMap.get(engin)
+                                            || { engin, metres: 0, rop: 0, arrets_h: 0, arrets_motifs: [], metres_perdus_est: 0, dispo_pct: null, consommables_cout: 0 };
+                                        row.consommables_cout = round(cout, 2);
+                                        parEnginMap.set(engin, row);
+                                    }
+                                    for (const [engin, ae] of arretsParEnginMap) {
+                                        const row = parEnginMap.get(engin)
+                                            || { engin, metres: 0, rop: 0, arrets_h: 0, arrets_motifs: [], metres_perdus_est: 0, dispo_pct: dispoByEngin.has(engin) ? round(dispoByEngin.get(engin), 1) : null, consommables_cout: 0 };
+                                        row.arrets_h = round(ae.total, 1);
+                                        row.arrets_motifs = ae.motifs.sort((a, b) => b.heures - a.heures);
+                                        row.metres_perdus_est = round((ae.total || 0) * (row.rop || 0), 0);
+                                        parEnginMap.set(engin, row);
+                                    }
+                                    const parEngin = [...parEnginMap.values()].sort((a, b) => b.metres - a.metres);
+                                    const metresTotal = parEngin.reduce((s, r) => s + (r.metres || 0), 0);
+                                    const coutConso = parEngin.reduce((s, r) => s + (r.consommables_cout || 0), 0);
+                                    const arretsHTotal = parEngin.reduce((s, r) => s + (r.arrets_h || 0), 0);
+                                    const metresPerdusTotal = parEngin.reduce((s, r) => s + (r.metres_perdus_est || 0), 0);
+                                    const dispoVals = parEngin.filter((r) => r.dispo_pct != null).map((r) => r.dispo_pct);
+                                    const dispoMoy = dispoVals.length ? round(dispoVals.reduce((s, v) => s + v, 0) / dispoVals.length, 1) : null;
+
+                                    res.json({
+                                        module: 'forage',
+                                        periode: { start, end },
+                                        par_engin: parEngin,
+                                        metres_total: round(metresTotal, 1),
+                                        arrets_h_total: round(arretsHTotal, 1),
+                                        metres_perdus_est_total: round(metresPerdusTotal, 0),
+                                        dispo_moyenne_pct: dispoMoy,
+                                        arrets_par_motif: [...arretsGlobal.values()].sort((a, b) => b.heures - a.heures),
+                                        maintenance: (maintRows || []).map((m) => ({
+                                            engin: m.engin, date: m.date, type: m.type || '',
+                                            description: m.description || '', duration: m.duration || 0,
+                                            technician: m.technician || '',
+                                        })),
+                                        consommables_cout: round(coutConso, 2),
+                                        carburant_litres: 0,
+                                        cout_total: round(coutConso, 2),
+                                        effectif: effectif,
+                                    });
+                                });
+                            });
                         });
                     }
                 );
