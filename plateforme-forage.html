@@ -1982,11 +1982,17 @@
                             <input type="text" id="contractNumber" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white" required placeholder="CT-2024-001">
                         </div>
                         <div>
-                            <label class="block text-slate-400 mb-2">Devise *</label>
+                            <label class="block text-slate-400 mb-2">Devise par défaut <span class="text-slate-500 text-xs">(nouvelles lignes — chaque ligne garde sa devise)</span></label>
                             <select id="contractCurrency" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white" required onchange="updateContractRates()">
-                                <option value="EUR">EUR (Euros)</option>
+                                <option value="XOF" selected>XOF (Francs CFA)</option>
                                 <option value="USD">USD (Dollars)</option>
-                                <option value="XOF">XOF (Francs CFA)</option>
+                                <option value="EUR">EUR (Euros)</option>
+                                <option value="GBP">GBP (Livre sterling)</option>
+                                <option value="CAD">CAD (Dollar canadien)</option>
+                                <option value="GHS">GHS (Cedi ghanéen)</option>
+                                <option value="NGN">NGN (Naira)</option>
+                                <option value="MAD">MAD (Dirham)</option>
+                                <option value="XAF">XAF (Franc CFA CEMAC)</option>
                             </select>
                         </div>
                     </div>
@@ -4704,6 +4710,23 @@
             { value: 'redevance',         label: 'Redevance',                       unit: 'fixed'     },
             { value: 'autre',             label: 'Autre prestation',                unit: 'fixed'     },
         ];
+
+        // Devises disponibles par ligne de barème (le contrat peut mélanger les devises).
+        var BAREME_CURRENCIES = ['XOF', 'USD', 'EUR', 'GBP', 'CAD', 'AUD', 'GHS', 'NGN', 'MAD', 'XAF'];
+        function baremeCurrencyOptionsHtml(selected) {
+            var sel = selected || 'XOF';
+            return BAREME_CURRENCIES.map(function(c) {
+                return '<option value="' + c + '"' + (sel === c ? ' selected' : '') + '>' + c + '</option>';
+            }).join('');
+        }
+        // Types de terrain géologique (barème de forage).
+        var BAREME_GROUND_TYPES = ['', 'Oxyde', 'Transition', 'Roches fraîches'];
+        function baremeGroundOptionsHtml(selected) {
+            return BAREME_GROUND_TYPES.map(function(g) {
+                var lbl = g || '— (indifférent)';
+                return '<option value="' + escapeHtmlForAttr(g) + '"' + (selected === g ? ' selected' : '') + '>' + escapeHtmlForAttr(lbl) + '</option>';
+            }).join('');
+        }
 
         function getServiceTypeInfo(serviceType) {
             return CONTRACT_SERVICE_TYPES.find(function(s) { return s.value === serviceType; }) || CONTRACT_SERVICE_TYPES[0];
@@ -11695,9 +11718,14 @@
         }
 
         function addContractRate() {
+            var defCur = document.getElementById('contractCurrency') ? document.getElementById('contractCurrency').value : 'XOF';
             contractRates.push({
                 serviceType: 'forage',
                 machineType: '',
+                designation: '',
+                diameter: '',
+                groundType: '',
+                currency: defCur,
                 rate: 0,
                 estimatedMeters: 0,
                 estimatedAmount: 0
@@ -11722,7 +11750,7 @@
             container.innerHTML = '';
 
             if (contractRates.length === 0) {
-                contractRates.push({ serviceType: 'forage', machineType: '', rate: 0, estimatedMeters: 0, estimatedAmount: 0 });
+                contractRates.push({ serviceType: 'forage', machineType: '', designation: '', diameter: '', groundType: '', currency: currency, rate: 0, estimatedMeters: 0, estimatedAmount: 0 });
             }
 
             contractRates.forEach(function(rate, index) {
@@ -11730,6 +11758,7 @@
                 var sInfo = getServiceTypeInfo(sType);
                 var isFixed = sInfo.unit === 'fixed';
                 var isPerDay = sInfo.unit === 'per_day';
+                var lineCur = rate.currency || currency;
                 var estimatedAmount = isFixed ? (rate.rate || 0) : (rate.estimatedMeters || 0) * (rate.rate || 0);
                 var rateLabel = isFixed ? 'Montant forfaitaire *' : (isPerDay ? 'Tarif/jour *' : 'Tarif/mètre *');
                 var qtyLabel  = isPerDay ? 'Jours estimés' : 'Mètres estimés';
@@ -11749,12 +11778,36 @@
                     '</select>' +
                     '</div>' +
                     '</div>' +
+                    // Désignation d'article (barème)
+                    '<div class="mb-3">' +
+                    '<label class="block text-slate-400 mb-1 text-sm">Désignation (article du barème)</label>' +
+                    '<input type="text" class="rate-designation w-full bg-slate-600 border border-slate-500 rounded px-3 py-2 text-white text-sm" value="' + escapeHtmlForAttr(rate.designation || '') + '" placeholder="ex: Trou vertical 127 mm 0–12,5 m — Transition" onchange="updateContractRate(' + index + ',\'designation\',this.value);">' +
+                    '</div>' +
+                    // Diamètre · Terrain · Devise (par ligne)
+                    '<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">' +
+                    '<div>' +
+                    '<label class="block text-slate-400 mb-1 text-sm">Diamètre (mm)</label>' +
+                    '<input type="text" class="rate-diameter w-full bg-slate-600 border border-slate-500 rounded px-3 py-2 text-white text-sm" value="' + escapeHtmlForAttr(rate.diameter || '') + '" placeholder="ex: 127" onchange="updateContractRate(' + index + ',\'diameter\',this.value);">' +
+                    '</div>' +
+                    '<div>' +
+                    '<label class="block text-slate-400 mb-1 text-sm">Type de terrain</label>' +
+                    '<select class="rate-ground w-full bg-slate-600 border border-slate-500 rounded px-3 py-2 text-white text-sm" onchange="updateContractRate(' + index + ',\'groundType\',this.value);">' +
+                    baremeGroundOptionsHtml(rate.groundType || '') +
+                    '</select>' +
+                    '</div>' +
+                    '<div>' +
+                    '<label class="block text-slate-400 mb-1 text-sm">Devise (ligne) *</label>' +
+                    '<select class="rate-currency w-full bg-slate-600 border border-slate-500 rounded px-3 py-2 text-white text-sm" onchange="updateContractRate(' + index + ',\'currency\',this.value); renderContractRates(); calculateContractTotal();">' +
+                    baremeCurrencyOptionsHtml(lineCur) +
+                    '</select>' +
+                    '</div>' +
+                    '</div>' +
                     '<div class="grid grid-cols-1 ' + (isFixed ? '' : 'md:grid-cols-2') + ' gap-4 items-end">' +
                     '<div>' +
                     '<label class="block text-slate-400 mb-1 text-sm">' + rateLabel + '</label>' +
                     '<div class="flex gap-2">' +
                     '<input type="number" class="rate-value w-full bg-slate-600 border border-slate-500 rounded px-3 py-2 text-white text-sm" min="0" step="0.01" value="' + (rate.rate || 0) + '" placeholder="0.00" onchange="updateContractRate(' + index + ',\'rate\',parseFloat(this.value)); calculateContractTotal();" required>' +
-                    '<span class="text-slate-400 text-sm py-2">' + currency + '</span>' +
+                    '<span class="text-slate-400 text-sm py-2">' + lineCur + '</span>' +
                     '</div>' +
                     '</div>' +
                     (isFixed ? '' :
@@ -11766,7 +11819,7 @@
                     '<div class="mt-3 flex justify-between items-center">' +
                     '<div class="text-sm">' +
                     '<span class="text-slate-400">Montant estimé: </span>' +
-                    '<span class="font-semibold text-green-400">' + formatCurrency(estimatedAmount, currency) + '</span>' +
+                    '<span class="font-semibold text-green-400">' + formatCurrency(estimatedAmount, lineCur) + '</span>' +
                     '</div>' +
                     '<button type="button" onclick="removeContractRate(' + index + ')" class="bg-red-600 hover:bg-red-700 px-3 py-2 rounded text-sm">Supprimer</button>' +
                     '</div>' +
@@ -11791,17 +11844,18 @@
         }
 
         function calculateContractTotal() {
-            var total = 0;
+            // Totaux groupés par devise (le barème peut mélanger les devises).
+            var defCur = document.getElementById('contractCurrency') ? document.getElementById('contractCurrency').value : 'XOF';
+            var byCur = {};
             contractRates.forEach(function(rate) {
                 var sInfo = getServiceTypeInfo(rate.serviceType || 'forage');
-                if (sInfo.unit === 'fixed') {
-                    total += rate.rate || 0;
-                } else {
-                    total += (rate.estimatedMeters || 0) * (rate.rate || 0);
-                }
+                var amt = sInfo.unit === 'fixed' ? (rate.rate || 0) : (rate.estimatedMeters || 0) * (rate.rate || 0);
+                var cur = rate.currency || defCur;
+                byCur[cur] = (byCur[cur] || 0) + amt;
             });
-            var currency = document.getElementById('contractCurrency') ? document.getElementById('contractCurrency').value : 'EUR';
-            document.getElementById('contractTotalAmount').textContent = formatCurrency(total, currency);
+            var parts = Object.keys(byCur).map(function(cur) { return formatCurrency(byCur[cur], cur); });
+            var el = document.getElementById('contractTotalAmount');
+            if (el) el.textContent = parts.length ? parts.join('  ·  ') : formatCurrency(0, defCur);
         }
 
         function saveContract(event) {
@@ -11830,6 +11884,10 @@
                     validRates.push({
                         serviceType: sType,
                         machineType: rate.machineType || '',
+                        designation: rate.designation || '',
+                        diameter: rate.diameter || '',
+                        groundType: rate.groundType || '',
+                        currency: rate.currency || (document.getElementById('contractCurrency') ? document.getElementById('contractCurrency').value : 'XOF'),
                         rate: rate.rate,
                         estimatedMeters: estimatedQty,
                         estimatedAmount: estimatedAmt
