@@ -1874,7 +1874,10 @@
                     <div class="mb-4">
                         <label class="block text-slate-400 mb-2 font-semibold">Lignes de facturation</label>
                         <div id="invoiceItemsContainer" class="space-y-3 mb-3"></div>
+                        <div class="flex flex-wrap gap-2">
                         <button type="button" onclick="addInvoiceItem()" class="ged-btn-primary px-4 py-2 rounded text-sm">+ Ajouter une ligne</button>
+                        <button type="button" onclick="addFgmToInvoice()" class="ged-btn-secondary px-4 py-2 rounded text-sm" title="Ajoute les frais de gestion mensuels du contrat lié, modulés par la disponibilité (KPI)">+ FGM du mois (selon disponibilité)</button>
+                        </div>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                         <div>
@@ -2029,6 +2032,23 @@
                         <label class="block text-slate-400 mb-3 font-semibold">Tarifs et prestations du contrat</label>
                         <div id="contractRatesContainer" class="space-y-3 mb-3"></div>
                         <button type="button" onclick="addContractRate()" class="ged-btn-primary px-4 py-2 rounded text-sm">+ Ajouter une prestation</button>
+                    </div>
+                    <datalist id="fgmRolesList">
+                        <option value="Foreur"><option value="Foreur auxiliaire"><option value="Responsable de la sécurité"><option value="Superviseur"><option value="Chantier de mécanique"><option value="Chef d'équipe"><option value="Mécanicien"><option value="Électricien">
+                    </datalist>
+                    <div class="mb-4 border-t border-slate-600 pt-4">
+                        <label class="block text-slate-400 mb-1 font-semibold">Frais de gestion mensuels (FGM)</label>
+                        <p class="text-slate-500 text-xs mb-3">Coûts fixes mensuels par poste (hébergement, repas, encadrement…). Le paiement est modulé par le KPI de disponibilité des équipements.</p>
+                        <div id="contractFgmContainer" class="space-y-3 mb-3"></div>
+                        <button type="button" onclick="addFgmLine()" class="ged-btn-primary px-4 py-2 rounded text-sm">+ Ajouter un poste FGM</button>
+                        <div class="mt-3 flex justify-between items-center flex-wrap gap-2">
+                            <span class="text-slate-400 text-sm">Total FGM mensuel :</span>
+                            <span class="text-lg font-bold text-green-400" id="contractFgmTotal">0</span>
+                        </div>
+                        <div class="mt-3 p-3 rounded-lg bg-slate-700/40 border border-slate-600 text-xs text-slate-300">
+                            <strong class="text-slate-200">Barème KPI (disponibilité → % des FGM payés) :</strong>
+                            &gt;85 % = 100 % · 75–84 % = 90 % · 65–74 % = 80 % · 55–64 % = 70 % · 45–54 % = 60 % · &lt;45 % = 50 %
+                        </div>
                     </div>
                     <div class="mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
@@ -11175,6 +11195,40 @@
             renderInvoiceItems();
         }
 
+        // Ajoute les lignes FGM du contrat lié, modulées par le KPI de disponibilité.
+        function addFgmToInvoice() {
+            var sel = document.getElementById('invoiceContract');
+            if (!sel || !sel.value) { alert('Sélectionnez d’abord un « Contrat lié » pour reprendre ses FGM.'); return; }
+            var ct = (contracts || []).find(function(c) { return String(c.id) === String(sel.value); });
+            if (!ct || !ct.fgm || !ct.fgm.length) { alert('Ce contrat n’a pas de frais de gestion mensuels (FGM) définis.'); return; }
+            var availRaw = prompt('Disponibilité des équipements sur la période (%)\n\nBarème KPI : >85=100% · 75–84=90% · 65–74=80% · 55–64=70% · 45–54=60% · <45=50%', '100');
+            if (availRaw === null) return;
+            var avail = parseFloat(String(availRaw).replace(',', '.'));
+            if (isNaN(avail)) { alert('Pourcentage invalide.'); return; }
+            var kpi = fgmKpiPercent(avail);
+            var invCurEl = document.getElementById('invoiceClient');
+            var invClient = clients.find(function(c) { return String(c.id) === String(invCurEl && invCurEl.value); });
+            var invCur = invClient ? invClient.currency : null;
+            var mismatch = false;
+            ct.fgm.forEach(function(l) {
+                if (invCur && l.currency && l.currency !== invCur) mismatch = true;
+                var unitAdj = (parseFloat(l.prixUnitaire) || 0) * (kpi / 100);
+                invoiceItems.push({
+                    description: 'FGM — ' + (l.role || '') + ' (' + (l.periode || 'Mensuel') + ') · dispo ' + avail + '% → ' + kpi + '% des FGM',
+                    quantity: parseFloat(l.quantite) || 0,
+                    unitPrice: Math.round(unitAdj * 100) / 100,
+                    unit: 'forfait'
+                });
+            });
+            // retire les lignes vides initiales
+            invoiceItems = invoiceItems.filter(function(it, i) {
+                return !(i === 0 && !it.description && !it.quantity && !it.unitPrice);
+            });
+            renderInvoiceItems();
+            if (typeof calculateInvoiceTotal === 'function') calculateInvoiceTotal();
+            if (mismatch) alert('Attention : certaines lignes FGM sont dans une devise différente de la facture. Vérifiez les montants / convertissez si besoin.');
+        }
+
         function removeInvoiceItem(index) {
             if (invoiceItems.length > 1) {
                 invoiceItems.splice(index, 1);
@@ -11592,6 +11646,106 @@
         // GESTION DES CONTRATS
         // ============================================
         var contractRates = [];
+        // ── FGM (Frais de Gestion Mensuels) + KPI de disponibilité ──────────
+        var contractFgm = [];
+        var FGM_ROLE_SUGGESTIONS = ['Foreur', 'Foreur auxiliaire', 'Responsable de la sécurité', 'Superviseur', 'Chantier de mécanique', 'Chef d\'équipe', 'Mécanicien', 'Électricien'];
+        // Paliers standard : disponibilité → % des FGM payés.
+        var FGM_KPI_TIERS = [
+            { min: 85, pct: 100 },
+            { min: 75, pct: 90 },
+            { min: 65, pct: 80 },
+            { min: 55, pct: 70 },
+            { min: 45, pct: 60 },
+            { min: 0,  pct: 50 }
+        ];
+        function fgmKpiPercent(availabilityPct) {
+            var a = parseFloat(availabilityPct);
+            if (isNaN(a)) return 100;
+            for (var i = 0; i < FGM_KPI_TIERS.length; i++) {
+                if (a >= FGM_KPI_TIERS[i].min) return FGM_KPI_TIERS[i].pct;
+            }
+            return 50;
+        }
+        function fgmLineTotal(l) { return (parseFloat(l.quantite) || 0) * (parseFloat(l.prixUnitaire) || 0); }
+        function fgmTotalsByCurrency(lines) {
+            var def = document.getElementById('contractCurrency') ? document.getElementById('contractCurrency').value : 'XOF';
+            var by = {};
+            (lines || []).forEach(function(l) {
+                var cur = l.currency || def;
+                by[cur] = (by[cur] || 0) + fgmLineTotal(l);
+            });
+            return by;
+        }
+        function baremeFgmRoleDatalistHtml() {
+            return FGM_ROLE_SUGGESTIONS.map(function(r) { return '<option value="' + escapeHtmlForAttr(r) + '">'; }).join('');
+        }
+
+        function addFgmLine() {
+            var defCur = document.getElementById('contractCurrency') ? document.getElementById('contractCurrency').value : 'XOF';
+            contractFgm.push({ role: '', periode: 'Mensuel', quantite: 1, prixUnitaire: 0, currency: defCur });
+            renderContractFgm();
+        }
+        function removeFgmLine(index) {
+            contractFgm.splice(index, 1);
+            renderContractFgm();
+        }
+        function updateFgmLine(index, field, value) {
+            if (!contractFgm[index]) return;
+            if (field === 'quantite' || field === 'prixUnitaire') {
+                contractFgm[index][field] = parseFloat(value) || 0;
+            } else {
+                contractFgm[index][field] = value;
+            }
+            renderContractFgm();
+        }
+        function renderContractFgm() {
+            var container = document.getElementById('contractFgmContainer');
+            if (!container) return;
+            var defCur = document.getElementById('contractCurrency') ? document.getElementById('contractCurrency').value : 'XOF';
+            var html = '';
+            contractFgm.forEach(function(l, index) {
+                var cur = l.currency || defCur;
+                html += '<div class="ged-stat-card p-4 rounded-lg" data-fgm-index="' + index + '">' +
+                    '<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">' +
+                    '<div>' +
+                    '<label class="block text-slate-400 mb-1 text-sm">Poste / rôle *</label>' +
+                    '<input type="text" list="fgmRolesList" class="w-full bg-slate-600 border border-slate-500 rounded px-3 py-2 text-white text-sm" value="' + escapeHtmlForAttr(l.role || '') + '" placeholder="ex: Foreur" onchange="updateFgmLine(' + index + ',\'role\',this.value);">' +
+                    '</div>' +
+                    '<div>' +
+                    '<label class="block text-slate-400 mb-1 text-sm">Période</label>' +
+                    '<input type="text" class="w-full bg-slate-600 border border-slate-500 rounded px-3 py-2 text-white text-sm" value="' + escapeHtmlForAttr(l.periode || 'Mensuel') + '" onchange="updateFgmLine(' + index + ',\'periode\',this.value);">' +
+                    '</div>' +
+                    '</div>' +
+                    '<div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">' +
+                    '<div>' +
+                    '<label class="block text-slate-400 mb-1 text-sm">Quantité</label>' +
+                    '<input type="number" min="0" step="1" class="w-full bg-slate-600 border border-slate-500 rounded px-3 py-2 text-white text-sm" value="' + (l.quantite != null ? l.quantite : 1) + '" onchange="updateFgmLine(' + index + ',\'quantite\',parseFloat(this.value));">' +
+                    '</div>' +
+                    '<div>' +
+                    '<label class="block text-slate-400 mb-1 text-sm">Prix unitaire *</label>' +
+                    '<div class="flex gap-2"><input type="number" min="0" step="0.01" class="w-full bg-slate-600 border border-slate-500 rounded px-3 py-2 text-white text-sm" value="' + (l.prixUnitaire || 0) + '" onchange="updateFgmLine(' + index + ',\'prixUnitaire\',parseFloat(this.value));"><span class="text-slate-400 text-sm py-2">' + cur + '</span></div>' +
+                    '</div>' +
+                    '<div>' +
+                    '<label class="block text-slate-400 mb-1 text-sm">Devise</label>' +
+                    '<select class="w-full bg-slate-600 border border-slate-500 rounded px-3 py-2 text-white text-sm" onchange="updateFgmLine(' + index + ',\'currency\',this.value);">' +
+                    baremeCurrencyOptionsHtml(cur) +
+                    '</select>' +
+                    '</div>' +
+                    '</div>' +
+                    '<div class="mt-3 flex justify-between items-center">' +
+                    '<div class="text-sm"><span class="text-slate-400">Total ligne : </span><span class="font-semibold text-green-400">' + formatCurrency(fgmLineTotal(l), cur) + '</span></div>' +
+                    '<button type="button" onclick="removeFgmLine(' + index + ')" class="bg-red-600 hover:bg-red-700 px-3 py-2 rounded text-sm">Supprimer</button>' +
+                    '</div>' +
+                    '</div>';
+            });
+            container.innerHTML = html;
+            var totEl = document.getElementById('contractFgmTotal');
+            if (totEl) {
+                var by = fgmTotalsByCurrency(contractFgm);
+                var parts = Object.keys(by).map(function(cur) { return formatCurrency(by[cur], cur); });
+                totEl.textContent = parts.length ? parts.join('  ·  ') : formatCurrency(0, defCur);
+            }
+        }
         var currentEditingContractId = null;
 
         function populateContractLinkedDrillSelect(selectedDrillId) {
@@ -11657,7 +11811,8 @@
             
             currentEditingContractId = null;
             contractRates = [];
-            
+            contractFgm = [];
+
             // Remplir la liste des clients
             var clientSelect = document.getElementById('contractClient');
             clientSelect.innerHTML = '<option value="">Sélectionner un client</option>';
@@ -11687,8 +11842,9 @@
             document.getElementById('contractFuelPrice').value = '1.20';
             var fpcNew = document.getElementById('contractFuelPriceCurrency');
             if (fpcNew) fpcNew.value = 'USD';
-            
+
             renderContractRates();
+            renderContractFgm();
             calculateContractTotal();
             updateContractSites();
             populateContractLinkedDrillSelect('');
@@ -11730,10 +11886,13 @@
             var fpcEl = document.getElementById('contractFuelPriceCurrency');
             if (fpcEl) fpcEl.value = resolveContractFuelCurrency(contract);
             
-            contractRates = contract.rates && contract.rates.length > 0 ? 
+            contractRates = contract.rates && contract.rates.length > 0 ?
                 JSON.parse(JSON.stringify(contract.rates)) : [];
-            
+            contractFgm = contract.fgm && contract.fgm.length > 0 ?
+                JSON.parse(JSON.stringify(contract.fgm)) : [];
+
             renderContractRates();
+            renderContractFgm();
             calculateContractTotal();
             updateContractCurrency();
             updateContractSites();
@@ -11770,6 +11929,7 @@
 
         function updateContractRates() {
             renderContractRates();
+            renderContractFgm();
             calculateContractTotal();
         }
 
@@ -11965,6 +12125,21 @@
             var fuelPriceCur = document.getElementById('contractFuelPriceCurrency');
             var fuelPriceCurrency = normalizeFuelPriceCurrency(fuelPriceCur ? fuelPriceCur.value : 'USD');
             
+            // FGM valides (poste + prix unitaire)
+            var validFgm = [];
+            (contractFgm || []).forEach(function(l) {
+                if ((l.role || '').trim() && (parseFloat(l.prixUnitaire) || 0) > 0) {
+                    var defCur = document.getElementById('contractCurrency') ? document.getElementById('contractCurrency').value : 'XOF';
+                    validFgm.push({
+                        role: l.role.trim(),
+                        periode: l.periode || 'Mensuel',
+                        quantite: parseFloat(l.quantite) || 0,
+                        prixUnitaire: parseFloat(l.prixUnitaire) || 0,
+                        currency: l.currency || defCur
+                    });
+                }
+            });
+
             var siteIdVal = document.getElementById('contractSite').value;
             var contractData = {
                 id: contractNumber,
@@ -11983,7 +12158,8 @@
                 notes: document.getElementById('contractNotes').value.trim(),
                 fuelPrice: fuelPrice,
                 fuelPriceCurrency: fuelPriceCurrency,
-                rates: validRates
+                rates: validRates,
+                fgm: validFgm
             };
             
             var linkedDrillEl = document.getElementById('contractLinkedDrill');

@@ -199,6 +199,7 @@ db.serialize(() => {
             fuelPrice REAL DEFAULT 1.20,
             fuelPriceCurrency TEXT DEFAULT NULL,
             rates TEXT DEFAULT '[]',
+            fgm TEXT DEFAULT '[]',
             createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (enterpriseId) REFERENCES enterprises(id),
             FOREIGN KEY (clientId) REFERENCES clients(id),
@@ -687,6 +688,7 @@ db.serialize(() => {
     migrateIgnoreDup("ALTER TABLE invoices ADD COLUMN contractId TEXT DEFAULT NULL", 'invoices.contractId');
     migrateIgnoreDup("ALTER TABLE invoices ADD COLUMN site TEXT DEFAULT ''", 'invoices.site');
     migrateIgnoreDup("ALTER TABLE contracts ADD COLUMN billingMonthDefinition TEXT DEFAULT ''", 'contracts.billingMonthDefinition');
+    migrateIgnoreDup("ALTER TABLE contracts ADD COLUMN fgm TEXT DEFAULT '[]'", 'contracts.fgm');
     migrateIgnoreDup("ALTER TABLE maintenanceSchedules ADD COLUMN enterpriseId INTEGER NOT NULL DEFAULT 1", 'maintenanceSchedules.enterpriseId');
     migrateIgnoreDup("ALTER TABLE maintenanceHistory ADD COLUMN enterpriseId INTEGER NOT NULL DEFAULT 1", 'maintenanceHistory.enterpriseId');
     // stockMovements.enterpriseId — backfill via inventory JOIN after column creation

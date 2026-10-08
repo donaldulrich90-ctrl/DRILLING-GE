@@ -1531,6 +1531,7 @@ app.get('/api/contracts', (req, res) => {
         res.json(rows.map(row => ({
             ...row,
             rates: JSON.parse(row.rates || '[]'),
+            fgm: JSON.parse(row.fgm || '[]'),
             fuelPrice: row.fuelPrice || 1.20,
             fuelPriceCurrency: normalizeContractFuelPriceCurrency(row.fuelPriceCurrency, row.currency)
         })));
@@ -1542,14 +1543,15 @@ app.post('/api/contracts', (req, res) => {
     const entId = resolveCreateEnterpriseId(req, contract);
     db.run(
         `INSERT INTO contracts (id, enterpriseId, clientId, siteId, startDate, endDate, value, currency, status, description,
-         paymentTerms, billingMonthDefinition, notes, fuelPrice, fuelPriceCurrency, rates)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         paymentTerms, billingMonthDefinition, notes, fuelPrice, fuelPriceCurrency, rates, fgm)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
             contract.id, entId, contract.clientId, contract.siteId || null, contract.startDate, contract.endDate,
             contract.value, contract.currency, contract.status, contract.description,
             contract.paymentTerms, contract.billingMonthDefinition || '', contract.notes || '', contract.fuelPrice || 1.20,
             normalizeContractFuelPriceCurrency(contract.fuelPriceCurrency, contract.currency),
-            JSON.stringify(contract.rates || [])
+            JSON.stringify(contract.rates || []),
+            JSON.stringify(contract.fgm || [])
         ],
         function(err) {
             if (err) {
@@ -1566,7 +1568,7 @@ app.put('/api/contracts/:id', (req, res) => {
     const entId = getEnterpriseId(req);
     const contract = req.body;
     let sql = `UPDATE contracts SET clientId = ?, siteId = ?, startDate = ?, endDate = ?, value = ?, currency = ?,
-         status = ?, description = ?, paymentTerms = ?, billingMonthDefinition = ?, notes = ?, fuelPrice = ?, fuelPriceCurrency = ?, rates = ?
+         status = ?, description = ?, paymentTerms = ?, billingMonthDefinition = ?, notes = ?, fuelPrice = ?, fuelPriceCurrency = ?, rates = ?, fgm = ?
          WHERE id = ?`;
     const vals = [
         contract.clientId, contract.siteId || null, contract.startDate, contract.endDate, contract.value, contract.currency,
@@ -1574,7 +1576,8 @@ app.put('/api/contracts/:id', (req, res) => {
         contract.notes || '',
         contract.fuelPrice || 1.20,
         normalizeContractFuelPriceCurrency(contract.fuelPriceCurrency, contract.currency),
-        JSON.stringify(contract.rates || []), id
+        JSON.stringify(contract.rates || []),
+        JSON.stringify(contract.fgm || []), id
     ];
     if (entId !== null) {
         sql += ' AND enterpriseId = ?';
