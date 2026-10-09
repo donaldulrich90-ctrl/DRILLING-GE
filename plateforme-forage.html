@@ -1065,6 +1065,32 @@
         .ged-stat-card, .ged-kpi-card { border-left: 4px solid var(--ged-accent) !important; }
         /* En-têtes de tableaux : majuscules espacées (comme Mine) */
         #ged-workspace table thead th { text-transform: uppercase; letter-spacing: .045em; font-weight: 700; }
+
+        /* ══════════════════════════════════════════════════════════════
+           PRÉSENTATION DE MARQUE GOOD ENGINEERS — masthead + logo + bandeau
+           (porté depuis GOOD ENGINEERS OS / Mine)
+           ══════════════════════════════════════════════════════════════ */
+        .gedm-masthead {
+            background: linear-gradient(180deg, #063D2B 0%, #0a2419 100%);
+            border-bottom: 2px solid rgba(245, 184, 0, 0.4);
+            padding: 16px 20px 14px; text-align: center; position: relative;
+            box-shadow: 0 6px 22px rgba(0, 0, 0, 0.3);
+        }
+        .gedm-logo { max-height: 96px; max-width: min(440px, 82%); height: auto; }
+        .gedm-strap { margin-top: 8px; color: var(--ged-yellow); font-family: 'Oswald', 'Barlow Semi Condensed', sans-serif;
+            font-weight: 800; letter-spacing: 0.18em; font-size: clamp(14px, 1.6vw, 20px); }
+        .gedm-strap span { color: #ffce61; }
+        .gedm-sub { color: #cfe0d6; font-size: clamp(13px, 1.2vw, 16px); margin-top: 4px; font-weight: 600; }
+        .gedm-marquee { background: linear-gradient(90deg, rgba(245,184,0,.15), rgba(245,184,0,.05));
+            border-bottom: 1px solid rgba(245,184,0,.3); overflow: hidden; white-space: nowrap; }
+        .gedm-marquee-track { display: inline-block; padding: 8px 0; animation: gedmMarquee 30s linear infinite; }
+        .gedm-marquee-track span { color: var(--ged-yellow); font-weight: 800; font-size: 14px; letter-spacing: 0.05em; margin: 0 34px; text-transform: uppercase; }
+        @keyframes gedmMarquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+        @media (prefers-reduced-motion: reduce) { .gedm-marquee-track { animation: none; } }
+        .gedm-sb-logo { background: rgba(255,255,255,.04); border: 1px solid rgba(245,184,0,.28);
+            border-radius: 12px; padding: 8px 10px; text-align: center; box-shadow: 0 6px 18px rgba(0,0,0,.25); }
+        .gedm-sb-logo img { width: 100%; max-width: 200px; height: auto; display: inline-block; }
+        @media print { .gedm-masthead, .gedm-marquee { display: none !important; } }
  </style>
     <link rel="stylesheet" href="/gedrilling-login.css">
     <link rel="stylesheet" href="/gedrilling-platform-theme.css">
@@ -1150,8 +1176,8 @@
         <div class="flex min-h-screen w-full">
             <aside id="gedSidebar" class="ged-sidebar w-64 lg:w-72 flex-shrink-0 flex flex-col overflow-y-auto">
                 <div class="ged-sidebar-brand p-4">
-                    <div class="flex items-center gap-3">
-                        <span class="ged-brand-mark">GE</span>
+                    <div class="gedm-sb-logo"><img src="/ge-logo.png" alt="GOOD ENGINEERS"></div>
+                    <div class="flex items-center gap-3 mt-3">
                         <div>
                             <p class="text-white font-extrabold text-xl tracking-tight leading-none">GEDRILLING</p>
                             <p class="text-[9px] text-ged-yellow uppercase tracking-[0.22em] mt-1.5 font-bold">Operations control</p>
@@ -1201,6 +1227,17 @@
             </aside>
             <button type="button" id="gedSidebarBackdrop" class="ged-sidebar-backdrop" onclick="toggleGedSidebar(false)" aria-label="Fermer la navigation"></button>
             <div class="flex-1 flex flex-col min-w-0 min-h-screen">
+                <header class="gedm-masthead">
+                    <img class="gedm-logo" src="/ge-logo.png" alt="GOOD ENGINEERS — Services miniers &amp; ingénierie">
+                    <div class="gedm-strap"><span>DISCIPLINE</span> • <span>RIGUEUR</span> • <span>PERFORMANCE</span></div>
+                    <div class="gedm-sub">Système de Gestion de Forage &amp; Sondage Minier</div>
+                </header>
+                <div class="gedm-marquee"><div class="gedm-marquee-track">
+                    <span>📢 CONTRÔLE GOOD ENGINEERS — PRODUCTION · SÉCURITÉ · PERFORMANCE</span>
+                    <span>📢 GEDRILLING — PILOTAGE DU FORAGE ET DE LA PERFORMANCE TERRAIN</span>
+                    <span>📢 CONTRÔLE GOOD ENGINEERS — PRODUCTION · SÉCURITÉ · PERFORMANCE</span>
+                    <span>📢 GEDRILLING — PILOTAGE DU FORAGE ET DE LA PERFORMANCE TERRAIN</span>
+                </div></div>
                 <header class="ged-top-header px-4 md:px-6 py-3 flex flex-wrap items-center justify-between gap-3">
                     <div class="flex items-center gap-3 min-w-0">
                         <button type="button" class="ged-mobile-menu-btn" onclick="toggleGedSidebar()" aria-label="Ouvrir la navigation" aria-controls="gedSidebar">☰</button>
