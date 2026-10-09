@@ -430,6 +430,33 @@ db.serialize(() => {
     db.run('CREATE INDEX IF NOT EXISTS idx_drilling_blocks_enterprise ON drilling_blocks(enterpriseId)');
     db.run('CREATE INDEX IF NOT EXISTS idx_drilling_holes_enterprise_block ON drilling_holes(enterpriseId, blockId)');
 
+
+    // Table des expressions de besoin (demandes partagées + workflow)
+    db.run(`
+        CREATE TABLE IF NOT EXISTS besoins (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            enterpriseId INTEGER NOT NULL,
+            numero TEXT DEFAULT '',
+            createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+            createdBy TEXT DEFAULT '',
+            site TEXT DEFAULT '',
+            type TEXT DEFAULT 'Matériel',
+            designation TEXT DEFAULT '',
+            quantite REAL DEFAULT 0,
+            unite TEXT DEFAULT '',
+            priorite TEXT DEFAULT 'normal',
+            justification TEXT DEFAULT '',
+            statut TEXT NOT NULL DEFAULT 'nouveau',
+            assignee TEXT DEFAULT '',
+            verificateur TEXT DEFAULT '',
+            validateur TEXT DEFAULT '',
+            attachments TEXT DEFAULT '[]',
+            history TEXT DEFAULT '[]',
+            updatedAt TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    `);
+    db.run('CREATE INDEX IF NOT EXISTS idx_besoins_enterprise ON besoins(enterpriseId)');
+
     // Table de planification & suivi (plan court/long terme par entreprise)
     db.run(`
         CREATE TABLE IF NOT EXISTS planification (
