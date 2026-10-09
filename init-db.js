@@ -442,6 +442,31 @@ db.serialize(() => {
         )
     `);
 
+    // Table des expressions de besoin (demandes de matériel/ressources)
+    db.run(`
+        CREATE TABLE IF NOT EXISTS besoins (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            enterpriseId INTEGER NOT NULL,
+            designation TEXT NOT NULL,
+            quantite REAL DEFAULT 0,
+            unite TEXT DEFAULT '',
+            categorie TEXT DEFAULT '',
+            site TEXT DEFAULT '',
+            urgence TEXT DEFAULT 'Normale',
+            justification TEXT DEFAULT '',
+            demandeurUsername TEXT DEFAULT '',
+            demandeurNom TEXT DEFAULT '',
+            statut TEXT NOT NULL DEFAULT 'En attente',
+            valideParUsername TEXT DEFAULT '',
+            valideParNom TEXT DEFAULT '',
+            valideAt TEXT DEFAULT NULL,
+            commentaire TEXT DEFAULT '',
+            createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+            updatedAt TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    `);
+    db.run('CREATE INDEX IF NOT EXISTS idx_besoins_enterprise ON besoins(enterpriseId)');
+
     // Table des informations de l'entreprise
     db.run(`
         CREATE TABLE IF NOT EXISTS companyInfo (

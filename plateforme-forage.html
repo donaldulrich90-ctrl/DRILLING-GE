@@ -1209,6 +1209,7 @@
                     <button type="button" onclick="showMainView('depenses_pm')" class="ged-nav-item main-nav-btn" id="nav-depenses_pm">◇ &nbsp;Dépenses PM</button>
 
                     <p class="ged-nav-section">Gestion</p>
+                    <button type="button" onclick="showMainView('besoins')" class="ged-nav-item main-nav-btn" id="nav-besoins">🧾 &nbsp;Expressions de besoin <span id="nav-besoins-badge" style="display:none;background:var(--ged-danger);color:#fff;border-radius:999px;font-size:10px;font-weight:800;padding:1px 7px;margin-left:4px"></span></button>
                     <button type="button" onclick="showMainView('contracts')" class="ged-nav-item main-nav-btn" id="nav-contracts">▤ &nbsp;Contrats</button>
                     <button type="button" onclick="showMainView('clients')" class="ged-nav-item main-nav-btn" id="nav-clients">▰ &nbsp;Clients</button>
                     <button type="button" onclick="showMainView('sites')" class="ged-nav-item main-nav-btn" id="nav-sites">⌖ &nbsp;Sites</button>
@@ -1610,6 +1611,15 @@
                 <p class="text-slate-400 text-sm mt-1">Objectifs court &amp; long terme (plan de la mine) et suivi planifié vs réel</p>
             </div>
             <div id="planificationContent"></div>
+        </div>
+
+        <!-- ═══ VUE EXPRESSIONS DE BESOIN ═══════════════════════════════ -->
+        <div id="mainView-besoins" class="main-view hidden">
+            <div class="mb-6 pb-4 border-b border-slate-700">
+                <h2 class="text-2xl font-extrabold tracking-tight" style="color:var(--ged-yellow)">🧾 Expressions de besoin</h2>
+                <p class="text-slate-400 text-sm mt-1">Demandes de matériel &amp; ressources — création, circuit de validation, alertes à toute l'équipe</p>
+            </div>
+            <div id="besoinsContent"></div>
         </div>
 
         <!-- ═══ VUE RENTABILITÉ CONSOMMABLES ════════════════════════════ -->
@@ -5305,6 +5315,7 @@
 
         function handleLogout() {
             stopMaintenanceNotifyWatcher();
+            besoinsStopWatcher();
             if ('speechSynthesis' in window) window.speechSynthesis.cancel();
             currentUser = null;
             loadGedExperiencePreferences();
@@ -5626,7 +5637,7 @@
                 view !== 'enterprises' && subNav.indexOf(view) < 0) {
                 view = 'dashboard';
             }
-            var views = ['consumables', 'dashboard', 'connections', 'assignments', 'maintenance', 'bit_sharpening', 'invoices', 'contracts', 'sites', 'enterprises', 'revenue', 'site_meals', 'reports', 'project_overview', 'planification', 'rh', 'inventory', 'accounts', 'clients', 'translator', 'team_chat', 'company_info', 'forage_plan', 'rentabilite', 'depenses_pm', 'analytics', 'hse'];
+            var views = ['consumables', 'dashboard', 'connections', 'assignments', 'maintenance', 'bit_sharpening', 'invoices', 'contracts', 'sites', 'enterprises', 'revenue', 'site_meals', 'reports', 'project_overview', 'planification', 'besoins', 'rh', 'inventory', 'accounts', 'clients', 'translator', 'team_chat', 'company_info', 'forage_plan', 'rentabilite', 'depenses_pm', 'analytics', 'hse'];
             views.forEach(function(v) {
                 var el = document.getElementById('mainView-' + v);
                 if (el) el.classList.add('hidden');
@@ -8228,6 +8239,8 @@
                 renderForagePlan();
             } else if (view === 'planification') {
                 renderPlanification();
+            } else if (view === 'besoins') {
+                renderBesoins();
             } else if (view === 'rentabilite') {
                 renderRentabilite();
             } else if (view === 'depenses_pm') {
@@ -8792,6 +8805,142 @@
             var s = plan2ParseD(start), e = plan2ParseD(end); if (!s || !e) return 0;
             var sum = 0; for (var k in map) { var d = plan2ParseD(k); if (d && d >= s && d <= e) sum += map[k]; } return sum;
         }
+
+        // ═══════════════════════════════════════════════════════════════
+        // EXPRESSIONS DE BESOIN — demandes + circuit de validation + alertes
+        // ═══════════════════════════════════════════════════════════════
+        var besoinsState = { list: [], loaded: false, lastSeen: 0, timer: null };
+        try { besoinsState.lastSeen = Number(localStorage.getItem('forage_besoins_lastseen')) || 0; } catch (e) {}
+
+        function besoinsEsc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+        function besoinsCanValidate() { var r = currentUser && currentUser.role; return !!(currentUser && (currentUser.isSuperAdmin || currentUser.isPlatformOwner || ['admin', 'gestionnaire', 'gestionnaire_site', 'superviseur', 'ingenieur', 'platform_owner'].indexOf(r) >= 0)); }
+        function besoinsMe() { return (currentUser && (currentUser.username || currentUser.user)) || ''; }
+        function besoinsTime(iso) { if (!iso) return 0; var t = Date.parse(String(iso).replace(' ', 'T')); return isFinite(t) ? t : 0; }
+        function besoinsMaxSeen(list) { var m = 0; (list || []).forEach(function (b) { m = Math.max(m, besoinsTime(b.updatedAt), besoinsTime(b.createdAt)); }); return m; }
+        function besoinsPersistSeen(v) { besoinsState.lastSeen = v; try { localStorage.setItem('forage_besoins_lastseen', String(v)); } catch (e) {} }
+
+        function besoinsUpdateBadge() {
+            var badge = document.getElementById('nav-besoins-badge'); if (!badge) return;
+            var pend = (besoinsState.list || []).filter(function (b) { return b.statut === 'En attente'; }).length;
+            if (pend > 0) { badge.textContent = pend; badge.style.display = 'inline-block'; } else { badge.style.display = 'none'; }
+        }
+
+        function besoinsStatutBadge(s) {
+            var map = { 'En attente': 'background:rgba(245,184,0,.18);color:#B45309', 'Approuvée': 'background:rgba(40,167,69,.15);color:#15803D', 'Refusée': 'background:rgba(220,53,69,.15);color:#B91C1C', 'Traitée': 'background:rgba(148,163,184,.18);color:#475569' };
+            return '<span style="' + (map[s] || map['Traitée']) + ';padding:2px 9px;border-radius:999px;font-size:11px;font-weight:800">' + besoinsEsc(s) + '</span>';
+        }
+        function besoinsUrgenceBadge(u) {
+            var map = { 'Normale': 'color:#475569', 'Urgente': 'color:#FF6B00;font-weight:800', 'Critique': 'color:#DC3545;font-weight:900' };
+            return '<span style="' + (map[u] || map['Normale']) + '">' + besoinsEsc(u || 'Normale') + '</span>';
+        }
+
+        function renderBesoins() {
+            var host = document.getElementById('besoinsContent'); if (!host) return;
+            host.innerHTML = '<div class="ged-content-panel rounded-xl p-6"><p class="text-slate-400">Chargement des expressions de besoin…</p></div>';
+            apiRequest('/api/besoins', 'GET').then(function (list) {
+                besoinsState.list = list || []; besoinsState.loaded = true;
+                besoinsPersistSeen(besoinsMaxSeen(besoinsState.list)); // ouvrir l'onglet = tout vu
+                besoinsDraw(); besoinsUpdateBadge();
+            }).catch(function (err) { host.innerHTML = '<div class="ged-content-panel rounded-xl p-6"><p class="err">Impossible de charger : ' + besoinsEsc(err && err.message) + '</p></div>'; });
+        }
+
+        function besoinsDraw() {
+            var host = document.getElementById('besoinsContent'); if (!host) return;
+            var canVal = besoinsCanValidate();
+            var html = '';
+            // Formulaire de création
+            html += '<div class="ged-content-panel rounded-xl p-5 mb-5">';
+            html += '<h3 class="font-extrabold text-lg mb-3" style="color:var(--ged-yellow)">Nouvelle expression de besoin</h3>';
+            html += '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">';
+            html += '<div class="lg:col-span-2"><label class="block text-xs font-bold mb-1">Désignation *</label><input id="besoinDesignation" type="text" class="w-full rounded-lg px-3 py-2" placeholder="Ex. Tiges de forage 3,5 m"></div>';
+            html += '<div><label class="block text-xs font-bold mb-1">Quantité</label><input id="besoinQuantite" type="number" min="0" step="any" class="w-full rounded-lg px-3 py-2" placeholder="0"></div>';
+            html += '<div><label class="block text-xs font-bold mb-1">Unité</label><input id="besoinUnite" type="text" class="w-full rounded-lg px-3 py-2" placeholder="pièces, m, L…"></div>';
+            html += '<div><label class="block text-xs font-bold mb-1">Catégorie</label><input id="besoinCategorie" type="text" class="w-full rounded-lg px-3 py-2" placeholder="Consommable, pièce…"></div>';
+            html += '<div><label class="block text-xs font-bold mb-1">Site / service</label><input id="besoinSite" type="text" class="w-full rounded-lg px-3 py-2" placeholder="Site / atelier"></div>';
+            html += '<div><label class="block text-xs font-bold mb-1">Urgence</label><select id="besoinUrgence" class="w-full rounded-lg px-3 py-2"><option>Normale</option><option>Urgente</option><option>Critique</option></select></div>';
+            html += '<div class="lg:col-span-4"><label class="block text-xs font-bold mb-1">Justification</label><textarea id="besoinJustification" class="w-full rounded-lg px-3 py-2" rows="2" placeholder="Pourquoi ce besoin ?"></textarea></div>';
+            html += '</div>';
+            html += '<div class="mt-3"><button type="button" onclick="besoinsCreate()" class="ged-btn-primary px-4 py-2 rounded-lg text-sm font-bold">📣 Envoyer la demande (alerte à l\'équipe)</button><span id="besoinsCreateStatus" class="text-sm ml-3 self-center"></span></div>';
+            html += '</div>';
+
+            // Liste
+            var list = besoinsState.list || [];
+            var pend = list.filter(function (b) { return b.statut === 'En attente'; }).length;
+            html += '<div class="ged-content-panel rounded-xl p-5">';
+            html += '<div class="flex items-center justify-between mb-3 flex-wrap gap-2"><h3 class="font-extrabold text-lg" style="color:var(--ged-yellow)">Demandes (' + list.length + ')</h3><span class="text-slate-400 text-sm">' + pend + ' en attente' + (canVal ? '' : ' · validation réservée aux responsables') + '</span></div>';
+            if (!list.length) { html += '<p class="text-slate-400">Aucune expression de besoin pour l\'instant.</p>'; }
+            else {
+                html += '<div class="ged-table-wrap" style="overflow-x:auto"><table class="w-full" style="font-size:13px"><thead><tr>';
+                ['Date', 'Désignation', 'Qté', 'Urgence', 'Demandeur', 'Statut', 'Action'].forEach(function (h) { html += '<th style="text-align:left;padding:8px 10px;text-transform:uppercase;letter-spacing:.04em;font-size:11px;color:var(--ged-charcoal);border-bottom:2px solid var(--ged-border)">' + h + '</th>'; });
+                html += '</tr></thead><tbody>';
+                list.forEach(function (b) {
+                    var d = (b.createdAt || '').replace('T', ' ').slice(0, 16);
+                    html += '<tr>';
+                    html += '<td style="padding:7px 10px;white-space:nowrap">' + besoinsEsc(d) + '</td>';
+                    html += '<td style="padding:7px 10px"><div style="font-weight:700">' + besoinsEsc(b.designation) + '</div>' + (b.justification ? '<div class="ged-muted" style="font-size:11px">' + besoinsEsc(b.justification) + '</div>' : '') + (b.commentaire ? '<div style="font-size:11px;color:#B45309">Note : ' + besoinsEsc(b.commentaire) + '</div>' : '') + '</td>';
+                    html += '<td style="padding:7px 10px;white-space:nowrap">' + besoinsEsc((Number(b.quantite) || 0)) + ' ' + besoinsEsc(b.unite || '') + '</td>';
+                    html += '<td style="padding:7px 10px">' + besoinsUrgenceBadge(b.urgence) + '</td>';
+                    html += '<td style="padding:7px 10px">' + besoinsEsc(b.demandeurNom || b.demandeurUsername || '—') + '</td>';
+                    html += '<td style="padding:7px 10px">' + besoinsStatutBadge(b.statut) + (b.valideParNom ? '<div class="ged-muted" style="font-size:10px">par ' + besoinsEsc(b.valideParNom) + '</div>' : '') + '</td>';
+                    html += '<td style="padding:7px 10px;white-space:nowrap">';
+                    if (canVal) {
+                        html += '<input id="besoinCmt-' + b.id + '" type="text" placeholder="note…" style="width:90px;padding:4px 6px;border-radius:7px;font-size:11px;margin-right:4px">';
+                        if (b.statut === 'En attente') {
+                            html += '<button type="button" onclick="besoinsSetStatus(' + b.id + ',\'Approuvée\')" class="ged-badge-success" style="border:0;border-radius:7px;padding:4px 9px;font-size:11px;cursor:pointer">✓ Approuver</button> ';
+                            html += '<button type="button" onclick="besoinsSetStatus(' + b.id + ',\'Refusée\')" class="ged-badge-danger" style="border:0;border-radius:7px;padding:4px 9px;font-size:11px;cursor:pointer">✕ Refuser</button>';
+                        } else if (b.statut === 'Approuvée') {
+                            html += '<button type="button" onclick="besoinsSetStatus(' + b.id + ',\'Traitée\')" class="ged-btn-secondary" style="border-radius:7px;padding:4px 9px;font-size:11px;cursor:pointer">📦 Marquer traitée</button>';
+                        } else { html += '<span class="ged-muted" style="font-size:11px">—</span>'; }
+                    } else { html += '<span class="ged-muted" style="font-size:11px">—</span>'; }
+                    html += '</td></tr>';
+                });
+                html += '</tbody></table></div>';
+            }
+            html += '</div>';
+            host.innerHTML = html;
+        }
+
+        function besoinsCreate() {
+            var g = function (id) { var el = document.getElementById(id); return el ? el.value : ''; };
+            var desig = (g('besoinDesignation') || '').trim();
+            var st = document.getElementById('besoinsCreateStatus');
+            if (!desig) { if (st) { st.textContent = 'La désignation est obligatoire.'; st.style.color = 'var(--ged-danger)'; } return; }
+            var body = { designation: desig, quantite: Number(g('besoinQuantite')) || 0, unite: g('besoinUnite'), categorie: g('besoinCategorie'), site: g('besoinSite'), urgence: g('besoinUrgence') || 'Normale', justification: g('besoinJustification') };
+            apiRequest('/api/besoins', 'POST', body).then(function () {
+                if (typeof showGedToast === 'function') showGedToast('Expression de besoin envoyée à l\'équipe', 'success');
+                renderBesoins();
+            }).catch(function (err) { if (st) { st.textContent = 'Échec : ' + (err && err.message); st.style.color = 'var(--ged-danger)'; } });
+        }
+
+        function besoinsSetStatus(id, statut) {
+            var cmtEl = document.getElementById('besoinCmt-' + id);
+            var body = { statut: statut, commentaire: cmtEl ? cmtEl.value : '' };
+            apiRequest('/api/besoins/' + id, 'PUT', body).then(function () {
+                if (typeof showGedToast === 'function') showGedToast('Demande ' + statut.toLowerCase(), statut === 'Refusée' ? 'warning' : 'success');
+                renderBesoins();
+            }).catch(function (err) { if (typeof showGedToast === 'function') showGedToast('Échec : ' + (err && err.message), 'error'); });
+        }
+
+        // Alerte à tous : badge (en attente) + toast sur nouveautés/changements depuis la dernière visite
+        function besoinsPollCheck() {
+            if (!currentUser) return;
+            apiRequest('/api/besoins', 'GET').then(function (list) {
+                besoinsState.list = list || [];
+                var me = besoinsMe();
+                var fresh = besoinsState.list.filter(function (b) { return Math.max(besoinsTime(b.updatedAt), besoinsTime(b.createdAt)) > besoinsState.lastSeen && b.demandeurUsername !== me && b.valideParUsername !== me; });
+                if (fresh.length && typeof showGedToast === 'function') {
+                    var top = fresh[0];
+                    var msg = fresh.length === 1
+                        ? ('Expression de besoin' + (top.statut === 'En attente' ? ' : ' : ' (' + top.statut.toLowerCase() + ') : ') + (top.designation || ''))
+                        : (fresh.length + ' expressions de besoin nouvelles / mises à jour');
+                    showGedToast('🧾 ' + msg, 'info');
+                }
+                besoinsPersistSeen(besoinsMaxSeen(besoinsState.list));
+                besoinsUpdateBadge();
+            }).catch(function () {});
+        }
+        function besoinsStartWatcher() { besoinsStopWatcher(); besoinsPollCheck(); besoinsState.timer = setInterval(besoinsPollCheck, 60000); }
+        function besoinsStopWatcher() { if (besoinsState.timer) { clearInterval(besoinsState.timer); besoinsState.timer = null; } }
 
         function renderPlanification() {
             var host = document.getElementById('planificationContent'); if (!host) return;
@@ -22127,6 +22276,7 @@
             if (typeof refreshForageUiI18n === 'function') refreshForageUiI18n();
             if (currentUser && !isPlatformBillingOnlyUser(currentUser)) {
                 startMaintenanceNotifyWatcher();
+                besoinsStartWatcher();
             }
             setInterval(function() {
                 if (document.getElementById('mainView-dashboard') && !document.getElementById('mainView-dashboard').classList.contains('hidden')) {
