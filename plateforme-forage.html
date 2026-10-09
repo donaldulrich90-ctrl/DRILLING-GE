@@ -8818,6 +8818,19 @@
             var unit = metric === 'trous' ? 'trous' : 'm';
             var html = '';
 
+            // ── Carte d'import (Excel / CSV / PDF) ──
+            html += '<div class="ged-content-panel rounded-xl p-5 mb-5">';
+            html += '<h3 class="font-extrabold text-lg mb-3" style="color:var(--ged-yellow)">0 · Importer le plan (fichier de la mine)</h3>';
+            html += '<p class="text-slate-400 text-xs mb-3">Importe directement le plan reçu : un tableau avec <b>période / début / fin / objectif</b>, ou simplement <b>dates + objectif total</b>. Le contenu est pré-rempli ci-dessous — tu vérifies puis tu enregistres.</p>';
+            html += '<div class="flex flex-wrap gap-2 items-center">';
+            html += '<input type="file" id="plan2XlsInput" accept=".xlsx,.xls,.csv" style="display:none" onchange="plan2ImportFile(this,\'excel\')">';
+            html += '<button type="button" onclick="document.getElementById(\'plan2XlsInput\').click()" class="ged-btn-primary px-4 py-2 rounded-lg text-sm font-bold">📊 Importer Excel / CSV</button>';
+            html += '<input type="file" id="plan2PdfInput" accept="application/pdf,.pdf" style="display:none" onchange="plan2ImportFile(this,\'pdf\')">';
+            html += '<button type="button" onclick="document.getElementById(\'plan2PdfInput\').click()" class="ged-btn-secondary px-4 py-2 rounded-lg text-sm font-bold">📄 Importer PDF</button>';
+            html += '<button type="button" onclick="plan2DownloadTemplate()" class="px-3 py-2 rounded-lg text-xs font-semibold" style="border:1px solid var(--ged-border);color:var(--ged-charcoal)">⬇ Gabarit CSV</button>';
+            html += '<span id="plan2ImportStatus" class="text-sm self-center"></span>';
+            html += '</div></div>';
+
             // ── Carte de définition du plan ──
             html += '<div class="ged-content-panel rounded-xl p-5 mb-5">';
             html += '<h3 class="font-extrabold text-lg mb-3" style="color:var(--ged-yellow)">1 · Définir le plan (donné par la mine)</h3>';
@@ -8961,6 +8974,165 @@
                 startDate: g('plan2Start'), endDate: g('plan2End'),
                 totalTarget: Number(g('plan2Total')) || 0
             };
+        }
+
+        // ── Import de plan (Excel/CSV via SheetJS, PDF via PDF.js) ──
+        var plan2Libs = {};
+        function plan2LoadScript(src) {
+            if (plan2Libs[src]) return plan2Libs[src];
+            plan2Libs[src] = new Promise(function (resolve, reject) {
+                var s = document.createElement('script');
+                s.src = src; s.onload = function () { resolve(); }; s.onerror = function () { reject(new Error('Échec de chargement : ' + src)); };
+                document.head.appendChild(s);
+            });
+            return plan2Libs[src];
+        }
+        function plan2ImportStatus(msg, kind) {
+            var el = document.getElementById('plan2ImportStatus'); if (!el) return;
+            el.textContent = msg || '';
+            el.style.color = kind === 'err' ? 'var(--ged-danger)' : (kind === 'ok' ? 'var(--ged-success)' : 'var(--ged-charcoal)');
+        }
+        function plan2NormNum(v) {
+            if (v == null) return null;
+            if (typeof v === 'number') return isFinite(v) ? v : null;
+            var s = String(v).replace(/[\s ]/g, '');
+            if (!s) return null;
+            if (s.indexOf(',') >= 0 && s.indexOf('.') >= 0) { if (s.lastIndexOf(',') > s.lastIndexOf('.')) { s = s.replace(/\./g, '').replace(',', '.'); } else { s = s.replace(/,/g, ''); } }
+            else if (s.indexOf(',') >= 0) { s = s.replace(',', '.'); }
+            s = s.replace(/[^0-9.\-]/g, '');
+            var n = parseFloat(s); return isFinite(n) ? n : null;
+        }
+        function plan2NormDate(v) {
+            if (v == null || v === '') return null;
+            if (v instanceof Date && !isNaN(v.getTime())) return v.toISOString().slice(0, 10);
+            if (typeof v === 'number' && v > 59 && v < 60000) { // série Excel
+                var d = new Date(Date.UTC(1899, 11, 30) + v * 86400000); return isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
+            }
+            var s = String(v).trim();
+            var m = s.match(/\b(\d{4})-(\d{1,2})-(\d{1,2})\b/);
+            if (m) return m[1] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[3]).slice(-2);
+            m = s.match(/\b(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})\b/);
+            if (m) { var yr = m[3].length === 2 ? '20' + m[3] : m[3]; return yr + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[1]).slice(-2); }
+            return null;
+        }
+        function plan2HeaderIdx(headers, keys) {
+            for (var i = 0; i < headers.length; i++) {
+                var h = String(headers[i] || '').toLowerCase();
+                for (var k = 0; k < keys.length; k++) { if (h.indexOf(keys[k]) >= 0) return i; }
+            }
+            return -1;
+        }
+        function plan2BuildFromRows(rows) {
+            // rows: tableau de tableaux. Retourne {periods:[{start,end,target}], startDate, endDate, totalTarget}
+            var periods = [], hdrRow = -1, ci = {};
+            for (var r = 0; r < Math.min(rows.length, 15); r++) {
+                var row = rows[r] || [];
+                var iDeb = plan2HeaderIdx(row, ['début', 'debut', 'start', 'du ', 'date d']);
+                var iFin = plan2HeaderIdx(row, ['fin', 'end', 'au ', 'date f']);
+                var iObj = plan2HeaderIdx(row, ['objectif', 'target', 'tonnes', 'tonnage', 'mètres', 'metres', 'quantit', 'volume', 'prévu', 'prevu']);
+                if (iObj >= 0 && (iDeb >= 0 || iFin >= 0)) { hdrRow = r; ci = { deb: iDeb, fin: iFin, obj: iObj, lab: plan2HeaderIdx(row, ['période', 'periode', 'mois', 'semaine', 'libellé', 'libelle', 'label', 'phase']) }; break; }
+            }
+            if (hdrRow >= 0) {
+                for (var rr = hdrRow + 1; rr < rows.length; rr++) {
+                    var rw = rows[rr] || [];
+                    var st = plan2NormDate(rw[ci.deb]), en = plan2NormDate(rw[ci.fin]) || st, tg = plan2NormNum(rw[ci.obj]);
+                    if (st && tg != null) periods.push({ start: st, end: en || st, label: ci.lab >= 0 ? String(rw[ci.lab] || '') : '', target: tg });
+                }
+            }
+            // repli : chercher dates + total n'importe où
+            if (!periods.length) {
+                var dates = [], total = null;
+                rows.forEach(function (rw2) { (rw2 || []).forEach(function (c) { var d = plan2NormDate(c); if (d) dates.push(d); }); });
+                for (var a = 0; a < rows.length; a++) { var row2 = rows[a] || []; for (var b = 0; b < row2.length; b++) { if (/total|objectif/i.test(String(row2[b] || ''))) { for (var c2 = b; c2 < row2.length; c2++) { var nn = plan2NormNum(row2[c2]); if (nn != null && nn > 0) { total = nn; break; } } } } }
+                if (dates.length >= 2) { dates.sort(); return { periods: [], startDate: dates[0], endDate: dates[dates.length - 1], totalTarget: total || 0 }; }
+                return null;
+            }
+            periods.sort(function (x, y) { return x.start < y.start ? -1 : 1; });
+            var tot = periods.reduce(function (s, p) { return s + (Number(p.target) || 0); }, 0);
+            return { periods: periods, startDate: periods[0].start, endDate: periods[periods.length - 1].end, totalTarget: tot };
+        }
+        function plan2ApplyImport(res, metric) {
+            if (!res || (!res.periods.length && !(res.startDate && res.endDate))) { plan2ImportStatus('Aucune donnée de plan reconnue dans le fichier. Utilise le gabarit CSV ou la saisie manuelle.', 'err'); return; }
+            var total = res.totalTarget || (res.periods || []).reduce(function (s, p) { return s + (Number(p.target) || 0); }, 0);
+            var gen = plan2GenPeriods(res.startDate, res.endDate, total || 0);
+            var months = gen.months, weeks = gen.weeks, imported = res.periods || [];
+            if (imported.length) {
+                // granularité : durée médiane
+                var durs = imported.map(function (p) { var a = plan2ParseD(p.start), b = plan2ParseD(p.end); return (a && b) ? ((b - a) / 86400000 + 1) : 30; }).sort(function (x, y) { return x - y; });
+                var med = durs[Math.floor(durs.length / 2)] || 30;
+                if (med <= 10) { weeks = imported; } else { months = imported; }
+            }
+            plan2.plan = { label: (plan2.plan && plan2.plan.label) || 'Plan importé', metric: metric === 'trous' ? 'trous' : 'metres', unit: metric === 'trous' ? 'trous' : 'm', site: '', startDate: res.startDate, endDate: res.endDate, totalTarget: total || 0, months: months, weeks: weeks };
+            plan2ImportStatus((imported.length ? imported.length + ' période(s) importée(s)' : 'Dates et objectif importés') + ' — vérifie puis Enregistre.', 'ok');
+            plan2Draw();
+        }
+        function plan2ImportFile(input, kind) {
+            var file = input && input.files && input.files[0]; if (!file) return;
+            input.value = '';
+            var metric = (document.getElementById('plan2Metric') || {}).value || 'metres';
+            plan2ImportStatus('Lecture du fichier…', '');
+            if (kind === 'excel') {
+                plan2LoadScript('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js').then(function () {
+                    var fr = new FileReader();
+                    fr.onload = function (e) {
+                        try {
+                            var wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array', cellDates: true });
+                            var ws = wb.Sheets[wb.SheetNames[0]];
+                            var rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, dateNF: 'yyyy-mm-dd' });
+                            plan2ApplyImport(plan2BuildFromRows(rows), metric);
+                        } catch (err) { plan2ImportStatus('Fichier illisible : ' + (err && err.message), 'err'); }
+                    };
+                    fr.onerror = function () { plan2ImportStatus('Échec de lecture du fichier.', 'err'); };
+                    fr.readAsArrayBuffer(file);
+                }).catch(function (err) { plan2ImportStatus(err.message, 'err'); });
+            } else {
+                plan2LoadScript('https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js').then(function () {
+                    try { pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js'; } catch (e) {}
+                    var fr = new FileReader();
+                    fr.onload = function (e) {
+                        pdfjsLib.getDocument({ data: new Uint8Array(e.target.result) }).promise.then(function (pdf) {
+                            var lines = [], pages = [];
+                            for (var i = 1; i <= pdf.numPages; i++) pages.push(pdf.getPage(i).then(function (pg) { return pg.getTextContent(); }));
+                            Promise.all(pages).then(function (contents) {
+                                contents.forEach(function (tc) {
+                                    var byY = {};
+                                    tc.items.forEach(function (it) { var y = Math.round(it.transform[5]); (byY[y] = byY[y] || []).push(it.str); });
+                                    Object.keys(byY).sort(function (a, b) { return b - a; }).forEach(function (y) { lines.push(byY[y].join(' ')); });
+                                });
+                                plan2ApplyImport(plan2ParsePdfLines(lines), metric);
+                            });
+                        }).catch(function (err) { plan2ImportStatus('PDF illisible : ' + (err && err.message), 'err'); });
+                    };
+                    fr.readAsArrayBuffer(file);
+                }).catch(function (err) { plan2ImportStatus(err.message, 'err'); });
+            }
+        }
+        function plan2ParsePdfLines(lines) {
+            var periods = [], allDates = [], total = null;
+            var dateRe = /(\d{4}-\d{1,2}-\d{1,2}|\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4})/g;
+            lines.forEach(function (ln) {
+                var ds = ln.match(dateRe) || [];
+                ds.forEach(function (d) { var nd = plan2NormDate(d); if (nd) allDates.push(nd); });
+                if (ds.length >= 2) {
+                    var rest = ln.replace(dateRe, ' ');
+                    var nums = rest.match(/\d{1,3}(?:[ \u00A0]\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d+)?/g) || [];
+                    var tg = null; for (var i = nums.length - 1; i >= 0; i--) { var n = plan2NormNum(nums[i]); if (n != null && n > 0) { tg = n; break; } }
+                    var st = plan2NormDate(ds[0]), en = plan2NormDate(ds[1]);
+                    if (st && en && tg != null) periods.push({ start: st, end: en, label: '', target: tg });
+                }
+                if (/total|objectif/i.test(ln)) { var nn = (ln.replace(dateRe, ' ').match(/\d{1,3}(?:[ \u00A0]\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d+)?/g) || []); for (var k = nn.length - 1; k >= 0; k--) { var v = plan2NormNum(nn[k]); if (v != null && v > 0) { total = v; break; } } }
+            });
+            if (periods.length) { periods.sort(function (x, y) { return x.start < y.start ? -1 : 1; }); return { periods: periods, startDate: periods[0].start, endDate: periods[periods.length - 1].end, totalTarget: periods.reduce(function (s, p) { return s + p.target; }, 0) }; }
+            if (allDates.length >= 2) { allDates.sort(); return { periods: [], startDate: allDates[0], endDate: allDates[allDates.length - 1], totalTarget: total || 0 }; }
+            return null;
+        }
+        function plan2DownloadTemplate() {
+            var csv = 'Periode;Debut;Fin;Objectif\r\nMois 1;2026-10-01;2026-10-31;3000\r\nMois 2;2026-11-01;2026-11-30;3200\r\nMois 3;2026-12-01;2026-12-31;3100\r\n';
+            try {
+                var blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+                var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'gabarit-plan.csv';
+                document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            } catch (e) { plan2ImportStatus('Téléchargement impossible sur ce navigateur.', 'err'); }
         }
 
         function plan2Generate() {
