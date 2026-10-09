@@ -68,6 +68,23 @@ function registerMetrics(app) {
         });
     });
 
+    // ---- Expressions de besoin (pour le portail consolidé) --------------
+    app.get('/api/service/besoins', requireServiceKey, (req, res) => {
+        const enterpriseId = parseInt(req.query.enterpriseId, 10);
+        if (!enterpriseId) return res.status(400).json({ error: 'enterpriseId requis' });
+        const db = getDb();
+        db.all('SELECT * FROM besoins WHERE enterpriseId = ? ORDER BY id DESC', [enterpriseId], (err, rows) => {
+            if (err) return res.status(500).json({ error: err.message });
+            const out = (rows || []).map((r) => {
+                let att = [], hist = [];
+                try { att = JSON.parse(r.attachments || '[]'); } catch (e) {}
+                try { hist = JSON.parse(r.history || '[]'); } catch (e) {}
+                return Object.assign({}, r, { attachments: att, history: hist });
+            });
+            return res.json({ module: 'forage', besoins: out });
+        });
+    });
+
     // ---- Métriques ------------------------------------------------------
     app.get('/api/service/metrics', requireServiceKey, (req, res) => {
         const enterpriseId = parseInt(req.query.enterpriseId, 10);
