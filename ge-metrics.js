@@ -43,6 +43,31 @@ function requireServiceKey(req, res, next) {
 }
 
 function registerMetrics(app) {
+    // ---- Plan de planification + réel par date (pour le suivi consolidé portail) ----
+    app.get('/api/service/plan', requireServiceKey, (req, res) => {
+        const enterpriseId = parseInt(req.query.enterpriseId, 10);
+        if (!enterpriseId) return res.status(400).json({ error: 'enterpriseId requis' });
+        const db = getDb();
+        db.get('SELECT data FROM planification WHERE enterpriseId = ?', [enterpriseId], (err, row) => {
+            if (err) return res.status(500).json({ error: err.message });
+            let plan = null;
+            if (row) { try { plan = JSON.parse(row.data || '{}'); } catch (e) { plan = null; } }
+            if (!plan) return res.json({ module: 'forage', plan: null, actualsByDate: {} });
+            const sql = `
+                SELECT d.date AS date,
+                       COALESCE(SUM(CAST(json_extract(d.data,'$.metersDrilled') AS REAL)),0) AS m
+                FROM dailyDataRecords d
+                JOIN drills dr ON dr.id = d.machineId
+                WHERE dr.enterpriseId = ?
+                GROUP BY d.date`;
+            db.all(sql, [enterpriseId], (e2, rows) => {
+                const byDate = {};
+                if (!e2) for (const r of rows || []) { const k = String(r.date || '').slice(0, 10); if (k) byDate[k] = round(r.m, 1); }
+                return res.json({ module: 'forage', plan: plan, actualsByDate: byDate });
+            });
+        });
+    });
+
     // ---- Métriques ------------------------------------------------------
     app.get('/api/service/metrics', requireServiceKey, (req, res) => {
         const enterpriseId = parseInt(req.query.enterpriseId, 10);
