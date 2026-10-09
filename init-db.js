@@ -430,6 +430,18 @@ db.serialize(() => {
     db.run('CREATE INDEX IF NOT EXISTS idx_drilling_blocks_enterprise ON drilling_blocks(enterpriseId)');
     db.run('CREATE INDEX IF NOT EXISTS idx_drilling_holes_enterprise_block ON drilling_holes(enterpriseId, blockId)');
 
+    // Table de planification & suivi (plan court/long terme par entreprise)
+    db.run(`
+        CREATE TABLE IF NOT EXISTS planification (
+            enterpriseId INTEGER PRIMARY KEY,
+            data TEXT DEFAULT '{}',
+            version INTEGER NOT NULL DEFAULT 0,
+            updatedByUsername TEXT DEFAULT '',
+            updatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (enterpriseId) REFERENCES enterprises(id) ON DELETE CASCADE
+        )
+    `);
+
     // Table des informations de l'entreprise
     db.run(`
         CREATE TABLE IF NOT EXISTS companyInfo (

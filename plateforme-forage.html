@@ -1203,6 +1203,7 @@
                     <p class="ged-nav-section">Pilotage &amp; analyse</p>
                     <button type="button" onclick="showMainView('analytics')" class="ged-nav-item main-nav-btn" id="nav-analytics">◒ &nbsp;Performance</button>
                     <button type="button" onclick="showMainView('project_overview')" class="ged-nav-item main-nav-btn" id="nav-project_overview" data-i18n="nav.project_overview">◈ &nbsp;Synthèse projet</button>
+                    <button type="button" onclick="showMainView('planification')" class="ged-nav-item main-nav-btn" id="nav-planification">🗓️ &nbsp;Planification &amp; suivi</button>
                     <button type="button" onclick="showMainView('reports')" class="ged-nav-item main-nav-btn" id="nav-reports">≡ &nbsp;Rapports</button>
                     <button type="button" onclick="showMainView('rentabilite')" class="ged-nav-item main-nav-btn" id="nav-rentabilite">↗ &nbsp;Rentabilité consommables</button>
                     <button type="button" onclick="showMainView('depenses_pm')" class="ged-nav-item main-nav-btn" id="nav-depenses_pm">◇ &nbsp;Dépenses PM</button>
@@ -1600,6 +1601,15 @@
                 <p class="text-slate-400 text-sm mt-1">Gestion du patron de trous — suivi avancement, paramètres, exportation</p>
             </div>
             <div id="forage_planContent"></div>
+        </div>
+
+        <!-- ═══ VUE PLANIFICATION & SUIVI ═══════════════════════════════ -->
+        <div id="mainView-planification" class="main-view hidden">
+            <div class="mb-6 pb-4 border-b border-slate-700">
+                <h2 class="text-2xl font-extrabold tracking-tight" style="color:var(--ged-yellow)">🗓️ Planification &amp; Suivi</h2>
+                <p class="text-slate-400 text-sm mt-1">Objectifs court &amp; long terme (plan de la mine) et suivi planifié vs réel</p>
+            </div>
+            <div id="planificationContent"></div>
         </div>
 
         <!-- ═══ VUE RENTABILITÉ CONSOMMABLES ════════════════════════════ -->
@@ -5616,7 +5626,7 @@
                 view !== 'enterprises' && subNav.indexOf(view) < 0) {
                 view = 'dashboard';
             }
-            var views = ['consumables', 'dashboard', 'connections', 'assignments', 'maintenance', 'bit_sharpening', 'invoices', 'contracts', 'sites', 'enterprises', 'revenue', 'site_meals', 'reports', 'project_overview', 'rh', 'inventory', 'accounts', 'clients', 'translator', 'team_chat', 'company_info', 'forage_plan', 'rentabilite', 'depenses_pm', 'analytics', 'hse'];
+            var views = ['consumables', 'dashboard', 'connections', 'assignments', 'maintenance', 'bit_sharpening', 'invoices', 'contracts', 'sites', 'enterprises', 'revenue', 'site_meals', 'reports', 'project_overview', 'planification', 'rh', 'inventory', 'accounts', 'clients', 'translator', 'team_chat', 'company_info', 'forage_plan', 'rentabilite', 'depenses_pm', 'analytics', 'hse'];
             views.forEach(function(v) {
                 var el = document.getElementById('mainView-' + v);
                 if (el) el.classList.add('hidden');
@@ -8216,6 +8226,8 @@
                 renderClients();
             } else if (view === 'forage_plan') {
                 renderForagePlan();
+            } else if (view === 'planification') {
+                renderPlanification();
             } else if (view === 'rentabilite') {
                 renderRentabilite();
             } else if (view === 'depenses_pm') {
@@ -8727,6 +8739,275 @@
             }
             FP_CURRENT_BLOCK_ID = d.blocks[0].id;
             return d.blocks[0];
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // PLANIFICATION & SUIVI — plan court/long terme + suivi planifié vs réel
+        // ═══════════════════════════════════════════════════════════════
+        var plan2 = { plan: null, version: 0, loaded: false, horizon: 'month', chart: null, status: '' };
+
+        function plan2Num(n, d) { n = Number(n) || 0; try { return n.toLocaleString('fr-FR', { minimumFractionDigits: d || 0, maximumFractionDigits: d || 0 }); } catch (e) { return String(Math.round(n)); } }
+        function plan2ParseD(s) { if (!s) return null; var p = String(s).slice(0, 10).split('-'); if (p.length !== 3) return null; var dt = new Date(Date.UTC(+p[0], +p[1] - 1, +p[2])); return isNaN(dt.getTime()) ? null : dt; }
+        function plan2FmtD(dt) { return dt.toISOString().slice(0, 10); }
+        function plan2AddDays(dt, n) { var d = new Date(dt.getTime()); d.setUTCDate(d.getUTCDate() + n); return d; }
+        function plan2DayCount(a, b) { return Math.round((b - a) / 86400000) + 1; }
+        function plan2Today() { var n = new Date(); return new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate())); }
+        function plan2Esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+        function plan2GenPeriods(start, end, total) {
+            var s = plan2ParseD(start), e = plan2ParseD(end);
+            if (!s || !e || e < s) return { months: [], weeks: [] };
+            var totalDays = plan2DayCount(s, e); if (totalDays <= 0) totalDays = 1;
+            var months = [], cur = new Date(Date.UTC(s.getUTCFullYear(), s.getUTCMonth(), 1));
+            while (cur <= e) {
+                var next = new Date(Date.UTC(cur.getUTCFullYear(), cur.getUTCMonth() + 1, 1));
+                var mStart = cur < s ? s : cur, mEnd = plan2AddDays(next, -1); if (mEnd > e) mEnd = e;
+                var days = plan2DayCount(mStart, mEnd);
+                months.push({ start: plan2FmtD(mStart), end: plan2FmtD(mEnd), label: mStart.toLocaleDateString('fr-FR', { month: 'short', year: 'numeric' }), target: total * days / totalDays });
+                cur = next;
+            }
+            var weeks = [], ws = new Date(s.getTime()), i = 1;
+            while (ws <= e) {
+                var we = plan2AddDays(ws, 6); if (we > e) we = e;
+                var wdays = plan2DayCount(ws, we);
+                weeks.push({ start: plan2FmtD(ws), end: plan2FmtD(we), label: 'S' + i + ' · ' + ws.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }), target: total * wdays / totalDays });
+                ws = plan2AddDays(we, 1); i++;
+            }
+            function fix(arr) { var sum = 0; arr.forEach(function (p) { p.target = Math.round(p.target); sum += p.target; }); if (arr.length) { arr[arr.length - 1].target += Math.round(total) - sum; if (arr[arr.length - 1].target < 0) arr[arr.length - 1].target = 0; } }
+            fix(months); fix(weeks);
+            return { months: months, weeks: weeks };
+        }
+
+        function plan2ActualByDate() {
+            var recs = (typeof getDailyDataForSite === 'function') ? getDailyDataForSite() : (typeof dailyDataRecords !== 'undefined' ? dailyDataRecords : []);
+            var map = {};
+            (recs || []).forEach(function (r) {
+                var d = (r && r.date || '').slice(0, 10); if (!d) return;
+                var m = parseFloat((r.data || {}).metersDrilled) || 0;
+                map[d] = (map[d] || 0) + m;
+            });
+            return map;
+        }
+        function plan2SumRange(map, start, end) {
+            var s = plan2ParseD(start), e = plan2ParseD(end); if (!s || !e) return 0;
+            var sum = 0; for (var k in map) { var d = plan2ParseD(k); if (d && d >= s && d <= e) sum += map[k]; } return sum;
+        }
+
+        function renderPlanification() {
+            var host = document.getElementById('planificationContent'); if (!host) return;
+            if (!plan2.loaded) {
+                host.innerHTML = '<div class="ged-content-panel rounded-xl p-6"><p class="text-slate-400">Chargement de la planification…</p></div>';
+                apiRequest('/api/planification', 'GET').then(function (res) {
+                    plan2.plan = res && res.plan ? res.plan : null;
+                    plan2.version = res && res.version ? res.version : 0;
+                    plan2.loaded = true;
+                    plan2Draw();
+                }).catch(function (err) {
+                    plan2.loaded = true; plan2.plan = null;
+                    host.innerHTML = '<div class="ged-content-panel rounded-xl p-6"><p class="err">Impossible de charger la planification : ' + plan2Esc(err && err.message) + '</p></div>';
+                });
+                return;
+            }
+            plan2Draw();
+        }
+
+        function plan2Draw() {
+            var host = document.getElementById('planificationContent'); if (!host) return;
+            var p = plan2.plan;
+            var metric = p && p.metric === 'trous' ? 'trous' : 'metres';
+            var unit = metric === 'trous' ? 'trous' : 'm';
+            var html = '';
+
+            // ── Carte de définition du plan ──
+            html += '<div class="ged-content-panel rounded-xl p-5 mb-5">';
+            html += '<h3 class="font-extrabold text-lg mb-3" style="color:var(--ged-yellow)">1 · Définir le plan (donné par la mine)</h3>';
+            html += '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">';
+            html += '<div><label class="block text-xs font-bold mb-1">Intitulé</label><input id="plan2Label" type="text" class="w-full rounded-lg px-3 py-2" value="' + plan2Esc(p ? p.label : 'Plan WAUD') + '" placeholder="Plan de forage WAUD"></div>';
+            html += '<div><label class="block text-xs font-bold mb-1">Métrique</label><select id="plan2Metric" class="w-full rounded-lg px-3 py-2"><option value="metres"' + (metric === 'metres' ? ' selected' : '') + '>Mètres forés</option><option value="trous"' + (metric === 'trous' ? ' selected' : '') + '>Trous</option></select></div>';
+            html += '<div><label class="block text-xs font-bold mb-1">Début</label><input id="plan2Start" type="date" class="w-full rounded-lg px-3 py-2" value="' + plan2Esc(p ? p.startDate : '') + '"></div>';
+            html += '<div><label class="block text-xs font-bold mb-1">Fin</label><input id="plan2End" type="date" class="w-full rounded-lg px-3 py-2" value="' + plan2Esc(p ? p.endDate : '') + '"></div>';
+            html += '<div><label class="block text-xs font-bold mb-1">Objectif total (' + unit + ')</label><input id="plan2Total" type="number" min="0" step="1" class="w-full rounded-lg px-3 py-2" value="' + (p ? Number(p.totalTarget) || 0 : '') + '" placeholder="ex. 20000"></div>';
+            html += '</div>';
+            html += '<div class="flex flex-wrap gap-2 mt-4">';
+            html += '<button type="button" onclick="plan2Generate()" class="ged-btn-secondary px-4 py-2 rounded-lg text-sm font-bold">↻ Générer les périodes</button>';
+            html += '<button type="button" onclick="plan2Save()" class="ged-btn-primary px-4 py-2 rounded-lg text-sm font-bold">💾 Enregistrer le plan</button>';
+            if (plan2.status) html += '<span class="text-sm self-center" style="color:var(--ged-success);font-weight:700">' + plan2Esc(plan2.status) + '</span>';
+            html += '</div>';
+            html += '<p class="text-slate-400 text-xs mt-2">La génération répartit l\'objectif total au prorata des jours (mensuel = long terme, hebdo = court terme). Tu peux ensuite ajuster chaque objectif à la main avant d\'enregistrer.</p>';
+            html += '</div>';
+
+            if (!p || !((p.months && p.months.length) || (p.weeks && p.weeks.length))) {
+                html += '<div class="ged-content-panel rounded-xl p-6"><p class="text-slate-400">Renseigne les dates et l\'objectif total, puis « Générer les périodes » pour démarrer le suivi.</p></div>';
+                host.innerHTML = html;
+                return;
+            }
+
+            // ── Suivi (plan vs réel) ──
+            var actMap = plan2ActualByDate();
+            var periods = plan2.horizon === 'week' ? (p.weeks || []) : (p.months || []);
+            var today = plan2Today();
+            var totalTarget = Number(p.totalTarget) || periods.reduce(function (s, x) { return s + (Number(x.target) || 0); }, 0);
+            var cumPlan = 0, cumAct = 0, cumPlanToDate = 0, cumActToDate = 0;
+            var rows = periods.map(function (per) {
+                var plan = Number(per.target) || 0;
+                var act = plan2SumRange(actMap, per.start, per.end);
+                cumPlan += plan; cumAct += act;
+                var pEnd = plan2ParseD(per.end), started = plan2ParseD(per.start);
+                var ended = pEnd && pEnd < today;
+                var ongoing = started && started <= today && pEnd && pEnd >= today;
+                if (ended || ongoing) { cumPlanToDate += plan; cumActToDate += act; }
+                return { per: per, plan: plan, act: act, cumPlan: cumPlan, cumAct: cumAct, ended: ended, ongoing: ongoing };
+            });
+
+            var pctDone = totalTarget > 0 ? (cumAct / totalTarget * 100) : 0;
+            var ecart = cumActToDate - cumPlanToDate;
+            var ecartPct = cumPlanToDate > 0 ? (ecart / cumPlanToDate * 100) : 0;
+            // date de fin projetée (au rythme réel observé)
+            var s0 = plan2ParseD(p.startDate), e0 = plan2ParseD(p.endDate);
+            var projEnd = '—', rate = 0;
+            if (s0) {
+                var elapsedEnd = today < (e0 || today) ? today : (e0 || today);
+                var daysElapsed = Math.max(1, plan2DayCount(s0, elapsedEnd));
+                rate = cumAct / daysElapsed; // par jour
+                if (rate > 0 && totalTarget > cumAct) {
+                    var remain = totalTarget - cumAct;
+                    var projDate = plan2AddDays(today, Math.ceil(remain / rate));
+                    projEnd = projDate.toLocaleDateString('fr-FR');
+                } else if (totalTarget > 0 && cumAct >= totalTarget) { projEnd = 'Objectif atteint'; }
+            }
+            var late = ecart < 0 && Math.abs(ecartPct) >= 5;
+
+            // KPIs
+            html += '<div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-5">';
+            html += plan2Kpi('Réalisé', plan2Num(cumAct) + ' / ' + plan2Num(totalTarget) + ' ' + unit, plan2Num(pctDone, 0) + ' % de l\'objectif', 'var(--ged-yellow)');
+            html += plan2Kpi('Écart à date', (ecart >= 0 ? '+' : '') + plan2Num(ecart) + ' ' + unit, (ecart >= 0 ? 'En avance' : 'En retard') + ' (' + plan2Num(ecartPct, 0) + ' %)', ecart >= 0 ? 'var(--ged-success)' : 'var(--ged-danger)');
+            html += plan2Kpi('Fin projetée', projEnd, 'Objectif ' + plan2Esc(p.endDate || '—'), 'var(--ged-black)');
+            html += plan2Kpi('Rythme réel', plan2Num(rate, 1) + ' ' + unit + '/j', 'Sur la période écoulée', 'var(--ged-black)');
+            html += '</div>';
+
+            if (late) {
+                html += '<div class="ged-api-error-banner rounded-xl p-4 mb-5"><strong>⚠ Retard détecté :</strong> le cumul réel est inférieur de ' + plan2Num(Math.abs(ecart)) + ' ' + unit + ' (' + plan2Num(Math.abs(ecartPct), 0) + ' %) au plan à cette date.</div>';
+            }
+
+            // Horizon toggle
+            html += '<div class="flex gap-2 mb-3">';
+            html += '<button type="button" onclick="plan2SetHorizon(\'month\')" class="tab-button px-4 py-2 rounded-lg text-sm' + (plan2.horizon === 'month' ? ' active' : '') + '">Long terme (mensuel)</button>';
+            html += '<button type="button" onclick="plan2SetHorizon(\'week\')" class="tab-button px-4 py-2 rounded-lg text-sm' + (plan2.horizon === 'week' ? ' active' : '') + '">Court terme (hebdo)</button>';
+            html += '</div>';
+
+            // S-curve
+            html += '<div class="ged-content-panel rounded-xl p-5 mb-5"><h3 class="font-bold mb-3">Courbe cumulée — planifié vs réel</h3><div style="position:relative;height:300px"><canvas id="plan2Chart"></canvas></div></div>';
+
+            // Table éditable + suivi
+            html += '<div class="ged-content-panel rounded-xl p-5"><h3 class="font-bold mb-3">2 · Objectifs par période &amp; suivi (' + (plan2.horizon === 'week' ? 'hebdomadaire' : 'mensuel') + ')</h3>';
+            html += '<div class="ged-table-wrap" style="overflow-x:auto"><table class="w-full" style="font-size:13px"><thead><tr>';
+            ['Période', 'Objectif (' + unit + ')', 'Réel', 'Écart', 'Cumul plan', 'Cumul réel', 'Statut'].forEach(function (h) { html += '<th style="text-align:left;padding:8px 10px;text-transform:uppercase;letter-spacing:.04em;font-size:11px;color:var(--ged-charcoal);border-bottom:2px solid var(--ged-border)">' + h + '</th>'; });
+            html += '</tr></thead><tbody>';
+            rows.forEach(function (r, idx) {
+                var e = r.act - r.plan;
+                var statut = !r.ended && !r.ongoing ? '<span class="ged-muted">À venir</span>' : (r.cumAct >= r.cumPlan ? '<span style="color:var(--ged-success);font-weight:700">● À jour</span>' : '<span style="color:var(--ged-danger);font-weight:700">● En retard</span>');
+                html += '<tr>';
+                html += '<td style="padding:7px 10px;font-weight:600">' + plan2Esc(r.per.label) + '<div class="ged-muted" style="font-size:10px">' + plan2Esc(r.per.start) + ' → ' + plan2Esc(r.per.end) + '</div></td>';
+                html += '<td style="padding:7px 10px"><input type="number" min="0" step="1" data-plan2idx="' + idx + '" value="' + (Number(r.plan) || 0) + '" style="width:92px;padding:5px 8px;border-radius:7px" class="plan2-target"></td>';
+                html += '<td style="padding:7px 10px;font-weight:700">' + plan2Num(r.act) + '</td>';
+                html += '<td style="padding:7px 10px;font-weight:700;color:' + (e >= 0 ? 'var(--ged-success)' : 'var(--ged-danger)') + '">' + (e >= 0 ? '+' : '') + plan2Num(e) + '</td>';
+                html += '<td style="padding:7px 10px">' + plan2Num(r.cumPlan) + '</td>';
+                html += '<td style="padding:7px 10px">' + plan2Num(r.cumAct) + '</td>';
+                html += '<td style="padding:7px 10px">' + statut + '</td>';
+                html += '</tr>';
+            });
+            html += '</tbody></table></div>';
+            html += '<p class="text-slate-400 text-xs mt-3">Astuce : ajuste les objectifs ci-dessus puis « Enregistrer le plan » (en haut). Le réel provient des relevés journaliers saisis dans la plateforme.</p>';
+            html += '</div>';
+
+            host.innerHTML = html;
+
+            // Dessin de la courbe
+            try {
+                if (plan2.chart) { plan2.chart.destroy(); plan2.chart = null; }
+                var ctx = document.getElementById('plan2Chart');
+                if (ctx && window.Chart) {
+                    var labels = rows.map(function (r) { return r.per.label; });
+                    var planCum = rows.map(function (r) { return r.cumPlan; });
+                    var actCum = rows.map(function (r) { return (r.ended || r.ongoing) ? r.cumAct : null; });
+                    plan2.chart = new Chart(ctx, {
+                        type: 'line',
+                        data: { labels: labels, datasets: [
+                            { label: 'Planifié (cumul)', data: planCum, borderColor: '#A7B4C0', backgroundColor: 'rgba(167,180,192,.12)', borderDash: [6, 4], fill: true, tension: .15, pointRadius: 2 },
+                            { label: 'Réel (cumul)', data: actCum, borderColor: '#F5B800', backgroundColor: 'rgba(245,184,0,.15)', fill: true, tension: .15, pointRadius: 2, spanGaps: false }
+                        ] },
+                        options: { responsive: true, maintainAspectRatio: false, animation: false,
+                            plugins: { legend: { labels: { color: '#A7B4C0', font: { size: 12 } } } },
+                            scales: { x: { ticks: { color: '#8695a3', font: { size: 10 } }, grid: { color: 'rgba(0,0,0,.05)' } },
+                                      y: { ticks: { color: '#8695a3', font: { size: 10 } }, grid: { color: 'rgba(0,0,0,.06)' }, beginAtZero: true } } }
+                    });
+                }
+            } catch (e) { /* chart best-effort */ }
+        }
+
+        function plan2Kpi(lab, val, sub, color) {
+            return '<div class="ged-stat-card ged-kpi-card rounded-xl p-4">' +
+                '<p class="text-[10px] font-bold tracking-widest uppercase ged-muted mb-1">' + plan2Esc(lab) + '</p>' +
+                '<p style="font-size:24px;font-weight:900;color:' + color + ';font-variant-numeric:tabular-nums">' + val + '</p>' +
+                '<p class="ged-muted" style="font-size:11px;margin-top:2px">' + plan2Esc(sub) + '</p></div>';
+        }
+
+        function plan2SetHorizon(h) { plan2.horizon = (h === 'week' ? 'week' : 'month'); plan2Draw(); }
+
+        function plan2ReadForm() {
+            var g = function (id) { var el = document.getElementById(id); return el ? el.value : ''; };
+            return {
+                label: g('plan2Label'), metric: g('plan2Metric'),
+                startDate: g('plan2Start'), endDate: g('plan2End'),
+                totalTarget: Number(g('plan2Total')) || 0
+            };
+        }
+
+        function plan2Generate() {
+            var f = plan2ReadForm();
+            if (!f.startDate || !f.endDate) { plan2.status = ''; alertPlan2('Renseigne les dates de début et de fin.'); return; }
+            if (plan2ParseD(f.endDate) < plan2ParseD(f.startDate)) { alertPlan2('La date de fin doit être après le début.'); return; }
+            if (!(f.totalTarget > 0)) { alertPlan2('Renseigne un objectif total supérieur à 0.'); return; }
+            var gen = plan2GenPeriods(f.startDate, f.endDate, f.totalTarget);
+            plan2.plan = { label: f.label || 'Plan', metric: f.metric === 'trous' ? 'trous' : 'metres', unit: f.metric === 'trous' ? 'trous' : 'm', site: '', startDate: f.startDate, endDate: f.endDate, totalTarget: f.totalTarget, months: gen.months, weeks: gen.weeks };
+            plan2.status = '';
+            plan2Draw();
+        }
+
+        function alertPlan2(msg) {
+            var host = document.getElementById('planificationContent');
+            if (host) { var b = document.createElement('div'); b.className = 'ged-api-error-banner rounded-xl p-3 mb-3'; b.textContent = '⚠ ' + msg; host.insertBefore(b, host.firstChild); window.setTimeout(function () { if (b.parentNode) b.parentNode.removeChild(b); }, 4000); }
+        }
+
+        function plan2CollectEditedTargets() {
+            // applique les objectifs édités dans le tableau (horizon courant) au plan
+            if (!plan2.plan) return;
+            var arr = plan2.horizon === 'week' ? plan2.plan.weeks : plan2.plan.months;
+            document.querySelectorAll('.plan2-target').forEach(function (inp) {
+                var idx = Number(inp.getAttribute('data-plan2idx'));
+                if (arr && arr[idx]) arr[idx].target = Number(inp.value) || 0;
+            });
+        }
+
+        function plan2Save() {
+            var f = plan2ReadForm();
+            if (!plan2.plan) { plan2Generate(); if (!plan2.plan) return; }
+            plan2CollectEditedTargets();
+            // mettre à jour l'enveloppe depuis le formulaire
+            plan2.plan.label = f.label || 'Plan';
+            plan2.plan.metric = f.metric === 'trous' ? 'trous' : 'metres';
+            plan2.plan.unit = plan2.plan.metric === 'trous' ? 'trous' : 'm';
+            plan2.plan.startDate = f.startDate; plan2.plan.endDate = f.endDate; plan2.plan.totalTarget = f.totalTarget;
+            var body = Object.assign({}, plan2.plan, { baseVersion: plan2.version });
+            apiRequest('/api/planification', 'PUT', body).then(function (res) {
+                plan2.plan = res && res.plan ? res.plan : plan2.plan;
+                plan2.version = res && res.version ? res.version : plan2.version + 1;
+                plan2.status = 'Plan enregistré ✓';
+                plan2Draw();
+                window.setTimeout(function () { plan2.status = ''; }, 4000);
+            }).catch(function (err) {
+                alertPlan2('Échec de l\'enregistrement : ' + (err && err.message ? err.message : 'erreur'));
+            });
         }
 
         function renderForagePlan() {
