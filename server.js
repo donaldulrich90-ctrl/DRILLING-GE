@@ -1200,6 +1200,7 @@ require('./routes/users')(app, {
 
 require('./routes/drilling-plan')(app, { db, getEnterpriseId });
 require('./routes/planification')(app, { db, getEnterpriseId });
+require('./routes/besoins')(app, { db, getEnterpriseId });
 
 // ============================================
 // ROUTES API - MACHINES (DRILLS)

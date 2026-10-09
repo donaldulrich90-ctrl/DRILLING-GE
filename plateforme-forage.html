@@ -1204,6 +1204,7 @@
                     <button type="button" onclick="showMainView('analytics')" class="ged-nav-item main-nav-btn" id="nav-analytics">◒ &nbsp;Performance</button>
                     <button type="button" onclick="showMainView('project_overview')" class="ged-nav-item main-nav-btn" id="nav-project_overview" data-i18n="nav.project_overview">◈ &nbsp;Synthèse projet</button>
                     <button type="button" onclick="showMainView('planification')" class="ged-nav-item main-nav-btn" id="nav-planification">🗓️ &nbsp;Planification &amp; suivi</button>
+                    <button type="button" onclick="showMainView('besoins')" class="ged-nav-item main-nav-btn" id="nav-besoins">📝 &nbsp;Expression de besoin <span id="besoinsNavBadge" class="hidden" style="background:var(--ged-danger);color:#fff;border-radius:999px;font-size:10px;padding:1px 7px;margin-left:4px;font-weight:800"></span></button>
                     <button type="button" onclick="showMainView('reports')" class="ged-nav-item main-nav-btn" id="nav-reports">≡ &nbsp;Rapports</button>
                     <button type="button" onclick="showMainView('rentabilite')" class="ged-nav-item main-nav-btn" id="nav-rentabilite">↗ &nbsp;Rentabilité consommables</button>
                     <button type="button" onclick="showMainView('depenses_pm')" class="ged-nav-item main-nav-btn" id="nav-depenses_pm">◇ &nbsp;Dépenses PM</button>
@@ -1610,6 +1611,15 @@
                 <p class="text-slate-400 text-sm mt-1">Objectifs court &amp; long terme (plan de la mine) et suivi planifié vs réel</p>
             </div>
             <div id="planificationContent"></div>
+        </div>
+
+        <!-- ═══ VUE EXPRESSION DE BESOIN ════════════════════════════════ -->
+        <div id="mainView-besoins" class="main-view hidden">
+            <div class="mb-6 pb-4 border-b border-slate-700">
+                <h2 class="text-2xl font-extrabold tracking-tight" style="color:var(--ged-yellow)">📝 Expression de besoin</h2>
+                <p class="text-slate-400 text-sm mt-1">Demandes partagées à toute l'entreprise — pièces jointes et circuit allouer → exécuter → vérifier → valider</p>
+            </div>
+            <div id="besoinsContent"></div>
         </div>
 
         <!-- ═══ VUE RENTABILITÉ CONSOMMABLES ════════════════════════════ -->
@@ -5626,7 +5636,7 @@
                 view !== 'enterprises' && subNav.indexOf(view) < 0) {
                 view = 'dashboard';
             }
-            var views = ['consumables', 'dashboard', 'connections', 'assignments', 'maintenance', 'bit_sharpening', 'invoices', 'contracts', 'sites', 'enterprises', 'revenue', 'site_meals', 'reports', 'project_overview', 'planification', 'rh', 'inventory', 'accounts', 'clients', 'translator', 'team_chat', 'company_info', 'forage_plan', 'rentabilite', 'depenses_pm', 'analytics', 'hse'];
+            var views = ['consumables', 'dashboard', 'connections', 'assignments', 'maintenance', 'bit_sharpening', 'invoices', 'contracts', 'sites', 'enterprises', 'revenue', 'site_meals', 'reports', 'project_overview', 'planification', 'besoins', 'rh', 'inventory', 'accounts', 'clients', 'translator', 'team_chat', 'company_info', 'forage_plan', 'rentabilite', 'depenses_pm', 'analytics', 'hse'];
             views.forEach(function(v) {
                 var el = document.getElementById('mainView-' + v);
                 if (el) el.classList.add('hidden');
@@ -8228,6 +8238,8 @@
                 renderForagePlan();
             } else if (view === 'planification') {
                 renderPlanification();
+            } else if (view === 'besoins') {
+                renderBesoins();
             } else if (view === 'rentabilite') {
                 renderRentabilite();
             } else if (view === 'depenses_pm') {
@@ -8792,6 +8804,155 @@
             var s = plan2ParseD(start), e = plan2ParseD(end); if (!s || !e) return 0;
             var sum = 0; for (var k in map) { var d = plan2ParseD(k); if (d && d >= s && d <= e) sum += map[k]; } return sum;
         }
+
+        // ═══════════════════════════════════════════════════════════════
+        // EXPRESSION DE BESOIN — demandes partagées + circuit de validation
+        // ═══════════════════════════════════════════════════════════════
+        var besoinsState = { list: [], loaded: false, newFiles: [] };
+        var BESOIN_STATUTS = {
+            nouveau: { l: 'Nouveau', c: 'var(--ged-charcoal)', bg: 'rgba(148,163,184,.18)' },
+            assigne: { l: 'Alloué', c: '#1565C0', bg: 'rgba(21,101,192,.15)' },
+            traite: { l: 'Exécuté', c: '#8a6a00', bg: 'rgba(245,184,0,.18)' },
+            verifie: { l: 'Vérifié', c: '#0077A3', bg: 'rgba(0,119,163,.15)' },
+            valide: { l: 'Validé', c: 'var(--ged-success)', bg: 'rgba(40,167,69,.15)' },
+            rejete: { l: 'Rejeté', c: 'var(--ged-danger)', bg: 'rgba(220,53,69,.15)' }
+        };
+        function besoinEsc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+        function besoinOpenCount(list) { return (list || []).filter(function (b) { return b.statut !== 'valide' && b.statut !== 'rejete'; }).length; }
+        function besoinUpdateBadge(count) {
+            var el = document.getElementById('besoinsNavBadge'); if (!el) return;
+            if (count > 0) { el.textContent = count; el.classList.remove('hidden'); } else { el.textContent = ''; el.classList.add('hidden'); }
+        }
+        function besoinsRefreshBadge() {
+            if (typeof apiRequest !== 'function') return;
+            apiRequest('/api/besoins', 'GET').then(function (list) {
+                besoinsState.list = list || []; besoinsState.loaded = true;
+                var open = besoinOpenCount(list);
+                besoinUpdateBadge(open);
+                // alerte « reçu par tout » : nouvelles demandes depuis la dernière consultation
+                try {
+                    var lastSeen = Number(localStorage.getItem('forage_besoins_lastSeen') || 0);
+                    var maxId = (list || []).reduce(function (m, b) { return Math.max(m, Number(b.id) || 0); }, 0);
+                    var nouvelles = (list || []).filter(function (b) { return Number(b.id) > lastSeen; }).length;
+                    if (lastSeen > 0 && nouvelles > 0 && typeof showGedToast === 'function') {
+                        showGedToast(nouvelles + ' nouvelle(s) expression(s) de besoin', 'warning');
+                    }
+                    if (lastSeen === 0 && maxId > 0) localStorage.setItem('forage_besoins_lastSeen', String(maxId));
+                } catch (e) {}
+            }).catch(function () {});
+        }
+        function renderBesoins() {
+            var host = document.getElementById('besoinsContent'); if (!host) return;
+            host.innerHTML = '<div class="ged-content-panel rounded-xl p-6"><p class="text-slate-400">Chargement…</p></div>';
+            apiRequest('/api/besoins', 'GET').then(function (list) {
+                besoinsState.list = list || []; besoinsState.loaded = true;
+                besoinUpdateBadge(besoinOpenCount(list));
+                try { var maxId = (list || []).reduce(function (m, b) { return Math.max(m, Number(b.id) || 0); }, 0); if (maxId) localStorage.setItem('forage_besoins_lastSeen', String(maxId)); } catch (e) {}
+                besoinsDraw();
+            }).catch(function (err) {
+                host.innerHTML = '<div class="ged-content-panel rounded-xl p-6"><p class="err">Impossible de charger : ' + besoinEsc(err && err.message) + '</p></div>';
+            });
+        }
+        function besoinsDraw() {
+            var host = document.getElementById('besoinsContent'); if (!host) return;
+            var html = '';
+            // Formulaire nouvelle demande
+            html += '<div class="ged-content-panel rounded-xl p-5 mb-5">';
+            html += '<h3 class="font-extrabold text-lg mb-3" style="color:var(--ged-yellow)">Nouvelle expression de besoin</h3>';
+            html += '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">';
+            html += '<div><label class="block text-xs font-bold mb-1">Type</label><select id="besType" class="w-full rounded-lg px-3 py-2">' + ['Matériel', 'Pièce', 'Consommable', 'Carburant', 'Service', 'Autre'].map(function (t) { return '<option>' + t + '</option>'; }).join('') + '</select></div>';
+            html += '<div class="lg:col-span-2"><label class="block text-xs font-bold mb-1">Désignation *</label><input id="besDesignation" type="text" class="w-full rounded-lg px-3 py-2" placeholder="Ex. : flexible hydraulique HP 1\\""></div>';
+            html += '<div><label class="block text-xs font-bold mb-1">Priorité</label><select id="besPriorite" class="w-full rounded-lg px-3 py-2"><option value="normal">Normal</option><option value="urgent">Urgent</option><option value="critique">Critique</option></select></div>';
+            html += '<div><label class="block text-xs font-bold mb-1">Quantité</label><input id="besQuantite" type="number" min="0" step="any" class="w-full rounded-lg px-3 py-2" value="1"></div>';
+            html += '<div><label class="block text-xs font-bold mb-1">Unité</label><input id="besUnite" type="text" class="w-full rounded-lg px-3 py-2" placeholder="pce, m, L…"></div>';
+            html += '<div><label class="block text-xs font-bold mb-1">Site</label><input id="besSite" type="text" class="w-full rounded-lg px-3 py-2" placeholder="Site / chantier"></div>';
+            html += '<div><label class="block text-xs font-bold mb-1">Pièces jointes</label><input id="besFiles" type="file" multiple class="w-full text-xs"></div>';
+            html += '</div>';
+            html += '<div class="mt-3"><label class="block text-xs font-bold mb-1">Justification / détails</label><textarea id="besJustif" rows="2" class="w-full rounded-lg px-3 py-2" placeholder="Motif, urgence, référence…"></textarea></div>';
+            html += '<div class="mt-3"><button type="button" onclick="besoinCreate()" class="ged-btn-primary px-4 py-2 rounded-lg text-sm font-bold">➕ Soumettre la demande</button> <span id="besCreateStatus" class="text-sm self-center" style="margin-left:8px"></span></div>';
+            html += '</div>';
+
+            // Liste
+            var list = besoinsState.list || [];
+            html += '<div class="ged-content-panel rounded-xl p-5"><h3 class="font-extrabold text-lg mb-3" style="color:var(--ged-yellow)">Demandes (' + list.length + ')</h3>';
+            if (!list.length) { html += '<p class="text-slate-400">Aucune expression de besoin pour le moment.</p>'; }
+            list.forEach(function (b) {
+                var st = BESOIN_STATUTS[b.statut] || BESOIN_STATUTS.nouveau;
+                var prioColor = b.priorite === 'critique' ? 'var(--ged-danger)' : (b.priorite === 'urgent' ? 'var(--ged-warning)' : 'var(--ged-charcoal)');
+                html += '<div class="rounded-xl p-4 mb-3" style="border:1px solid var(--ged-border);border-left:4px solid ' + st.c + '">';
+                html += '<div class="flex flex-wrap items-center gap-2 mb-1">';
+                html += '<span class="font-extrabold">' + besoinEsc(b.numero) + '</span>';
+                html += '<span style="background:' + st.bg + ';color:' + st.c + ';border-radius:999px;font-size:11px;font-weight:800;padding:2px 10px">' + st.l + '</span>';
+                html += '<span style="color:' + prioColor + ';font-weight:800;font-size:11px;text-transform:uppercase">' + besoinEsc(b.priorite) + '</span>';
+                html += '<span class="ged-muted" style="font-size:11px;margin-left:auto">' + besoinEsc((b.createdAt || '').slice(0, 16).replace('T', ' ')) + ' · ' + besoinEsc(b.createdBy) + '</span>';
+                html += '</div>';
+                html += '<div class="font-bold" style="font-size:15px">' + besoinEsc(b.designation) + '</div>';
+                html += '<div class="ged-muted" style="font-size:12px;margin-top:2px">' + besoinEsc(b.type) + ' · ' + besoinEsc(b.quantite) + ' ' + besoinEsc(b.unite) + (b.site ? ' · ' + besoinEsc(b.site) : '') + '</div>';
+                if (b.justification) html += '<div style="font-size:13px;margin-top:6px">' + besoinEsc(b.justification) + '</div>';
+                // pièces jointes
+                html += '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">';
+                (b.attachments || []).forEach(function (a) { html += '<a href="' + besoinEsc(a.url) + '" target="_blank" style="font-size:12px;color:var(--ged-blue);text-decoration:underline">📎 ' + besoinEsc(a.name) + '</a>'; });
+                html += '<label style="font-size:12px;color:var(--ged-charcoal);cursor:pointer">+ Ajouter une pièce jointe<input type="file" style="display:none" onchange="besoinAttach(' + b.id + ', this)"></label>';
+                html += '</div>';
+                // circuit / acteurs
+                var acteurs = [];
+                if (b.assignee) acteurs.push('Alloué à <b>' + besoinEsc(b.assignee) + '</b>');
+                if (b.verificateur) acteurs.push('Vérifié par <b>' + besoinEsc(b.verificateur) + '</b>');
+                if (b.validateur) acteurs.push('Validé par <b>' + besoinEsc(b.validateur) + '</b>');
+                if (acteurs.length) html += '<div class="ged-muted" style="font-size:12px;margin-top:6px">' + acteurs.join(' · ') + '</div>';
+                // actions workflow
+                html += '<div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">';
+                if (b.statut === 'nouveau' || b.statut === 'assigne') {
+                    html += '<input id="besAssignee' + b.id + '" type="text" placeholder="Allouer à (utilisateur)" style="padding:5px 9px;border-radius:7px;font-size:12px;width:170px">';
+                    html += '<button type="button" onclick="besoinAction(' + b.id + ',\'assign\')" class="ged-btn-secondary px-3 py-1.5 rounded-lg text-xs font-bold">Allouer</button>';
+                }
+                if (b.statut === 'assigne') html += '<button type="button" onclick="besoinAction(' + b.id + ',\'execute\')" class="ged-btn-secondary px-3 py-1.5 rounded-lg text-xs font-bold">Marquer fait</button>';
+                if (b.statut === 'traite') html += '<button type="button" onclick="besoinAction(' + b.id + ',\'verify\')" class="ged-btn-secondary px-3 py-1.5 rounded-lg text-xs font-bold">Vérifier</button>';
+                if (b.statut === 'verifie') html += '<button type="button" onclick="besoinAction(' + b.id + ',\'validate\')" class="ged-btn-primary px-3 py-1.5 rounded-lg text-xs font-bold">Valider</button>';
+                if (b.statut !== 'valide' && b.statut !== 'rejete') html += '<button type="button" onclick="besoinAction(' + b.id + ',\'reject\')" class="px-3 py-1.5 rounded-lg text-xs font-bold" style="border:1px solid var(--ged-danger);color:var(--ged-danger)">Rejeter</button>';
+                html += '</div>';
+                html += '</div>';
+            });
+            html += '</div>';
+            host.innerHTML = html;
+        }
+        function besoinCreate() {
+            var g = function (id) { var el = document.getElementById(id); return el ? el.value : ''; };
+            var designation = g('besDesignation');
+            if (!designation.trim()) { var s = document.getElementById('besCreateStatus'); if (s) { s.textContent = 'La désignation est requise.'; s.style.color = 'var(--ged-danger)'; } return; }
+            var body = { type: g('besType'), designation: designation, priorite: g('besPriorite'), quantite: Number(g('besQuantite')) || 0, unite: g('besUnite'), site: g('besSite'), justification: g('besJustif') };
+            var filesEl = document.getElementById('besFiles');
+            var files = filesEl && filesEl.files ? Array.prototype.slice.call(filesEl.files) : [];
+            apiRequest('/api/besoins', 'POST', body).then(function (rec) {
+                var chain = Promise.resolve();
+                files.forEach(function (f) { chain = chain.then(function () { return besoinUpload(rec.id, f); }); });
+                return chain.then(function () { return rec; });
+            }).then(function () {
+                if (typeof showGedToast === 'function') showGedToast('Expression de besoin soumise ✓', 'success');
+                renderBesoins();
+            }).catch(function (err) {
+                var s = document.getElementById('besCreateStatus'); if (s) { s.textContent = 'Échec : ' + (err && err.message); s.style.color = 'var(--ged-danger)'; }
+            });
+        }
+        function besoinUpload(id, file) {
+            var fd = new FormData(); fd.append('file', file);
+            var headers = {};
+            var es = document.getElementById('enterpriseSelector'); if (es && es.value) headers['X-Enterprise-Id'] = es.value;
+            return fetch('/api/besoins/' + id + '/attachment', { method: 'POST', credentials: 'include', headers: headers, body: fd }).then(function (r) { if (!r.ok) return r.json().then(function (j) { throw new Error(j.error || ('HTTP ' + r.status)); }); return r.json(); });
+        }
+        function besoinAttach(id, input) {
+            var f = input && input.files && input.files[0]; if (!f) return;
+            besoinUpload(id, f).then(function () { if (typeof showGedToast === 'function') showGedToast('Pièce jointe ajoutée', 'success'); renderBesoins(); }).catch(function (err) { if (typeof showGedToast === 'function') showGedToast('Échec pièce jointe : ' + (err && err.message), 'danger'); });
+        }
+        function besoinAction(id, action) {
+            var body = { action: action };
+            if (action === 'assign') { var inp = document.getElementById('besAssignee' + id); body.assignee = inp ? inp.value : ''; if (!body.assignee.trim()) { if (typeof showGedToast === 'function') showGedToast('Indique à qui allouer la demande.', 'warning'); return; } }
+            apiRequest('/api/besoins/' + id, 'PUT', body).then(function () {
+                if (typeof showGedToast === 'function') showGedToast('Demande mise à jour', 'success');
+                renderBesoins();
+            }).catch(function (err) { if (typeof showGedToast === 'function') showGedToast('Échec : ' + (err && err.message), 'danger'); });
+        }
+        try { window.setTimeout(function () { try { besoinsRefreshBadge(); } catch (e) {} }, 5000); window.setInterval(function () { try { besoinsRefreshBadge(); } catch (e) {} }, 90000); } catch (e) {}
 
         function renderPlanification() {
             var host = document.getElementById('planificationContent'); if (!host) return;
