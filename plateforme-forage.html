@@ -8826,7 +8826,7 @@
         }
         function besoinsRefreshBadge() {
             if (typeof apiRequest !== 'function') return;
-            apiRequest('/api/besoins', 'GET').then(function (list) {
+            apiRequest('/besoins', 'GET').then(function (list) {
                 besoinsState.list = list || []; besoinsState.loaded = true;
                 var open = besoinOpenCount(list);
                 besoinUpdateBadge(open);
@@ -8845,7 +8845,7 @@
         function renderBesoins() {
             var host = document.getElementById('besoinsContent'); if (!host) return;
             host.innerHTML = '<div class="ged-content-panel rounded-xl p-6"><p class="text-slate-400">Chargement…</p></div>';
-            apiRequest('/api/besoins', 'GET').then(function (list) {
+            apiRequest('/besoins', 'GET').then(function (list) {
                 besoinsState.list = list || []; besoinsState.loaded = true;
                 besoinUpdateBadge(besoinOpenCount(list));
                 try { var maxId = (list || []).reduce(function (m, b) { return Math.max(m, Number(b.id) || 0); }, 0); if (maxId) localStorage.setItem('forage_besoins_lastSeen', String(maxId)); } catch (e) {}
@@ -8924,7 +8924,7 @@
             var body = { type: g('besType'), designation: designation, priorite: g('besPriorite'), quantite: Number(g('besQuantite')) || 0, unite: g('besUnite'), site: g('besSite'), justification: g('besJustif') };
             var filesEl = document.getElementById('besFiles');
             var files = filesEl && filesEl.files ? Array.prototype.slice.call(filesEl.files) : [];
-            apiRequest('/api/besoins', 'POST', body).then(function (rec) {
+            apiRequest('/besoins', 'POST', body).then(function (rec) {
                 var chain = Promise.resolve();
                 files.forEach(function (f) { chain = chain.then(function () { return besoinUpload(rec.id, f); }); });
                 return chain.then(function () { return rec; });
@@ -8948,7 +8948,7 @@
         function besoinAction(id, action) {
             var body = { action: action };
             if (action === 'assign') { var inp = document.getElementById('besAssignee' + id); body.assignee = inp ? inp.value : ''; if (!body.assignee.trim()) { if (typeof showGedToast === 'function') showGedToast('Indique à qui allouer la demande.', 'warning'); return; } }
-            apiRequest('/api/besoins/' + id, 'PUT', body).then(function () {
+            apiRequest('/besoins/' + id, 'PUT', body).then(function () {
                 if (typeof showGedToast === 'function') showGedToast('Demande mise à jour', 'success');
                 renderBesoins();
             }).catch(function (err) { if (typeof showGedToast === 'function') showGedToast('Échec : ' + (err && err.message), 'danger'); });
@@ -8959,7 +8959,7 @@
             var host = document.getElementById('planificationContent'); if (!host) return;
             if (!plan2.loaded) {
                 host.innerHTML = '<div class="ged-content-panel rounded-xl p-6"><p class="text-slate-400">Chargement de la planification…</p></div>';
-                apiRequest('/api/planification', 'GET').then(function (res) {
+                apiRequest('/planification', 'GET').then(function (res) {
                     plan2.plan = res && res.plan ? res.plan : null;
                     plan2.version = res && res.version ? res.version : 0;
                     plan2.loaded = true;
@@ -9333,7 +9333,7 @@
             plan2.plan.unit = plan2.plan.metric === 'trous' ? 'trous' : 'm';
             plan2.plan.startDate = f.startDate; plan2.plan.endDate = f.endDate; plan2.plan.totalTarget = f.totalTarget;
             var body = Object.assign({}, plan2.plan, { baseVersion: plan2.version });
-            apiRequest('/api/planification', 'PUT', body).then(function (res) {
+            apiRequest('/planification', 'PUT', body).then(function (res) {
                 plan2.plan = res && res.plan ? res.plan : plan2.plan;
                 plan2.version = res && res.version ? res.version : plan2.version + 1;
                 plan2.status = 'Plan enregistré ✓';
