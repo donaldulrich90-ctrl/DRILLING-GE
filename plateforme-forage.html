@@ -1962,6 +1962,7 @@
                         <div id="invoiceItemsContainer" class="space-y-3 mb-3"></div>
                         <div class="flex flex-wrap gap-2">
                         <button type="button" onclick="addInvoiceItem()" class="ged-btn-primary px-4 py-2 rounded text-sm">+ Ajouter une ligne</button>
+                        <button type="button" onclick="generateForageLinesFromPlan()" class="ged-btn-secondary px-4 py-2 rounded text-sm" title="Génère les lignes de forage depuis le plan (mètres forés) × le barème du contrat lié, par diamètre et type de terrain">+ Lignes de forage (mètres × barème)</button>
                         <button type="button" onclick="addFgmToInvoice()" class="ged-btn-secondary px-4 py-2 rounded text-sm" title="Ajoute les frais de gestion mensuels du contrat lié, modulés par la disponibilité (KPI)">+ FGM du mois (selon disponibilité)</button>
                         </div>
                     </div>
@@ -11873,6 +11874,95 @@
         function addInvoiceItem() {
             invoiceItems.push({ description: '', quantity: 0, unitPrice: 0, unit: 'm' });
             renderInvoiceItems();
+        }
+
+        // Normalise la géologie d'un trou vers un type de terrain du barème.
+        function normalizeGeologyToTerrain(g) {
+            var s = String(g == null ? '' : g).toLowerCase();
+            if (/oxyd/.test(s)) return 'Oxyde';
+            if (/transi/.test(s)) return 'Transition';
+            if (/fra|fresh|roche/.test(s)) return 'Roches fraîches';
+            return '';
+        }
+
+        // Génère les lignes de forage de la facture depuis le plan (mètres forés
+        // réels par trou) × le barème du contrat lié, groupées par diamètre et terrain.
+        function generateForageLinesFromPlan() {
+            var sel = document.getElementById('invoiceContract');
+            if (!sel || !sel.value) { alert('Sélectionnez d’abord un « Contrat lié » pour reprendre son barème.'); return; }
+            var ct = (contracts || []).find(function(c) { return String(c.id) === String(sel.value); });
+            if (!ct || !ct.rates || !ct.rates.length) { alert('Ce contrat n’a pas de barème défini.'); return; }
+
+            // Période = mois de facturation (sinon mois de la date de facture).
+            var bm = ((document.getElementById('invoiceBillingMonth') || {}).value || '');
+            if (!(bm && bm.length >= 7)) bm = ((document.getElementById('invoiceDate') || {}).value || '').slice(0, 7);
+            bm = bm ? bm.slice(0, 7) : '';
+            var holeMonth = function(h) { return String(h.endDate || h.startDate || '').slice(0, 7); };
+
+            // Agrège les trous forés (actDepth > 0) de la période par (diamètre, terrain).
+            var groups = {};
+            var fp = (typeof getFPData === 'function') ? getFPData() : { blocks: [] };
+            (fp.blocks || []).forEach(function(b) {
+                (b.holes || []).forEach(function(h) {
+                    var m = parseFloat(h.actDepth) || 0;
+                    if (m <= 0) return;
+                    var hm = holeMonth(h);
+                    if (bm && hm && hm !== bm) return; // filtre période si la date du trou est connue
+                    var diam = (h.diameterMm != null && h.diameterMm !== '') ? String(h.diameterMm) : '';
+                    var terr = normalizeGeologyToTerrain(h.geology);
+                    var key = diam + '||' + terr;
+                    if (!groups[key]) groups[key] = { diameter: diam, terrain: terr, meters: 0 };
+                    groups[key].meters += m;
+                });
+            });
+            var keys = Object.keys(groups);
+            if (!keys.length) {
+                alert('Aucun trou foré trouvé pour la période (mois de facturation). Vérifiez le plan de forage (profondeur réelle des trous) et la période.');
+                return;
+            }
+
+            var invClientEl = document.getElementById('invoiceClient');
+            var invClient = clients.find(function(c) { return String(c.id) === String(invClientEl && invClientEl.value); });
+            var invCur = invClient ? invClient.currency : null;
+            var matched = 0, unmatched = 0, mismatch = false;
+
+            keys.forEach(function(k) {
+                var g = groups[k];
+                var rate = (ct.rates || []).find(function(r) {
+                    var rd = (r.diameter != null ? String(r.diameter) : '').trim();
+                    var sameDiam = (rd !== '' && g.diameter !== '')
+                        ? (parseFloat(rd) === parseFloat(g.diameter))
+                        : (rd === '' && g.diameter === '');
+                    var sameTerr = (r.groundType || '') === g.terrain;
+                    return sameDiam && sameTerr && (parseFloat(r.rate) || 0) > 0;
+                });
+                var label = 'Forage' + (g.diameter ? ' Ø' + g.diameter + ' mm' : '') + (g.terrain ? ' — ' + g.terrain : '');
+                var qty = Math.round(g.meters * 10) / 10;
+                if (rate) {
+                    if (invCur && rate.currency && rate.currency !== invCur) mismatch = true;
+                    invoiceItems.push({
+                        description: (rate.designation && rate.designation.trim()) ? rate.designation : label,
+                        quantity: qty, unitPrice: parseFloat(rate.rate) || 0, unit: 'm'
+                    });
+                    matched++;
+                } else {
+                    invoiceItems.push({ description: label + ' — tarif à renseigner', quantity: qty, unitPrice: 0, unit: 'm' });
+                    unmatched++;
+                }
+            });
+
+            // Retire la ligne vide initiale éventuelle.
+            invoiceItems = invoiceItems.filter(function(it, i) {
+                return !(i === 0 && !it.description && !it.quantity && !it.unitPrice);
+            });
+            renderInvoiceItems();
+            if (typeof calculateInvoiceTotal === 'function') calculateInvoiceTotal();
+
+            var msg = matched + ' ligne(s) de forage générée(s) depuis le barème';
+            if (unmatched) msg += ' · ' + unmatched + ' sans tarif correspondant (à compléter manuellement)';
+            msg += '.\n\nVérifiez les quantités : elles proviennent de la profondeur réelle des trous du plan sur la période.';
+            if (mismatch) msg += '\n⚠ Certaines lignes du barème sont dans une devise différente de la facture.';
+            alert(msg);
         }
 
         // Ajoute les lignes FGM du contrat lié, modulées par le KPI de disponibilité.
