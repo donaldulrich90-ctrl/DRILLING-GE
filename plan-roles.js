@@ -11,14 +11,17 @@ const DEFAULT_ROLES_BY_PLAN = {
     enterprise: ['foreur', 'aideforeur', 'superviseur', 'santesecurite', 'ingenieur', 'gestionnaire', 'gestionnaire_site', 'admin']
 };
 
-/** Vues métier (onglets) — hors « Entreprises » (réservé plateforme) */
-const TENANT_MAIN_VIEWS = ['dashboard', 'connections', 'assignments', 'maintenance', 'invoices', 'contracts', 'sites', 'revenue', 'site_meals', 'reports', 'project_overview', 'rh', 'inventory', 'accounts', 'clients', 'translator', 'team_chat', 'company_info'];
+/** Vues métier (onglets) — hors « Entreprises » (réservé plateforme).
+ *  Inclut les onglets opérationnels forage ajoutés après la v1 : sans eux, la
+ *  politique d'abonnement les excluait de effectiveAllowedTabs et showMainView
+ *  les renvoyait au tableau de bord (et allowedTabs les rejetait). */
+const TENANT_MAIN_VIEWS = ['dashboard', 'connections', 'assignments', 'maintenance', 'bit_sharpening', 'consumables', 'inventory', 'invoices', 'contracts', 'sites', 'revenue', 'site_meals', 'reports', 'project_overview', 'forage_plan', 'planification', 'besoins', 'rentabilite', 'depenses_pm', 'analytics', 'hse', 'rh', 'accounts', 'clients', 'translator', 'team_chat', 'company_info'];
 
 /** Onglets inclus par défaut selon le plan d’abonnement */
 const DEFAULT_TABS_BY_PLAN = {
-    free: ['dashboard', 'reports', 'project_overview', 'assignments', 'translator', 'team_chat', 'company_info'],
-    basic: ['dashboard', 'connections', 'assignments', 'maintenance', 'reports', 'project_overview', 'sites', 'clients', 'contracts', 'site_meals', 'translator', 'team_chat', 'company_info'],
-    premium: ['dashboard', 'connections', 'assignments', 'maintenance', 'invoices', 'contracts', 'sites', 'revenue', 'site_meals', 'reports', 'project_overview', 'rh', 'inventory', 'clients', 'translator', 'team_chat', 'company_info'],
+    free: ['dashboard', 'reports', 'project_overview', 'assignments', 'besoins', 'hse', 'translator', 'team_chat', 'company_info'],
+    basic: ['dashboard', 'connections', 'assignments', 'maintenance', 'bit_sharpening', 'consumables', 'forage_plan', 'besoins', 'hse', 'reports', 'project_overview', 'sites', 'clients', 'contracts', 'site_meals', 'translator', 'team_chat', 'company_info'],
+    premium: ['dashboard', 'connections', 'assignments', 'maintenance', 'bit_sharpening', 'consumables', 'inventory', 'invoices', 'contracts', 'sites', 'revenue', 'site_meals', 'reports', 'project_overview', 'forage_plan', 'planification', 'besoins', 'rentabilite', 'depenses_pm', 'analytics', 'hse', 'rh', 'clients', 'translator', 'team_chat', 'company_info'],
     enterprise: TENANT_MAIN_VIEWS.slice()
 };
 

@@ -97,12 +97,33 @@ db.serialize(() => {
         if (aerr && !String(aerr.message || '').includes('duplicate column')) {
             console.warn('Migration subscription_plan_catalog.defaultAllowedTabs:', aerr.message);
         }
+        // Onglets opérationnels forage ajoutés après la v1. Les anciennes bases ont
+        // des lignes de catalogue figées sur l'ancienne liste : sans eux, la politique
+        // d'abonnement excluait ces onglets et showMainView renvoyait au tableau de bord.
+        const NEW_OPERATIONAL_TABS = ['bit_sharpening', 'consumables', 'forage_plan', 'planification', 'besoins', 'rentabilite', 'depenses_pm', 'analytics', 'hse'];
         Object.keys(planRoles.DEFAULT_TABS_BY_PLAN).forEach((p) => {
-            const json = JSON.stringify(planRoles.DEFAULT_TABS_BY_PLAN[p]);
+            const planDefault = planRoles.DEFAULT_TABS_BY_PLAN[p] || [];
+            const json = JSON.stringify(planDefault);
+            // 1) Lignes vides : on pose le défaut du plan.
             db.run(
                 'UPDATE subscription_plan_catalog SET defaultAllowedTabs = ? WHERE plan = ? AND (defaultAllowedTabs IS NULL OR TRIM(COALESCE(defaultAllowedTabs,\'\')) = \'\')',
                 [json, p]
             );
+            // 2) Lignes existantes : on AJOUTE (union) uniquement les nouveaux onglets
+            //    prévus pour ce plan, sans retirer d'éventuelles personnalisations.
+            const toAdd = NEW_OPERATIONAL_TABS.filter((t) => planDefault.includes(t));
+            if (!toAdd.length) return;
+            db.get('SELECT defaultAllowedTabs FROM subscription_plan_catalog WHERE plan = ?', [p], (gErr, row) => {
+                if (gErr || !row || !row.defaultAllowedTabs) return;
+                let current;
+                try { current = JSON.parse(row.defaultAllowedTabs); } catch (e) { return; }
+                if (!Array.isArray(current)) return;
+                const missing = toAdd.filter((t) => !current.includes(t));
+                if (!missing.length) return;
+                const merged = current.concat(missing);
+                db.run('UPDATE subscription_plan_catalog SET defaultAllowedTabs = ? WHERE plan = ?',
+                    [JSON.stringify(merged), p]);
+            });
         });
     });
 
