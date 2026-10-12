@@ -11,14 +11,22 @@ const DEFAULT_ROLES_BY_PLAN = {
     enterprise: ['foreur', 'aideforeur', 'superviseur', 'santesecurite', 'ingenieur', 'gestionnaire', 'gestionnaire_site', 'admin']
 };
 
-/** Vues métier (onglets) — hors « Entreprises » (réservé plateforme) */
-const TENANT_MAIN_VIEWS = ['dashboard', 'connections', 'assignments', 'maintenance', 'invoices', 'contracts', 'sites', 'revenue', 'site_meals', 'reports', 'project_overview', 'rh', 'inventory', 'accounts', 'clients', 'translator', 'team_chat', 'company_info'];
+/** Vues métier (onglets) — hors « Entreprises » (réservé plateforme).
+ * Inclut les onglets opérationnels de forage (plan de forage, planification /
+ * suivi drill & blast, expression de besoin, rentabilité, affûtage, consommables,
+ * dépenses PM, analytics, santé-sécurité) : sans eux ici, getEffectiveAllowedTabs
+ * les filtrait, et showMainView renvoyait l'utilisateur au dashboard. */
+const TENANT_MAIN_VIEWS = ['dashboard', 'connections', 'assignments', 'maintenance', 'bit_sharpening', 'consumables', 'forage_plan', 'planification', 'besoins', 'rentabilite', 'depenses_pm', 'analytics', 'hse', 'invoices', 'contracts', 'sites', 'revenue', 'site_meals', 'reports', 'project_overview', 'rh', 'inventory', 'accounts', 'clients', 'translator', 'team_chat', 'company_info'];
+
+/** Cœur opérationnel forage, disponible sur tous les plans (sinon les onglets
+ * de drilling « ne fonctionnent pas » faute d'être dans la liste autorisée). */
+const CORE_DRILLING_TABS = ['forage_plan', 'planification', 'besoins', 'rentabilite', 'bit_sharpening', 'consumables', 'hse'];
 
 /** Onglets inclus par défaut selon le plan d’abonnement */
 const DEFAULT_TABS_BY_PLAN = {
-    free: ['dashboard', 'reports', 'project_overview', 'assignments', 'translator', 'team_chat', 'company_info'],
-    basic: ['dashboard', 'connections', 'assignments', 'maintenance', 'reports', 'project_overview', 'sites', 'clients', 'contracts', 'site_meals', 'translator', 'team_chat', 'company_info'],
-    premium: ['dashboard', 'connections', 'assignments', 'maintenance', 'invoices', 'contracts', 'sites', 'revenue', 'site_meals', 'reports', 'project_overview', 'rh', 'inventory', 'clients', 'translator', 'team_chat', 'company_info'],
+    free: ['dashboard', 'reports', 'project_overview', 'assignments', 'translator', 'team_chat', 'company_info', ...CORE_DRILLING_TABS],
+    basic: ['dashboard', 'connections', 'assignments', 'maintenance', 'reports', 'project_overview', 'sites', 'clients', 'contracts', 'site_meals', 'translator', 'team_chat', 'company_info', ...CORE_DRILLING_TABS, 'depenses_pm', 'analytics'],
+    premium: ['dashboard', 'connections', 'assignments', 'maintenance', 'invoices', 'contracts', 'sites', 'revenue', 'site_meals', 'reports', 'project_overview', 'rh', 'inventory', 'clients', 'translator', 'team_chat', 'company_info', ...CORE_DRILLING_TABS, 'depenses_pm', 'analytics'],
     enterprise: TENANT_MAIN_VIEWS.slice()
 };
 

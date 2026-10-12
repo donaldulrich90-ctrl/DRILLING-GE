@@ -236,6 +236,38 @@ function loadPlanDefaultTabsFromDb() {
         planRoles.setPlanDefaultTabsFromDatabase(Object.keys(map).length ? map : null);
     });
 }
+
+// Migration : le catalogue des formules (subscription_plan_catalog.defaultAllowedTabs)
+// a été semé avant l'ajout des onglets de forage (plan de forage, planification /
+// suivi drill & blast, expression de besoin, rentabilité, affûtage, consommables,
+// dépenses PM, analytics, santé-sécurité). Comme ce catalogue écrase les constantes
+// du code, ces onglets restaient absents de la liste autorisée et showMainView
+// renvoyait l'utilisateur au tableau de bord. On les ajoute aux lignes existantes
+// sans rien retirer (idempotent), en se calant sur les défauts de code par formule.
+function migratePlanCatalogDrillingTabs(done) {
+    const DRILLING = ['forage_plan', 'planification', 'besoins', 'rentabilite', 'bit_sharpening', 'consumables', 'hse', 'depenses_pm', 'analytics'];
+    db.all('SELECT plan, defaultAllowedTabs FROM subscription_plan_catalog', [], (err, rows) => {
+        if (err) { console.warn('Migration onglets drilling (catalogue):', err.message); return done && done(); }
+        const pending = [];
+        (rows || []).forEach((r) => {
+            const existing = planRoles.parseAllowedTabsJson(r.defaultAllowedTabs);
+            if (!existing || !existing.length) return; // NULL/vide -> les défauts de code (déjà à jour) s'appliquent
+            const target = planRoles.DEFAULT_TABS_BY_PLAN[r.plan] || [];
+            const add = DRILLING.filter((t) => target.includes(t) && !existing.includes(t));
+            if (add.length) pending.push({ plan: r.plan, list: existing.concat(add) });
+        });
+        if (!pending.length) return done && done();
+        let left = pending.length;
+        pending.forEach((p) => {
+            db.run('UPDATE subscription_plan_catalog SET defaultAllowedTabs = ? WHERE plan = ?',
+                [JSON.stringify(p.list), p.plan], (uErr) => {
+                    if (uErr) console.warn('Migration onglets drilling (' + p.plan + '):', uErr.message);
+                    else console.log('✅ Onglets drilling ajoutés à la formule ' + p.plan);
+                    if (--left === 0) done && done();
+                });
+        });
+    });
+}
 db.run(
     `CREATE TABLE IF NOT EXISTS worker_chat_messages (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -3491,7 +3523,7 @@ app.get('/api/bits/:id/status-history', (req, res) => {
 
 require('./routes-collab')(app, { db, getEnterpriseId });
 
-loadPlanDefaultTabsFromDb();
+migratePlanCatalogDrillingTabs(loadPlanDefaultTabsFromDb);
 
 // Catch-all handler: send back React's index.html file for client-side routing (doit être à la fin)
 app.get('*', (req, res) => {
