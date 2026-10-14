@@ -286,6 +286,56 @@ db.serialize(() => {
         else console.log('✅ Table employees');
     });
 
+    // Table des pointages de présence (entrées/sorties)
+    db.run(`
+        CREATE TABLE IF NOT EXISTS attendance (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            enterpriseId INTEGER NOT NULL DEFAULT 1,
+            employeeId INTEGER NOT NULL,
+            type TEXT NOT NULL DEFAULT 'in',
+            ts TEXT NOT NULL,
+            method TEXT DEFAULT 'fingerprint',
+            deviceId TEXT DEFAULT '',
+            source TEXT DEFAULT 'kiosk',
+            siteId INTEGER,
+            note TEXT DEFAULT '',
+            createdBy TEXT DEFAULT '',
+            createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (enterpriseId) REFERENCES enterprises(id),
+            FOREIGN KEY (employeeId) REFERENCES employees(id)
+        )
+    `, (err) => {
+        if (err) console.error('Erreur table attendance:', err);
+        else console.log('✅ Table attendance');
+    });
+    db.run('CREATE INDEX IF NOT EXISTS idx_attendance_ent_ts ON attendance(enterpriseId, ts)');
+    db.run('CREATE INDEX IF NOT EXISTS idx_attendance_emp ON attendance(enterpriseId, employeeId)');
+    // Anti-doublon d'un même pointage ré-importé par l'agent (device + employé + horodatage)
+    db.run('CREATE UNIQUE INDEX IF NOT EXISTS idx_attendance_dedup ON attendance(enterpriseId, employeeId, ts, type)');
+
+    // Table des empreintes biométriques enrôlées (gabarits par employé)
+    db.run(`
+        CREATE TABLE IF NOT EXISTS employee_biometrics (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            enterpriseId INTEGER NOT NULL DEFAULT 1,
+            employeeId INTEGER NOT NULL,
+            finger TEXT DEFAULT '',
+            template TEXT NOT NULL,
+            format TEXT DEFAULT 'zk',
+            deviceUserId TEXT DEFAULT '',
+            quality INTEGER DEFAULT 0,
+            createdBy TEXT DEFAULT '',
+            createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+            updatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (enterpriseId) REFERENCES enterprises(id),
+            FOREIGN KEY (employeeId) REFERENCES employees(id)
+        )
+    `, (err) => {
+        if (err) console.error('Erreur table employee_biometrics:', err);
+        else console.log('✅ Table employee_biometrics');
+    });
+    db.run('CREATE INDEX IF NOT EXISTS idx_biometrics_emp ON employee_biometrics(enterpriseId, employeeId)');
+
     // Table des assignations
     db.run(`
         CREATE TABLE IF NOT EXISTS assignments (
