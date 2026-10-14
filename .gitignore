@@ -47,3 +47,5 @@ scripts/setup-vps.sh
 
 # Visuel de la page de connexion GEDRILLING
 !public/gedrilling-mining-hero.jpg
+
+pointage-agent/node_modules/

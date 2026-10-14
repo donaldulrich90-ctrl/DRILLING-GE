@@ -17256,8 +17256,310 @@
                 });
                 html += '</div>';
             }
-            
-            content.innerHTML = html;
+
+            content.innerHTML = rhSubNav('workers') + html;
+        }
+
+        // ── Présence / Pointage (sous-onglets du module RH) ──────────────────
+        var rhSubTab = 'workers';
+        var presenceState = { today: null, enrollments: [], loadingToday: false };
+
+        function rhSubNav(active) {
+            function tab(id, label, icon) {
+                var on = active === id;
+                return '<button type="button" onclick="rhShowSub(\'' + id + '\')" class="px-4 py-2 rounded-lg text-sm font-bold" ' +
+                    'style="' + (on ? 'background:var(--ged-yellow);color:#1a1a1a;' : 'background:var(--ged-charcoal,#334155);color:#cbd5e1;') + '">' + icon + ' ' + label + '</button>';
+            }
+            return '<div class="flex flex-wrap gap-2 mb-5">' +
+                tab('workers', 'Travailleurs', '👷') +
+                tab('presence', 'Présence', '📋') +
+                tab('kiosk', 'Pointage', '🖐️') +
+                '</div>';
+        }
+
+        function rhShowSub(t) {
+            rhSubTab = t;
+            if (t === 'presence') return renderRHPresence();
+            if (t === 'kiosk') return renderRHKiosk();
+            return renderRH();
+        }
+
+        function presEsc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+        function presTime(ts) { if (!ts) return '—'; try { return new Date(ts).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }); } catch (e) { return '—'; } }
+        function presTodayStr() { return new Date().toISOString().slice(0, 10); }
+
+        // ── Tableau de bord RH : présence du jour ────────────────────────────
+        function renderRHPresence() {
+            var content = document.getElementById('rhContent'); if (!content) return;
+            var date = (document.getElementById('presDate') && document.getElementById('presDate').value) || presTodayStr();
+            content.innerHTML = rhSubNav('presence') +
+                '<div class="ged-content-panel rounded-xl p-5 mb-4">' +
+                '<div class="flex flex-wrap items-center gap-3 justify-between mb-3">' +
+                '<h3 class="font-extrabold text-lg" style="color:var(--ged-yellow)">Présence du jour</h3>' +
+                '<div class="flex items-center gap-2">' +
+                '<input type="date" id="presDate" value="' + presEsc(date) + '" class="rounded-lg px-3 py-2" onchange="loadPresenceToday()">' +
+                '<button type="button" onclick="loadPresenceToday()" class="ged-btn-primary px-3 py-2 rounded-lg text-sm font-bold">↻ Actualiser</button>' +
+                '<button type="button" onclick="exportPresenceCsv()" class="px-3 py-2 rounded-lg text-sm font-bold" style="background:var(--ged-charcoal,#334155);color:#cbd5e1">⬇ CSV</button>' +
+                '</div></div>' +
+                '<div id="presTodayHost"><p class="text-slate-400">Chargement…</p></div>' +
+                '</div>';
+            loadPresenceToday();
+        }
+
+        function loadPresenceToday() {
+            var host = document.getElementById('presTodayHost'); if (!host) return;
+            var date = (document.getElementById('presDate') && document.getElementById('presDate').value) || presTodayStr();
+            host.innerHTML = '<p class="text-slate-400">Chargement…</p>';
+            apiRequest('/attendance/today?date=' + encodeURIComponent(date), 'GET').then(function (res) {
+                presenceState.today = res;
+                var rows = (res && res.rows) || [];
+                var present = rows.filter(function (r) { return r.lastType === 'in'; }).length;
+                var html = '<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">' +
+                    presKpi('Présents', present, 'var(--ged-success,#22c55e)') +
+                    presKpi('Pointages', rows.reduce(function (a, r) { return a + (r.punches || 0); }, 0), 'var(--ged-yellow)') +
+                    presKpi('Employés vus', rows.length, '#60a5fa') +
+                    presKpi('Sortis', rows.filter(function (r) { return r.lastType === 'out'; }).length, '#f59e0b') +
+                    '</div>';
+                if (!rows.length) {
+                    html += '<p class="text-slate-400 text-center py-6">Aucun pointage pour cette date.</p>';
+                } else {
+                    html += '<div style="overflow-x:auto"><table class="w-full text-sm" style="border-collapse:collapse">' +
+                        '<thead><tr style="color:#94a3b8;text-align:left">' +
+                        '<th class="py-2 pr-3">Employé</th><th class="py-2 pr-3">N°</th><th class="py-2 pr-3">Arrivée</th><th class="py-2 pr-3">Départ</th><th class="py-2 pr-3">État</th><th class="py-2 pr-3">Pointages</th></tr></thead><tbody>';
+                    rows.forEach(function (r) {
+                        var inside = r.lastType === 'in';
+                        html += '<tr style="border-top:1px solid var(--ged-border,#334155)">' +
+                            '<td class="py-2 pr-3 font-bold">' + presEsc(r.employeeName || ('#' + r.employeeId)) + '</td>' +
+                            '<td class="py-2 pr-3 text-slate-400">' + presEsc(r.employeeNumber) + '</td>' +
+                            '<td class="py-2 pr-3">' + presTime(r.firstIn) + '</td>' +
+                            '<td class="py-2 pr-3">' + presTime(r.lastOut) + '</td>' +
+                            '<td class="py-2 pr-3"><span style="padding:2px 8px;border-radius:9999px;font-size:12px;font-weight:700;background:' + (inside ? 'rgba(34,197,94,.15);color:#22c55e' : 'rgba(148,163,184,.15);color:#94a3b8') + '">' + (inside ? 'Présent' : 'Sorti') + '</span></td>' +
+                            '<td class="py-2 pr-3 text-slate-400">' + (r.punches || 0) + '</td></tr>';
+                    });
+                    html += '</tbody></table></div>';
+                }
+                host.innerHTML = html;
+            }).catch(function (err) {
+                host.innerHTML = '<p class="err">Impossible de charger la présence : ' + presEsc(err && err.message) + '</p>';
+            });
+        }
+
+        function presKpi(label, val, color) {
+            return '<div class="rounded-xl p-3" style="border:1px solid var(--ged-border,#334155)">' +
+                '<div class="text-xs font-bold" style="color:#94a3b8">' + presEsc(label) + '</div>' +
+                '<div class="text-2xl font-extrabold" style="color:' + color + '">' + val + '</div></div>';
+        }
+
+        function exportPresenceCsv() {
+            var res = presenceState.today; if (!res || !res.rows) return;
+            var lines = ['Employe;Numero;Role;Arrivee;Depart;Etat;Pointages'];
+            res.rows.forEach(function (r) {
+                lines.push([r.employeeName || '', r.employeeNumber || '', r.employeeRole || '', r.firstIn || '', r.lastOut || '', r.lastType === 'in' ? 'Present' : 'Sorti', r.punches || 0].join(';'));
+            });
+            var blob = new Blob(['﻿' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+            var a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+            a.download = 'presence_' + (res.date || presTodayStr()) + '.csv'; a.click();
+        }
+
+        // ── Client de l'agent local (lecteur d'empreinte USB via ws://localhost) ──
+        var GEAgent = {
+            ws: null, seq: 0, pending: {}, status: 'disconnected', info: null,
+            url: function () { try { return localStorage.getItem('ge_agent_url') || 'ws://127.0.0.1:9955'; } catch (e) { return 'ws://127.0.0.1:9955'; } },
+            setUrl: function (u) { try { localStorage.setItem('ge_agent_url', u); } catch (e) {} },
+            onStatus: null,
+            connect: function () {
+                var self = this;
+                try { if (self.ws) { try { self.ws.close(); } catch (e) {} } } catch (e) {}
+                self.status = 'connecting'; if (self.onStatus) self.onStatus();
+                var ws;
+                try { ws = new WebSocket(self.url()); } catch (e) { self.status = 'error'; if (self.onStatus) self.onStatus(); return; }
+                self.ws = ws;
+                ws.onopen = function () { self.status = 'connected'; if (self.onStatus) self.onStatus(); self.send('ping', {}).then(function (r) { self.info = r; if (self.onStatus) self.onStatus(); }).catch(function () {}); };
+                ws.onclose = function () { self.status = 'disconnected'; if (self.onStatus) self.onStatus(); };
+                ws.onerror = function () { self.status = 'error'; if (self.onStatus) self.onStatus(); };
+                ws.onmessage = function (ev) {
+                    var msg; try { msg = JSON.parse(ev.data); } catch (e) { return; }
+                    if (msg && msg.id != null && self.pending[msg.id]) { var p = self.pending[msg.id]; delete self.pending[msg.id]; p(msg); }
+                };
+            },
+            send: function (cmd, payload) {
+                var self = this;
+                return new Promise(function (resolve, reject) {
+                    if (!self.ws || self.ws.readyState !== 1) return reject(new Error('Agent non connecté'));
+                    var id = ++self.seq;
+                    self.pending[id] = function (msg) { if (msg.ok === false) reject(new Error(msg.reason || 'Échec du lecteur')); else resolve(msg); };
+                    try { self.ws.send(JSON.stringify(Object.assign({ id: id, cmd: cmd }, payload || {}))); } catch (e) { reject(e); }
+                    setTimeout(function () { if (self.pending[id]) { delete self.pending[id]; reject(new Error('Délai dépassé (lecteur)')); } }, 25000);
+                });
+            }
+        };
+
+        // ── Écran kiosque de pointage ────────────────────────────────────────
+        function renderRHKiosk() {
+            var content = document.getElementById('rhContent'); if (!content) return;
+            content.innerHTML = rhSubNav('kiosk') +
+                '<div class="ged-content-panel rounded-xl p-5 mb-4">' +
+                '<div class="flex flex-wrap items-center justify-between gap-3 mb-2">' +
+                '<h3 class="font-extrabold text-lg" style="color:var(--ged-yellow)">Pointage — poste kiosque</h3>' +
+                '<div id="agentStatus" class="text-sm font-bold"></div></div>' +
+                '<p class="text-xs text-slate-400 mb-3">Le lecteur d\'empreinte USB est relié par l\'agent local. ' +
+                'Sans agent, utilisez le pointage manuel ci-dessous.</p>' +
+                '<div class="flex flex-wrap items-center gap-2 mb-4">' +
+                '<input type="text" id="agentUrl" value="' + presEsc(GEAgent.url()) + '" class="rounded-lg px-3 py-2 text-sm" style="min-width:220px" placeholder="ws://127.0.0.1:9955">' +
+                '<button type="button" onclick="kioskReconnect()" class="px-3 py-2 rounded-lg text-sm font-bold" style="background:var(--ged-charcoal,#334155);color:#cbd5e1">🔌 Connecter l\'agent</button>' +
+                '</div>' +
+                '<div class="grid grid-cols-1 lg:grid-cols-2 gap-4">' +
+                // Colonne empreinte
+                '<div class="rounded-xl p-5 text-center" style="border:1px dashed var(--ged-border,#334155)">' +
+                '<div style="font-size:54px;line-height:1">🖐️</div>' +
+                '<button type="button" id="btnFinger" onclick="kioskIdentify()" class="ged-btn-primary px-5 py-3 rounded-xl text-base font-extrabold mt-2">Pointer par empreinte</button>' +
+                '<div id="kioskResult" class="mt-4 text-sm"></div>' +
+                '</div>' +
+                // Colonne manuelle
+                '<div class="rounded-xl p-5" style="border:1px solid var(--ged-border,#334155)">' +
+                '<div class="font-bold mb-2">Pointage manuel (secours)</div>' +
+                '<select id="kioskEmp" class="w-full rounded-lg px-3 py-2 mb-3"><option value="">— Choisir un employé —</option></select>' +
+                '<div class="flex gap-2">' +
+                '<button type="button" onclick="kioskManual(\'in\')" class="flex-1 px-4 py-3 rounded-xl font-extrabold" style="background:rgba(34,197,94,.15);color:#22c55e">➡️ Entrée</button>' +
+                '<button type="button" onclick="kioskManual(\'out\')" class="flex-1 px-4 py-3 rounded-xl font-extrabold" style="background:rgba(245,158,11,.15);color:#f59e0b">⬅️ Sortie</button>' +
+                '</div></div>' +
+                '</div>' +
+                '<div class="mt-5"><button type="button" onclick="renderRHEnroll()" class="text-sm font-bold" style="color:var(--ged-yellow)">🔐 Gérer les empreintes enrôlées →</button></div>' +
+                '</div>';
+            kioskPopulateEmployees();
+            GEAgent.onStatus = kioskRenderStatus;
+            kioskRenderStatus();
+            if (GEAgent.status !== 'connected') GEAgent.connect();
+        }
+
+        function kioskRenderStatus() {
+            var el = document.getElementById('agentStatus'); if (!el) return;
+            var map = {
+                connected: ['●  Agent connecté' + (GEAgent.info && GEAgent.info.driver ? ' (' + presEsc(GEAgent.info.driver) + ')' : ''), '#22c55e'],
+                connecting: ['●  Connexion à l\'agent…', '#f59e0b'],
+                disconnected: ['●  Agent non connecté', '#94a3b8'],
+                error: ['●  Agent injoignable', '#ef4444']
+            };
+            var s = map[GEAgent.status] || map.disconnected;
+            el.textContent = s[0]; el.style.color = s[1];
+            var btn = document.getElementById('btnFinger'); if (btn) btn.disabled = (GEAgent.status !== 'connected');
+        }
+
+        function kioskReconnect() {
+            var u = (document.getElementById('agentUrl') && document.getElementById('agentUrl').value || '').trim();
+            if (u) GEAgent.setUrl(u);
+            GEAgent.connect();
+        }
+
+        function kioskPopulateEmployees() {
+            var sel = document.getElementById('kioskEmp'); if (!sel) return;
+            var list = (typeof employees !== 'undefined' && employees) ? employees : [];
+            list.filter(function (e) { return e.status !== 'terminated'; }).forEach(function (e) {
+                var o = document.createElement('option'); o.value = e.id; o.textContent = (e.name || ('#' + e.id)) + (e.employeeNumber ? ' (' + e.employeeNumber + ')' : '');
+                sel.appendChild(o);
+            });
+        }
+
+        function kioskShowResult(html, color) {
+            var el = document.getElementById('kioskResult'); if (!el) return;
+            el.innerHTML = '<div style="color:' + (color || '#cbd5e1') + ';font-weight:700">' + html + '</div>';
+        }
+
+        // Détermine entrée/sortie en basculant depuis le dernier pointage du jour.
+        function kioskNextType(employeeId) {
+            return apiRequest('/attendance/today?date=' + presTodayStr(), 'GET').then(function (res) {
+                var row = ((res && res.rows) || []).filter(function (r) { return Number(r.employeeId) === Number(employeeId); })[0];
+                return (row && row.lastType === 'in') ? 'out' : 'in';
+            }).catch(function () { return 'in'; });
+        }
+
+        function kioskRecord(employeeId, employeeName, method) {
+            return kioskNextType(employeeId).then(function (type) {
+                return apiRequest('/attendance/punch', 'POST', { employeeId: employeeId, type: type, method: method || 'fingerprint', deviceId: (GEAgent.info && GEAgent.info.device) || 'kiosk', source: 'kiosk' }).then(function () {
+                    var label = type === 'in' ? 'Entrée enregistrée ✅' : 'Sortie enregistrée ✅';
+                    kioskShowResult('<div style="font-size:20px">' + presEsc(employeeName) + '</div>' + label + ' — ' + presTime(new Date().toISOString()), type === 'in' ? '#22c55e' : '#f59e0b');
+                });
+            }).catch(function (err) { kioskShowResult('Échec : ' + presEsc(err && err.message), '#ef4444'); });
+        }
+
+        function kioskIdentify() {
+            if (GEAgent.status !== 'connected') { kioskShowResult('Agent non connecté. Branchez le lecteur et cliquez « Connecter l\'agent ».', '#ef4444'); return; }
+            kioskShowResult('Posez le doigt sur le lecteur…', '#f59e0b');
+            apiRequest('/attendance/templates', 'GET').then(function (tpls) {
+                if (!tpls || !tpls.length) { kioskShowResult('Aucune empreinte enrôlée. Enrôlez d\'abord les employés.', '#ef4444'); return; }
+                return GEAgent.send('identify', { templates: tpls }).then(function (msg) {
+                    if (!msg || msg.employeeId == null) { kioskShowResult('Empreinte non reconnue.', '#ef4444'); return; }
+                    var emp = ((typeof employees !== 'undefined' && employees) || []).filter(function (e) { return Number(e.id) === Number(msg.employeeId); })[0];
+                    return kioskRecord(msg.employeeId, emp ? emp.name : ('#' + msg.employeeId), 'fingerprint');
+                });
+            }).catch(function (err) { kioskShowResult('Échec : ' + presEsc(err && err.message), '#ef4444'); });
+        }
+
+        function kioskManual(type) {
+            var sel = document.getElementById('kioskEmp'); var id = sel && sel.value;
+            if (!id) { kioskShowResult('Choisissez un employé.', '#f59e0b'); return; }
+            var emp = ((typeof employees !== 'undefined' && employees) || []).filter(function (e) { return Number(e.id) === Number(id); })[0];
+            apiRequest('/attendance/punch', 'POST', { employeeId: Number(id), type: type, method: 'manual', deviceId: 'kiosk', source: 'kiosk' }).then(function () {
+                kioskShowResult(presEsc(emp ? emp.name : ('#' + id)) + ' — ' + (type === 'in' ? 'Entrée' : 'Sortie') + ' enregistrée ✅', type === 'in' ? '#22c55e' : '#f59e0b');
+            }).catch(function (err) { kioskShowResult('Échec : ' + presEsc(err && err.message), '#ef4444'); });
+        }
+
+        // ── Gestion des empreintes enrôlées ──────────────────────────────────
+        function renderRHEnroll() {
+            var content = document.getElementById('rhContent'); if (!content) return;
+            content.innerHTML = rhSubNav('kiosk') +
+                '<div class="ged-content-panel rounded-xl p-5 mb-4">' +
+                '<div class="flex items-center justify-between mb-3">' +
+                '<h3 class="font-extrabold text-lg" style="color:var(--ged-yellow)">Empreintes enrôlées</h3>' +
+                '<button type="button" onclick="renderRHKiosk()" class="text-sm font-bold" style="color:#94a3b8">← Retour au pointage</button></div>' +
+                '<div class="flex flex-wrap items-end gap-2 mb-4">' +
+                '<div><label class="block text-xs font-bold mb-1">Employé</label><select id="enrollEmp" class="rounded-lg px-3 py-2" style="min-width:220px"><option value="">— Choisir —</option></select></div>' +
+                '<button type="button" id="btnEnroll" onclick="enrollCapture()" class="ged-btn-primary px-4 py-2 rounded-lg text-sm font-bold">🔐 Enrôler l\'empreinte</button>' +
+                '<span id="enrollStatus" class="text-sm self-center"></span>' +
+                '</div><div id="enrollList"><p class="text-slate-400">Chargement…</p></div></div>';
+            var sel = document.getElementById('enrollEmp');
+            ((typeof employees !== 'undefined' && employees) || []).filter(function (e) { return e.status !== 'terminated'; }).forEach(function (e) {
+                var o = document.createElement('option'); o.value = e.id; o.textContent = (e.name || ('#' + e.id)) + (e.employeeNumber ? ' (' + e.employeeNumber + ')' : ''); sel.appendChild(o);
+            });
+            GEAgent.onStatus = null;
+            if (GEAgent.status !== 'connected') GEAgent.connect();
+            loadEnrollments();
+        }
+
+        function loadEnrollments() {
+            var host = document.getElementById('enrollList'); if (!host) return;
+            apiRequest('/attendance/enrollments', 'GET').then(function (rows) {
+                if (!rows || !rows.length) { host.innerHTML = '<p class="text-slate-400">Aucune empreinte enrôlée pour le moment.</p>'; return; }
+                var html = '<table class="w-full text-sm"><thead><tr style="color:#94a3b8;text-align:left"><th class="py-2 pr-3">Employé</th><th class="py-2 pr-3">N°</th><th class="py-2 pr-3">Doigt</th><th class="py-2 pr-3">Mise à jour</th><th></th></tr></thead><tbody>';
+                rows.forEach(function (r) {
+                    html += '<tr style="border-top:1px solid var(--ged-border,#334155)">' +
+                        '<td class="py-2 pr-3 font-bold">' + presEsc(r.employeeName) + '</td>' +
+                        '<td class="py-2 pr-3 text-slate-400">' + presEsc(r.employeeNumber) + '</td>' +
+                        '<td class="py-2 pr-3">' + presEsc(r.finger || '—') + '</td>' +
+                        '<td class="py-2 pr-3 text-slate-400">' + presTime(r.updatedAt) + '</td>' +
+                        '<td class="py-2 pr-3"><button type="button" onclick="enrollDelete(' + r.employeeId + ',' + r.id + ')" style="color:#ef4444;font-weight:700">Supprimer</button></td></tr>';
+                });
+                host.innerHTML = html + '</tbody></table>';
+            }).catch(function (err) { host.innerHTML = '<p class="err">' + presEsc(err && err.message) + '</p>'; });
+        }
+
+        function enrollCapture() {
+            var sel = document.getElementById('enrollEmp'); var id = sel && sel.value;
+            var st = document.getElementById('enrollStatus');
+            function status(t, c) { if (st) { st.textContent = t; st.style.color = c || '#cbd5e1'; } }
+            if (!id) { status('Choisissez un employé.', '#f59e0b'); return; }
+            if (GEAgent.status !== 'connected') { status('Agent non connecté.', '#ef4444'); return; }
+            status('Posez le doigt sur le lecteur…', '#f59e0b');
+            GEAgent.send('enroll', {}).then(function (msg) {
+                if (!msg || !msg.template) { status('Capture échouée.', '#ef4444'); return; }
+                return apiRequest('/employees/' + id + '/biometrics', 'POST', { template: msg.template, finger: msg.finger || 'right-index', format: msg.format || 'zk', deviceUserId: msg.deviceUserId || String(id), quality: msg.quality || 0 }).then(function () {
+                    status('Empreinte enrôlée ✅', '#22c55e'); loadEnrollments();
+                });
+            }).catch(function (err) { status('Échec : ' + (err && err.message), '#ef4444'); });
+        }
+
+        function enrollDelete(empId, bioId) {
+            apiRequest('/employees/' + empId + '/biometrics/' + bioId, 'DELETE').then(function () { loadEnrollments(); }).catch(function () {});
         }
 
         var currentEditingEmployeeId = null;
