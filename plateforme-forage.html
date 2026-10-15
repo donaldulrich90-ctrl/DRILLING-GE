@@ -15877,6 +15877,7 @@
 
         // Prix par plat × nombre de plats → montant (si les deux sont saisis).
         var siteMealSettings = { unitPrice: 0, currency: 'XOF' };
+        var siteMealSettingsLoaded = false;
         function recalcSiteMealAmount() {
             var p = parseFloat((document.getElementById('siteMealPlates') || {}).value);
             var u = parseFloat((document.getElementById('siteMealUnitPrice') || {}).value);
@@ -15987,10 +15988,11 @@
         function renderSiteMeals() {
             var content = document.getElementById('site_mealsContent');
             if (!content) return;
-            if (!siteMealSettings._loaded) { siteMealSettings._loaded = true; loadSiteMealSettings(function () { renderSiteMeals(); }); }
+            if (!siteMealSettingsLoaded) { siteMealSettingsLoaded = true; loadSiteMealSettings(function () { renderSiteMeals(); }); }
             var reportMonthKey = getRevenueReportMonthKey();
-            var dispCur = getRevenueViewDisplayCurrency();
-            var expCurDefault = companyInfo.currency || 'XOF';
+            // Dépenses repas toujours affichées en CFA (XOF).
+            var dispCur = 'XOF';
+            var expCurDefault = 'XOF';
             var list = getSiteMealExpensesForSite().slice().sort(function(a, b) {
                 return new Date(b.date) - new Date(a.date);
             });
