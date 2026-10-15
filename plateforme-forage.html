@@ -2470,15 +2470,15 @@
                             <label class="block text-slate-400 mb-2">Nombre de plats *</label>
                             <input type="number" id="siteMealPlates" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white" min="0" step="1" placeholder="0" oninput="recalcSiteMealAmount()">
                         </div>
-                        <div>
+                        <div id="siteMealUnitPriceWrap">
                             <label class="block text-slate-400 mb-2">Prix par plat</label>
                             <input type="number" id="siteMealUnitPrice" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white" min="0" step="0.01" placeholder="0" oninput="recalcSiteMealAmount()">
                         </div>
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                        <div>
+                        <div id="siteMealAmountWrap">
                             <label class="block text-slate-400 mb-2" data-i18n="site_meals.col.amount">Montant total</label>
-                            <input type="number" id="siteMealAmount" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white font-bold" min="0" step="0.01" required>
+                            <input type="number" id="siteMealAmount" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white font-bold" min="0" step="0.01">
                             <p class="text-xs text-slate-500 mt-1">= plats × prix/plat (modifiable)</p>
                         </div>
                         <div>
@@ -15872,12 +15872,25 @@
             var fb = document.getElementById('siteMealFilledBy');
             if (fb) fb.value = (currentUser && (currentUser.name || currentUser.username)) || '';
             recalcSiteMealAmount();
+            applyMealAdminVisibility();
             document.getElementById('siteMealModal').classList.remove('hidden');
         }
 
         // Prix par plat × nombre de plats → montant (si les deux sont saisis).
         var siteMealSettings = { unitPrice: 0, currency: 'XOF' };
         var siteMealSettingsLoaded = false;
+        // Administrateur général : seul à voir les prix et à modifier/supprimer un repas saisi.
+        function isMealAdmin() {
+            return !!(currentUser && (currentUser.isSuperAdmin || currentUser.isPlatformOwner || currentUser.role === 'admin'));
+        }
+        // Masque prix par plat et montant pour la personne qui saisit le nombre de plats.
+        function applyMealAdminVisibility() {
+            var admin = isMealAdmin();
+            var up = document.getElementById('siteMealUnitPriceWrap');
+            var am = document.getElementById('siteMealAmountWrap');
+            if (up) up.style.display = admin ? '' : 'none';
+            if (am) am.style.display = admin ? '' : 'none';
+        }
         function recalcSiteMealAmount() {
             var p = parseFloat((document.getElementById('siteMealPlates') || {}).value);
             var u = parseFloat((document.getElementById('siteMealUnitPrice') || {}).value);
@@ -15900,6 +15913,7 @@
         }
 
         function editSiteMeal(id) {
+            if (!isMealAdmin()) { alert("Modification réservée à l'administrateur général."); return; }
             var row = siteMealExpenses.find(function(r) { return r.id === id; });
             if (!row) return;
             currentEditingSiteMealId = id;
@@ -15918,6 +15932,7 @@
             var fbEl = document.getElementById('siteMealFilledBy'); if (fbEl) fbEl.value = row.filledBy || '';
             document.getElementById('siteMealAmount').value = row.amount || '';
             document.getElementById('siteMealCurrency').value = row.currency || 'XOF';
+            applyMealAdminVisibility();
             document.getElementById('siteMealLabel').value = row.label || '';
             document.getElementById('siteMealNotes').value = row.notes || '';
             document.getElementById('siteMealModal').classList.remove('hidden');
@@ -15956,8 +15971,13 @@
                 unitPrice: (function() { var v = (document.getElementById('siteMealUnitPrice') || {}).value; var n = parseFloat(v); return v === '' || Number.isNaN(n) ? null : n; })(),
                 filledBy: (document.getElementById('siteMealFilledBy').value || '').trim()
             };
-            if (!payload.date || payload.amount <= 0) {
-                alert('Date et montant valides requis');
+            // Le saisisseur ne voit ni ne fixe le prix : le serveur applique le prix paramétré.
+            if (!isMealAdmin()) { payload.unitPrice = null; payload.amount = null; }
+            if (!payload.date) { alert('Date requise'); return; }
+            if (isMealAdmin()) {
+                if (!(payload.amount > 0)) { alert('Montant valide requis'); return; }
+            } else if (!(payload.plates > 0)) {
+                alert('Nombre de plats requis');
                 return;
             }
             var smReq = currentEditingSiteMealId
@@ -15993,6 +16013,7 @@
             // Dépenses repas toujours affichées en CFA (XOF).
             var dispCur = 'XOF';
             var expCurDefault = 'XOF';
+            var mealAdmin = isMealAdmin();
             var list = getSiteMealExpensesForSite().slice().sort(function(a, b) {
                 return new Date(b.date) - new Date(a.date);
             });
@@ -16022,18 +16043,18 @@
                 '<input type="month" id="siteMealsReportMonthInput" class="bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white" value="' +
                 esc(reportMonthKey) +
                 '" onchange="onSiteMealsReportMonthChange()"></div>' +
-                '<div class="flex flex-col justify-end"><p class="text-slate-400 text-sm">' +
+                (mealAdmin ? ('<div class="flex flex-col justify-end"><p class="text-slate-400 text-sm">' +
                 esc(tUi('site_meals.month_total')) +
                 '</p>' +
                 '<p class="text-2xl font-bold text-amber-300">' +
                 formatCurrency(monthTotal, dispCur) +
-                '</p></div>' +
+                '</p></div>') : '') +
                 '<div class="flex-1 min-w-[200px]"></div>' +
                 '<button type="button" onclick="showAddSiteMealModal()" class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg font-semibold">' +
                 esc(tUi('site_meals.add')) +
                 '</button></div>' +
-                // Réglage du prix par plat (pré-rempli à la saisie)
-                '<div class="ged-content-panel p-4 rounded-xl flex flex-wrap items-end gap-3">' +
+                // Réglage du prix par plat — réservé à l'administrateur général
+                (mealAdmin ? ('<div class="ged-content-panel p-4 rounded-xl flex flex-wrap items-end gap-3">' +
                 '<div><label class="block text-slate-400 text-xs mb-1">Prix par plat</label>' +
                 '<input type="number" id="mealSettingPrice" min="0" step="0.01" value="' + (siteMealSettings.unitPrice || '') + '" class="bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white w-32"></div>' +
                 '<div><label class="block text-slate-400 text-xs mb-1">Devise</label>' +
@@ -16043,7 +16064,7 @@
                 '<button type="button" onclick="saveSiteMealSettings()" class="ged-btn-primary px-4 py-2 rounded-lg font-semibold">Enregistrer le prix</button>' +
                 '<span id="mealSettingStatus" class="text-sm self-center"></span>' +
                 '<p class="text-xs text-slate-500 w-full">Ce prix est pré-rempli à chaque saisie ; le montant d\'un repas = nombre de plats × prix par plat.</p>' +
-                '</div>';
+                '</div>') : '');
 
             if (list.length === 0) {
                 html += '<p class="text-slate-400 text-center py-8">' + esc(tUi('site_meals.empty')) + '</p>';
@@ -16054,8 +16075,9 @@
                     var pers = r.headcount ? ' · ' + r.headcount + ' pers.' : '';
                     var shiftLabels = { jour: 'Jour', nuit: 'Nuit', matin: 'Matin', apresmidi: 'Après-midi', journee: 'Journée' };
                     var platsInfo = (r.plates != null && r.plates !== '')
-                        ? ' · ' + r.plates + ' plat' + (r.plates > 1 ? 's' : '') + (r.unitPrice ? ' × ' + formatCurrency(r.unitPrice, r.currency || expCurDefault) : '')
+                        ? ' · ' + r.plates + ' plat' + (r.plates > 1 ? 's' : '') + ((mealAdmin && r.unitPrice) ? ' × ' + formatCurrency(r.unitPrice, r.currency || expCurDefault) : '')
                         : '';
+                    var lockInfo = mealAdmin ? '' : ' · 🔒 verrouillé';
                     var shiftInfo = r.shift ? ' · Shift ' + (shiftLabels[r.shift] || r.shift) : '';
                     var byInfo = r.filledBy ? ' · par ' + esc(r.filledBy) : '';
                     html +=
@@ -16076,11 +16098,12 @@
                         platsInfo +
                         pers +
                         byInfo +
+                        lockInfo +
                         '</p>' +
                         (r.notes ? '<p class="text-xs text-slate-500 mt-1">' + esc(r.notes) + '</p>' : '') +
                         '</div>' +
                         '<div class="flex items-center gap-2">' +
-                        '<p class="font-bold text-lg text-orange-300">' +
+                        (mealAdmin ? ('<p class="font-bold text-lg text-orange-300">' +
                         formatCurrency(
                             convertMoneyAmountToCurrency(r.amount || 0, r.currency || expCurDefault, dispCur),
                             dispCur
@@ -16091,7 +16114,8 @@
                         ')" class="ged-btn-primary px-2 py-1 rounded text-xs">Modifier</button>' +
                         '<button type="button" onclick="deleteSiteMeal(' +
                         r.id +
-                        ')" class="bg-red-600 hover:bg-red-700 px-2 py-1 rounded text-xs">Supprimer</button>' +
+                        ')" class="bg-red-600 hover:bg-red-700 px-2 py-1 rounded text-xs">Supprimer</button>') :
+                        '<span class="text-xs text-slate-400">Saisi — modification par l\'admin</span>') +
                         '</div></div>';
                 });
                 html += '</div>';
