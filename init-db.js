@@ -322,6 +322,7 @@ db.serialize(() => {
             finger TEXT DEFAULT '',
             template TEXT NOT NULL,
             format TEXT DEFAULT 'zk',
+            publicKey TEXT DEFAULT '',
             deviceUserId TEXT DEFAULT '',
             quality INTEGER DEFAULT 0,
             createdBy TEXT DEFAULT '',
@@ -335,6 +336,12 @@ db.serialize(() => {
         else console.log('✅ Table employee_biometrics');
     });
     db.run('CREATE INDEX IF NOT EXISTS idx_biometrics_emp ON employee_biometrics(enterpriseId, employeeId)');
+    // Colonne clé publique (empreinte de l'appareil / WebAuthn) — ajout rétro-compatible.
+    db.run('ALTER TABLE employee_biometrics ADD COLUMN publicKey TEXT DEFAULT \'\'', (aerr) => {
+        if (aerr && !String(aerr.message || '').includes('duplicate column')) {
+            console.warn('Migration employee_biometrics.publicKey:', aerr.message);
+        }
+    });
 
     // Table des assignations
     db.run(`

@@ -2,10 +2,43 @@
 // et gabarits biométriques enrôlés. Alimenté par le kiosque (lecteur d'empreinte
 // via l'agent local) ou saisi manuellement par les RH.
 
+const crypto = require('crypto');
+
 const WRITE_ROLES = new Set(['admin', 'gestionnaire', 'gestionnaire_site', 'superviseur', 'ingenieur', 'platform_owner', 'santesecurite']);
 
 function text(v, max) { if (v == null) return ''; var s = String(v); return s.length > max ? s.slice(0, max) : s; }
 function isIsoish(s) { return typeof s === 'string' && /\d{4}-\d{2}-\d{2}/.test(s); }
+
+// ── WebAuthn (empreinte de l'appareil : téléphone / PC) ──────────────────────
+// Défis à usage unique, courte durée de vie, en mémoire (serveur unique).
+const _waChallenges = new Map(); // challenge(base64url) -> expiry(ms)
+function waNewChallenge() {
+    const c = crypto.randomBytes(32).toString('base64url');
+    _waChallenges.set(c, Date.now() + 5 * 60 * 1000);
+    if (_waChallenges.size > 5000) { const now = Date.now(); for (const [k, v] of _waChallenges) if (v < now) _waChallenges.delete(k); }
+    return c;
+}
+function waConsumeChallenge(c) {
+    if (!c || !_waChallenges.has(c)) return false;
+    const exp = _waChallenges.get(c); _waChallenges.delete(c);
+    return exp >= Date.now();
+}
+function b64urlToBuf(s) { return Buffer.from(String(s || ''), 'base64url'); }
+function parseClientData(clientDataB64) {
+    try { return JSON.parse(b64urlToBuf(clientDataB64).toString('utf8')); } catch (e) { return null; }
+}
+// Vérifie l'assertion WebAuthn (signature de l'appareil) contre la clé publique stockée (SPKI DER).
+function waVerifyAssertion(publicKeySpkiB64, authDataB64, clientDataB64, signatureB64) {
+    try {
+        const keyObj = crypto.createPublicKey({ key: Buffer.from(publicKeySpkiB64, 'base64'), format: 'der', type: 'spki' });
+        const authData = b64urlToBuf(authDataB64);
+        const clientHash = crypto.createHash('sha256').update(b64urlToBuf(clientDataB64)).digest();
+        const signed = Buffer.concat([authData, clientHash]);
+        const sig = b64urlToBuf(signatureB64);
+        const isEc = keyObj.asymmetricKeyType === 'ec';
+        return crypto.verify('sha256', signed, isEc ? { key: keyObj, dsaEncoding: 'der' } : keyObj, sig);
+    } catch (e) { return false; }
+}
 
 module.exports = function registerAttendanceRoutes(app, options) {
     const { db, getEnterpriseId } = options;
@@ -159,10 +192,11 @@ module.exports = function registerAttendanceRoutes(app, options) {
         });
     });
 
-    // Tous les gabarits du tenant (le kiosque les charge pour l'identification 1:N via l'agent).
+    // Gabarits « lecteur » du tenant (le kiosque USB les charge pour l'identification 1:N via l'agent).
+    // Exclut les identifiants WebAuthn (empreinte de l'appareil), traités à part.
     app.get('/api/attendance/templates', (req, res) => {
         const eid = tenantOr400(req, res); if (eid == null) return;
-        db.all('SELECT employeeId, finger, template, format, deviceUserId FROM employee_biometrics WHERE enterpriseId = ?', [eid], (err, rows) => {
+        db.all("SELECT employeeId, finger, template, format, deviceUserId FROM employee_biometrics WHERE enterpriseId = ? AND format <> 'webauthn'", [eid], (err, rows) => {
             if (err) return res.status(500).json({ error: err.message });
             res.json(rows || []);
         });
@@ -206,5 +240,92 @@ module.exports = function registerAttendanceRoutes(app, options) {
                 if (err) return res.status(500).json({ error: err.message });
                 res.json({ ok: true, deleted: this.changes });
             });
+    });
+
+    // ── Pointage par empreinte de l'appareil (WebAuthn : téléphone / PC) ──────
+
+    // Détermine entrée/sortie en basculant depuis le dernier pointage du jour, puis insère.
+    function recordPunchToggle(eid, employeeId, method, deviceId, source, cb) {
+        const day = new Date().toISOString().slice(0, 10);
+        db.get("SELECT type FROM attendance WHERE enterpriseId=? AND employeeId=? AND substr(ts,1,10)=? ORDER BY ts DESC LIMIT 1",
+            [eid, employeeId, day], (e, row) => {
+                const type = (row && row.type === 'in') ? 'out' : 'in';
+                const ts = new Date().toISOString();
+                db.run('INSERT OR IGNORE INTO attendance (enterpriseId, employeeId, type, ts, method, deviceId, source) VALUES (?,?,?,?,?,?,?)',
+                    [eid, employeeId, type, ts, method, deviceId, source], function (ie) {
+                        if (ie) return cb(ie);
+                        cb(null, { type, ts });
+                    });
+            });
+    }
+
+    // Défi à usage unique (anti-rejeu) pour enrôler ou pointer.
+    app.get('/api/attendance/webauthn/challenge', (req, res) => {
+        const eid = tenantOr400(req, res); if (eid == null) return;
+        res.json({ challenge: waNewChallenge(), rpId: req.hostname });
+    });
+
+    // Identifiants WebAuthn enrôlés (pour construire allowCredentials côté client).
+    app.get('/api/attendance/webauthn/credentials', (req, res) => {
+        const eid = tenantOr400(req, res); if (eid == null) return;
+        db.all("SELECT employeeId, template AS credentialId FROM employee_biometrics WHERE enterpriseId = ? AND format = 'webauthn'", [eid], (err, rows) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json(rows || []);
+        });
+    });
+
+    // Enrôle l'empreinte de l'appareil pour un employé. { credentialId, publicKey, clientDataJSON, finger? }
+    app.post('/api/employees/:id/webauthn/register', (req, res) => {
+        if (!canWrite(req)) return res.status(403).json({ error: 'Droits insuffisants' });
+        const eid = tenantOr400(req, res); if (eid == null) return;
+        const employeeId = Number(req.params.id) || 0;
+        const b = req.body || {};
+        const credentialId = text(b.credentialId, 1000);
+        const publicKey = text(b.publicKey, 4000);
+        if (!credentialId || !publicKey) return res.status(400).json({ error: 'credentialId et publicKey requis' });
+        const cd = parseClientData(b.clientDataJSON);
+        if (!cd || cd.type !== 'webauthn.create' || !waConsumeChallenge(cd.challenge)) {
+            return res.status(400).json({ error: 'Attestation invalide (défi ou type)' });
+        }
+        db.get('SELECT id FROM employees WHERE id = ? AND enterpriseId = ?', [employeeId, eid], (e0, emp) => {
+            if (e0) return res.status(500).json({ error: e0.message });
+            if (!emp) return res.status(404).json({ error: 'Employé introuvable dans cette entreprise' });
+            const now = new Date().toISOString();
+            db.run(
+                `INSERT INTO employee_biometrics (enterpriseId, employeeId, finger, template, format, publicKey, deviceUserId, quality, createdBy, createdAt, updatedAt)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+                [eid, employeeId, text(b.finger, 30) || 'appareil', credentialId, 'webauthn', publicKey, '', 0, actor(req), now, now],
+                function (iErr) {
+                    if (iErr) return res.status(500).json({ error: iErr.message });
+                    res.json({ ok: true, id: this.lastID });
+                }
+            );
+        });
+    });
+
+    // Pointe un employé après vérification de l'empreinte de l'appareil.
+    // { credentialId, authenticatorData, clientDataJSON, signature, deviceId? }
+    app.post('/api/attendance/webauthn/punch', (req, res) => {
+        const eid = tenantOr400(req, res); if (eid == null) return;
+        const b = req.body || {};
+        const credentialId = text(b.credentialId, 1000);
+        if (!credentialId) return res.status(400).json({ error: 'credentialId requis' });
+        const cd = parseClientData(b.clientDataJSON);
+        if (!cd || cd.type !== 'webauthn.get' || !waConsumeChallenge(cd.challenge)) {
+            return res.status(400).json({ error: 'Assertion invalide (défi ou type)' });
+        }
+        db.get("SELECT employeeId, publicKey FROM employee_biometrics WHERE enterpriseId = ? AND format='webauthn' AND template = ?", [eid, credentialId], (err, row) => {
+            if (err) return res.status(500).json({ error: err.message });
+            if (!row) return res.status(404).json({ error: 'Appareil non enrôlé' });
+            if (!waVerifyAssertion(row.publicKey, b.authenticatorData, b.clientDataJSON, b.signature)) {
+                return res.status(401).json({ error: 'Empreinte non vérifiée' });
+            }
+            recordPunchToggle(eid, row.employeeId, 'webauthn', text(b.deviceId, 60) || 'appareil', 'webauthn', (e2, r) => {
+                if (e2) return res.status(500).json({ error: e2.message });
+                db.get('SELECT name FROM employees WHERE id = ?', [row.employeeId], (e3, emp) => {
+                    res.json({ ok: true, employeeId: row.employeeId, employeeName: emp ? emp.name : '', type: r.type, ts: r.ts });
+                });
+            });
+        });
     });
 };
