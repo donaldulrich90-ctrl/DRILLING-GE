@@ -1176,7 +1176,7 @@
         <div class="flex min-h-screen w-full">
             <aside id="gedSidebar" class="ged-sidebar w-64 lg:w-72 flex-shrink-0 flex flex-col overflow-y-auto">
                 <div class="ged-sidebar-brand p-4">
-                    <div class="gedm-sb-logo"><img src="/ge-logo.png" alt="GOOD ENGINEERS"></div>
+                    <div class="gedm-sb-logo"><img id="gedSidebarLogo" src="/ge-logo.png" alt="Logo entreprise" onerror="this.onerror=null;this.src='/ge-logo.png'"></div>
                     <div class="flex items-center gap-3 mt-3">
                         <div>
                             <p class="text-white font-extrabold text-xl tracking-tight leading-none">GEDRILLING</p>
@@ -5450,6 +5450,32 @@
             return r === 'admin' || r === 'gestionnaire_site' || r === 'platform_owner';
         }
 
+        // Affiche le logo de l'entreprise souscriptrice (tenant courant) dans la barre latérale,
+        // sinon celui de GOOD ENGINEERS par défaut.
+        function resolveCurrentEnterprise() {
+            if (!currentUser) return null;
+            var eid = currentUser.currentEnterpriseId != null ? currentUser.currentEnterpriseId
+                : (window.API && window.API.getEnterpriseId ? window.API.getEnterpriseId() : currentUser.enterpriseId);
+            function findIn(list) {
+                if (!list || !list.length) return null;
+                for (var i = 0; i < list.length; i++) {
+                    if (list[i] && String(list[i].id) === String(eid)) return list[i];
+                }
+                return null;
+            }
+            return findIn(currentUser.enterprises) ||
+                (typeof enterprises !== 'undefined' && Array.isArray(enterprises) ? findIn(enterprises) : null);
+        }
+
+        function applyEnterpriseBranding() {
+            var img = document.getElementById('gedSidebarLogo');
+            if (!img) return;
+            var ent = resolveCurrentEnterprise();
+            var logo = ent && ent.logo ? String(ent.logo).trim() : '';
+            img.src = logo || '/ge-logo.png';
+            img.alt = (ent && ent.name) ? ent.name : 'GOOD ENGINEERS';
+        }
+
         function applyUserPermissions() {
             if (!currentUser) return;
             applyNavLabelsI18n();
@@ -5590,6 +5616,7 @@
                     btn.style.display = 'none';
                 }
             });
+            applyEnterpriseBranding();
         }
 
         // ============================================
@@ -22249,6 +22276,7 @@
             try { localStorage.setItem('forage_currentEnterpriseId', entId); } catch(e) {}
             await loadData();
             updateSiteSelector();
+            applyEnterpriseBranding();
             renderDashboard();
             renderView(currentMainView || 'dashboard');
         }
@@ -22757,6 +22785,7 @@
                 if (savedSiteId) currentSiteId = parseInt(savedSiteId);
             } catch (e) {}
             updateSiteSelector();
+            applyEnterpriseBranding();
             renderDashboard();
             if (currentUser && (currentUser.isSuperAdmin || currentUser.role === 'super_admin' || currentUser.role === 'admin')) {
                 showMainView('dashboard');
