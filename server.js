@@ -3006,10 +3006,23 @@ app.get('/api/site-meal-expenses', (req, res) => {
     });
 });
 
-// Montant = nombre de plats × prix par plat quand ces champs sont fournis, sinon montant saisi.
-function computeMealAmount(body) {
+// L'administrateur général : seul habilité à modifier/supprimer un repas déjà saisi.
+function isMealGeneralAdmin(req) {
+    return !!(req.auth && (req.auth.isSuperAdmin || req.auth.isPlatformOwner || req.auth.role === 'admin'));
+}
+
+// Prix par plat effectif : celui fourni, sinon le réglage de l'entreprise (invisible au saisisseur).
+function resolveMealUnitPrice(eid, body, cb) {
+    if (body.unitPrice != null && body.unitPrice !== '' && Number.isFinite(Number(body.unitPrice))) {
+        return cb(Number(body.unitPrice));
+    }
+    db.get('SELECT unitPrice FROM site_meal_settings WHERE enterpriseId = ?', [eid], (err, row) => {
+        cb(row && row.unitPrice != null ? Number(row.unitPrice) : null);
+    });
+}
+
+function mealAmountFrom(body, unit) {
     const plates = body.plates != null && body.plates !== '' ? Number(body.plates) : null;
-    const unit = body.unitPrice != null && body.unitPrice !== '' ? Number(body.unitPrice) : null;
     if (plates != null && unit != null && Number.isFinite(plates) && Number.isFinite(unit)) {
         return Math.max(0, plates * unit);
     }
@@ -3019,39 +3032,47 @@ function computeMealAmount(body) {
 app.post('/api/site-meal-expenses', (req, res) => {
     const eid = getEnterpriseId(req);
     if (!eid) return res.status(400).json({ error: 'Contexte entreprise requis' });
-    const { date, siteId, drillId, mealPeriod, headcount, currency, label, notes, shift, plates, unitPrice } = req.body;
-    const amount = computeMealAmount(req.body);
-    if (!date || amount == null) return res.status(400).json({ error: 'date et montant requis' });
+    const { date, siteId, drillId, mealPeriod, headcount, currency, label, notes, shift, plates } = req.body;
+    if (!date) return res.status(400).json({ error: 'date requise' });
     const filledBy = (req.auth && req.auth.username) ? String(req.auth.username) : (req.body.filledBy || '');
-    db.run(
-        'INSERT INTO siteMealExpenses (enterpriseId, date, siteId, drillId, mealPeriod, headcount, amount, currency, label, notes, shift, plates, unitPrice, filledBy) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [eid, date, siteId != null ? String(siteId) : '', drillId || '', mealPeriod || 'lunch',
-         headcount != null ? Number(headcount) : null, Number(amount), currency || 'XOF', label || '', notes || '',
-         shift || '', plates != null && plates !== '' ? Number(plates) : null, unitPrice != null && unitPrice !== '' ? Number(unitPrice) : null, filledBy],
-        function(err) {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ id: this.lastID, amount, filledBy });
-        }
-    );
+    resolveMealUnitPrice(eid, req.body, (unit) => {
+        const amount = mealAmountFrom(req.body, unit);
+        db.run(
+            'INSERT INTO siteMealExpenses (enterpriseId, date, siteId, drillId, mealPeriod, headcount, amount, currency, label, notes, shift, plates, unitPrice, filledBy) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [eid, date, siteId != null ? String(siteId) : '', drillId || '', mealPeriod || 'lunch',
+             headcount != null ? Number(headcount) : null, Number(amount), currency || 'XOF', label || '', notes || '',
+             shift || '', plates != null && plates !== '' ? Number(plates) : null, unit != null ? unit : null, filledBy],
+            function(err) {
+                if (err) return res.status(500).json({ error: err.message });
+                res.json({ id: this.lastID, amount, filledBy });
+            }
+        );
+    });
 });
 
 app.put('/api/site-meal-expenses/:id', (req, res) => {
     const eid = getEnterpriseId(req);
     if (!eid) return res.status(400).json({ error: 'Contexte entreprise requis' });
-    const { date, siteId, drillId, mealPeriod, headcount, currency, label, notes, shift, plates, unitPrice } = req.body;
-    const amount = computeMealAmount(req.body);
-    db.run(
-        'UPDATE siteMealExpenses SET date=?, siteId=?, drillId=?, mealPeriod=?, headcount=?, amount=?, currency=?, label=?, notes=?, shift=?, plates=?, unitPrice=? WHERE id=? AND enterpriseId=?',
-        [date, siteId != null ? String(siteId) : '', drillId || '', mealPeriod || 'lunch',
-         headcount != null ? Number(headcount) : null, Number(amount), currency || 'XOF', label || '', notes || '',
-         shift || '', plates != null && plates !== '' ? Number(plates) : null, unitPrice != null && unitPrice !== '' ? Number(unitPrice) : null,
-         req.params.id, eid],
-        function(err) {
-            if (err) return res.status(500).json({ error: err.message });
-            if (this.changes === 0) return res.status(404).json({ error: 'Non trouvé' });
-            res.json({ ok: true, amount });
-        }
-    );
+    // Une fois saisi, un repas ne se modifie qu'avec l'administrateur général.
+    if (!isMealGeneralAdmin(req)) {
+        return res.status(403).json({ error: "Modification réservée à l'administrateur général." });
+    }
+    const { date, siteId, drillId, mealPeriod, headcount, currency, label, notes, shift, plates } = req.body;
+    resolveMealUnitPrice(eid, req.body, (unit) => {
+        const amount = mealAmountFrom(req.body, unit);
+        db.run(
+            'UPDATE siteMealExpenses SET date=?, siteId=?, drillId=?, mealPeriod=?, headcount=?, amount=?, currency=?, label=?, notes=?, shift=?, plates=?, unitPrice=? WHERE id=? AND enterpriseId=?',
+            [date, siteId != null ? String(siteId) : '', drillId || '', mealPeriod || 'lunch',
+             headcount != null ? Number(headcount) : null, Number(amount), currency || 'XOF', label || '', notes || '',
+             shift || '', plates != null && plates !== '' ? Number(plates) : null, unit != null ? unit : null,
+             req.params.id, eid],
+            function(err) {
+                if (err) return res.status(500).json({ error: err.message });
+                if (this.changes === 0) return res.status(404).json({ error: 'Non trouvé' });
+                res.json({ ok: true, amount });
+            }
+        );
+    });
 });
 
 // Réglage du prix par plat (par entreprise)
@@ -3083,6 +3104,9 @@ app.put('/api/site-meal-settings', (req, res) => {
 app.delete('/api/site-meal-expenses/:id', (req, res) => {
     const eid = getEnterpriseId(req);
     if (!eid) return res.status(400).json({ error: 'Contexte entreprise requis' });
+    if (!isMealGeneralAdmin(req)) {
+        return res.status(403).json({ error: "Suppression réservée à l'administrateur général." });
+    }
     db.run('DELETE FROM siteMealExpenses WHERE id=? AND enterpriseId=?', [req.params.id, eid], function(err) {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ ok: true });
