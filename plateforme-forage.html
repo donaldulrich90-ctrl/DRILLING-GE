@@ -17394,6 +17394,86 @@
             }
         };
 
+        // ── Empreinte de l'appareil (WebAuthn : téléphone / PC) ──────────────
+        function waSupported() { return !!(window.PublicKeyCredential && navigator.credentials && navigator.credentials.create); }
+        function bufToB64url(buf) { var b = new Uint8Array(buf), s = ''; for (var i = 0; i < b.length; i++) s += String.fromCharCode(b[i]); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
+        function bufToB64(buf) { var b = new Uint8Array(buf), s = ''; for (var i = 0; i < b.length; i++) s += String.fromCharCode(b[i]); return btoa(s); }
+        function b64urlToBuf(s) { s = String(s).replace(/-/g, '+').replace(/_/g, '/'); while (s.length % 4) s += '='; var bin = atob(s), u = new Uint8Array(bin.length); for (var i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u.buffer; }
+
+        function webauthnEnroll(employeeId, employeeName, employeeNumber) {
+            if (!waSupported()) return Promise.reject(new Error('Cet appareil/navigateur ne gère pas l\'empreinte (WebAuthn).'));
+            return apiRequest('/attendance/webauthn/challenge', 'GET').then(function (ch) {
+                var opts = {
+                    challenge: b64urlToBuf(ch.challenge),
+                    rp: { name: 'GOOD ENGINEERS', id: ch.rpId || location.hostname },
+                    user: { id: new TextEncoder().encode('emp-' + employeeId), name: (employeeNumber || ('emp' + employeeId)), displayName: employeeName || ('Employé ' + employeeId) },
+                    pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+                    authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'preferred' },
+                    timeout: 60000, attestation: 'none'
+                };
+                return navigator.credentials.create({ publicKey: opts });
+            }).then(function (cred) {
+                var pub = cred.response.getPublicKey ? cred.response.getPublicKey() : null;
+                if (!pub) throw new Error('Clé publique indisponible sur cet appareil.');
+                return apiRequest('/employees/' + employeeId + '/webauthn/register', 'POST', {
+                    credentialId: bufToB64url(cred.rawId),
+                    publicKey: bufToB64(pub),
+                    clientDataJSON: bufToB64url(cred.response.clientDataJSON),
+                    finger: 'appareil'
+                });
+            });
+        }
+
+        function webauthnPunch() {
+            if (!waSupported()) return Promise.reject(new Error('Cet appareil/navigateur ne gère pas l\'empreinte (WebAuthn).'));
+            return apiRequest('/attendance/webauthn/credentials', 'GET').then(function (creds) {
+                if (!creds || !creds.length) throw new Error('Aucun appareil enrôlé. Enrôlez d\'abord l\'employé sur cet appareil.');
+                return apiRequest('/attendance/webauthn/challenge', 'GET').then(function (ch) {
+                    var opts = {
+                        challenge: b64urlToBuf(ch.challenge),
+                        rpId: ch.rpId || location.hostname,
+                        allowCredentials: creds.map(function (c) { return { type: 'public-key', id: b64urlToBuf(c.credentialId) }; }),
+                        userVerification: 'required', timeout: 60000
+                    };
+                    return navigator.credentials.get({ publicKey: opts });
+                });
+            }).then(function (assertion) {
+                return apiRequest('/attendance/webauthn/punch', 'POST', {
+                    credentialId: bufToB64url(assertion.rawId),
+                    authenticatorData: bufToB64url(assertion.response.authenticatorData),
+                    clientDataJSON: bufToB64url(assertion.response.clientDataJSON),
+                    signature: bufToB64url(assertion.response.signature),
+                    deviceId: 'appareil'
+                });
+            });
+        }
+
+        function kioskDevicePunch() {
+            kioskShowResult('Posez le doigt sur le capteur de l\'appareil…', '#f59e0b');
+            webauthnPunch().then(function (r) {
+                var label = r.type === 'in' ? 'Entrée enregistrée ✅' : 'Sortie enregistrée ✅';
+                kioskShowResult('<div style="font-size:20px">' + presEsc(r.employeeName || ('#' + r.employeeId)) + '</div>' + label + ' — ' + presTime(r.ts), r.type === 'in' ? '#22c55e' : '#f59e0b');
+            }).catch(function (err) {
+                var m = (err && err.name === 'NotAllowedError') ? 'Empreinte annulée ou non reconnue.' : (err && err.message);
+                kioskShowResult('Échec : ' + presEsc(m), '#ef4444');
+            });
+        }
+
+        function enrollDevice() {
+            var sel = document.getElementById('enrollEmp'); var id = sel && sel.value;
+            var st = document.getElementById('enrollStatus');
+            function status(t, c) { if (st) { st.textContent = t; st.style.color = c || '#cbd5e1'; } }
+            if (!id) { status('Choisissez un employé.', '#f59e0b'); return; }
+            var emp = ((typeof employees !== 'undefined' && employees) || []).filter(function (e) { return Number(e.id) === Number(id); })[0];
+            status('Posez le doigt sur le capteur de l\'appareil…', '#f59e0b');
+            webauthnEnroll(Number(id), emp ? emp.name : '', emp ? emp.employeeNumber : '').then(function () {
+                status('Appareil enrôlé ✅', '#22c55e'); loadEnrollments();
+            }).catch(function (err) {
+                var m = (err && err.name === 'NotAllowedError') ? 'Enrôlement annulé.' : (err && err.message);
+                status('Échec : ' + m, '#ef4444');
+            });
+        }
+
         // ── Écran kiosque de pointage ────────────────────────────────────────
         function renderRHKiosk() {
             var content = document.getElementById('rhContent'); if (!content) return;
@@ -17412,7 +17492,10 @@
                 // Colonne empreinte
                 '<div class="rounded-xl p-5 text-center" style="border:1px dashed var(--ged-border,#334155)">' +
                 '<div style="font-size:54px;line-height:1">🖐️</div>' +
-                '<button type="button" id="btnFinger" onclick="kioskIdentify()" class="ged-btn-primary px-5 py-3 rounded-xl text-base font-extrabold mt-2">Pointer par empreinte</button>' +
+                '<div class="flex flex-col gap-2 items-center mt-2">' +
+                '<button type="button" id="btnFinger" onclick="kioskIdentify()" class="ged-btn-primary px-5 py-3 rounded-xl text-base font-extrabold">🖐️ Lecteur USB</button>' +
+                '<button type="button" id="btnDevice" onclick="kioskDevicePunch()" class="px-5 py-3 rounded-xl text-base font-extrabold" style="background:#2563eb;color:#fff">📱 Empreinte de cet appareil</button>' +
+                '</div>' +
                 '<div id="kioskResult" class="mt-4 text-sm"></div>' +
                 '</div>' +
                 // Colonne manuelle
@@ -17514,7 +17597,8 @@
                 '<button type="button" onclick="renderRHKiosk()" class="text-sm font-bold" style="color:#94a3b8">← Retour au pointage</button></div>' +
                 '<div class="flex flex-wrap items-end gap-2 mb-4">' +
                 '<div><label class="block text-xs font-bold mb-1">Employé</label><select id="enrollEmp" class="rounded-lg px-3 py-2" style="min-width:220px"><option value="">— Choisir —</option></select></div>' +
-                '<button type="button" id="btnEnroll" onclick="enrollCapture()" class="ged-btn-primary px-4 py-2 rounded-lg text-sm font-bold">🔐 Enrôler l\'empreinte</button>' +
+                '<button type="button" id="btnEnroll" onclick="enrollCapture()" class="ged-btn-primary px-4 py-2 rounded-lg text-sm font-bold">🖐️ Enrôler (lecteur USB)</button>' +
+                '<button type="button" id="btnEnrollDevice" onclick="enrollDevice()" class="px-4 py-2 rounded-lg text-sm font-bold" style="background:#2563eb;color:#fff">📱 Enrôler via cet appareil</button>' +
                 '<span id="enrollStatus" class="text-sm self-center"></span>' +
                 '</div><div id="enrollList"><p class="text-slate-400">Chargement…</p></div></div>';
             var sel = document.getElementById('enrollEmp');
