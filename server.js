@@ -3006,18 +3006,31 @@ app.get('/api/site-meal-expenses', (req, res) => {
     });
 });
 
+// Montant = nombre de plats × prix par plat quand ces champs sont fournis, sinon montant saisi.
+function computeMealAmount(body) {
+    const plates = body.plates != null && body.plates !== '' ? Number(body.plates) : null;
+    const unit = body.unitPrice != null && body.unitPrice !== '' ? Number(body.unitPrice) : null;
+    if (plates != null && unit != null && Number.isFinite(plates) && Number.isFinite(unit)) {
+        return Math.max(0, plates * unit);
+    }
+    return body.amount != null ? Number(body.amount) : 0;
+}
+
 app.post('/api/site-meal-expenses', (req, res) => {
     const eid = getEnterpriseId(req);
     if (!eid) return res.status(400).json({ error: 'Contexte entreprise requis' });
-    const { date, siteId, drillId, mealPeriod, headcount, amount, currency, label, notes } = req.body;
-    if (!date || amount == null) return res.status(400).json({ error: 'date et amount requis' });
+    const { date, siteId, drillId, mealPeriod, headcount, currency, label, notes, shift, plates, unitPrice } = req.body;
+    const amount = computeMealAmount(req.body);
+    if (!date || amount == null) return res.status(400).json({ error: 'date et montant requis' });
+    const filledBy = (req.auth && req.auth.username) ? String(req.auth.username) : (req.body.filledBy || '');
     db.run(
-        'INSERT INTO siteMealExpenses (enterpriseId, date, siteId, drillId, mealPeriod, headcount, amount, currency, label, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO siteMealExpenses (enterpriseId, date, siteId, drillId, mealPeriod, headcount, amount, currency, label, notes, shift, plates, unitPrice, filledBy) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [eid, date, siteId != null ? String(siteId) : '', drillId || '', mealPeriod || 'lunch',
-         headcount != null ? Number(headcount) : null, Number(amount), currency || 'XOF', label || '', notes || ''],
+         headcount != null ? Number(headcount) : null, Number(amount), currency || 'XOF', label || '', notes || '',
+         shift || '', plates != null && plates !== '' ? Number(plates) : null, unitPrice != null && unitPrice !== '' ? Number(unitPrice) : null, filledBy],
         function(err) {
             if (err) return res.status(500).json({ error: err.message });
-            res.json({ id: this.lastID });
+            res.json({ id: this.lastID, amount, filledBy });
         }
     );
 });
@@ -3025,16 +3038,44 @@ app.post('/api/site-meal-expenses', (req, res) => {
 app.put('/api/site-meal-expenses/:id', (req, res) => {
     const eid = getEnterpriseId(req);
     if (!eid) return res.status(400).json({ error: 'Contexte entreprise requis' });
-    const { date, siteId, drillId, mealPeriod, headcount, amount, currency, label, notes } = req.body;
+    const { date, siteId, drillId, mealPeriod, headcount, currency, label, notes, shift, plates, unitPrice } = req.body;
+    const amount = computeMealAmount(req.body);
     db.run(
-        'UPDATE siteMealExpenses SET date=?, siteId=?, drillId=?, mealPeriod=?, headcount=?, amount=?, currency=?, label=?, notes=? WHERE id=? AND enterpriseId=?',
+        'UPDATE siteMealExpenses SET date=?, siteId=?, drillId=?, mealPeriod=?, headcount=?, amount=?, currency=?, label=?, notes=?, shift=?, plates=?, unitPrice=? WHERE id=? AND enterpriseId=?',
         [date, siteId != null ? String(siteId) : '', drillId || '', mealPeriod || 'lunch',
          headcount != null ? Number(headcount) : null, Number(amount), currency || 'XOF', label || '', notes || '',
+         shift || '', plates != null && plates !== '' ? Number(plates) : null, unitPrice != null && unitPrice !== '' ? Number(unitPrice) : null,
          req.params.id, eid],
         function(err) {
             if (err) return res.status(500).json({ error: err.message });
             if (this.changes === 0) return res.status(404).json({ error: 'Non trouvé' });
-            res.json({ ok: true });
+            res.json({ ok: true, amount });
+        }
+    );
+});
+
+// Réglage du prix par plat (par entreprise)
+app.get('/api/site-meal-settings', (req, res) => {
+    const eid = getEnterpriseId(req);
+    if (!eid) return res.status(400).json({ error: 'Contexte entreprise requis' });
+    db.get('SELECT unitPrice, currency FROM site_meal_settings WHERE enterpriseId = ?', [eid], (err, row) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(row || { unitPrice: 0, currency: 'XOF' });
+    });
+});
+
+app.put('/api/site-meal-settings', (req, res) => {
+    const eid = getEnterpriseId(req);
+    if (!eid) return res.status(400).json({ error: 'Contexte entreprise requis' });
+    const unitPrice = Number(req.body.unitPrice) || 0;
+    const currency = req.body.currency || 'XOF';
+    db.run(
+        'INSERT INTO site_meal_settings (enterpriseId, unitPrice, currency, updatedAt) VALUES (?, ?, ?, CURRENT_TIMESTAMP) ' +
+        'ON CONFLICT(enterpriseId) DO UPDATE SET unitPrice=excluded.unitPrice, currency=excluded.currency, updatedAt=CURRENT_TIMESTAMP',
+        [eid, unitPrice, currency],
+        function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ ok: true, unitPrice, currency });
         }
     );
 });

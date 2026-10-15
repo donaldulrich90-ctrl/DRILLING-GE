@@ -2457,12 +2457,29 @@
                     </div>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                         <div>
-                            <label class="block text-slate-400 mb-2" data-i18n="site_meals.col.headcount">Convives</label>
-                            <input type="number" id="siteMealHeadcount" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white" min="0" step="1" placeholder="0">
+                            <label class="block text-slate-400 mb-2">Shift / Poste</label>
+                            <select id="siteMealShift" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white">
+                                <option value="jour">Jour</option>
+                                <option value="nuit">Nuit</option>
+                                <option value="matin">Matin</option>
+                                <option value="apresmidi">Après-midi</option>
+                                <option value="journee">Journée</option>
+                            </select>
                         </div>
                         <div>
-                            <label class="block text-slate-400 mb-2" data-i18n="site_meals.col.amount">Montant *</label>
-                            <input type="number" id="siteMealAmount" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white" min="0" step="0.01" required>
+                            <label class="block text-slate-400 mb-2">Nombre de plats *</label>
+                            <input type="number" id="siteMealPlates" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white" min="0" step="1" placeholder="0" oninput="recalcSiteMealAmount()">
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 mb-2">Prix par plat</label>
+                            <input type="number" id="siteMealUnitPrice" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white" min="0" step="0.01" placeholder="0" oninput="recalcSiteMealAmount()">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                        <div>
+                            <label class="block text-slate-400 mb-2" data-i18n="site_meals.col.amount">Montant total</label>
+                            <input type="number" id="siteMealAmount" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white font-bold" min="0" step="0.01" required>
+                            <p class="text-xs text-slate-500 mt-1">= plats × prix/plat (modifiable)</p>
                         </div>
                         <div>
                             <label class="block text-slate-400 mb-2">Devise</label>
@@ -2472,6 +2489,14 @@
                                 <option value="EUR">EUR</option>
                             </select>
                         </div>
+                        <div>
+                            <label class="block text-slate-400 mb-2">Personne désignée</label>
+                            <input type="text" id="siteMealFilledBy" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white" placeholder="Qui a rempli">
+                        </div>
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-slate-400 mb-2" data-i18n="site_meals.col.headcount">Convives (optionnel)</label>
+                        <input type="number" id="siteMealHeadcount" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white" min="0" step="1" placeholder="0">
                     </div>
                     <div class="mb-4">
                         <label class="block text-slate-400 mb-2" data-i18n="site_meals.label_field">Libellé</label>
@@ -15839,7 +15864,38 @@
             populateSiteMealFormSelects();
             var dEl = document.getElementById('siteMealDate');
             if (dEl) dEl.value = getLocalDateYYYYMMDD(new Date());
+            // Pré-remplir le prix par plat depuis le réglage et la personne connectée.
+            var up = document.getElementById('siteMealUnitPrice');
+            if (up && siteMealSettings && siteMealSettings.unitPrice) up.value = siteMealSettings.unitPrice;
+            var curEl = document.getElementById('siteMealCurrency');
+            if (curEl && siteMealSettings && siteMealSettings.currency) curEl.value = siteMealSettings.currency;
+            var fb = document.getElementById('siteMealFilledBy');
+            if (fb) fb.value = (currentUser && (currentUser.name || currentUser.username)) || '';
+            recalcSiteMealAmount();
             document.getElementById('siteMealModal').classList.remove('hidden');
+        }
+
+        // Prix par plat × nombre de plats → montant (si les deux sont saisis).
+        var siteMealSettings = { unitPrice: 0, currency: 'XOF' };
+        function recalcSiteMealAmount() {
+            var p = parseFloat((document.getElementById('siteMealPlates') || {}).value);
+            var u = parseFloat((document.getElementById('siteMealUnitPrice') || {}).value);
+            var amt = document.getElementById('siteMealAmount');
+            if (amt && Number.isFinite(p) && Number.isFinite(u)) amt.value = Math.max(0, p * u);
+        }
+        function loadSiteMealSettings(cb) {
+            apiRequest('/site-meal-settings', 'GET').then(function (s) {
+                siteMealSettings = { unitPrice: Number(s && s.unitPrice) || 0, currency: (s && s.currency) || 'XOF' };
+                if (cb) cb();
+            }).catch(function () { if (cb) cb(); });
+        }
+        function saveSiteMealSettings() {
+            var up = parseFloat((document.getElementById('mealSettingPrice') || {}).value) || 0;
+            var cur = (document.getElementById('mealSettingCurrency') || {}).value || 'XOF';
+            apiRequest('/site-meal-settings', 'PUT', { unitPrice: up, currency: cur }).then(function () {
+                siteMealSettings = { unitPrice: up, currency: cur };
+                var s = document.getElementById('mealSettingStatus'); if (s) { s.textContent = 'Enregistré ✅'; s.style.color = '#22c55e'; }
+            }).catch(function (err) { var s = document.getElementById('mealSettingStatus'); if (s) { s.textContent = 'Échec : ' + (err && err.message); s.style.color = '#ef4444'; } });
         }
 
         function editSiteMeal(id) {
@@ -15855,6 +15911,10 @@
             document.getElementById('siteMealPeriod').value = row.mealPeriod || 'lunch';
             var hc = document.getElementById('siteMealHeadcount');
             if (hc) hc.value = row.headcount != null && row.headcount !== '' ? row.headcount : '';
+            var shEl = document.getElementById('siteMealShift'); if (shEl) shEl.value = row.shift || 'jour';
+            var plEl = document.getElementById('siteMealPlates'); if (plEl) plEl.value = row.plates != null && row.plates !== '' ? row.plates : '';
+            var upEl = document.getElementById('siteMealUnitPrice'); if (upEl) upEl.value = row.unitPrice != null && row.unitPrice !== '' ? row.unitPrice : '';
+            var fbEl = document.getElementById('siteMealFilledBy'); if (fbEl) fbEl.value = row.filledBy || '';
             document.getElementById('siteMealAmount').value = row.amount || '';
             document.getElementById('siteMealCurrency').value = row.currency || 'XOF';
             document.getElementById('siteMealLabel').value = row.label || '';
@@ -15889,7 +15949,11 @@
                 amount: parseFloat(document.getElementById('siteMealAmount').value) || 0,
                 currency: document.getElementById('siteMealCurrency').value || 'XOF',
                 label: (document.getElementById('siteMealLabel').value || '').trim(),
-                notes: (document.getElementById('siteMealNotes').value || '').trim()
+                notes: (document.getElementById('siteMealNotes').value || '').trim(),
+                shift: (document.getElementById('siteMealShift') || {}).value || '',
+                plates: (function() { var v = (document.getElementById('siteMealPlates') || {}).value; var n = parseInt(v, 10); return v === '' || Number.isNaN(n) ? null : n; })(),
+                unitPrice: (function() { var v = (document.getElementById('siteMealUnitPrice') || {}).value; var n = parseFloat(v); return v === '' || Number.isNaN(n) ? null : n; })(),
+                filledBy: (document.getElementById('siteMealFilledBy').value || '').trim()
             };
             if (!payload.date || payload.amount <= 0) {
                 alert('Date et montant valides requis');
@@ -15923,6 +15987,7 @@
         function renderSiteMeals() {
             var content = document.getElementById('site_mealsContent');
             if (!content) return;
+            if (!siteMealSettings._loaded) { siteMealSettings._loaded = true; loadSiteMealSettings(function () { renderSiteMeals(); }); }
             var reportMonthKey = getRevenueReportMonthKey();
             var dispCur = getRevenueViewDisplayCurrency();
             var expCurDefault = companyInfo.currency || 'XOF';
@@ -15964,7 +16029,19 @@
                 '<div class="flex-1 min-w-[200px]"></div>' +
                 '<button type="button" onclick="showAddSiteMealModal()" class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg font-semibold">' +
                 esc(tUi('site_meals.add')) +
-                '</button></div>';
+                '</button></div>' +
+                // Réglage du prix par plat (pré-rempli à la saisie)
+                '<div class="ged-content-panel p-4 rounded-xl flex flex-wrap items-end gap-3">' +
+                '<div><label class="block text-slate-400 text-xs mb-1">Prix par plat</label>' +
+                '<input type="number" id="mealSettingPrice" min="0" step="0.01" value="' + (siteMealSettings.unitPrice || '') + '" class="bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white w-32"></div>' +
+                '<div><label class="block text-slate-400 text-xs mb-1">Devise</label>' +
+                '<select id="mealSettingCurrency" class="bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white">' +
+                ['XOF', 'USD', 'EUR'].map(function (c) { return '<option value="' + c + '"' + (siteMealSettings.currency === c ? ' selected' : '') + '>' + c + '</option>'; }).join('') +
+                '</select></div>' +
+                '<button type="button" onclick="saveSiteMealSettings()" class="ged-btn-primary px-4 py-2 rounded-lg font-semibold">Enregistrer le prix</button>' +
+                '<span id="mealSettingStatus" class="text-sm self-center"></span>' +
+                '<p class="text-xs text-slate-500 w-full">Ce prix est pré-rempli à chaque saisie ; le montant d\'un repas = nombre de plats × prix par plat.</p>' +
+                '</div>';
 
             if (list.length === 0) {
                 html += '<p class="text-slate-400 text-center py-8">' + esc(tUi('site_meals.empty')) + '</p>';
@@ -15973,6 +16050,12 @@
                 list.forEach(function(r) {
                     var lbl = r.label ? esc(r.label) : esc(siteMealPeriodLabelT(r.mealPeriod));
                     var pers = r.headcount ? ' · ' + r.headcount + ' pers.' : '';
+                    var shiftLabels = { jour: 'Jour', nuit: 'Nuit', matin: 'Matin', apresmidi: 'Après-midi', journee: 'Journée' };
+                    var platsInfo = (r.plates != null && r.plates !== '')
+                        ? ' · ' + r.plates + ' plat' + (r.plates > 1 ? 's' : '') + (r.unitPrice ? ' × ' + formatCurrency(r.unitPrice, r.currency || expCurDefault) : '')
+                        : '';
+                    var shiftInfo = r.shift ? ' · Shift ' + (shiftLabels[r.shift] || r.shift) : '';
+                    var byInfo = r.filledBy ? ' · par ' + esc(r.filledBy) : '';
                     html +=
                         '<div class="bg-slate-700 p-4 rounded-lg border border-slate-600 flex flex-wrap justify-between gap-3">' +
                         '<div class="flex-1 min-w-[200px]">' +
@@ -15987,7 +16070,10 @@
                         '</p>' +
                         '<p class="text-xs text-amber-200/90 mt-1">' +
                         esc(siteMealPeriodLabelT(r.mealPeriod)) +
+                        shiftInfo +
+                        platsInfo +
                         pers +
+                        byInfo +
                         '</p>' +
                         (r.notes ? '<p class="text-xs text-slate-500 mt-1">' + esc(r.notes) + '</p>' : '') +
                         '</div>' +
