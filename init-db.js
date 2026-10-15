@@ -723,6 +723,28 @@ db.serialize(() => {
         if (err) console.error('Erreur table siteMealExpenses:', err);
         else console.log('✅ Table siteMealExpenses');
     });
+    // Repas par shift : nombre de plats, prix unitaire, poste et saisisseur (ajouts rétro-compatibles).
+    [
+        "ALTER TABLE siteMealExpenses ADD COLUMN shift TEXT DEFAULT ''",
+        'ALTER TABLE siteMealExpenses ADD COLUMN plates INTEGER DEFAULT NULL',
+        'ALTER TABLE siteMealExpenses ADD COLUMN unitPrice REAL DEFAULT NULL',
+        "ALTER TABLE siteMealExpenses ADD COLUMN filledBy TEXT DEFAULT ''"
+    ].forEach((sql) => db.run(sql, (e) => {
+        if (e && !String(e.message || '').includes('duplicate column')) console.warn('Migration siteMealExpenses:', e.message);
+    }));
+    // Réglage du prix par plat (par entreprise), pré-rempli à la saisie.
+    db.run(`
+        CREATE TABLE IF NOT EXISTS site_meal_settings (
+            enterpriseId INTEGER PRIMARY KEY,
+            unitPrice REAL DEFAULT 0,
+            currency TEXT DEFAULT 'XOF',
+            updatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (enterpriseId) REFERENCES enterprises(id)
+        )
+    `, (err) => {
+        if (err) console.error('Erreur table site_meal_settings:', err);
+        else console.log('✅ Table site_meal_settings');
+    });
 
     db.run(`
         CREATE TABLE IF NOT EXISTS worker_chat_messages (
