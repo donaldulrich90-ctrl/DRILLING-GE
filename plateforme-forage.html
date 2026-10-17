@@ -1288,6 +1288,13 @@
 
         <!-- Vue Dashboard -->
         <div id="mainView-dashboard" class="main-view">
+            <div id="gedDashCompany" class="hidden items-center gap-4 mb-5 p-4 rounded-xl border border-slate-700 bg-slate-800/60">
+                <img id="gedDashCompanyLogo" src="/ge-logo.png" alt="" class="object-contain bg-white rounded-lg p-1.5" style="height:56px;max-width:170px;">
+                <div>
+                    <p class="text-[10px] font-bold tracking-[0.2em] uppercase text-slate-500">Entreprise</p>
+                    <p id="gedDashCompanyName" class="text-xl font-extrabold text-white">—</p>
+                </div>
+            </div>
             <div class="mb-5">
                 <p class="text-[10px] font-bold tracking-[0.2em] uppercase text-slate-500 mb-2">Operations control room</p>
                 <h2 class="ged-page-title text-2xl md:text-3xl font-extrabold tracking-tight" data-i18n="dashboard.title">Centre de pilotage des opérations</h2>
@@ -5499,6 +5506,22 @@
             var logo = ent && ent.logo ? String(ent.logo).trim() : '';
             img.src = logo || '/ge-logo.png';
             img.alt = (ent && ent.name) ? ent.name : 'GOOD ENGINEERS';
+
+            // Bannière entreprise sur la page d'accueil (Centre de pilotage)
+            var banner = document.getElementById('gedDashCompany');
+            if (banner) {
+                var bImg = document.getElementById('gedDashCompanyLogo');
+                var bName = document.getElementById('gedDashCompanyName');
+                if (logo) {
+                    if (bImg) bImg.src = logo;
+                    if (bName) bName.textContent = (ent && ent.name) ? ent.name : '';
+                    banner.classList.remove('hidden');
+                    banner.classList.add('flex');
+                } else {
+                    banner.classList.add('hidden');
+                    banner.classList.remove('flex');
+                }
+            }
         }
 
         function applyUserPermissions() {
@@ -6153,6 +6176,7 @@
         // RENDU DU TABLEAU DE BORD
         // ============================================
         function renderDashboard() {
+            try { if (typeof applyEnterpriseBranding === 'function') applyEnterpriseBranding(); } catch (e) {}
             var grid = document.getElementById('drillsGrid');
             if (!grid) return;
 
