@@ -5503,7 +5503,12 @@
             var img = document.getElementById('gedSidebarLogo');
             if (!img) return;
             var ent = resolveCurrentEnterprise();
-            var logo = ent && ent.logo ? String(ent.logo).trim() : '';
+            // Logo de l'entreprise qui souscrit : priorité au logo que la société
+            // téléverse elle-même (Paramètres → Informations entreprise), puis au
+            // logo de sa fiche entreprise, enfin le logo GOOD ENGINEERS par défaut.
+            var coLogo = (typeof companyLogo === 'string' && companyLogo.trim()) ? companyLogo.trim() : '';
+            var entLogo = ent && ent.logo ? String(ent.logo).trim() : '';
+            var logo = coLogo || entLogo;
             img.src = logo || '/ge-logo.png';
             img.alt = (ent && ent.name) ? ent.name : 'GOOD ENGINEERS';
 
@@ -10793,6 +10798,7 @@
                             img.src = companyLogo;
                         }
                         updateHeaderLogo();
+                        try { if (typeof applyEnterpriseBranding === 'function') applyEnterpriseBranding(); } catch (e) {}
                         saveData();
                         alert('Logo enregistré! N\'oubliez pas de sauvegarder les paramètres.');
                     };
