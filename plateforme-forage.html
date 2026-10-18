@@ -1648,6 +1648,7 @@
                 <button type="button" class="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded text-sm" data-sttab="machines" onclick="stSwitch('machines')">🛠 Machines louées</button>
                 <button type="button" class="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded text-sm" data-sttab="usage" onclick="stSwitch('usage')">📏 Relevé d'usage</button>
                 <button type="button" class="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded text-sm" data-sttab="backcharges" onclick="stSwitch('backcharges')">➖ Back-charges</button>
+                <button type="button" class="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded text-sm" data-sttab="allocation" onclick="stSwitch('allocation')">🚜 Allocation foreuses</button>
             </div>
             <div id="soustraitantsContent"></div>
         </div>
@@ -1865,6 +1866,13 @@
                             <option value="EN FORAGE">EN FORAGE</option>
                             <option value="HS">HS</option>
                         </select>
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-slate-400 mb-2">Propriétaire — sous-traitant (optionnel)</label>
+                        <select id="newDrillSubcontractorId" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white">
+                            <option value="">Entreprise (machine propre)</option>
+                        </select>
+                        <p class="text-slate-500 text-xs mt-1">Si la machine appartient à un sous-traitant, sélectionne-le pour le suivi.</p>
                     </div>
                     <div class="flex gap-2">
                         <button type="submit" class="flex-1 bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg font-semibold">Enregistrer</button>
@@ -6332,6 +6340,13 @@
                     csel.appendChild(o);
                 });
             }
+            var stsel = document.getElementById('newDrillSubcontractorId');
+            if (stsel) {
+                stsel.innerHTML = '<option value="">Entreprise (machine propre)</option>';
+                apiRequest('/soustraitants', 'GET').then(function (list) {
+                    (list || []).forEach(function (s) { var o = document.createElement('option'); o.value = s.id; o.textContent = s.name; stsel.appendChild(o); });
+                }).catch(function () {});
+            }
             var m = document.getElementById('addDrillModal');
             if (m) m.classList.remove('hidden');
         }
@@ -6442,6 +6457,8 @@
             } else {
                 body.contractId = null;
             }
+            var stOwnerEl = document.getElementById('newDrillSubcontractorId');
+            body.subcontractorId = (stOwnerEl && stOwnerEl.value) ? parseInt(stOwnerEl.value, 10) : null;
             function done() {
                 drills.push(body);
                 saveData();
@@ -9873,7 +9890,34 @@
             if (ST.tab === 'machines') return stRenderMachines();
             if (ST.tab === 'usage') return stRenderUsage();
             if (ST.tab === 'backcharges') return stRenderBackcharges();
+            if (ST.tab === 'allocation') return stRenderAllocation();
             return stRenderStatement();
+        }
+
+        // ---- Allocation des foreuses à un sous-traitant propriétaire ------
+        async function stRenderAllocation() {
+            var el = document.getElementById('soustraitantsContent'); var w = stCanWrite();
+            var drills = [];
+            try { drills = await apiRequest('/drills', 'GET'); } catch (e) { drills = []; }
+            if (!Array.isArray(drills)) drills = (drills && drills.drills) || [];
+            var html = '<div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><h3 class="font-bold mb-1">🚜 Allocation des foreuses</h3>'
+                + '<p class="text-slate-500 text-sm mb-3">Indique si une foreuse <strong>appartient à un sous-traitant</strong>. Utile pour le suivi (qui opère quelle machine) et pour relier la machine à son propriétaire.</p>';
+            if (!ST.subs.length) { html += '<p class="text-slate-400 text-sm">Ajoute d\'abord un sous-traitant.</p></div>'; el.innerHTML = html; return; }
+            if (!drills.length) { html += '<p class="text-slate-400 text-sm">Aucune foreuse enregistrée.</p></div>'; el.innerHTML = html; return; }
+            html += '<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-slate-400 text-left"><th class="py-1">Foreuse</th><th>Lieu / libellé</th><th>Propriétaire (sous-traitant)</th></tr></thead><tbody>';
+            drills.forEach(function (d) {
+                var opts = '<option value="">— Entreprise (propre) —</option>' + ST.subs.map(function (s) {
+                    return '<option value="' + s.id + '"' + (String(d.subcontractorId) === String(s.id) ? ' selected' : '') + '>' + escapeHtml(s.name) + '</option>';
+                }).join('');
+                html += '<tr class="border-t border-slate-700"><td class="py-1 font-semibold">' + escapeHtml(String(d.id)) + '</td><td>' + escapeHtml(d.location || '') + '</td>'
+                    + '<td><select ' + (w ? '' : 'disabled') + ' data-alloc-drill="' + escapeHtmlForAttr(String(d.id)) + '" onchange="stAllocate(this)" class="bg-slate-900 border border-slate-600 rounded px-2 py-1 text-sm">' + opts + '</select></td></tr>';
+            });
+            html += '</tbody></table></div></div>'; el.innerHTML = html;
+        }
+        async function stAllocate(sel) {
+            var id = sel.getAttribute('data-alloc-drill');
+            try { await apiRequest('/drills/' + encodeURIComponent(id) + '/subcontractor', 'PUT', { subcontractorId: sel.value || null }); }
+            catch (e) { alert(e.message || 'Erreur'); }
         }
 
         // ---- État de paiement mensuel -------------------------------------
