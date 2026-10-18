@@ -1215,6 +1215,7 @@
                     <button type="button" onclick="showMainView('sites')" class="ged-nav-item main-nav-btn" id="nav-sites">⌖ &nbsp;Sites</button>
                     <button type="button" onclick="showMainView('invoices')" class="ged-nav-item main-nav-btn" id="nav-invoices">▧ &nbsp;Factures</button>
                     <button type="button" onclick="showMainView('revenue')" class="ged-nav-item main-nav-btn" id="nav-revenue">◍ &nbsp;Revenus</button>
+                    <button type="button" onclick="showMainView('soustraitants')" class="ged-nav-item main-nav-btn" id="nav-soustraitants">⚒ &nbsp;Sous-traitants</button>
                     <button type="button" onclick="showMainView('site_meals')" class="ged-nav-item main-nav-btn" id="nav-site_meals">◌ &nbsp;Repas chantier</button>
                     <button type="button" onclick="showMainView('rh')" class="ged-nav-item main-nav-btn" id="nav-rh">♙ &nbsp;Ressources humaines</button>
                     <button type="button" onclick="showMainView('accounts')" class="ged-nav-item main-nav-btn" id="nav-accounts">⊙ &nbsp;Comptes &amp; accès</button>
@@ -1627,6 +1628,28 @@
                 <p class="text-slate-400 text-sm mt-1">Demandes partagées à toute l'entreprise — pièces jointes et circuit allouer → exécuter → vérifier → valider</p>
             </div>
             <div id="besoinsContent"></div>
+        </div>
+
+        <!-- ═══ VUE SOUS-TRAITANTS ═══════════════════════════════════════ -->
+        <div id="mainView-soustraitants" class="main-view hidden">
+            <div class="mb-5 pb-4 border-b border-slate-700 flex items-center justify-between flex-wrap gap-3">
+                <div>
+                    <h2 class="text-2xl font-extrabold tracking-tight" style="color:var(--ged-yellow)">⚒ Sous-traitants &amp; location de machines</h2>
+                    <p class="text-slate-400 text-sm mt-1">Paiement mensuel = tarif × usage réel, moins les back-charges · justificatifs joints · montants en FCFA</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <label class="text-xs text-slate-400 font-semibold uppercase tracking-wide">Période</label>
+                    <input type="month" id="stPeriod" class="bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm" onchange="stReload()">
+                </div>
+            </div>
+            <div class="flex gap-2 mb-4 flex-wrap" id="stTabs">
+                <button type="button" class="ged-btn-primary px-4 py-2 rounded text-sm" data-sttab="statement" onclick="stSwitch('statement')">📋 État de paiement</button>
+                <button type="button" class="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded text-sm" data-sttab="subs" onclick="stSwitch('subs')">🏢 Sous-traitants</button>
+                <button type="button" class="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded text-sm" data-sttab="machines" onclick="stSwitch('machines')">🛠 Machines louées</button>
+                <button type="button" class="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded text-sm" data-sttab="usage" onclick="stSwitch('usage')">📏 Relevé d'usage</button>
+                <button type="button" class="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded text-sm" data-sttab="backcharges" onclick="stSwitch('backcharges')">➖ Back-charges</button>
+            </div>
+            <div id="soustraitantsContent"></div>
         </div>
 
         <!-- ═══ VUE RENTABILITÉ CONSOMMABLES ════════════════════════════ -->
@@ -5717,7 +5740,7 @@
                 view !== 'enterprises' && subNav.indexOf(view) < 0) {
                 view = 'dashboard';
             }
-            var views = ['consumables', 'dashboard', 'connections', 'assignments', 'maintenance', 'bit_sharpening', 'invoices', 'contracts', 'sites', 'enterprises', 'revenue', 'site_meals', 'reports', 'project_overview', 'planification', 'besoins', 'rh', 'inventory', 'accounts', 'clients', 'translator', 'team_chat', 'company_info', 'forage_plan', 'rentabilite', 'depenses_pm', 'analytics', 'hse'];
+            var views = ['consumables', 'dashboard', 'connections', 'assignments', 'maintenance', 'bit_sharpening', 'invoices', 'contracts', 'sites', 'enterprises', 'revenue', 'site_meals', 'reports', 'project_overview', 'planification', 'besoins', 'rh', 'inventory', 'accounts', 'clients', 'translator', 'team_chat', 'company_info', 'forage_plan', 'rentabilite', 'depenses_pm', 'analytics', 'hse', 'soustraitants'];
             views.forEach(function(v) {
                 var el = document.getElementById('mainView-' + v);
                 if (el) el.classList.add('hidden');
@@ -8332,6 +8355,8 @@
                 renderHSE();
             } else if (view === 'bit_sharpening') {
                 renderBitSharpening();
+            } else if (view === 'soustraitants') {
+                renderSoustraitants();
             }
         }
 
@@ -9809,6 +9834,277 @@
             (block.holes||[]).forEach(function(h){ rows.push([h.id,h.status,h.planDepth||0,h.actDepth||0,h.diameterMm||'',h.easting!=null?h.easting:'',h.northing!=null?h.northing:'',h.elevation!=null?h.elevation:'',h.geology||'',h.waterEncountered?'Oui':'Non',h.waterDepth!=null?h.waterDepth:'',h.azimuth||0,h.inclination!=null?h.inclination:90,h.drillId||'',h.operatorName||'',h.startDate||'',h.endDate||'',h.notes||'']); });
             var csv=rows.map(function(r){ return r.map(function(v){ return '"'+String(v).replace(/"/g,'""')+'"'; }).join(','); }).join('\n');
             var a=document.createElement('a'); a.href='data:text/csv;charset=utf-8,﻿'+encodeURIComponent(csv); a.download='plan-forage-'+(block.name||block.id).replace(/\s+/g,'_')+'.csv'; a.click();
+        }
+
+        // ============================================
+        // SOUS-TRAITANTS & LOCATION DE MACHINES
+        // Paiement mensuel = tarif × usage réel − back-charges · bénéfice net
+        // ============================================
+        var ST = { period: '', tab: 'statement', subs: [], machines: [], statement: null };
+        function stFmt(n) { return (Number(n) || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' F'; }
+        function stDefaultPeriod() { var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
+        function stUnitLabel(u) { return u === 'heure' ? '/h' : u === 'metre' ? '/m' : u === 'forfait' ? 'forfait' : '/jour'; }
+        function stUnitQty(u) { return u === 'heure' ? 'heures' : u === 'metre' ? 'mètres' : u === 'forfait' ? '(forfait)' : 'jours'; }
+        function stCanWrite() {
+            if (!currentUser) return false;
+            if (currentUser.isSuperAdmin || currentUser.isPlatformOwner) return true;
+            return ['admin', 'gestionnaire', 'gestionnaire_site', 'superviseur', 'ingenieur', 'platform_owner'].indexOf(currentUser.role) >= 0;
+        }
+        function stApiBase() { return (window.API && window.API.getBaseUrl) ? window.API.getBaseUrl() : '/api'; }
+        function stSwitch(tab) { ST.tab = tab; renderSoustraitants(); }
+        function stReload() { var i = document.getElementById('stPeriod'); ST.period = (i && i.value) || stDefaultPeriod(); renderSoustraitants(); }
+        function stKpi(lab, val, sub, color) {
+            return '<div class="ged-kpi-card bg-slate-800 p-4 rounded-xl border border-slate-700"><p class="text-slate-400 text-xs uppercase tracking-wide font-semibold">' + escapeHtml(lab) + '</p><p class="text-2xl font-bold mt-2"' + (color ? ' style="color:' + color + '"' : '') + '>' + val + '</p><p class="text-xs text-slate-500 mt-1">' + escapeHtml(sub || '') + '</p></div>';
+        }
+        function stSubName(id) { for (var i = 0; i < ST.subs.length; i++) { if (Number(ST.subs[i].id) === Number(id)) return ST.subs[i].name; } return '—'; }
+
+        async function renderSoustraitants() {
+            if (!ST.period) { var inp = document.getElementById('stPeriod'); ST.period = (inp && inp.value) || stDefaultPeriod(); if (inp) inp.value = ST.period; }
+            document.querySelectorAll('#stTabs [data-sttab]').forEach(function (b) {
+                var on = b.getAttribute('data-sttab') === ST.tab;
+                b.className = (on ? 'ged-btn-primary' : 'bg-slate-700 hover:bg-slate-600') + ' px-4 py-2 rounded text-sm';
+            });
+            var el = document.getElementById('soustraitantsContent');
+            try {
+                ST.subs = await apiRequest('/soustraitants', 'GET');
+                ST.machines = await apiRequest('/soustraitants/machines', 'GET');
+            } catch (e) { el.innerHTML = '<div class="text-red-400 p-4">Erreur de chargement des sous-traitants.</div>'; return; }
+            if (ST.tab === 'subs') return stRenderSubs();
+            if (ST.tab === 'machines') return stRenderMachines();
+            if (ST.tab === 'usage') return stRenderUsage();
+            if (ST.tab === 'backcharges') return stRenderBackcharges();
+            return stRenderStatement();
+        }
+
+        // ---- État de paiement mensuel -------------------------------------
+        async function stRenderStatement() {
+            var el = document.getElementById('soustraitantsContent');
+            el.innerHTML = '<div class="text-slate-400 p-4">Calcul de l\'état…</div>';
+            var st; try { st = await apiRequest('/soustraitants/statement?period=' + encodeURIComponent(ST.period), 'GET'); }
+            catch (e) { el.innerHTML = '<div class="text-red-400 p-4">Erreur de calcul.</div>'; return; }
+            ST.statement = st; var t = st.totals || {};
+            var html = '<div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-5">';
+            html += stKpi('Brut sous-traitants', stFmt(t.gross), 'Tarif × usage du mois');
+            html += stKpi('Back-charges déduites', '− ' + stFmt(t.subcontractorBackCharges), 'Imputées aux sous-traitants');
+            html += stKpi('Net à payer', stFmt(t.netToPay), 'À régler ce mois', 'var(--ged-yellow)');
+            html += stKpi('Back-charges entreprise', stFmt(t.enterpriseBackCharges), 'Coûts propres entreprise');
+            html += '</div>';
+            html += '<div class="ged-kpi-card bg-slate-800 p-4 rounded-xl border border-slate-700 mb-5">'
+                + '<p class="text-slate-300 font-semibold mb-2">💹 Bénéfice net du mois</p>'
+                + '<div class="flex items-center gap-3 flex-wrap"><label class="text-sm text-slate-400">Revenus du mois (FCFA)</label>'
+                + '<input type="number" id="stRevenue" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm w-48" placeholder="0" oninput="stComputeProfit()">'
+                + '<span class="text-sm text-slate-400">− coûts ' + stFmt(t.totalCosts) + ' =</span>'
+                + '<span id="stProfit" class="text-lg font-bold text-green-400">—</span></div>'
+                + '<p class="text-xs text-slate-500 mt-2">Coûts = net sous-traitants (' + stFmt(t.netToPay) + ') + back-charges entreprise (' + stFmt(t.enterpriseBackCharges) + ').</p></div>';
+            if (!st.subcontractors.length) {
+                html += '<div class="text-slate-400 border border-dashed border-slate-600 rounded-xl p-6 text-center">Aucun sous-traitant. Ajoute-en dans l\'onglet « Sous-traitants », puis ses machines et le relevé d\'usage.</div>';
+            }
+            st.subcontractors.forEach(function (s) {
+                html += '<div class="bg-slate-800 border border-slate-700 rounded-xl p-4 mb-3">';
+                html += '<div class="flex items-center justify-between flex-wrap gap-2 mb-2"><div><strong class="text-lg">' + escapeHtml(s.name) + '</strong>' + (s.phone ? ' <span class="text-slate-400 text-sm">· ' + escapeHtml(s.phone) + '</span>' : '') + '</div>'
+                    + '<div class="text-right"><div class="text-xs text-slate-400 uppercase">Net à payer</div><div class="text-xl font-extrabold" style="color:var(--ged-yellow)">' + stFmt(s.net) + '</div></div></div>';
+                if (s.machines.length) {
+                    html += '<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-slate-400 text-left"><th class="py-1">Machine</th><th>Tarif</th><th>Usage</th><th class="text-right">Brut</th></tr></thead><tbody>';
+                    s.machines.forEach(function (m) {
+                        html += '<tr class="border-t border-slate-700"><td class="py-1">' + escapeHtml(m.label) + '</td><td>' + stFmt(m.rate) + ' ' + stUnitLabel(m.unit) + '</td><td>' + (m.unit === 'forfait' ? 'forfait' : (Number(m.quantity) || 0) + ' ' + stUnitQty(m.unit)) + '</td><td class="text-right">' + stFmt(m.gross) + '</td></tr>';
+                    });
+                    html += '</tbody></table></div>';
+                } else { html += '<p class="text-slate-500 text-sm">Aucune machine louée.</p>'; }
+                if (s.backCharges && s.backCharges.length) {
+                    html += '<div class="mt-2 text-sm border-t border-slate-700 pt-2"><p class="text-slate-400 mb-1">Back-charges :</p>';
+                    s.backCharges.forEach(function (c) {
+                        html += '<div class="flex justify-between"><span>' + escapeHtml(c.label) + (c.attachment ? ' <a class="text-blue-400" href="' + escapeHtmlForAttr(c.attachment) + '" target="_blank">📎</a>' : '') + '</span><span class="text-red-400">− ' + stFmt(c.amount) + '</span></div>';
+                    });
+                    html += '</div>';
+                }
+                html += '</div>';
+            });
+            el.innerHTML = html;
+            stComputeProfit();
+        }
+        function stComputeProfit() {
+            var t = (ST.statement && ST.statement.totals) || {};
+            var rev = Number((document.getElementById('stRevenue') || {}).value) || 0;
+            var p = rev - (Number(t.totalCosts) || 0);
+            var sp = document.getElementById('stProfit');
+            if (sp) { sp.textContent = stFmt(p); sp.className = 'text-lg font-bold ' + (p >= 0 ? 'text-green-400' : 'text-red-400'); }
+        }
+
+        // ---- Sous-traitants (CRUD) ----------------------------------------
+        function stRenderSubs() {
+            var el = document.getElementById('soustraitantsContent'); var w = stCanWrite(); var html = '';
+            if (w) {
+                html += '<div class="bg-slate-800 border border-slate-700 rounded-xl p-4 mb-4"><h3 class="font-bold mb-2">➕ Ajouter / modifier un sous-traitant</h3>'
+                    + '<input type="hidden" id="subEditId">'
+                    + '<div class="grid grid-cols-1 sm:grid-cols-2 gap-2">'
+                    + '<input id="subName" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm" placeholder="Nom *">'
+                    + '<input id="subContact" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm" placeholder="Personne de contact">'
+                    + '<input id="subPhone" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm" placeholder="Téléphone">'
+                    + '<input id="subEmail" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm" placeholder="Email">'
+                    + '</div><textarea id="subNote" rows="2" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm w-full mt-2" placeholder="Note"></textarea>'
+                    + '<div class="mt-2 flex gap-2"><button class="ged-btn-primary px-4 py-2 rounded text-sm" onclick="stSaveSub()">Enregistrer</button><button class="bg-slate-700 px-4 py-2 rounded text-sm" onclick="stResetSubForm()">Annuler</button></div></div>';
+            }
+            html += '<div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><h3 class="font-bold mb-2">Sous-traitants (' + ST.subs.length + ')</h3>';
+            if (!ST.subs.length) html += '<p class="text-slate-500 text-sm">Aucun sous-traitant enregistré.</p>';
+            else {
+                html += '<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-slate-400 text-left"><th class="py-1">Nom</th><th>Contact</th><th>Téléphone</th><th>Email</th>' + (w ? '<th></th>' : '') + '</tr></thead><tbody>';
+                ST.subs.forEach(function (s) {
+                    html += '<tr class="border-t border-slate-700"><td class="py-1">' + escapeHtml(s.name) + '</td><td>' + escapeHtml(s.contact || '') + '</td><td>' + escapeHtml(s.phone || '') + '</td><td>' + escapeHtml(s.email || '') + '</td>' + (w ? '<td class="text-right whitespace-nowrap"><button class="text-blue-400 mr-2" onclick="stEditSub(' + s.id + ')">✎</button><button class="text-red-400" onclick="stDeleteSub(' + s.id + ')">🗑</button></td>' : '') + '</tr>';
+                });
+                html += '</tbody></table></div>';
+            }
+            html += '</div>'; el.innerHTML = html;
+        }
+        function stResetSubForm() { ['subEditId', 'subName', 'subContact', 'subPhone', 'subEmail', 'subNote'].forEach(function (id) { var e = document.getElementById(id); if (e) e.value = ''; }); }
+        function stEditSub(id) {
+            var s = ST.subs.filter(function (x) { return Number(x.id) === Number(id); })[0]; if (!s) return;
+            document.getElementById('subEditId').value = s.id; document.getElementById('subName').value = s.name || '';
+            document.getElementById('subContact').value = s.contact || ''; document.getElementById('subPhone').value = s.phone || '';
+            document.getElementById('subEmail').value = s.email || ''; document.getElementById('subNote').value = s.note || '';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        async function stSaveSub() {
+            var id = document.getElementById('subEditId').value;
+            var data = { name: document.getElementById('subName').value.trim(), contact: document.getElementById('subContact').value.trim(), phone: document.getElementById('subPhone').value.trim(), email: document.getElementById('subEmail').value.trim(), note: document.getElementById('subNote').value.trim() };
+            if (!data.name) { alert('Nom requis.'); return; }
+            try { await apiRequest('/soustraitants' + (id ? '/' + id : ''), id ? 'PUT' : 'POST', data); stResetSubForm(); renderSoustraitants(); }
+            catch (e) { alert(e.message || 'Erreur.'); }
+        }
+        async function stDeleteSub(id) {
+            if (!confirm('Supprimer ce sous-traitant (et ses machines/back-charges) ?')) return;
+            try { await apiRequest('/soustraitants/' + id, 'DELETE'); renderSoustraitants(); } catch (e) { alert(e.message || 'Erreur.'); }
+        }
+
+        // ---- Machines louées (CRUD) ---------------------------------------
+        function stSubOptions(sel) { return ST.subs.map(function (s) { return '<option value="' + s.id + '"' + (Number(sel) === Number(s.id) ? ' selected' : '') + '>' + escapeHtml(s.name) + '</option>'; }).join(''); }
+        function stRenderMachines() {
+            var el = document.getElementById('soustraitantsContent'); var w = stCanWrite(); var html = '';
+            if (!ST.subs.length) { el.innerHTML = '<div class="text-slate-400 border border-dashed border-slate-600 rounded-xl p-6 text-center">Ajoute d\'abord un sous-traitant.</div>'; return; }
+            if (w) {
+                html += '<div class="bg-slate-800 border border-slate-700 rounded-xl p-4 mb-4"><h3 class="font-bold mb-2">➕ Ajouter / modifier une machine louée</h3>'
+                    + '<input type="hidden" id="macEditId">'
+                    + '<div class="grid grid-cols-1 sm:grid-cols-2 gap-2">'
+                    + '<select id="macSub" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm">' + stSubOptions() + '</select>'
+                    + '<input id="macLabel" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm" placeholder="Nom / n° de machine *">'
+                    + '<input id="macModel" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm" placeholder="Modèle">'
+                    + '<input id="macRate" type="number" step="any" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm" placeholder="Tarif (FCFA)">'
+                    + '<select id="macUnit" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm"><option value="jour">par jour</option><option value="heure">par heure</option><option value="metre">par mètre foré</option><option value="forfait">forfait mensuel</option></select>'
+                    + '</div><div class="mt-2 flex gap-2"><button class="ged-btn-primary px-4 py-2 rounded text-sm" onclick="stSaveMachine()">Enregistrer</button><button class="bg-slate-700 px-4 py-2 rounded text-sm" onclick="stResetMacForm()">Annuler</button></div></div>';
+            }
+            html += '<div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><h3 class="font-bold mb-2">Machines louées (' + ST.machines.length + ')</h3>';
+            if (!ST.machines.length) html += '<p class="text-slate-500 text-sm">Aucune machine.</p>';
+            else {
+                html += '<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-slate-400 text-left"><th class="py-1">Machine</th><th>Sous-traitant</th><th>Tarif</th>' + (w ? '<th></th>' : '') + '</tr></thead><tbody>';
+                ST.machines.forEach(function (m) {
+                    html += '<tr class="border-t border-slate-700"><td class="py-1">' + escapeHtml(m.label) + (m.model ? ' <span class="text-slate-500">(' + escapeHtml(m.model) + ')</span>' : '') + '</td><td>' + escapeHtml(stSubName(m.subcontractorId)) + '</td><td>' + stFmt(m.rate) + ' ' + stUnitLabel(m.unit) + '</td>' + (w ? '<td class="text-right whitespace-nowrap"><button class="text-blue-400 mr-2" onclick="stEditMachine(' + m.id + ')">✎</button><button class="text-red-400" onclick="stDeleteMachine(' + m.id + ')">🗑</button></td>' : '') + '</tr>';
+                });
+                html += '</tbody></table></div>';
+            }
+            html += '</div>'; el.innerHTML = html;
+        }
+        function stResetMacForm() { ['macEditId', 'macLabel', 'macModel', 'macRate'].forEach(function (id) { var e = document.getElementById(id); if (e) e.value = ''; }); }
+        function stEditMachine(id) {
+            var m = ST.machines.filter(function (x) { return Number(x.id) === Number(id); })[0]; if (!m) return;
+            document.getElementById('macEditId').value = m.id; document.getElementById('macSub').value = m.subcontractorId;
+            document.getElementById('macLabel').value = m.label || ''; document.getElementById('macModel').value = m.model || '';
+            document.getElementById('macRate').value = m.rate || 0; document.getElementById('macUnit').value = m.unit || 'jour';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        async function stSaveMachine() {
+            var id = document.getElementById('macEditId').value;
+            var data = { subcontractorId: document.getElementById('macSub').value, label: document.getElementById('macLabel').value.trim(), model: document.getElementById('macModel').value.trim(), rate: document.getElementById('macRate').value, unit: document.getElementById('macUnit').value };
+            if (!data.label) { alert('Nom de machine requis.'); return; }
+            try { await apiRequest('/soustraitants/machines' + (id ? '/' + id : ''), id ? 'PUT' : 'POST', data); stResetMacForm(); renderSoustraitants(); }
+            catch (e) { alert(e.message || 'Erreur.'); }
+        }
+        async function stDeleteMachine(id) {
+            if (!confirm('Supprimer cette machine louée ?')) return;
+            try { await apiRequest('/soustraitants/machines/' + id, 'DELETE'); renderSoustraitants(); } catch (e) { alert(e.message || 'Erreur.'); }
+        }
+
+        // ---- Relevé d'usage mensuel ---------------------------------------
+        async function stRenderUsage() {
+            var el = document.getElementById('soustraitantsContent');
+            var actives = ST.machines.filter(function (m) { return Number(m.active) !== 0; });
+            if (!actives.length) { el.innerHTML = '<div class="text-slate-400 border border-dashed border-slate-600 rounded-xl p-6 text-center">Aucune machine louée. Ajoute-en dans l\'onglet « Machines louées ».</div>'; return; }
+            var usage = []; try { usage = await apiRequest('/soustraitants/usage?period=' + encodeURIComponent(ST.period), 'GET'); } catch (e) {}
+            var byM = {}; usage.forEach(function (u) { byM[u.machineId] = u; });
+            var w = stCanWrite();
+            var html = '<div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><h3 class="font-bold mb-1">📏 Usage réel — ' + escapeHtml(ST.period) + '</h3><p class="text-slate-500 text-sm mb-3">Saisis la quantité du mois par machine (heures, jours ou mètres selon le tarif). Le forfait n\'a pas besoin d\'usage.</p>';
+            html += '<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-slate-400 text-left"><th class="py-1">Machine</th><th>Sous-traitant</th><th>Tarif</th><th>Usage</th><th>Brut</th></tr></thead><tbody>';
+            actives.forEach(function (m) {
+                var u = byM[m.id]; var qty = u ? (Number(u.quantity) || 0) : 0;
+                var gross = m.unit === 'forfait' ? (Number(m.rate) || 0) : (Number(m.rate) || 0) * qty;
+                html += '<tr class="border-t border-slate-700"><td class="py-1">' + escapeHtml(m.label) + '</td><td>' + escapeHtml(stSubName(m.subcontractorId)) + '</td><td>' + stFmt(m.rate) + ' ' + stUnitLabel(m.unit) + '</td>'
+                    + '<td>' + (m.unit === 'forfait' ? '<span class="text-slate-500">forfait</span>' : '<input type="number" step="any" ' + (w ? '' : 'disabled') + ' value="' + qty + '" data-usage-m="' + m.id + '" class="bg-slate-900 border border-slate-600 rounded px-2 py-1 text-sm w-28" onchange="stUsagePreview(this,' + (Number(m.rate) || 0) + ')"> <span class="text-slate-500">' + stUnitQty(m.unit) + '</span>') + '</td>'
+                    + '<td data-gross-m="' + m.id + '">' + stFmt(gross) + '</td></tr>';
+            });
+            html += '</tbody></table></div>';
+            if (w) html += '<div class="mt-3"><button class="ged-btn-primary px-4 py-2 rounded text-sm" onclick="stSaveUsage()">💾 Enregistrer le relevé</button></div>';
+            html += '</div>'; el.innerHTML = html;
+        }
+        function stUsagePreview(inp, rate) {
+            var id = inp.getAttribute('data-usage-m'); var cell = document.querySelector('[data-gross-m="' + id + '"]');
+            if (cell) cell.textContent = stFmt((Number(rate) || 0) * (Number(inp.value) || 0));
+        }
+        async function stSaveUsage() {
+            var inputs = document.querySelectorAll('[data-usage-m]');
+            try {
+                for (var i = 0; i < inputs.length; i++) {
+                    await apiRequest('/soustraitants/usage', 'POST', { machineId: inputs[i].getAttribute('data-usage-m'), period: ST.period, quantity: inputs[i].value });
+                }
+                alert('Relevé d\'usage enregistré.'); ST.tab = 'statement'; renderSoustraitants();
+            } catch (e) { alert(e.message || 'Erreur.'); }
+        }
+
+        // ---- Back-charges --------------------------------------------------
+        async function stRenderBackcharges() {
+            var el = document.getElementById('soustraitantsContent'); var w = stCanWrite();
+            var list = []; try { list = await apiRequest('/soustraitants/backcharges?period=' + encodeURIComponent(ST.period), 'GET'); } catch (e) {}
+            var html = '';
+            if (w) {
+                html += '<div class="bg-slate-800 border border-slate-700 rounded-xl p-4 mb-4"><h3 class="font-bold mb-2">➕ Nouvelle back-charge — ' + escapeHtml(ST.period) + '</h3>'
+                    + '<form id="stBcForm" onsubmit="return stSaveBackcharge(event)">'
+                    + '<input type="hidden" name="period" value="' + escapeHtmlForAttr(ST.period) + '">'
+                    + '<div class="grid grid-cols-1 sm:grid-cols-2 gap-2">'
+                    + '<select name="scope" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm" onchange="stBcScope(this.value)"><option value="subcontractor">Déduire d\'un sous-traitant</option><option value="enterprise">Côté entreprise (coût propre)</option></select>'
+                    + '<select name="subcontractorId" id="stBcSub" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm">' + stSubOptions() + '</select>'
+                    + '<input name="label" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm" placeholder="Libellé (carburant, pièces, réparation…) *">'
+                    + '<input name="amount" type="number" step="any" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm" placeholder="Montant (FCFA) *">'
+                    + '</div>'
+                    + '<textarea name="note" rows="2" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm w-full mt-2" placeholder="Note / détail"></textarea>'
+                    + '<div class="mt-2 flex items-center gap-3 flex-wrap"><label class="text-sm text-slate-400">Justificatif :</label><input type="file" name="attachment" class="text-sm"><button class="ged-btn-primary px-4 py-2 rounded text-sm">Enregistrer</button></div>'
+                    + '</form></div>';
+            }
+            html += '<div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><h3 class="font-bold mb-2">Back-charges du mois (' + list.length + ')</h3>';
+            if (!list.length) html += '<p class="text-slate-500 text-sm">Aucune back-charge pour ' + escapeHtml(ST.period) + '.</p>';
+            else {
+                html += '<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-slate-400 text-left"><th class="py-1">Libellé</th><th>Imputation</th><th>Montant</th><th>Justif.</th>' + (w ? '<th></th>' : '') + '</tr></thead><tbody>';
+                list.forEach(function (c) {
+                    var imp = c.scope === 'enterprise' ? '<span class="text-amber-400">Entreprise</span>' : escapeHtml(stSubName(c.subcontractorId));
+                    html += '<tr class="border-t border-slate-700"><td class="py-1">' + escapeHtml(c.label) + '</td><td>' + imp + '</td><td class="text-red-400">− ' + stFmt(c.amount) + '</td><td>' + (c.attachment ? '<a class="text-blue-400" href="' + escapeHtmlForAttr(c.attachment) + '" target="_blank">📎</a>' : '—') + '</td>' + (w ? '<td class="text-right"><button class="text-red-400" onclick="stDeleteBackcharge(' + c.id + ')">🗑</button></td>' : '') + '</tr>';
+                });
+                html += '</tbody></table></div>';
+            }
+            html += '</div>'; el.innerHTML = html; stBcScope('subcontractor');
+        }
+        function stBcScope(v) { var s = document.getElementById('stBcSub'); if (s) s.style.display = v === 'enterprise' ? 'none' : ''; }
+        async function stSaveBackcharge(ev) {
+            ev.preventDefault();
+            var form = document.getElementById('stBcForm');
+            if (!form.label.value.trim() || !form.amount.value) { alert('Libellé et montant requis.'); return false; }
+            try {
+                var headers = {}; var eid = window.API && window.API.getEnterpriseId ? window.API.getEnterpriseId() : null;
+                if (eid != null) headers['X-Enterprise-Id'] = String(eid);
+                var res = await fetch(stApiBase() + '/soustraitants/backcharges', { method: 'POST', credentials: 'include', headers: headers, body: new FormData(form) });
+                if (!res.ok) { var e = await res.json().catch(function () { return {}; }); throw new Error(e.error || ('HTTP ' + res.status)); }
+                renderSoustraitants();
+            } catch (e) { alert(e.message || 'Erreur.'); }
+            return false;
+        }
+        async function stDeleteBackcharge(id) {
+            if (!confirm('Supprimer cette back-charge ?')) return;
+            try { await apiRequest('/soustraitants/backcharges/' + id, 'DELETE'); renderSoustraitants(); } catch (e) { alert(e.message || 'Erreur.'); }
         }
 
         // ============================================
