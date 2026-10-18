@@ -85,6 +85,44 @@ function registerMetrics(app) {
         });
     });
 
+    // ---- Sous-traitants : état de paiement du mois (portail consolidé) --
+    app.get('/api/service/soustraitants', requireServiceKey, (req, res) => {
+        const enterpriseId = parseInt(req.query.enterpriseId, 10);
+        const period = /^\d{4}-\d{2}$/.test(String(req.query.period || '')) ? String(req.query.period) : '';
+        if (!enterpriseId || !period) return res.status(400).json({ error: 'enterpriseId et period requis' });
+        const db = getDb();
+        const q = (sql, params) => new Promise((resolve) => db.all(sql, params, (e, r) => resolve(e ? [] : (r || []))));
+        Promise.all([
+            q('SELECT * FROM subcontractors WHERE enterpriseId = ? ORDER BY name', [enterpriseId]),
+            q('SELECT * FROM rented_machines WHERE enterpriseId = ?', [enterpriseId]),
+            q('SELECT * FROM machine_usage WHERE enterpriseId = ? AND period = ?', [enterpriseId, period]),
+            q('SELECT * FROM back_charges WHERE enterpriseId = ? AND period = ?', [enterpriseId, period]),
+        ]).then(([subs, machines, usage, charges]) => {
+            const uByM = {}; usage.forEach((u) => { uByM[u.machineId] = u; });
+            const cBySub = {}; let entBack = 0;
+            charges.forEach((c) => {
+                if (c.scope === 'enterprise') entBack += Number(c.amount) || 0;
+                else (cBySub[c.subcontractorId] = cBySub[c.subcontractorId] || []).push(c);
+            });
+            let gross = 0, subBack = 0, net = 0;
+            const out = subs.map((s) => {
+                let g = 0;
+                machines.filter((m) => Number(m.subcontractorId) === Number(s.id)).forEach((m) => {
+                    const u = uByM[m.id]; const qty = u ? (Number(u.quantity) || 0) : 0;
+                    g += m.unit === 'forfait' ? (Number(m.rate) || 0) : (Number(m.rate) || 0) * qty;
+                });
+                const bch = cBySub[s.id] || [];
+                const back = bch.reduce((a, c) => a + (Number(c.amount) || 0), 0);
+                gross += g; subBack += back; net += (g - back);
+                return { name: s.name, gross: g, backCharges: back, net: g - back };
+            });
+            return res.json({
+                module: 'forage', period, subcontractors: out,
+                totals: { gross, subcontractorBackCharges: subBack, netToPay: net, enterpriseBackCharges: entBack, totalCosts: net + entBack },
+            });
+        }).catch((err) => res.status(500).json({ error: err.message }));
+    });
+
     // ---- Métriques ------------------------------------------------------
     app.get('/api/service/metrics', requireServiceKey, (req, res) => {
         const enterpriseId = parseInt(req.query.enterpriseId, 10);
