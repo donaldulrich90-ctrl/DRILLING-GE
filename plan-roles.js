@@ -15,13 +15,17 @@ const DEFAULT_ROLES_BY_PLAN = {
  *  Inclut les onglets opérationnels forage ajoutés après la v1 : sans eux, la
  *  politique d'abonnement les excluait de effectiveAllowedTabs et showMainView
  *  les renvoyait au tableau de bord (et allowedTabs les rejetait). */
-const TENANT_MAIN_VIEWS = ['dashboard', 'connections', 'assignments', 'maintenance', 'bit_sharpening', 'consumables', 'inventory', 'invoices', 'contracts', 'sites', 'revenue', 'site_meals', 'reports', 'project_overview', 'forage_plan', 'planification', 'besoins', 'rentabilite', 'depenses_pm', 'analytics', 'hse', 'rh', 'accounts', 'clients', 'translator', 'team_chat', 'company_info'];
+const TENANT_MAIN_VIEWS = ['dashboard', 'connections', 'assignments', 'maintenance', 'bit_sharpening', 'consumables', 'inventory', 'invoices', 'contracts', 'sites', 'revenue', 'soustraitants', 'site_meals', 'reports', 'project_overview', 'forage_plan', 'planification', 'besoins', 'rentabilite', 'depenses_pm', 'analytics', 'hse', 'rh', 'accounts', 'clients', 'translator', 'team_chat', 'company_info'];
+
+// Onglets toujours autorisés (ajouts récents) : garantit l'accès même pour les
+// entreprises dont la liste d'onglets a été personnalisée avant leur arrivée.
+const ALWAYS_TABS = ['soustraitants'];
 
 /** Onglets inclus par défaut selon le plan d’abonnement */
 const DEFAULT_TABS_BY_PLAN = {
-    free: ['dashboard', 'reports', 'project_overview', 'assignments', 'besoins', 'hse', 'translator', 'team_chat', 'company_info'],
-    basic: ['dashboard', 'connections', 'assignments', 'maintenance', 'bit_sharpening', 'consumables', 'forage_plan', 'besoins', 'hse', 'reports', 'project_overview', 'sites', 'clients', 'contracts', 'site_meals', 'translator', 'team_chat', 'company_info'],
-    premium: ['dashboard', 'connections', 'assignments', 'maintenance', 'bit_sharpening', 'consumables', 'inventory', 'invoices', 'contracts', 'sites', 'revenue', 'site_meals', 'reports', 'project_overview', 'forage_plan', 'planification', 'besoins', 'rentabilite', 'depenses_pm', 'analytics', 'hse', 'rh', 'clients', 'translator', 'team_chat', 'company_info'],
+    free: ['dashboard', 'reports', 'project_overview', 'assignments', 'besoins', 'soustraitants', 'hse', 'translator', 'team_chat', 'company_info'],
+    basic: ['dashboard', 'connections', 'assignments', 'maintenance', 'bit_sharpening', 'consumables', 'forage_plan', 'besoins', 'soustraitants', 'hse', 'reports', 'project_overview', 'sites', 'clients', 'contracts', 'site_meals', 'translator', 'team_chat', 'company_info'],
+    premium: ['dashboard', 'connections', 'assignments', 'maintenance', 'bit_sharpening', 'consumables', 'inventory', 'invoices', 'contracts', 'sites', 'revenue', 'soustraitants', 'site_meals', 'reports', 'project_overview', 'forage_plan', 'planification', 'besoins', 'rentabilite', 'depenses_pm', 'analytics', 'hse', 'rh', 'clients', 'translator', 'team_chat', 'company_info'],
     enterprise: TENANT_MAIN_VIEWS.slice()
 };
 
@@ -76,13 +80,14 @@ function getDefaultTabsForPlan(plan) {
 
 /** Liste d’onglets effective : personnalisation entreprise sinon défaut du plan (catalogue ou code) */
 function getEffectiveAllowedTabs(entRow) {
-    if (!entRow) return getDefaultTabsForPlan('free');
+    const withAlways = (list) => [...new Set([...(list || []), ...ALWAYS_TABS])];
+    if (!entRow) return withAlways(getDefaultTabsForPlan('free'));
     const custom = parseAllowedTabsJson(entRow.allowedTabs);
     if (custom && custom.length > 0) {
         const cleaned = custom.filter((v) => TENANT_MAIN_VIEWS.includes(v));
-        if (cleaned.length > 0) return cleaned;
+        if (cleaned.length > 0) return withAlways(cleaned);
     }
-    return getDefaultTabsForPlan(entRow.plan);
+    return withAlways(getDefaultTabsForPlan(entRow.plan));
 }
 
 function getEffectiveAllowedRoles(entRow) {
