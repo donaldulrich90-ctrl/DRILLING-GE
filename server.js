@@ -219,6 +219,13 @@ db.run('ALTER TABLE drills ADD COLUMN operator TEXT DEFAULT NULL', (err) => {
     }
 });
 
+// Allocation d'une foreuse à un sous-traitant propriétaire (optionnel).
+db.run('ALTER TABLE drills ADD COLUMN subcontractorId INTEGER DEFAULT NULL', (err) => {
+    if (err && !String(err.message || '').includes('duplicate column')) {
+        console.warn('Migration drills.subcontractorId:', err.message);
+    }
+});
+
 function loadPlanDefaultTabsFromDb() {
     db.all('SELECT plan, defaultAllowedTabs FROM subscription_plan_catalog', [], (err, rows) => {
         if (err) {
@@ -1232,11 +1239,12 @@ app.get('/api/drills', (req, res) => {
 });
 
 app.post('/api/drills', (req, res) => {
-    const { id, location, status, siteId, contractId, telemetry, maintenance, fuel, rods, consumables, connectionMode, connectionStatus, connectionConfig } = req.body;
+    const { id, location, status, siteId, contractId, telemetry, maintenance, fuel, rods, consumables, connectionMode, connectionStatus, connectionConfig, subcontractorId } = req.body;
     const entId = resolveCreateEnterpriseId(req, req.body);
+    const subId = (subcontractorId === '' || subcontractorId == null) ? null : parseInt(subcontractorId, 10);
     db.run(
-        `INSERT INTO drills (id, enterpriseId, location, status, siteId, contractId, telemetry, maintenance, fuel, rods, consumables, connectionMode, connectionStatus, connectionConfig)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO drills (id, enterpriseId, location, status, siteId, contractId, telemetry, maintenance, fuel, rods, consumables, connectionMode, connectionStatus, connectionConfig, subcontractorId)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
             id, entId, location, status, siteId || null, contractId || null,
             JSON.stringify(telemetry || {}),
@@ -1246,7 +1254,8 @@ app.post('/api/drills', (req, res) => {
             JSON.stringify(consumables || {}),
             connectionMode || 'manual',
             connectionStatus || 'disconnected',
-            JSON.stringify(connectionConfig || {})
+            JSON.stringify(connectionConfig || {}),
+            Number.isFinite(subId) ? subId : null
         ],
         function(err) {
             if (err) {
@@ -1287,6 +1296,24 @@ app.put('/api/drills/:id', (req, res) => {
         if (err) return res.status(500).json({ error: err.message });
         if (this.changes === 0) return res.status(404).json({ error: 'Machine introuvable ou accès refusé' });
         res.json({ message: 'Machine mise à jour', changes: this.changes });
+    });
+});
+
+// Allouer (ou retirer) le sous-traitant propriétaire d'une foreuse — mise à
+// jour ciblée, sans toucher aux autres champs de la machine.
+app.put('/api/drills/:id/subcontractor', (req, res) => {
+    const id = req.params.id;
+    const entId = getEnterpriseId(req);
+    const raw = req.body ? req.body.subcontractorId : null;
+    const subId = (raw === '' || raw == null) ? null : parseInt(raw, 10);
+    const val = Number.isFinite(subId) ? subId : null;
+    let sql = 'UPDATE drills SET subcontractorId = ? WHERE id = ?';
+    const vals = [val, id];
+    if (entId !== null) { sql += ' AND enterpriseId = ?'; vals.push(entId); }
+    db.run(sql, vals, function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        if (this.changes === 0) return res.status(404).json({ error: 'Machine introuvable ou accès refusé' });
+        res.json({ message: 'Allocation mise à jour', subcontractorId: val });
     });
 });
 
