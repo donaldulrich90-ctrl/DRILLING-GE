@@ -1094,6 +1094,19 @@
  </style>
     <link rel="stylesheet" href="/gedrilling-login.css">
     <link rel="stylesheet" href="/gedrilling-platform-theme.css">
+    <style>
+        /* ── Lisibilité : texte secondaire plus clair sur fond sombre ── */
+        .text-slate-600 { color: #9fb0c0 !important; }
+        .text-slate-500 { color: #b4c1cf !important; }
+        .text-slate-400 { color: #c6d2de !important; }
+        /* Labels/aides dans les modales et cartes : bon contraste */
+        .ged-modal-panel .text-slate-500,
+        .ged-modal-panel .text-slate-600,
+        .ged-modal-panel label { color: #d2dce6 !important; }
+        /* Placeholders et champs désactivés moins fantômes */
+        input::placeholder, textarea::placeholder, select::placeholder { color: #93a2b2 !important; opacity: 1; }
+        select:disabled, input:disabled, textarea:disabled { opacity: .92 !important; }
+    </style>
 </head>
 <body class="ged-theme-control ged-motion-full">
     <!-- Page de connexion GEDRILLING -->
