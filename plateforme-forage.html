@@ -6069,6 +6069,15 @@
             return ['admin', 'super_admin', 'gestionnaire', 'gestionnaire_site', 'superviseur', 'ingenieur', 'platform_owner'].indexOf(r) >= 0;
         }
 
+        // Saisie des données réservée aux ingénieurs (et direction/admin).
+        // Le tableau de bord reste visible par tous ; seuls ces rôles SAISISSENT.
+        function canEnterDailyData() {
+            if (!currentUser) return false;
+            if (currentUser.isSuperAdmin || currentUser.isPlatformOwner) return true;
+            var r = currentUser.role || '';
+            return ['ingenieur', 'admin', 'super_admin', 'gestionnaire', 'gestionnaire_site', 'platform_owner'].indexOf(r) >= 0;
+        }
+
         function isDailyDataRecordReadOnlyForCurrentUser(record) {
             if (!record) return false;
             var workflowStatus = String(record.workflowStatus || 'draft').toLowerCase();
@@ -6774,7 +6783,9 @@
                 '<label class="block text-blue-200 text-xs mb-1">Date</label>' +
                 '<input type="date" id="resourcesDailyEntryDate" value="' + todayIso + '" class="bg-slate-900 border border-blue-400/40 rounded px-3 py-2 text-white text-sm">' +
                 '</div>' +
-                '<button type="button" onclick=\'showDailyEntryModalFromResources(' + JSON.stringify(drill.id) + ')\' class="ged-btn-primary px-4 py-2 rounded-lg font-semibold">📝 Ouvrir la saisie</button>' +
+                (canEnterDailyData()
+                    ? '<button type="button" onclick=\'showDailyEntryModalFromResources(' + JSON.stringify(drill.id) + ')\' class="ged-btn-primary px-4 py-2 rounded-lg font-semibold">📝 Ouvrir la saisie</button>'
+                    : '<span class="text-xs text-amber-200 self-center">👁️ Lecture seule — la saisie est réservée aux ingénieurs</span>') +
                 (dailyDataRoleCanOverrideDailyLock()
                     ? '<button type="button" onclick=\'openDailyDataPurgeModal(' + JSON.stringify(drill.id) + ')\' class="bg-red-900/80 hover:bg-red-800 px-4 py-2 rounded-lg font-semibold text-white text-sm">🗑️ Supprimer par dates</button>'
                     : '') +
@@ -22090,6 +22101,10 @@
         }
 
         function showDailyEntryModal(machineId) {
+            if (!canEnterDailyData()) {
+                alert('Saisie réservée aux ingénieurs (et à la direction). Le tableau de bord reste consultable par tous.');
+                return;
+            }
             var drill = findDrillByMachineId(machineId);
             if (!drill) return;
             
@@ -22328,7 +22343,11 @@
 
         function saveDailyEntry(event) {
             event.preventDefault();
-            
+            if (!canEnterDailyData()) {
+                alert('Droits insuffisants : la saisie des données est réservée aux ingénieurs.');
+                return;
+            }
+
             var date = document.getElementById('dailyEntryDate').value;
             var machineIdRaw = document.getElementById('dailyEntryMachineId').value;
             var location = document.getElementById('dailyEntryLocation').value.trim();
