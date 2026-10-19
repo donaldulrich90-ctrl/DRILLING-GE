@@ -2591,17 +2591,169 @@
                         </div>
                         <div>
                             <label class="block text-slate-400 mb-2">Rôle *</label>
-                            <select id="employeeRole" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white" required>
+                            <select id="employeeRole" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white" required onchange="onEmployeeRoleChange()">
                                 <option value="">Sélectionner un rôle</option>
-                                <option value="Foreur">Foreur</option>
-                                <option value="Aide foreur">Aide foreur</option>
-                                <option value="Superviseur">Superviseur</option>
-                                <option value="Santé sécurité">Santé sécurité</option>
-                                <option value="Ingénieur">Ingénieur</option>
-                                <option value="Gestionnaire">Gestionnaire</option>
+                                <optgroup label="Rôles existants (forage)">
+                                    <option value="Foreur">Foreur</option>
+                                    <option value="Aide foreur">Aide foreur</option>
+                                    <option value="Superviseur">Superviseur</option>
+                                    <option value="Santé sécurité">Santé sécurité</option>
+                                    <option value="Ingénieur">Ingénieur</option>
+                                    <option value="Gestionnaire">Gestionnaire</option>
+                                </optgroup>
+                                <optgroup label="Direction &amp; administration">
+                                    <option value="Directeur général">Directeur général (CEO)</option>
+                                    <option value="Directeur d'exploitation">Directeur d'exploitation</option>
+                                    <option value="Directeur technique">Directeur technique</option>
+                                    <option value="Directeur administratif et financier (DAF)">Directeur administratif et financier (DAF)</option>
+                                    <option value="Responsable administratif">Responsable administratif</option>
+                                    <option value="Responsable des ressources humaines">Responsable des ressources humaines</option>
+                                    <option value="Gestionnaire de paie">Gestionnaire de paie</option>
+                                    <option value="Contrôleur de gestion">Contrôleur de gestion</option>
+                                    <option value="Comptable">Comptable</option>
+                                    <option value="Caissier">Caissier</option>
+                                    <option value="Juriste">Juriste</option>
+                                    <option value="Assistant(e) de direction">Assistant(e) de direction</option>
+                                    <option value="Secrétaire">Secrétaire</option>
+                                    <option value="Administrateur">Administrateur</option>
+                                    <option value="Informaticien / Responsable IT">Informaticien / Responsable IT</option>
+                                </optgroup>
+                                <optgroup label="Géologie &amp; exploration">
+                                    <option value="Géologue">Géologue</option>
+                                    <option value="Géologue d'exploration">Géologue d'exploration</option>
+                                    <option value="Géologue de production">Géologue de production</option>
+                                    <option value="Aide-géologue">Aide-géologue</option>
+                                    <option value="Technicien géologue">Technicien géologue</option>
+                                    <option value="Hydrogéologue">Hydrogéologue</option>
+                                    <option value="Géotechnicien">Géotechnicien</option>
+                                    <option value="Échantillonneur">Échantillonneur</option>
+                                </optgroup>
+                                <optgroup label="Topographie">
+                                    <option value="Topographe">Topographe</option>
+                                    <option value="Aide-topographe">Aide-topographe</option>
+                                    <option value="Géomètre">Géomètre</option>
+                                </optgroup>
+                                <optgroup label="Opérations minières">
+                                    <option value="Surintendant de mine">Surintendant de mine</option>
+                                    <option value="Chef de mine">Chef de mine</option>
+                                    <option value="Ingénieur minier">Ingénieur minier</option>
+                                    <option value="Ingénieur d'exploitation">Ingénieur d'exploitation</option>
+                                    <option value="Surintendant de production">Surintendant de production</option>
+                                    <option value="Superviseur de production">Superviseur de production</option>
+                                    <option value="Chef de quart">Chef de quart</option>
+                                    <option value="Contremaître">Contremaître</option>
+                                    <option value="Chef d'équipe">Chef d'équipe</option>
+                                    <option value="Opérateur de foreuse">Opérateur de foreuse</option>
+                                    <option value="Opérateur d'excavatrice / pelle">Opérateur d'excavatrice / pelle</option>
+                                    <option value="Opérateur de chargeuse">Opérateur de chargeuse</option>
+                                    <option value="Opérateur de bulldozer">Opérateur de bulldozer</option>
+                                    <option value="Opérateur de niveleuse">Opérateur de niveleuse</option>
+                                    <option value="Opérateur de dumper">Opérateur de dumper</option>
+                                    <option value="Opérateur de tombereau">Opérateur de tombereau</option>
+                                    <option value="Conducteur d'engins">Conducteur d'engins</option>
+                                    <option value="Chauffeur poids lourd">Chauffeur poids lourd</option>
+                                    <option value="Manœuvre">Manœuvre</option>
+                                </optgroup>
+                                <optgroup label="Forage &amp; minage">
+                                    <option value="Foreur">Foreur</option>
+                                    <option value="Aide-foreur">Aide-foreur</option>
+                                    <option value="Chef foreur">Chef foreur</option>
+                                    <option value="Boutefeu / Artificier">Boutefeu / Artificier</option>
+                                    <option value="Aide-mineur">Aide-mineur</option>
+                                    <option value="Magasinier explosifs">Magasinier explosifs</option>
+                                </optgroup>
+                                <optgroup label="Traitement / usine">
+                                    <option value="Responsable traitement / usine">Responsable traitement / usine</option>
+                                    <option value="Métallurgiste">Métallurgiste</option>
+                                    <option value="Ingénieur procédé">Ingénieur procédé</option>
+                                    <option value="Opérateur de concasseur">Opérateur de concasseur</option>
+                                    <option value="Opérateur de broyeur">Opérateur de broyeur</option>
+                                    <option value="Opérateur de laverie">Opérateur de laverie</option>
+                                    <option value="Opérateur CIL / CIP">Opérateur CIL / CIP</option>
+                                    <option value="Opérateur de flottation">Opérateur de flottation</option>
+                                    <option value="Responsable fonderie">Responsable fonderie</option>
+                                    <option value="Fondeur">Fondeur</option>
+                                </optgroup>
+                                <optgroup label="Laboratoire">
+                                    <option value="Responsable laboratoire">Responsable laboratoire</option>
+                                    <option value="Technicien de laboratoire">Technicien de laboratoire</option>
+                                    <option value="Laborantin">Laborantin</option>
+                                </optgroup>
+                                <optgroup label="Maintenance &amp; atelier">
+                                    <option value="Responsable maintenance">Responsable maintenance</option>
+                                    <option value="Chef mécanicien">Chef mécanicien</option>
+                                    <option value="Mécanicien chef d'équipe">Mécanicien chef d'équipe</option>
+                                    <option value="Mécanicien">Mécanicien</option>
+                                    <option value="Mécanicien engins lourds">Mécanicien engins lourds</option>
+                                    <option value="Mécanicien diesel">Mécanicien diesel</option>
+                                    <option value="Électricien">Électricien</option>
+                                    <option value="Électricien haute tension">Électricien haute tension</option>
+                                    <option value="Électromécanicien">Électromécanicien</option>
+                                    <option value="Mécanicien électricité">Mécanicien électricité</option>
+                                    <option value="Soudeur">Soudeur</option>
+                                    <option value="Chaudronnier">Chaudronnier</option>
+                                    <option value="Hydraulicien">Hydraulicien</option>
+                                    <option value="Pneumaticien / Vulcanisateur">Pneumaticien / Vulcanisateur</option>
+                                    <option value="Graisseur">Graisseur</option>
+                                    <option value="Tourneur">Tourneur</option>
+                                    <option value="Technicien instrumentation">Technicien instrumentation</option>
+                                    <option value="Technicien groupe électrogène">Technicien groupe électrogène</option>
+                                </optgroup>
+                                <optgroup label="HSE / SST &amp; environnement">
+                                    <option value="Responsable HSE / SST">Responsable HSE / SST</option>
+                                    <option value="Superviseur HSE">Superviseur HSE</option>
+                                    <option value="Agent HSE">Agent HSE</option>
+                                    <option value="Secouriste">Secouriste</option>
+                                    <option value="Infirmier">Infirmier</option>
+                                    <option value="Médecin du travail">Médecin du travail</option>
+                                    <option value="Responsable environnement">Responsable environnement</option>
+                                    <option value="Technicien environnement">Technicien environnement</option>
+                                </optgroup>
+                                <optgroup label="Logistique &amp; approvisionnement">
+                                    <option value="Responsable logistique">Responsable logistique</option>
+                                    <option value="Responsable approvisionnement">Responsable approvisionnement</option>
+                                    <option value="Acheteur">Acheteur</option>
+                                    <option value="Gestionnaire de stock">Gestionnaire de stock</option>
+                                    <option value="Magasinier">Magasinier</option>
+                                    <option value="Agent de pesée / bascule">Agent de pesée / bascule</option>
+                                    <option value="Pompiste">Pompiste</option>
+                                    <option value="Chauffeur">Chauffeur</option>
+                                </optgroup>
+                                <optgroup label="Sécurité">
+                                    <option value="Chef de la sécurité">Chef de la sécurité</option>
+                                    <option value="Agent de sécurité">Agent de sécurité</option>
+                                    <option value="Vigile">Vigile</option>
+                                    <option value="Gardien">Gardien</option>
+                                </optgroup>
+                                <optgroup label="Support &amp; vie de base">
+                                    <option value="Cuisinier">Cuisinier</option>
+                                    <option value="Aide-cuisinier">Aide-cuisinier</option>
+                                    <option value="Agent d'entretien">Agent d'entretien</option>
+                                    <option value="Planton">Planton</option>
+                                    <option value="Stagiaire">Stagiaire</option>
+                                </optgroup>
                                 <option value="Autre">Autre</option>
                             </select>
                         </div>
+                    </div>
+                    <div class="mb-4 hidden" id="employeeSectionWrap">
+                        <label class="block text-slate-400 mb-2">Section de la mine <span class="text-xs text-slate-500">(à préciser pour un stagiaire ou « Autre »)</span></label>
+                        <select id="employeeSection" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white">
+                                <option value="">— Choisir la section —</option>
+                                <option value="Direction &amp; administration">Direction &amp; administration</option>
+                                <option value="Géologie &amp; exploration">Géologie &amp; exploration</option>
+                                <option value="Topographie">Topographie</option>
+                                <option value="Opérations minières">Opérations minières</option>
+                                <option value="Forage &amp; minage">Forage &amp; minage</option>
+                                <option value="Traitement / usine">Traitement / usine</option>
+                                <option value="Laboratoire">Laboratoire</option>
+                                <option value="Maintenance &amp; atelier">Maintenance &amp; atelier</option>
+                                <option value="HSE / SST &amp; environnement">HSE / SST &amp; environnement</option>
+                                <option value="Logistique &amp; approvisionnement">Logistique &amp; approvisionnement</option>
+                                <option value="Sécurité">Sécurité</option>
+                                <option value="Support &amp; vie de base">Support &amp; vie de base</option>
+                        </select>
+                        <p class="text-xs text-slate-500 mt-1">Service / département où la personne est affectée.</p>
                     </div>
                     <div class="mb-4">
                         <label class="block text-slate-400 mb-2">Site d’affectation (optionnel)</label>
@@ -18259,10 +18411,29 @@
             return 'EMP-' + year + '-' + String(nextNumber).padStart(3, '0');
         }
 
+        // Affiche le champ « Section de la mine » uniquement pour un stagiaire
+        // ou un rôle « Autre » (pour préciser le service d'affectation).
+        function onEmployeeRoleChange() {
+            var roleEl = document.getElementById('employeeRole');
+            var wrap = document.getElementById('employeeSectionWrap');
+            if (!roleEl || !wrap) return;
+            var r = roleEl.value || '';
+            var needed = (r === 'Stagiaire' || r === 'Autre');
+            wrap.classList.toggle('hidden', !needed);
+            if (!needed) {
+                var sel = document.getElementById('employeeSection');
+                if (sel) sel.value = '';
+            }
+        }
+
         function showAddEmployeeModal() {
             currentEditingEmployeeId = null;
             document.getElementById('employeeModalTitle').textContent = 'Nouvel Employé';
             document.getElementById('employeeForm').reset();
+            var secWrap = document.getElementById('employeeSectionWrap');
+            if (secWrap) secWrap.classList.add('hidden');
+            var secSel = document.getElementById('employeeSection');
+            if (secSel) secSel.value = '';
             
             // Générer automatiquement le numéro d'employé
             document.getElementById('employeeNumber').value = generateEmployeeNumber();
@@ -18306,6 +18477,9 @@
             document.getElementById('employeeNumber').value = employee.employeeNumber || generateEmployeeNumber();
             document.getElementById('employeeName').value = employee.name || '';
             document.getElementById('employeeRole').value = employee.role || '';
+            var secSelEdit = document.getElementById('employeeSection');
+            if (secSelEdit) secSelEdit.value = employee.section || '';
+            onEmployeeRoleChange();
             document.getElementById('employeeEmail').value = employee.email || '';
             document.getElementById('employeePhone').value = employee.phone || '';
             document.getElementById('employeeSalary').value = employee.salary || 0;
@@ -18359,6 +18533,7 @@
                 employeeNumber: employeeNumber,
                 name: name,
                 role: role,
+                section: (function() { var s = document.getElementById('employeeSection'); return (role === 'Stagiaire' || role === 'Autre') && s ? (s.value || '') : ''; })(),
                 email: document.getElementById('employeeEmail').value.trim() || '',
                 phone: document.getElementById('employeePhone').value.trim() || '',
                 salary: parseFloat(document.getElementById('employeeSalary').value) || 0,
