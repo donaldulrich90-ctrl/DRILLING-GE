@@ -181,6 +181,13 @@ db.run('ALTER TABLE employees ADD COLUMN siteId INTEGER', (err) => {
     }
 });
 
+// Migration : section/service de la mine (renseigné surtout pour stagiaire / « Autre »)
+db.run('ALTER TABLE employees ADD COLUMN section TEXT DEFAULT NULL', (err) => {
+    if (err && !String(err.message || '').includes('duplicate column')) {
+        console.warn('Migration employees.section:', err.message);
+    }
+});
+
 db.run('ALTER TABLE enterprises ADD COLUMN allowedTabs TEXT DEFAULT NULL', (err) => {
     if (err && !String(err.message || '').includes('duplicate column')) {
         console.warn('Migration enterprises.allowedTabs:', err.message);
@@ -1676,14 +1683,15 @@ app.post('/api/employees', (req, res) => {
     // ne reflète pas tous les ids déjà présents en base. SQLite attribue le prochain id AUTOINCREMENT.
     db.run(
         `INSERT INTO employees (enterpriseId, employeeNumber, name, role, email, phone, status, salary, startDate,
-         address, notes, takenLeave, payslips, siteId)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         address, notes, takenLeave, payslips, siteId, section)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
             entId, employee.employeeNumber, employee.name, employee.role, employee.email,
             employee.phone, employee.status, employee.salary, employee.startDate,
             employee.address || '', employee.notes || '', employee.takenLeave || 0,
             JSON.stringify(employee.payslips || []),
-            employee.siteId != null && employee.siteId !== '' ? parseInt(employee.siteId, 10) : null
+            employee.siteId != null && employee.siteId !== '' ? parseInt(employee.siteId, 10) : null,
+            employee.section || null
         ],
         function(err) {
             if (err) {
@@ -1700,7 +1708,7 @@ app.put('/api/employees/:id', (req, res) => {
     const entId = getEnterpriseId(req);
     const employee = req.body;
     let sql = `UPDATE employees SET employeeNumber = ?, name = ?, role = ?, email = ?, phone = ?,
-         status = ?, salary = ?, startDate = ?, address = ?, notes = ?, takenLeave = ?, payslips = ?, siteId = ?
+         status = ?, salary = ?, startDate = ?, address = ?, notes = ?, takenLeave = ?, payslips = ?, siteId = ?, section = ?
          WHERE id = ?`;
     const vals = [
         employee.employeeNumber, employee.name, employee.role, employee.email, employee.phone,
@@ -1708,6 +1716,7 @@ app.put('/api/employees/:id', (req, res) => {
         employee.notes || '', employee.takenLeave || 0,
         JSON.stringify(employee.payslips || []),
         employee.siteId != null && employee.siteId !== '' ? parseInt(employee.siteId, 10) : null,
+        employee.section || null,
         id
     ];
     if (entId !== null) {
