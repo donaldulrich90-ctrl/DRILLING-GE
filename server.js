@@ -334,6 +334,15 @@ function dailyDataElevatedRoleFromAuth(auth) {
     return ['admin', 'super_admin', 'gestionnaire', 'gestionnaire_site', 'superviseur', 'ingenieur', 'platform_owner'].includes(r);
 }
 
+// Saisie des données journalières : réservée aux ingénieurs (et à la direction).
+// Le tableau de bord reste consultable par tous les rôles ; seule l'écriture est bridée.
+function dailyDataCanEnterFromAuth(auth) {
+    if (!auth) return false;
+    if (auth.isSuperAdmin || auth.isPlatformOwner) return true;
+    const r = auth.role || '';
+    return ['ingenieur', 'admin', 'super_admin', 'gestionnaire', 'gestionnaire_site', 'platform_owner'].includes(r);
+}
+
 function normalizeDailyWorkflowStatus(value) {
     const status = String(value || 'draft').toLowerCase();
     return ['draft', 'submitted', 'approved', 'rejected'].includes(status) ? status : 'draft';
@@ -2336,6 +2345,9 @@ app.post('/api/daily-data', (req, res) => {
     const entId = getEnterpriseId(req);
     if (!record.date || !record.machineId) {
         return res.status(400).json({ error: 'date et machineId requis' });
+    }
+    if (!dailyDataCanEnterFromAuth(req.auth)) {
+        return res.status(403).json({ error: 'Saisie réservée aux ingénieurs (et à la direction). Le tableau de bord reste consultable par tous.' });
     }
     assertDrillBelongsToTenant(db, record.machineId, entId, (aerr, ok) => {
         if (aerr) return res.status(500).json({ error: aerr.message });
