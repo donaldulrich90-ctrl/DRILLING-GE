@@ -1106,6 +1106,22 @@
         /* Placeholders et champs désactivés moins fantômes */
         input::placeholder, textarea::placeholder, select::placeholder { color: #93a2b2 !important; opacity: 1; }
         select:disabled, input:disabled, textarea:disabled { opacity: .92 !important; }
+        /* ── Saisie journalière : contraste renforcé (libellés, aides, champs désactivés) ── */
+        #dailyEntryModal label,
+        #dailyEntryModal .text-slate-400 { color: #e4ebf3 !important; }
+        #dailyEntryModal .text-slate-500 { color: #c6d2de !important; }
+        #dailyEntryModal #dailyEntryModalSummary { color: #e4ebf3 !important; }
+        #dailyEntryModal input::placeholder,
+        #dailyEntryModal textarea::placeholder { color: #aab7c6 !important; opacity: 1; }
+        #dailyEntryModal select:disabled,
+        #dailyEntryModal input:disabled,
+        #dailyEntryModal textarea:disabled {
+            opacity: 1 !important;
+            color: #e4ebf3 !important;
+            -webkit-text-fill-color: #e4ebf3 !important;
+        }
+        /* Bannière de validation visible à l'intérieur de la modale de saisie */
+        #dailyEntryErrorBanner:not(.hidden) { display: block; }
     </style>
 </head>
 <body class="ged-theme-control ged-motion-full">
@@ -4057,6 +4073,7 @@
                     </div>
 
                     <div id="dailyEntryAuditBanner" class="hidden mb-3 px-4 py-2 rounded-lg border text-sm"></div>
+                    <div id="dailyEntryErrorBanner" class="hidden mb-3 px-4 py-3 rounded-lg text-sm font-semibold shrink-0 bg-red-900/80 border border-red-400 text-red-50"></div>
 
                     <div class="overflow-y-auto flex-1 min-h-0 pr-1 space-y-4 pb-2">
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
@@ -22391,7 +22408,8 @@
             }
             var drill = findDrillByMachineId(machineId);
             if (!drill) return;
-            
+            if (typeof clearDailyEntryError === 'function') clearDailyEntryError();
+
             // Remplir le formulaire avec les valeurs par défaut
             var today = new Date().toISOString().split('T')[0];
             document.getElementById('dailyEntryDate').value = today;
@@ -22625,10 +22643,28 @@
             }
         }
 
+        // Affiche un message de validation DANS la modale de saisie (zone fixe,
+        // toujours visible), en plus de la notification — le toast en haut à
+        // droite pouvait passer inaperçu derrière l'interface.
+        function showDailyEntryError(message) {
+            var banner = document.getElementById('dailyEntryErrorBanner');
+            if (banner) {
+                banner.textContent = String(message || '');
+                banner.classList.remove('hidden');
+                try { banner.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (_) {}
+            }
+            alert(message);
+        }
+        function clearDailyEntryError() {
+            var banner = document.getElementById('dailyEntryErrorBanner');
+            if (banner) { banner.textContent = ''; banner.classList.add('hidden'); }
+        }
+
         function saveDailyEntry(event) {
             event.preventDefault();
+            clearDailyEntryError();
             if (!canEnterDailyData()) {
-                alert('Droits insuffisants : la saisie des données est réservée aux ingénieurs.');
+                showDailyEntryError('Droits insuffisants : la saisie des données est réservée aux ingénieurs.');
                 return;
             }
 
@@ -22673,7 +22709,7 @@
             
             var drill = findDrillByMachineId(machineIdRaw);
             if (!drill) {
-                alert('Machine introuvable');
+                showDailyEntryError('Machine introuvable');
                 return;
             }
             var machineId = drill.id;
@@ -22682,7 +22718,7 @@
                 return drillIdsMatch(r.machineId, machineId) && r.date === date && dailyRecordShiftKey(r) === String(shiftForSave || '');
             });
             if (existingRec && isDailyDataRecordReadOnlyForCurrentUser(existingRec)) {
-                alert('Cette saisie est verrouillée. Un poste soumis ou approuvé doit d’abord être rejeté ou rouvert par la supervision.');
+                showDailyEntryError('Cette saisie est verrouillée. Un poste soumis ou approuvé doit d’abord être rejeté ou rouvert par la supervision.');
                 return;
             }
             var stoppagesForBalance = collectDailyEntryStoppages();
@@ -22691,9 +22727,9 @@
             var sumHoursAndDowntime = downtimeForBalance + hours;
             var shiftBalanceTol = 0.02;
             if (Math.abs(sumHoursAndDowntime - nominalShiftHours) > shiftBalanceTol) {
-                alert('Durée du shift : ' + nominalShiftHours + ' h (' + getShiftLabelForReport(shiftForSave) + '). La somme des temps d’arrêt (' +
+                showDailyEntryError('Durée du shift : ' + nominalShiftHours + ' h (' + getShiftLabelForReport(shiftForSave) + '). La somme des temps d’arrêt (' +
                     formatStoppageHoursExactDisplay(downtimeForBalance) + ' h) et des heures machine (' +
-                    formatStoppageHoursExactDisplay(hours) + ' h) doit être égale à ' + nominalShiftHours + ' h.\nActuellement : ' +
+                    formatStoppageHoursExactDisplay(hours) + ' h) doit être égale à ' + nominalShiftHours + ' h. Actuellement : ' +
                     formatStoppageHoursExactDisplay(sumHoursAndDowntime) + ' h. Ajustez les arrêts ou les heures machine avant d’enregistrer.');
                 return;
             }
