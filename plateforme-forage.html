@@ -2778,6 +2778,47 @@
                         </select>
                         <p class="text-xs text-slate-500 mt-1">Utilisé pour les coûts salariaux par site et le filtrage.</p>
                     </div>
+                    <div class="border border-amber-700/40 rounded-lg p-4 bg-slate-900/30 mb-4">
+                        <h4 class="text-sm font-semibold text-amber-300 mb-3">Affectation — équipe, rotation et engin</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                            <div>
+                                <label class="block text-slate-400 mb-1 text-xs">Équipe</label>
+                                <input type="text" id="employeeTeam" list="employeeTeamSuggestions" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white text-sm" placeholder="Ex: Équipe A">
+                                <datalist id="employeeTeamSuggestions">
+                                    <option value="Équipe A"></option><option value="Équipe B"></option>
+                                    <option value="Équipe C"></option><option value="Équipe D"></option>
+                                    <option value="Jour"></option><option value="Nuit"></option>
+                                </datalist>
+                            </div>
+                            <div>
+                                <label class="block text-slate-400 mb-1 text-xs">Rotation</label>
+                                <input type="text" id="employeeRotation" list="employeeRotationSuggestions" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white text-sm" placeholder="Ex: 14/14">
+                                <datalist id="employeeRotationSuggestions">
+                                    <option value="14/14"></option><option value="28/28"></option>
+                                    <option value="21/7"></option><option value="6j/1j"></option>
+                                    <option value="4x4"></option><option value="Jour"></option><option value="Nuit"></option>
+                                </datalist>
+                            </div>
+                            <div>
+                                <label class="block text-slate-400 mb-1 text-xs">Type d'engin opéré</label>
+                                <select id="employeeEnginType" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white text-sm">
+                                    <option value="">— Non applicable —</option>
+                                    <option value="Foreuse">Foreuse</option>
+                                    <option value="Excavatrice / pelle">Excavatrice / pelle</option>
+                                    <option value="Chargeuse">Chargeuse</option>
+                                    <option value="Bulldozer">Bulldozer</option>
+                                    <option value="Niveleuse">Niveleuse</option>
+                                    <option value="Dumper">Dumper</option>
+                                    <option value="Tombereau">Tombereau</option>
+                                    <option value="Camion">Camion</option>
+                                    <option value="Grue">Grue</option>
+                                    <option value="Compacteur">Compacteur</option>
+                                    <option value="Autre engin">Autre engin</option>
+                                </select>
+                            </div>
+                        </div>
+                        <p class="text-xs text-slate-500 mt-2">Permet de classer les travailleurs par équipe, par engin opéré et de suivre les rotations.</p>
+                    </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                         <div>
                             <label class="block text-slate-400 mb-2">Email</label>
@@ -17905,25 +17946,82 @@
         // ============================================
         // RESSOURCES HUMAINES
         // ============================================
+        // Regroupement de la liste RH (aucun / équipe / type d'engin / rotation)
+        var rhGroupBy = 'none';
+        function setRhGroupBy(v) { rhGroupBy = v || 'none'; renderRH(); }
+        window.setRhGroupBy = setRhGroupBy;
+
+        function rhEmployeeGroupValue(emp, by) {
+            if (by === 'team') return (emp.team && String(emp.team).trim()) ? String(emp.team).trim() : 'Sans équipe';
+            if (by === 'engin') return (emp.enginType && String(emp.enginType).trim()) ? String(emp.enginType).trim() : 'Sans engin';
+            if (by === 'rotation') return (emp.rotation && String(emp.rotation).trim()) ? String(emp.rotation).trim() : 'Sans rotation';
+            return '';
+        }
+
+        function rhEscapeCell(v) {
+            return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
         function renderRH() {
             var content = document.getElementById('rhContent');
             if (!content) return;
-            
+
             var employeesToShow = getEmployeesForRH();
+            var groupOpts = [['none', 'Aucun'], ['team', 'Équipe'], ['engin', 'Type d\'engin'], ['rotation', 'Rotation']]
+                .map(function(o) { return '<option value="' + o[0] + '"' + (rhGroupBy === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('');
             var html = '<div class="mb-4 flex justify-between items-center">' +
                 '<h3 class="text-xl font-bold">Liste des travailleurs</h3>' +
                 '<button onclick="showAddEmployeeModal()" class="ged-btn-primary px-4 py-2 rounded-lg">+ Nouvel employé</button>' +
                 '</div>' +
-                '<div class="mb-4">' +
-                '<input type="text" id="rhSearch" placeholder="Rechercher..." class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white" onkeyup="filterEmployees()">' +
+                '<div class="mb-4 flex flex-col sm:flex-row gap-2 sm:items-center">' +
+                '<input type="text" id="rhSearch" placeholder="Rechercher..." class="flex-1 bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white" onkeyup="filterEmployees()">' +
+                '<label class="text-sm text-slate-300 flex items-center gap-2 whitespace-nowrap">Grouper par :' +
+                '<select id="rhGroupBy" onchange="setRhGroupBy(this.value)" class="bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white text-sm">' + groupOpts + '</select></label>' +
                 '</div>';
-            
+
             if (employeesToShow.length === 0) {
                 html += '<p class="text-slate-400 text-center py-8">Aucun employé enregistré. Utilisez « Nouvel employé ».</p>';
-            } else {
-                html += '<div class="space-y-3" id="employeesList">';
+                content.innerHTML = rhSubNav('workers') + html;
+                return;
+            }
+
+            if (rhGroupBy !== 'none') {
+                var groups = {};
+                var order = [];
                 employeesToShow.forEach(function(emp) {
-                    var assignedDrills = assignments.filter(function(a) { 
+                    var g = rhEmployeeGroupValue(emp, rhGroupBy);
+                    if (!groups[g]) { groups[g] = []; order.push(g); }
+                    groups[g].push(emp);
+                });
+                order.sort(function(a, b) {
+                    var aEmpty = a.indexOf('Sans ') === 0, bEmpty = b.indexOf('Sans ') === 0;
+                    if (aEmpty !== bEmpty) return aEmpty ? 1 : -1;
+                    return a.localeCompare(b, 'fr');
+                });
+                html += '<div id="employeesList" class="space-y-6">';
+                order.forEach(function(g) {
+                    html += '<div><div class="flex items-center gap-2 mb-3 border-b border-slate-600 pb-2">' +
+                        '<span class="text-lg font-bold text-amber-300">' + rhEscapeCell(g) + '</span>' +
+                        '<span class="bg-slate-600 text-slate-200 text-xs px-2 py-1 rounded-full">' + groups[g].length + '</span></div>' +
+                        '<div class="space-y-3">' +
+                        groups[g].map(renderEmployeeCardHtml).join('') +
+                        '</div></div>';
+                });
+                html += '</div>';
+                content.innerHTML = rhSubNav('workers') + html;
+                return;
+            }
+
+            html += '<div class="space-y-3" id="employeesList">' +
+                employeesToShow.map(renderEmployeeCardHtml).join('') +
+                '</div>';
+            content.innerHTML = rhSubNav('workers') + html;
+        }
+
+        function renderEmployeeCardHtml(emp) {
+            var html = '';
+            {
+                    var assignedDrills = assignments.filter(function(a) {
                         return (a.operatorId === emp.id || (a.helpers && a.helpers.some(function(h) { return h.id === emp.id; }))) && a.status === 'active'; 
                     });
                     var siteLabel = resolveEmployeeSiteLabel(emp.siteId);
@@ -17982,6 +18080,16 @@
                         '<p class="text-slate-400">Site d’affectation:</p>' +
                         '<p class="text-cyan-400 font-semibold">' + (siteLabel ? siteLabel : '— Non renseigné') + '</p>' +
                         '</div>' +
+                        ((emp.team || emp.rotation || emp.enginType) ?
+                            '<div class="col-span-2">' +
+                            '<p class="text-slate-400">Équipe / Rotation / Engin :</p>' +
+                            '<p class="font-semibold">' +
+                            [ emp.team ? '<span class="text-amber-300">👥 ' + rhEscapeCell(emp.team) + '</span>' : '',
+                              emp.rotation ? '<span class="text-sky-300">🔁 ' + rhEscapeCell(emp.rotation) + '</span>' : '',
+                              emp.enginType ? '<span class="text-emerald-300">🚜 ' + rhEscapeCell(emp.enginType) + '</span>' : '' ]
+                              .filter(Boolean).join(' &nbsp;·&nbsp; ') +
+                            '</p>' +
+                            '</div>' : '') +
                         '</div>' +
                         '<div class="mt-2 bg-slate-600 p-2 rounded">' +
                         '<div class="flex justify-between items-center text-xs">' +
@@ -18025,11 +18133,8 @@
                         '</div>' +
                         '</div>' +
                         '</div>';
-                });
-                html += '</div>';
             }
-
-            content.innerHTML = rhSubNav('workers') + html;
+            return html;
         }
 
         // ── Présence / Pointage (sous-onglets du module RH) ──────────────────
@@ -18566,6 +18671,12 @@
             document.getElementById('employeeRole').value = employee.role || '';
             var secSelEdit = document.getElementById('employeeSection');
             if (secSelEdit) secSelEdit.value = employee.section || '';
+            var teamEdit = document.getElementById('employeeTeam');
+            if (teamEdit) teamEdit.value = employee.team || '';
+            var rotEdit = document.getElementById('employeeRotation');
+            if (rotEdit) rotEdit.value = employee.rotation || '';
+            var enginEdit = document.getElementById('employeeEnginType');
+            if (enginEdit) enginEdit.value = employee.enginType || '';
             onEmployeeRoleChange();
             document.getElementById('employeeEmail').value = employee.email || '';
             document.getElementById('employeePhone').value = employee.phone || '';
@@ -18621,6 +18732,9 @@
                 name: name,
                 role: role,
                 section: (function() { var s = document.getElementById('employeeSection'); return (role === 'Stagiaire' || role === 'Autre') && s ? (s.value || '') : ''; })(),
+                team: (document.getElementById('employeeTeam') || {}).value ? document.getElementById('employeeTeam').value.trim() : '',
+                rotation: (document.getElementById('employeeRotation') || {}).value ? document.getElementById('employeeRotation').value.trim() : '',
+                enginType: (document.getElementById('employeeEnginType') || {}).value || '',
                 email: document.getElementById('employeeEmail').value.trim() || '',
                 phone: document.getElementById('employeePhone').value.trim() || '',
                 salary: parseFloat(document.getElementById('employeeSalary').value) || 0,
