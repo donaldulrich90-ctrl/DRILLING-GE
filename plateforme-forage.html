@@ -2819,6 +2819,24 @@
                         </div>
                         <p class="text-xs text-slate-500 mt-2">Permet de classer les travailleurs par équipe, par engin opéré et de suivre les rotations.</p>
                     </div>
+                    <div class="border border-sky-700/40 rounded-lg p-4 bg-slate-900/30 mb-4">
+                        <h4 class="text-sm font-semibold text-sky-300 mb-2">Machines assignées (optionnel)</h4>
+                        <p class="text-xs text-slate-500 mb-3">Une machine (foreuse, camion, engin) peut être opérée par plusieurs personnes. Sélectionnez une ou plusieurs machines pour responsabiliser l'opérateur — modifiable à tout moment ici ou dans l'onglet « Assignations ».</p>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-slate-400 mb-1 text-xs">En tant que</label>
+                                <select id="employeeMachineRole" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white text-sm">
+                                    <option value="operateur">Opérateur</option>
+                                    <option value="aide">Aide</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-slate-400 mb-1 text-xs">Machine(s)</label>
+                                <select id="employeeMachines" multiple size="4" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white text-sm"></select>
+                                <p class="text-xs text-slate-500 mt-1">Maintenez Ctrl (ou Cmd) pour en choisir plusieurs.</p>
+                            </div>
+                        </div>
+                    </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                         <div>
                             <label class="block text-slate-400 mb-2">Email</label>
@@ -18018,6 +18036,83 @@
             content.innerHTML = rhSubNav('workers') + html;
         }
 
+        // ── Affectation machine depuis la fiche employé ──────────────────────
+        function populateEmployeeMachinesSelect(selectedIds) {
+            var sel = document.getElementById('employeeMachines');
+            if (!sel) return;
+            var set = {};
+            (selectedIds || []).forEach(function(id) { set[String(id)] = true; });
+            sel.innerHTML = '';
+            var machines = (typeof getDrillsForSite === 'function') ? getDrillsForSite() : (typeof drills !== 'undefined' ? drills : []);
+            (machines || []).forEach(function(d) {
+                var o = document.createElement('option');
+                o.value = d.id;
+                o.textContent = d.id + (d.location ? ' - ' + d.location : '');
+                if (set[String(d.id)]) o.selected = true;
+                sel.appendChild(o);
+            });
+        }
+
+        function getSelectedEmployeeMachines() {
+            var sel = document.getElementById('employeeMachines');
+            if (!sel) return [];
+            return Array.prototype.slice.call(sel.selectedOptions || []).map(function(o) { return o.value; });
+        }
+
+        function machinesAssignedToEmployee(empId) {
+            var ids = [];
+            (assignments || []).forEach(function(a) {
+                if ((a.status || '') !== 'active') return;
+                var isOp = drillIdsMatch(a.operatorId, empId);
+                var isHelp = a.helpers && a.helpers.some(function(h) { return drillIdsMatch(h.id, empId); });
+                if (isOp || isHelp) ids.push(a.drillId);
+            });
+            return ids;
+        }
+
+        function employeeIsPrincipalSomewhere(empId) {
+            return (assignments || []).some(function(a) {
+                return (a.status || '') === 'active' && drillIdsMatch(a.operatorId, empId);
+            });
+        }
+
+        // Rattache (additif) un employé à des machines. Une machine peut être
+        // opérée par plusieurs personnes : si elle a déjà un opérateur principal,
+        // la personne est ajoutée comme co-équipier (aide) ; sinon elle devient
+        // l'opérateur principal. Mutation seule — l'appelant persiste via saveData().
+        function assignEmployeeToMachines(emp, machineIds, asRole) {
+            if (!emp || !machineIds || !machineIds.length) return;
+            var today = new Date().toISOString().split('T')[0];
+            function nextAssignmentId() {
+                return (assignments || []).length > 0
+                    ? Math.max.apply(null, assignments.map(function(a) { return parseInt(a.id, 10) || 0; })) + 1
+                    : 1;
+            }
+            if (!Array.isArray(assignments)) assignments = assignments || [];
+            machineIds.forEach(function(mid) {
+                var drill = findDrillByMachineId(mid);
+                if (!drill) return;
+                var active = assignments.find(function(a) {
+                    return (a.status || '') === 'active' && drillIdsMatch(a.drillId, drill.id);
+                });
+                if (active) {
+                    var isOp = drillIdsMatch(active.operatorId, emp.id);
+                    var isHelp = active.helpers && active.helpers.some(function(h) { return drillIdsMatch(h.id, emp.id); });
+                    if (isOp || isHelp) return;
+                    if (!active.helpers) active.helpers = [];
+                    active.helpers.push({ id: emp.id, name: emp.name });
+                } else {
+                    var na = {
+                        id: nextAssignmentId(), drillId: drill.id,
+                        operatorId: emp.id, operatorName: emp.name,
+                        helpers: [], startDate: today, status: 'active'
+                    };
+                    if (drill.contractId != null && drill.contractId !== '') na.contractId = drill.contractId;
+                    assignments.push(na);
+                }
+            });
+        }
+
         function renderEmployeeCardHtml(emp) {
             var html = '';
             {
@@ -18635,6 +18730,9 @@
             
             document.getElementById('employeeStatus').value = 'active';
             populateEmployeeSiteSelect('');
+            var machRoleAdd = document.getElementById('employeeMachineRole');
+            if (machRoleAdd) machRoleAdd.value = 'operateur';
+            populateEmployeeMachinesSelect([]);
             // Réinitialiser photo
             document.getElementById('employeePhotoData').value = '';
             var pp = document.getElementById('employeePhotoPreview');
@@ -18677,6 +18775,9 @@
             if (rotEdit) rotEdit.value = employee.rotation || '';
             var enginEdit = document.getElementById('employeeEnginType');
             if (enginEdit) enginEdit.value = employee.enginType || '';
+            var machRoleEdit = document.getElementById('employeeMachineRole');
+            if (machRoleEdit) machRoleEdit.value = employeeIsPrincipalSomewhere(employee.id) ? 'operateur' : 'aide';
+            populateEmployeeMachinesSelect(machinesAssignedToEmployee(employee.id));
             onEmployeeRoleChange();
             document.getElementById('employeeEmail').value = employee.email || '';
             document.getElementById('employeePhone').value = employee.phone || '';
@@ -18758,9 +18859,16 @@
                 photo:          document.getElementById('employeePhotoData').value
             };
             
-            function afterEmployeeSaved(msg) {
+            var selMachines = getSelectedEmployeeMachines();
+            var selMachineRole = (document.getElementById('employeeMachineRole') || {}).value || 'operateur';
+
+            function afterEmployeeSaved(msg, savedEmp) {
+                if (savedEmp && selMachines && selMachines.length) {
+                    assignEmployeeToMachines(savedEmp, selMachines, selMachineRole);
+                }
                 saveData();
                 renderRH();
+                if (typeof renderAssignments === 'function') renderAssignments();
                 closeEmployeeModal();
                 alert(msg);
             }
@@ -18771,7 +18879,7 @@
                     if (!empEdit) return;
                     Object.assign(empEdit, employeeData);
                     window.API.Employees.update(empEdit.id, empEdit).then(function() {
-                        afterEmployeeSaved('Employé modifié avec succès!');
+                        afterEmployeeSaved('Employé modifié avec succès!', empEdit);
                     }).catch(function(e) {
                         alert((e && e.message) ? e.message : String(e));
                     });
@@ -18788,7 +18896,7 @@
                             newEmp.id = mx + 1;
                         }
                         employees.push(newEmp);
-                        afterEmployeeSaved('Employé ajouté avec succès!\n\nNuméro: ' + employeeNumber);
+                        afterEmployeeSaved('Employé ajouté avec succès!\n\nNuméro: ' + employeeNumber, newEmp);
                     }).catch(function(e) {
                         alert((e && e.message) ? e.message : String(e));
                     });
@@ -18801,7 +18909,7 @@
                 var employee = findEmployeeById(currentEditingEmployeeId);
                 if (employee) {
                     Object.assign(employee, employeeData);
-                    afterEmployeeSaved('Employé modifié avec succès!');
+                    afterEmployeeSaved('Employé modifié avec succès!', employee);
                 }
             } else {
                 // Nouvel employé
@@ -18810,7 +18918,7 @@
                 };
                 Object.assign(newEmployee, employeeData);
                 employees.push(newEmployee);
-                afterEmployeeSaved('Employé ajouté avec succès!\n\nNuméro: ' + employeeNumber);
+                afterEmployeeSaved('Employé ajouté avec succès!\n\nNuméro: ' + employeeNumber, newEmployee);
             }
         }
 
