@@ -5371,7 +5371,12 @@
             currency: 'XOF',
             signatoryFirstName: '',
             signatoryLastName: '',
-            signatoryTitle: ''
+            signatoryTitle: '',
+            // Format du matricule employé (paramétrable dans les paramètres entreprise)
+            matriculePrefix: 'EMP',
+            matriculeIncludeYear: true,
+            matriculeSeparator: '-',
+            matriculePadding: 3
         };
         var clients = [];
         
@@ -11290,6 +11295,21 @@
                 '<div><label class="block text-slate-400 mb-2">BIC / SWIFT</label>' +
                 '<input type="text" id="compBic" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white" value="' + companyInfo.bic + '"></div>' +
                 '</div></div>' +
+                '<div class="border border-amber-700/40 rounded-lg p-4 bg-slate-900/30 mt-2">' +
+                '<h4 class="text-sm font-semibold text-amber-300 mb-2">Format du matricule employé</h4>' +
+                '<p class="text-xs text-slate-500 mb-3">Numéro généré automatiquement pour chaque nouvel employé. Les matricules déjà attribués ne changent pas.</p>' +
+                '<div class="grid grid-cols-1 md:grid-cols-3 gap-3">' +
+                '<div><label class="block text-slate-400 mb-1 text-xs">Préfixe</label>' +
+                '<input type="text" id="compMatPrefix" oninput="updateMatriculePreview()" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white text-sm" value="' + (companyInfo.matriculePrefix != null && companyInfo.matriculePrefix !== '' ? companyInfo.matriculePrefix : 'EMP').replace(/"/g, '&quot;') + '" placeholder="Ex: EMP, MAT, GE"></div>' +
+                '<div><label class="block text-slate-400 mb-1 text-xs">Séparateur</label>' +
+                '<input type="text" id="compMatSeparator" oninput="updateMatriculePreview()" maxlength="3" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white text-sm" value="' + (companyInfo.matriculeSeparator != null ? companyInfo.matriculeSeparator : '-').replace(/"/g, '&quot;') + '" placeholder="Ex: - ou /"></div>' +
+                '<div><label class="block text-slate-400 mb-1 text-xs">Nombre de chiffres</label>' +
+                '<input type="number" id="compMatPadding" oninput="updateMatriculePreview()" min="1" max="8" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white text-sm" value="' + (parseInt(companyInfo.matriculePadding, 10) > 0 ? parseInt(companyInfo.matriculePadding, 10) : 3) + '"></div>' +
+                '</div>' +
+                '<label class="flex items-center gap-2 mt-3 text-sm text-slate-300">' +
+                '<input type="checkbox" id="compMatIncludeYear" onchange="updateMatriculePreview()" class="rounded border-slate-500"' + (companyInfo.matriculeIncludeYear !== false ? ' checked' : '') + '> Inclure l\'année en cours</label>' +
+                '<p class="text-xs text-slate-400 mt-3">Aperçu : <span id="compMatPreview" class="text-emerald-300 font-mono">—</span></p>' +
+                '</div>' +
                 '<div class="mb-4">' +
                 '<label class="block text-slate-400 mb-2">Logo de l\'entreprise</label>' +
                 '<div class="flex items-center gap-4">' +
@@ -11310,6 +11330,7 @@
             modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
             modal.innerHTML = html;
             document.body.appendChild(modal);
+            updateMatriculePreview();
         }
 
         function uploadCompanyLogo() {
@@ -11359,7 +11380,17 @@
             if (sf) companyInfo.signatoryFirstName = sf.value.trim();
             if (sl) companyInfo.signatoryLastName = sl.value.trim();
             if (st) companyInfo.signatoryTitle = st.value.trim();
-            
+
+            // Format du matricule employé
+            var mp = document.getElementById('compMatPrefix');
+            var ms = document.getElementById('compMatSeparator');
+            var mpad = document.getElementById('compMatPadding');
+            var my = document.getElementById('compMatIncludeYear');
+            if (mp) companyInfo.matriculePrefix = (mp.value || '').trim() || 'EMP';
+            if (ms) companyInfo.matriculeSeparator = ms.value != null ? ms.value : '-';
+            if (mpad) { var pv = parseInt(mpad.value, 10); companyInfo.matriculePadding = (pv > 0 && pv <= 8) ? pv : 3; }
+            if (my) companyInfo.matriculeIncludeYear = !!my.checked;
+
             saveData();
             document.getElementById('companySettingsModal').remove();
             alert('Paramètres enregistrés avec succès!');
@@ -18395,20 +18426,59 @@
             }
         }
 
-        function generateEmployeeNumber() {
+        // Configuration du matricule employé (paramétrable dans les paramètres entreprise).
+        function getMatriculeConfig() {
+            return {
+                prefix: (companyInfo.matriculePrefix != null && companyInfo.matriculePrefix !== '') ? String(companyInfo.matriculePrefix) : 'EMP',
+                includeYear: companyInfo.matriculeIncludeYear !== false,
+                separator: (companyInfo.matriculeSeparator != null) ? String(companyInfo.matriculeSeparator) : '-',
+                padding: (parseInt(companyInfo.matriculePadding, 10) > 0) ? parseInt(companyInfo.matriculePadding, 10) : 3
+            };
+        }
+
+        // Préfixe complet (préfixe + séparateur + année si activée) à partir d'une config.
+        function matriculePrefixPart(cfg) {
             var year = new Date().getFullYear();
+            return cfg.includeYear ? (cfg.prefix + cfg.separator + year) : cfg.prefix;
+        }
+
+        function generateEmployeeNumber() {
+            var cfg = getMatriculeConfig();
+            var prefixPart = matriculePrefixPart(cfg);
+            var escapeRe = function(s) { return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); };
+            var re = new RegExp('^' + escapeRe(prefixPart) + escapeRe(cfg.separator) + '(\\d+)$');
             var maxNumber = 0;
             employees.forEach(function(emp) {
                 if (emp.employeeNumber) {
-                    var match = emp.employeeNumber.match(/EMP-(\d{4})-(\d+)/);
-                    if (match && parseInt(match[1]) === year) {
-                        var num = parseInt(match[2]);
+                    var match = String(emp.employeeNumber).match(re);
+                    if (match) {
+                        var num = parseInt(match[1], 10);
                         if (num > maxNumber) maxNumber = num;
                     }
                 }
             });
             var nextNumber = maxNumber + 1;
-            return 'EMP-' + year + '-' + String(nextNumber).padStart(3, '0');
+            return prefixPart + cfg.separator + String(nextNumber).padStart(cfg.padding, '0');
+        }
+
+        // Aperçu en direct du matricule dans les paramètres entreprise.
+        function updateMatriculePreview() {
+            var el = document.getElementById('compMatPreview');
+            if (!el) return;
+            var prefix = (document.getElementById('compMatPrefix') || {}).value;
+            var sep = (document.getElementById('compMatSeparator') || {});
+            sep = sep.value != null ? sep.value : '-';
+            var padEl = document.getElementById('compMatPadding');
+            var pad = padEl ? parseInt(padEl.value, 10) : 3;
+            if (!(pad > 0 && pad <= 8)) pad = 3;
+            var incYear = (document.getElementById('compMatIncludeYear') || {}).checked;
+            var cfg = {
+                prefix: (prefix != null && prefix !== '') ? prefix : 'EMP',
+                includeYear: !!incYear,
+                separator: sep,
+                padding: pad
+            };
+            el.textContent = matriculePrefixPart(cfg) + cfg.separator + String(1).padStart(cfg.padding, '0');
         }
 
         // Affiche le champ « Section de la mine » uniquement pour un stagiaire
@@ -23550,6 +23620,7 @@
         window.editInvoice = editInvoice;
         window.showAddContractModal = showAddContractModal;
         window.showAddEmployeeModal = showAddEmployeeModal;
+        window.onEmployeeRoleChange = onEmployeeRoleChange;
         window.editEmployee = editEmployee;
         window.closeEmployeeModal = closeEmployeeModal;
         window.saveEmployee = saveEmployee;
@@ -23641,6 +23712,7 @@
         window.showCompanySettings = showCompanySettings;
         window.uploadCompanyLogo = uploadCompanyLogo;
         window.saveCompanySettings = saveCompanySettings;
+        window.updateMatriculePreview = updateMatriculePreview;
         window.closeClientModal = closeClientModal;
         window.previewClientLogo = previewClientLogo;
         window.clearClientLogo = clearClientLogo;
