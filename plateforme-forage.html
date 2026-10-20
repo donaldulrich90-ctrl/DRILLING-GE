@@ -17238,6 +17238,17 @@
                 '</div>' +
                 '</div>';
             
+            // Graphiques drilling (clairs et intelligents)
+            html += '<div class="ged-content-panel p-6 rounded-xl mb-6">' +
+                '<h4 class="text-lg font-bold mb-1">📈 Graphiques — Drilling</h4>' +
+                '<p id="reportDrillInsight" class="text-sm text-amber-200/90 mb-4">Analyse en cours…</p>' +
+                '<div class="grid grid-cols-1 lg:grid-cols-2 gap-5">' +
+                '<div class="bg-slate-900/50 rounded-xl p-4 border border-slate-700"><p class="text-xs uppercase tracking-widest font-semibold mb-3 text-slate-300">Mètres forés par machine</p><div style="position:relative;height:220px"><canvas id="rptChartMeters"></canvas></div></div>' +
+                '<div class="bg-slate-900/50 rounded-xl p-4 border border-slate-700"><p class="text-xs uppercase tracking-widest font-semibold mb-3 text-slate-300">Production journalière (14 derniers jours)</p><div style="position:relative;height:220px"><canvas id="rptChartTrend"></canvas></div></div>' +
+                '<div class="bg-slate-900/50 rounded-xl p-4 border border-slate-700"><p class="text-xs uppercase tracking-widest font-semibold mb-3 text-slate-300">Carburant par machine (L) &amp; efficacité (L/m)</p><div style="position:relative;height:220px"><canvas id="rptChartFuel"></canvas></div></div>' +
+                '<div class="bg-slate-900/50 rounded-xl p-4 border border-slate-700"><p class="text-xs uppercase tracking-widest font-semibold mb-3 text-slate-300">Disponibilité moyenne par machine (%)</p><div style="position:relative;height:220px"><canvas id="rptChartAvail"></canvas></div></div>' +
+                '</div></div>';
+
             // Détails des cumuls
             html += '<div class="space-y-4">' +
                 '<div class="ged-content-panel p-6 rounded-xl">' +
@@ -17282,9 +17293,131 @@
             html += '</div></div></div>';
             
             content.innerHTML = html;
+            try { renderDrillingReportCharts(); } catch (chartErr) { console.warn('Graphiques drilling:', chartErr); }
             } catch (err) {
                 console.error('Erreur renderReports:', err);
                 content.innerHTML = '<div class="p-6 text-center"><p class="text-red-400 mb-4">Une erreur s\'est produite lors du chargement des rapports.</p><p class="text-slate-400 text-sm">' + (err.message || '') + '</p><button onclick="renderReports()" class="mt-4 ged-btn-primary px-4 py-2 rounded-lg">Réessayer</button></div>';
+            }
+        }
+
+        // Graphiques clairs + lecture intelligente pour le rapport drilling.
+        var _reportCharts = [];
+        function renderDrillingReportCharts() {
+            if (typeof Chart === 'undefined') return;
+            _reportCharts.forEach(function(c) { try { c.destroy(); } catch (e) {} });
+            _reportCharts = [];
+            var records = dailyDataRecords || [];
+
+            // Agrégation par machine
+            var mm = {};
+            records.forEach(function(r) {
+                var mid = r.machineId || '';
+                if (!mid) return;
+                if (!mm[mid]) mm[mid] = { id: mid, meters: 0, hours: 0, fuel: 0, availSum: 0, availCnt: 0, records: 0 };
+                var d = r.data || {};
+                if (typeof d === 'string') { try { d = JSON.parse(d); } catch (e) { d = {}; } }
+                mm[mid].meters += parseFloat(d.metersDrilled) || 0;
+                mm[mid].hours += parseFloat(d.hours) || 0;
+                mm[mid].fuel += parseFloat(d.fuelConsumptionEffective) || parseFloat(d.fuelConsumed) || 0;
+                var ap = parseFloat(d.availabilityPct);
+                if (!isNaN(ap)) { mm[mid].availSum += ap; mm[mid].availCnt += 1; }
+                mm[mid].records += 1;
+            });
+            var machines = Object.keys(mm).map(function(k) { return mm[k]; }).sort(function(a, b) { return b.meters - a.meters; });
+
+            // Tendance journalière (par date)
+            var dateMap = {};
+            records.forEach(function(r) {
+                var dt = r.date || '';
+                if (!dt) return;
+                var d = r.data || {};
+                if (typeof d === 'string') { try { d = JSON.parse(d); } catch (e) { d = {}; } }
+                dateMap[dt] = (dateMap[dt] || 0) + (parseFloat(d.metersDrilled) || 0);
+            });
+            var allDates = Object.keys(dateMap).sort();
+            var sortedDates = allDates.slice(-14);
+            var trendLabels = sortedDates.map(function(d) { return d.slice(5); });
+            var trendVals = sortedDates.map(function(d) { return parseFloat(dateMap[d].toFixed(2)); });
+
+            var insightEl = document.getElementById('reportDrillInsight');
+            if (machines.length === 0) {
+                if (insightEl) insightEl.textContent = 'Aucune donnée de production pour le moment — saisissez des données journalières pour voir les graphiques.';
+                return;
+            }
+
+            // Lecture intelligente : total, meilleure machine, tendance 7 j, dispo moyenne
+            var totM = machines.reduce(function(s, m) { return s + m.meters; }, 0);
+            var totF = machines.reduce(function(s, m) { return s + m.fuel; }, 0);
+            var best = machines[0];
+            var last7 = allDates.slice(-7).reduce(function(s, d) { return s + dateMap[d]; }, 0);
+            var prev7 = allDates.slice(-14, -7).reduce(function(s, d) { return s + dateMap[d]; }, 0);
+            var trendTxt = '';
+            if (prev7 > 0) {
+                var pct = ((last7 - prev7) / prev7) * 100;
+                trendTxt = ' · Tendance 7 j : ' + (pct >= 0 ? '▲ +' : '▼ ') + pct.toFixed(0) + '%';
+            }
+            var avMach = machines.filter(function(m) { return m.availCnt > 0; });
+            var avgAvail = avMach.length ? avMach.reduce(function(s, m) { return s + m.availSum / m.availCnt; }, 0) / avMach.length : null;
+            if (insightEl) {
+                insightEl.textContent = 'Total ' + totM.toFixed(0) + ' m sur ' + records.length + ' saisies · Meilleure machine : ' + best.id + ' (' + best.meters.toFixed(0) + ' m)' +
+                    (avgAvail != null ? ' · Dispo. moy. ' + avgAvail.toFixed(0) + '%' : '') +
+                    (totM > 0 ? ' · ' + (totF / totM).toFixed(1) + ' L/m' : '') + trendTxt;
+            }
+
+            var cols = ['#F5B800', '#FF6B00', '#38BDF8', '#28A745', '#A78BFA', '#EC4899', '#14B8A6', '#F97316'];
+            var axis = {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: { beginAtZero: true, ticks: { color: '#cbd5e1', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.08)' } },
+                    x: { ticks: { color: '#cbd5e1', font: { size: 11 } }, grid: { display: false } }
+                }
+            };
+            var ids = machines.map(function(m) { return m.id; });
+
+            var cM = document.getElementById('rptChartMeters');
+            if (cM) _reportCharts.push(new Chart(cM, {
+                type: 'bar',
+                data: { labels: ids, datasets: [{ data: machines.map(function(m) { return parseFloat(m.meters.toFixed(1)); }), backgroundColor: ids.map(function(_, i) { return cols[i % cols.length]; }), borderRadius: 4 }] },
+                options: axis
+            }));
+
+            var cT = document.getElementById('rptChartTrend');
+            if (cT) _reportCharts.push(new Chart(cT, {
+                type: 'line',
+                data: { labels: trendLabels, datasets: [{ data: trendVals, borderColor: '#F5B800', backgroundColor: 'rgba(245,184,0,0.15)', fill: true, tension: 0.3, pointRadius: 3, pointBackgroundColor: '#F5B800' }] },
+                options: axis
+            }));
+
+            var cF = document.getElementById('rptChartFuel');
+            if (cF) _reportCharts.push(new Chart(cF, {
+                type: 'bar',
+                data: {
+                    labels: ids,
+                    datasets: [
+                        { label: 'Carburant (L)', data: machines.map(function(m) { return parseFloat(m.fuel.toFixed(0)); }), backgroundColor: '#FF6B00', borderRadius: 4, yAxisID: 'y' },
+                        { type: 'line', label: 'L/m', data: machines.map(function(m) { return m.meters > 0 ? parseFloat((m.fuel / m.meters).toFixed(2)) : 0; }), borderColor: '#38BDF8', backgroundColor: '#38BDF8', yAxisID: 'y1', tension: 0.3, pointRadius: 3 }
+                    ]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: true, labels: { color: '#cbd5e1', font: { size: 11 } } } },
+                    scales: {
+                        y: { beginAtZero: true, position: 'left', ticks: { color: '#cbd5e1', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.08)' } },
+                        y1: { beginAtZero: true, position: 'right', ticks: { color: '#38BDF8', font: { size: 11 } }, grid: { display: false } },
+                        x: { ticks: { color: '#cbd5e1', font: { size: 11 } }, grid: { display: false } }
+                    }
+                }
+            }));
+
+            var cA = document.getElementById('rptChartAvail');
+            if (cA) {
+                var avData = machines.map(function(m) { return m.availCnt > 0 ? parseFloat((m.availSum / m.availCnt).toFixed(1)) : 0; });
+                _reportCharts.push(new Chart(cA, {
+                    type: 'bar',
+                    data: { labels: ids, datasets: [{ data: avData, backgroundColor: avData.map(function(v) { return v >= 80 ? '#28A745' : v >= 60 ? '#F5B800' : '#DC3545'; }), borderRadius: 4 }] },
+                    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, max: 100, ticks: { color: '#cbd5e1', font: { size: 11 } }, grid: { color: 'rgba(255,255,255,0.08)' } }, x: { ticks: { color: '#cbd5e1', font: { size: 11 } }, grid: { display: false } } } }
+                }));
             }
         }
 
