@@ -1122,6 +1122,21 @@
         }
         /* Bannière de validation visible à l'intérieur de la modale de saisie */
         #dailyEntryErrorBanner:not(.hidden) { display: block; }
+        /* ── Saisie journalière : remplacer l'ambre/marron peu lisible par des
+              tons clairs et neutres, plus professionnels ── */
+        #dailyEntryModal [class*="text-amber-"] { color: #e7edf4 !important; }
+        #dailyEntryModal strong[class*="text-amber-"],
+        #dailyEntryModal b[class*="text-amber-"] { color: #ffd34d !important; }
+        /* Fonds ambre foncé → panneau neutre ardoise (le texte ressort) */
+        #dailyEntryModal [class*="bg-amber-900"] { background-color: rgba(15,23,42,0.6) !important; }
+        /* Bordures ambre ternes → accent or discret et net */
+        #dailyEntryModal [class*="border-amber-"] { border-color: rgba(245,184,0,0.45) !important; }
+        /* Valeur mise en avant (ex. total arrêts) : or lisible */
+        #dailyEntryModal #dailyEntryDowntimeTotal,
+        #dailyEntryModal #dailyEntryHammerDelta { color: #ffd34d !important; }
+        /* Bouton « + Ajouter un temps d'arrêt » : garder un bouton clair et pro */
+        #dailyEntryModal [class*="bg-amber-700"] { background-color: #b45309 !important; color: #fff7ed !important; }
+        #dailyEntryModal [class*="bg-amber-700"]:hover { background-color: #c2620b !important; }
         /* ── Lisibilité générale de TOUTES les entrées de données ── */
         input, select, textarea { color: #f1f5f9; }
         input::placeholder, textarea::placeholder { color: #9fb0c0; opacity: 1; }
