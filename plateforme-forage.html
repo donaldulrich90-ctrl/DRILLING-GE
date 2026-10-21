@@ -17640,21 +17640,52 @@
                 payload.trendLabels = ds.map(function(d) { return d.slice(5); });
                 payload.trendVals = ds.map(function(d) { return parseFloat(dm[d].toFixed(1)); });
             }
-            var box = function(title, id, full) {
-                return '<div style="border:1px solid #e2e8f0;border-radius:6px;padding:10px;' + (full ? 'grid-column:1 / -1;' : '') + '">' +
-                    '<div style="font-size:11px;color:#475569;font-weight:700;margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em;">' + title + '</div>' +
-                    '<div style="position:relative;height:200px;"><canvas id="' + id + '"></canvas></div></div>';
+            // Rendu d'un graphique en image PNG (dans l'app, Chart.js déjà chargé)
+            // pour l'intégrer tel quel dans le document imprimé — fiable à l'impression.
+            function chartToImg(cfg, w, h) {
+                try {
+                    var cv = document.createElement('canvas');
+                    cv.width = w || 540; cv.height = h || 300;
+                    cv.style.position = 'fixed'; cv.style.left = '-10000px'; cv.style.top = '0';
+                    document.body.appendChild(cv);
+                    cfg.options = cfg.options || {};
+                    cfg.options.responsive = false;
+                    cfg.options.animation = false;
+                    cfg.options.devicePixelRatio = 2;
+                    var ch = new Chart(cv, cfg);
+                    try { ch.draw(); } catch (e) {}
+                    var url = cv.toDataURL('image/png');
+                    ch.destroy();
+                    document.body.removeChild(cv);
+                    return url;
+                } catch (e) { return ''; }
+            }
+            var axisOpt = function(max) {
+                return { plugins: { legend: { display: false } }, scales: {
+                    y: { beginAtZero: true, max: max, ticks: { color: '#334155', font: { size: 12 } }, grid: { color: 'rgba(0,0,0,0.08)' } },
+                    x: { ticks: { color: '#334155', font: { size: 12 } }, grid: { display: false } } } };
             };
+            var cols = ['#1e40af', '#F5B800', '#FF6B00', '#28A745', '#38BDF8', '#A78BFA', '#EC4899', '#14B8A6'];
+            var bc = payload.ids.map(function(_, i) { return cols[i % cols.length]; });
+            var imgs = [];
+            imgs.push(['Métrage foré par machine (m)', chartToImg({ type: 'bar', data: { labels: payload.ids, datasets: [{ data: payload.meters, backgroundColor: bc, borderRadius: 3 }] }, options: axisOpt() }), false]);
+            imgs.push(['Carburant par machine (L)', chartToImg({ type: 'bar', data: { labels: payload.ids, datasets: [{ data: payload.fuel, backgroundColor: '#FF6B00', borderRadius: 3 }] }, options: axisOpt() }), false]);
+            imgs.push(['Heures machine (h)', chartToImg({ type: 'bar', data: { labels: payload.ids, datasets: [{ data: payload.hours, backgroundColor: '#28A745', borderRadius: 3 }] }, options: axisOpt() }), false]);
+            imgs.push(['Disponibilité par machine (%)', chartToImg({ type: 'bar', data: { labels: payload.ids, datasets: [{ data: payload.avail, backgroundColor: payload.avail.map(function(v) { return v >= 80 ? '#28A745' : v >= 60 ? '#F5B800' : '#DC3545'; }), borderRadius: 3 }] }, options: axisOpt(100) }), false]);
+            if (withTrend && payload.trendLabels && payload.trendLabels.length) {
+                imgs.push(['Production journalière (m)', chartToImg({ type: 'line', data: { labels: payload.trendLabels, datasets: [{ data: payload.trendVals, borderColor: '#1e40af', backgroundColor: 'rgba(30,64,175,0.12)', fill: true, tension: 0.3, pointRadius: 2 }] }, options: axisOpt() }, 1100, 320), true]);
+            }
+            var cells = imgs.filter(function(it) { return it[1]; }).map(function(it) {
+                return '<div style="border:1px solid #e2e8f0;border-radius:6px;padding:10px;' + (it[2] ? 'grid-column:1 / -1;' : '') + '">' +
+                    '<div style="font-size:11px;color:#475569;font-weight:700;margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em;">' + it[0] + '</div>' +
+                    '<img src="' + it[1] + '" alt="" style="width:100%;height:auto;display:block;" />' +
+                    '</div>';
+            }).join('');
+            if (!cells) return null;
             var html = '<h2>Graphiques</h2>' +
-                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:12px 0;">' +
-                box('Métrage foré par machine (m)', 'rpMeters') +
-                box('Carburant par machine (L)', 'rpFuel') +
-                box('Heures machine (h)', 'rpHours') +
-                box('Disponibilité par machine (%)', 'rpAvail') +
-                (withTrend ? box('Production journalière (m)', 'rpTrend', true) : '') +
-                '</div>';
-            var script = '<scr' + 'ipt>window.__RPT=' + JSON.stringify(payload) + ';(function(){var P=window.__RPT;function draw(){if(typeof Chart==="undefined"){return setTimeout(draw,120);}var ax={responsive:true,maintainAspectRatio:false,animation:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{color:"#334155"},grid:{color:"rgba(0,0,0,0.06)"}},x:{ticks:{color:"#334155"},grid:{display:false}}}};var cols=["#1e40af","#F5B800","#FF6B00","#28A745","#38BDF8","#A78BFA","#EC4899","#14B8A6"];var bc=P.ids.map(function(_,i){return cols[i%cols.length];});new Chart(document.getElementById("rpMeters"),{type:"bar",data:{labels:P.ids,datasets:[{data:P.meters,backgroundColor:bc,borderRadius:3}]},options:ax});new Chart(document.getElementById("rpFuel"),{type:"bar",data:{labels:P.ids,datasets:[{data:P.fuel,backgroundColor:"#FF6B00",borderRadius:3}]},options:ax});new Chart(document.getElementById("rpHours"),{type:"bar",data:{labels:P.ids,datasets:[{data:P.hours,backgroundColor:"#28A745",borderRadius:3}]},options:ax});new Chart(document.getElementById("rpAvail"),{type:"bar",data:{labels:P.ids,datasets:[{data:P.avail,backgroundColor:P.avail.map(function(v){return v>=80?"#28A745":v>=60?"#F5B800":"#DC3545";}),borderRadius:3}]},options:{responsive:true,maintainAspectRatio:false,animation:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,max:100,ticks:{color:"#334155"},grid:{color:"rgba(0,0,0,0.06)"}},x:{ticks:{color:"#334155"},grid:{display:false}}}});if(P.trendLabels){new Chart(document.getElementById("rpTrend"),{type:"line",data:{labels:P.trendLabels,datasets:[{data:P.trendVals,borderColor:"#1e40af",backgroundColor:"rgba(30,64,175,0.12)",fill:true,tension:0.3,pointRadius:2}]},options:ax});}setTimeout(function(){try{window.print();}catch(e){}},550);}draw();})();<\/scr' + 'ipt>';
-            return { html: html, script: script };
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:12px 0;page-break-inside:avoid;">' +
+                cells + '</div>';
+            return { html: html, script: '' };
         }
 
         function printDailyReport(date, records) {
@@ -17674,7 +17705,6 @@
             
             var chartsBlockDaily = buildReportChartsBlock(records, { trend: false });
             var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Rapport Journalier - ' + date + '</title>' +
-                (chartsBlockDaily ? '<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"><\/script>' : '') +
                 '<style>' +
                 REPORT_PRINT_ENTETE_CSS +
                 '@page{margin:14mm;}' +
@@ -17825,7 +17855,7 @@
             var printWindow = window.open('', '_blank');
             printWindow.document.write(html);
             printWindow.document.close();
-            if (!chartsBlockDaily) printWindow.print();
+            printWindow.print();
         }
 
         function printWeeklyReport(year, week, startDate, endDate, records) {
@@ -17846,7 +17876,6 @@
             
             var chartsBlockWeek = buildReportChartsBlock(records, { trend: true });
             var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Rapport Hebdomadaire - Semaine ' + week + ' ' + year + '</title>' +
-                (chartsBlockWeek ? '<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"><\/script>' : '') +
                 '<style>' +
                 REPORT_PRINT_ENTETE_CSS +
                 '@page{margin:14mm;}' +
@@ -17978,7 +18007,7 @@
             var printWindow = window.open('', '_blank');
             printWindow.document.write(html);
             printWindow.document.close();
-            if (!chartsBlockWeek) printWindow.print();
+            printWindow.print();
         }
 
         function formatDate(dateString) {
