@@ -17746,6 +17746,8 @@
                 '.footer{text-align:center;margin-top:36px;padding-top:18px;border-top:1px solid #e5e7eb;font-size:11px;color:#6b7280;}' +
                 '</style></head><body>' +
                 reportEnteteHtml +
+                '<h2>Indicateurs clés du poste</h2>' +
+                buildReportKpiBandeau(records, date) +
                 '<h2>Synthèse exploitation (KPI)</h2>' +
                 renderOperationalKpiTableHtml(records);
             
@@ -21950,6 +21952,64 @@
                 uoa: uo,
                 effectiveUoa: ef
             };
+        }
+
+        // Bandeau d'indicateurs clés (KPI) en haut du rapport — données réelles,
+        // « Non renseigné » / « N/A » si la donnée manque (pas de chiffre fictif).
+        function buildReportKpiBandeau(records, reportDate) {
+            var agg = { prod: 0, reforage: 0, flushing: 0, bdn: 0, stb: 0, wMech: 0, sMech: 0 };
+            var machineIds = {}, shiftKeys = {};
+            (records || []).forEach(function(r) {
+                var data = r.data || {};
+                if (typeof data === 'string') { try { data = JSON.parse(data); } catch (e) { data = {}; } }
+                var m = computeOperationalReportMetrics(data);
+                agg.prod += m.production || 0;
+                agg.reforage += parseFloat(m.redrillM) || 0;
+                agg.flushing += parseFloat(m.flushM) || 0;
+                agg.bdn += m.bdn || 0;
+                agg.stb += m.stb || 0;
+                if (m.scheduled > 0 && m.mechAvail != null && !isNaN(m.mechAvail)) { agg.wMech += m.mechAvail * m.scheduled; agg.sMech += m.scheduled; }
+                machineIds[r.machineId] = true;
+                shiftKeys[dailyRecordShiftKey(r)] = true;
+            });
+            var dispo = agg.sMech > 0 ? (agg.wMech / agg.sMech) : null;
+
+            // Poste précédent comparable : même(s) machine(s) et même(s) équipe(s), date antérieure la plus proche.
+            var prevProd = null, prevDate = null;
+            var prior = (dailyDataRecords || []).filter(function(r) {
+                return r.date && reportDate && r.date < reportDate && machineIds[r.machineId] && shiftKeys[dailyRecordShiftKey(r)];
+            });
+            if (prior.length) {
+                prevDate = prior.reduce(function(a, r) { return r.date > a ? r.date : a; }, '');
+                prevProd = prior.filter(function(r) { return r.date === prevDate; }).reduce(function(s, r) {
+                    var d = r.data || {}; if (typeof d === 'string') { try { d = JSON.parse(d); } catch (e) { d = {}; } }
+                    return s + (parseFloat(d.metersDrilled) || 0);
+                }, 0);
+            }
+            var evol = (prevProd != null && prevProd > 0) ? ((agg.prod - prevProd) / prevProd * 100) : null;
+            var evolTxt = evol == null ? 'N/A' : ((evol >= 0 ? '▲ +' : '▼ ') + evol.toFixed(0) + ' %');
+            var evolColor = evol == null ? '#64748b' : (evol >= 0 ? '#1e40af' : '#dc2626');
+
+            function card(label, value, color, sub) {
+                return '<div style="flex:1 1 130px;min-width:120px;border:1px solid #dbe2ea;border-radius:6px;padding:8px 11px;background:#fff;">' +
+                    '<div style="font-size:9.5px;text-transform:uppercase;letter-spacing:.04em;color:#64748b;font-weight:700;">' + label + '</div>' +
+                    '<div style="font-size:19px;font-weight:800;color:' + (color || '#0f172a') + ';line-height:1.15;margin-top:3px;">' + value + '</div>' +
+                    (sub ? '<div style="font-size:9px;color:#94a3b8;margin-top:1px;">' + sub + '</div>' : '') +
+                    '</div>';
+            }
+            var fmtM = function(v) { return v.toFixed(1) + ' m'; };
+            return '<div style="display:flex;flex-wrap:wrap;gap:8px;margin:0 0 10px;">' +
+                card('Production réalisée', fmtM(agg.prod), '#1e40af', 'mètres nouveaux') +
+                card('Production planifiée', 'Non renseigné', '#ea580c', 'objectif du poste') +
+                card('Taux de réalisation', 'N/A', '#0f172a', 'réalisé / planifié') +
+                card('Écart (réel − plan)', 'N/A', '#0f172a', 'mètres') +
+                card('Disponibilité méca.', dispo != null ? dispo.toFixed(1) + ' %' : 'Non renseigné', '#1e40af', '') +
+                card('Heures de panne', agg.bdn.toFixed(1) + ' h', '#b91c1c', 'arrêt mécanique') +
+                card('Heures de standby', agg.stb.toFixed(1) + ' h', '#b45309', 'immobilisation') +
+                card('vs poste précédent', prevProd != null ? fmtM(prevProd) : 'N/A', evolColor, prevDate ? ('évol. ' + evolTxt + ' · ' + prevDate) : 'aucun comparable') +
+                '</div>' +
+                '<div style="font-size:10px;color:#475569;margin:0 0 16px;">Production réalisée = <b>mètres nouveaux</b> (' + agg.prod.toFixed(1) + ' m). ' +
+                'Reforage : <b>' + agg.reforage.toFixed(1) + ' m</b> · Flushing : <b>' + agg.flushing.toFixed(1) + ' m</b> — présentés séparément, non additionnés.</div>';
         }
 
         function renderOperationalKpiTableHtml(records) {
