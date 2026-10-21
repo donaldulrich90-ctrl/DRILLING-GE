@@ -1122,6 +1122,21 @@
         }
         /* Bannière de validation visible à l'intérieur de la modale de saisie */
         #dailyEntryErrorBanner:not(.hidden) { display: block; }
+        /* ── Lisibilité générale de TOUTES les entrées de données ── */
+        input, select, textarea { color: #f1f5f9; }
+        input::placeholder, textarea::placeholder { color: #9fb0c0; opacity: 1; }
+        /* Options des listes déroulantes : texte foncé sur fond clair (lisible partout) */
+        select option, select optgroup { color: #0b1117; background: #e9eef4; }
+        select option:disabled { color: #6b7686; }
+        /* Champs désactivés / lecture seule : rester lisibles (pas de texte fantôme) */
+        input:disabled, select:disabled, textarea:disabled,
+        input[readonly], textarea[readonly] {
+            color: #dbe3ee !important;
+            -webkit-text-fill-color: #dbe3ee !important;
+            opacity: 1 !important;
+        }
+        /* Cases à cocher / radios plus visibles sur fond sombre */
+        input[type="checkbox"], input[type="radio"] { accent-color: #F5B800; }
     </style>
 </head>
 <body class="ged-theme-control ged-motion-full">
@@ -17586,6 +17601,62 @@
             printWeeklyReport(year, week, startDate, endDate, records);
         }
 
+        // Construit les graphiques (HTML + script) à injecter dans un document
+        // de rapport imprimable (fenêtre générée). Retourne {html, script} ou null.
+        function buildReportChartsBlock(records, opts) {
+            opts = opts || {};
+            var withTrend = !!opts.trend;
+            var mm = {};
+            (records || []).forEach(function(r) {
+                var mid = r.machineId || '';
+                if (!mid) return;
+                var d = r.data || {};
+                if (typeof d === 'string') { try { d = JSON.parse(d); } catch (e) { d = {}; } }
+                if (!mm[mid]) mm[mid] = { id: mid, meters: 0, fuel: 0, hours: 0, availSum: 0, availCnt: 0 };
+                mm[mid].meters += parseFloat(d.metersDrilled) || 0;
+                mm[mid].fuel += (typeof getEffectiveFuelConsumptionFromData === 'function') ? getEffectiveFuelConsumptionFromData(d) : (parseFloat(d.fuelConsumptionEffective) || parseFloat(d.fuelConsumed) || 0);
+                mm[mid].hours += parseFloat(d.hours) || 0;
+                var ap = parseFloat(d.availabilityPct);
+                if (!isNaN(ap)) { mm[mid].availSum += ap; mm[mid].availCnt += 1; }
+            });
+            var machines = Object.keys(mm).map(function(k) { return mm[k]; }).sort(function(a, b) { return b.meters - a.meters; });
+            if (!machines.length) return null;
+            var payload = {
+                ids: machines.map(function(m) { return m.id; }),
+                meters: machines.map(function(m) { return parseFloat(m.meters.toFixed(1)); }),
+                fuel: machines.map(function(m) { return parseFloat(m.fuel.toFixed(0)); }),
+                hours: machines.map(function(m) { return parseFloat(m.hours.toFixed(1)); }),
+                avail: machines.map(function(m) { return m.availCnt ? parseFloat((m.availSum / m.availCnt).toFixed(1)) : 0; })
+            };
+            if (withTrend) {
+                var dm = {};
+                (records || []).forEach(function(r) {
+                    var dt = r.date || ''; if (!dt) return;
+                    var d = r.data || {};
+                    if (typeof d === 'string') { try { d = JSON.parse(d); } catch (e) { d = {}; } }
+                    dm[dt] = (dm[dt] || 0) + (parseFloat(d.metersDrilled) || 0);
+                });
+                var ds = Object.keys(dm).sort();
+                payload.trendLabels = ds.map(function(d) { return d.slice(5); });
+                payload.trendVals = ds.map(function(d) { return parseFloat(dm[d].toFixed(1)); });
+            }
+            var box = function(title, id, full) {
+                return '<div style="border:1px solid #e2e8f0;border-radius:6px;padding:10px;' + (full ? 'grid-column:1 / -1;' : '') + '">' +
+                    '<div style="font-size:11px;color:#475569;font-weight:700;margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em;">' + title + '</div>' +
+                    '<div style="position:relative;height:200px;"><canvas id="' + id + '"></canvas></div></div>';
+            };
+            var html = '<h2>Graphiques</h2>' +
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:12px 0;">' +
+                box('Métrage foré par machine (m)', 'rpMeters') +
+                box('Carburant par machine (L)', 'rpFuel') +
+                box('Heures machine (h)', 'rpHours') +
+                box('Disponibilité par machine (%)', 'rpAvail') +
+                (withTrend ? box('Production journalière (m)', 'rpTrend', true) : '') +
+                '</div>';
+            var script = '<scr' + 'ipt>window.__RPT=' + JSON.stringify(payload) + ';(function(){var P=window.__RPT;function draw(){if(typeof Chart==="undefined"){return setTimeout(draw,120);}var ax={responsive:true,maintainAspectRatio:false,animation:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,ticks:{color:"#334155"},grid:{color:"rgba(0,0,0,0.06)"}},x:{ticks:{color:"#334155"},grid:{display:false}}}};var cols=["#1e40af","#F5B800","#FF6B00","#28A745","#38BDF8","#A78BFA","#EC4899","#14B8A6"];var bc=P.ids.map(function(_,i){return cols[i%cols.length];});new Chart(document.getElementById("rpMeters"),{type:"bar",data:{labels:P.ids,datasets:[{data:P.meters,backgroundColor:bc,borderRadius:3}]},options:ax});new Chart(document.getElementById("rpFuel"),{type:"bar",data:{labels:P.ids,datasets:[{data:P.fuel,backgroundColor:"#FF6B00",borderRadius:3}]},options:ax});new Chart(document.getElementById("rpHours"),{type:"bar",data:{labels:P.ids,datasets:[{data:P.hours,backgroundColor:"#28A745",borderRadius:3}]},options:ax});new Chart(document.getElementById("rpAvail"),{type:"bar",data:{labels:P.ids,datasets:[{data:P.avail,backgroundColor:P.avail.map(function(v){return v>=80?"#28A745":v>=60?"#F5B800":"#DC3545";}),borderRadius:3}]},options:{responsive:true,maintainAspectRatio:false,animation:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true,max:100,ticks:{color:"#334155"},grid:{color:"rgba(0,0,0,0.06)"}},x:{ticks:{color:"#334155"},grid:{display:false}}}});if(P.trendLabels){new Chart(document.getElementById("rpTrend"),{type:"line",data:{labels:P.trendLabels,datasets:[{data:P.trendVals,borderColor:"#1e40af",backgroundColor:"rgba(30,64,175,0.12)",fill:true,tension:0.3,pointRadius:2}]},options:ax});}setTimeout(function(){try{window.print();}catch(e){}},550);}draw();})();<\/scr' + 'ipt>';
+            return { html: html, script: script };
+        }
+
         function printDailyReport(date, records) {
             var companyName = companyInfo.name || REPORT_BRAND_SUBSCRIBER_NAME;
             var metaRowsDaily = [
@@ -17601,7 +17672,9 @@
             ];
             var reportEnteteHtml = buildReportStandardEnteteHtml('RAPPORT JOURNALIER DE FORAGE', records, metaRowsDaily);
             
+            var chartsBlockDaily = buildReportChartsBlock(records, { trend: false });
             var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Rapport Journalier - ' + date + '</title>' +
+                (chartsBlockDaily ? '<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"><\/script>' : '') +
                 '<style>' +
                 REPORT_PRINT_ENTETE_CSS +
                 '@page{margin:14mm;}' +
@@ -17741,16 +17814,18 @@
                 '<p style="font-size:16px;margin:5px 0;"><strong>Total heures de travail:</strong> ' + totals.hours.toFixed(1) + ' h</p>' +
                 '<p style="font-size:16px;margin:5px 0;"><strong>Total temps d\'arrêt:</strong> ' + totals.downtimeHours.toFixed(1) + ' h</p>' +
                 '</div>' +
+                (chartsBlockDaily ? chartsBlockDaily.html : '') +
                 '<div class="footer">' +
                 '<p>Document généré le ' + new Date().toLocaleString('fr-FR') + '</p>' +
                 '<p style="margin-top:10px;">' + escapeHtmlReportCell(companyName) + ' · ' + new Date().getFullYear() + '</p>' +
                 '</div>' +
+                (chartsBlockDaily ? chartsBlockDaily.script : '') +
                 '</body></html>';
-            
+
             var printWindow = window.open('', '_blank');
             printWindow.document.write(html);
             printWindow.document.close();
-            printWindow.print();
+            if (!chartsBlockDaily) printWindow.print();
         }
 
         function printWeeklyReport(year, week, startDate, endDate, records) {
@@ -17769,7 +17844,9 @@
             ];
             var reportEnteteHtml = buildReportStandardEnteteHtml('RAPPORT HEBDOMADAIRE DE FORAGE', records, metaRowsWeek);
             
+            var chartsBlockWeek = buildReportChartsBlock(records, { trend: true });
             var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Rapport Hebdomadaire - Semaine ' + week + ' ' + year + '</title>' +
+                (chartsBlockWeek ? '<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"><\/script>' : '') +
                 '<style>' +
                 REPORT_PRINT_ENTETE_CSS +
                 '@page{margin:14mm;}' +
@@ -17890,16 +17967,18 @@
                 '<p style="font-size:16px;margin:5px 0;"><strong>Total heures de travail:</strong> ' + weekTotals.hours.toFixed(1) + ' h</p>' +
                 '<p style="font-size:16px;margin:5px 0;"><strong>Total temps d\'arrêt:</strong> ' + weekTotals.downtimeHours.toFixed(1) + ' h</p>' +
                 '</div>' +
+                (chartsBlockWeek ? chartsBlockWeek.html : '') +
                 '<div class="footer">' +
                 '<p>Document généré le ' + new Date().toLocaleString('fr-FR') + '</p>' +
                 '<p style="margin-top:10px;">' + escapeHtmlReportCell(companyName) + ' · ' + new Date().getFullYear() + '</p>' +
                 '</div>' +
+                (chartsBlockWeek ? chartsBlockWeek.script : '') +
                 '</body></html>';
-            
+
             var printWindow = window.open('', '_blank');
             printWindow.document.write(html);
             printWindow.document.close();
-            printWindow.print();
+            if (!chartsBlockWeek) printWindow.print();
         }
 
         function formatDate(dateString) {
