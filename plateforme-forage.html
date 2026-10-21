@@ -17579,7 +17579,18 @@
                 recordCount: records.length,
                 machineIds: records.map(function(r) { return r.machineId; })
             };
-            printDailyReport(date, records);
+            ensureReportPlanLoaded(function() { printDailyReport(date, records); });
+        }
+
+        // Charge une fois le plan (objectifs) pour le graphe réalisé/planifié.
+        function ensureReportPlanLoaded(cb) {
+            if (typeof plan2 !== 'undefined' && plan2 && plan2.loaded) return cb();
+            try {
+                apiRequest('/planification', 'GET').then(function(res) {
+                    try { plan2.plan = res && res.plan ? res.plan : null; plan2.version = res && res.version ? res.version : 0; plan2.loaded = true; } catch (e) {}
+                    cb();
+                }).catch(function() { try { plan2.loaded = true; plan2.plan = null; } catch (e) {} cb(); });
+            } catch (e) { cb(); }
         }
 
         function generateWeeklyReport() {
@@ -17618,6 +17629,81 @@
 
         // Construit les graphiques (HTML + script) à injecter dans un document
         // de rapport imprimable (fenêtre générée). Retourne {html, script} ou null.
+        // Rendu d'un graphique en image PNG (réutilisable hors buildReportChartsBlock).
+        function reportChartToImg(cfg, w, h) {
+            try {
+                if (typeof Chart === 'undefined') return '';
+                var cv = document.createElement('canvas');
+                cv.width = w || 540; cv.height = h || 300;
+                cv.style.position = 'fixed'; cv.style.left = '-10000px'; cv.style.top = '0';
+                document.body.appendChild(cv);
+                cfg.options = cfg.options || {};
+                cfg.options.responsive = false; cfg.options.animation = false; cfg.options.devicePixelRatio = 2;
+                var ch = new Chart(cv, cfg);
+                try { ch.draw(); } catch (e) {}
+                var url = cv.toDataURL('image/png');
+                ch.destroy(); document.body.removeChild(cv);
+                return url;
+            } catch (e) { return ''; }
+        }
+
+        // Objectif planifié pour une date : objectif de la période (semaine de
+        // préférence, sinon mois) réparti au prorata des jours. null si absent.
+        function getPlannedMetersForDate(dateStr) {
+            var p = (typeof plan2 !== 'undefined' && plan2 && plan2.plan) ? plan2.plan : null;
+            if (!p) return null;
+            var periods = (p.weeks && p.weeks.length) ? p.weeks : (p.months || []);
+            for (var i = 0; i < periods.length; i++) {
+                var per = periods[i];
+                if (per.start && per.end && dateStr >= per.start && dateStr <= per.end) {
+                    var sd = new Date(per.start + 'T00:00:00'), ed = new Date(per.end + 'T00:00:00');
+                    var days = Math.round((ed - sd) / 86400000) + 1; if (days < 1) days = 1;
+                    return (Number(per.target) || 0) / days;
+                }
+            }
+            return null;
+        }
+
+        // Section 01 : graphe « Forage nouveau réalisé / planifié » sur 7 jours
+        // jusqu'à la date du rapport (barres bleues = réalisé, orange = planifié).
+        function buildPlanVsRealSection(records, reportDate) {
+            if (typeof Chart === 'undefined' || !reportDate) return '';
+            var base = new Date(reportDate + 'T00:00:00');
+            if (isNaN(base.getTime())) return '';
+            var dates = [];
+            for (var i = 6; i >= 0; i--) { var d = new Date(base.getTime()); d.setDate(d.getDate() - i); dates.push(d.toISOString().slice(0, 10)); }
+            var machineScope = {}, shiftScope = {};
+            (records || []).forEach(function(r) { machineScope[r.machineId] = true; shiftScope[dailyRecordShiftKey(r)] = true; });
+            var real = [], plan = [], cumReal = 0, cumPlan = 0, haveAnyPlan = false;
+            dates.forEach(function(dt) {
+                var rSum = 0;
+                (dailyDataRecords || []).forEach(function(r) {
+                    if (r.date !== dt || !machineScope[r.machineId] || !shiftScope[dailyRecordShiftKey(r)]) return;
+                    var d = r.data || {}; if (typeof d === 'string') { try { d = JSON.parse(d); } catch (e) { d = {}; } }
+                    rSum += parseFloat(d.metersDrilled) || 0;
+                });
+                real.push(parseFloat(rSum.toFixed(1))); cumReal += rSum;
+                var pv = getPlannedMetersForDate(dt);
+                if (pv != null) { haveAnyPlan = true; plan.push(parseFloat(pv.toFixed(1))); cumPlan += pv; }
+                else plan.push(null);
+            });
+            var labels = dates.map(function(d) { return d.slice(8, 10) + '/' + d.slice(5, 7); });
+            var datasets = [{ label: 'Réalisée', data: real, backgroundColor: '#1e40af', borderRadius: 3 }];
+            if (haveAnyPlan) datasets.push({ label: 'Planifiée', data: plan, backgroundColor: '#ea580c', borderRadius: 3 });
+            var img = reportChartToImg({
+                type: 'bar', data: { labels: labels, datasets: datasets },
+                options: { plugins: { legend: { display: true, labels: { color: '#334155', font: { size: 11 } } } }, scales: { y: { beginAtZero: true, ticks: { color: '#334155' }, grid: { color: 'rgba(0,0,0,0.06)' } }, x: { ticks: { color: '#334155' }, grid: { display: false } } } }
+            }, 1100, 300);
+            if (!img) return '';
+            var taux = cumPlan > 0 ? (cumReal / cumPlan * 100) : null;
+            var caption = haveAnyPlan
+                ? ('7 jours : <b>' + cumReal.toFixed(0) + '</b> / <b>' + cumPlan.toFixed(0) + '</b> m · Réalisation ' + (taux != null ? taux.toFixed(1) + ' %' : 'N/A'))
+                : ('7 jours : <b>' + cumReal.toFixed(0) + '</b> m réalisés · Objectif planifié : <span style="color:#9ca3af;">Non renseigné</span>');
+            return '<h2>Forage nouveau réalisé / planifié — 7 jours</h2>' +
+                '<div style="border:1px solid #e2e8f0;border-radius:6px;padding:10px;"><img src="' + img + '" alt="" style="width:100%;height:auto;display:block;"></div>' +
+                '<p style="font-size:10px;color:#475569;margin:5px 0 0;">' + caption + '</p>';
+        }
+
         function buildReportChartsBlock(records, opts) {
             opts = opts || {};
             var withTrend = !!opts.trend;
@@ -17755,6 +17841,7 @@
                 reportEnteteHtml +
                 '<h2>Indicateurs clés du poste</h2>' +
                 buildReportKpiBandeau(records, date) +
+                buildPlanVsRealSection(records, date) +
                 '<h2>Synthèse exploitation (KPI)</h2>' +
                 renderOperationalKpiTableHtml(records);
             
