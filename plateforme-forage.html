@@ -34,7 +34,7 @@
             }
         };
     </script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
     <script src="i18n.js"></script>
     <script src="api-client.js"></script>
     <style>
@@ -9639,7 +9639,7 @@
             var metric = (document.getElementById('plan2Metric') || {}).value || 'metres';
             plan2ImportStatus('Lecture du fichier…', '');
             if (kind === 'excel') {
-                plan2LoadScript('https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js').then(function () {
+                plan2LoadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js').then(function () {
                     var fr = new FileReader();
                     fr.onload = function (e) {
                         try {
@@ -9653,8 +9653,8 @@
                     fr.readAsArrayBuffer(file);
                 }).catch(function (err) { plan2ImportStatus(err.message, 'err'); });
             } else {
-                plan2LoadScript('https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js').then(function () {
-                    try { pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js'; } catch (e) {}
+                plan2LoadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js').then(function () {
+                    try { pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; } catch (e) {}
                     var fr = new FileReader();
                     fr.onload = function (e) {
                         pdfjsLib.getDocument({ data: new Uint8Array(e.target.result) }).promise.then(function (pdf) {
