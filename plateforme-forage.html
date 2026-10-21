@@ -17743,6 +17743,13 @@
                 'table.kpi-table th:nth-child(1),table.kpi-table td:nth-child(1),table.kpi-table th:nth-child(2),table.kpi-table td:nth-child(2){text-align:left;}' +
                 'table.kpi-table tbody tr:nth-child(even):not(.total){background:#f9fafb;}' +
                 'table.kpi-table tr.total td{background:#d1fae5;font-weight:600;}' +
+                'table.pro2{width:100%;border-collapse:collapse;margin:8px 0 4px;font-size:11px;border:1px solid #cbd5e1;}' +
+                'table.pro2 th,table.pro2 td{padding:7px 9px;border:1px solid #e5e7eb;vertical-align:top;}' +
+                'table.pro2 thead th{background:#1a2b4b;color:#fff;font-size:9.5px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;text-align:left;}' +
+                'table.pro2 th.num,table.pro2 td.r-num{text-align:right;font-variant-numeric:tabular-nums;}' +
+                'table.pro2 td.r-txt{text-align:left;}' +
+                'table.pro2 tbody tr:nth-child(even):not(.total){background:#f9fafb;}' +
+                'table.pro2 tr.total td{background:#eef2ff;font-weight:700;color:#1a2b4b;}' +
                 '.footer{text-align:center;margin-top:36px;padding-top:18px;border-top:1px solid #e5e7eb;font-size:11px;color:#6b7280;}' +
                 '</style></head><body>' +
                 reportEnteteHtml +
@@ -17769,99 +17776,10 @@
                 }
                 totals.downtimeHours += parseFloat(dh) || 0;
             });
-            html += '<h2>Données opérationnelles</h2>' +
-                '<table class="report-pro-table report-pro-table--daily">' +
-                '<thead><tr><th>Machine</th><th>Shift</th><th>Saisi par</th><th>Lieu</th><th>Type roche</th><th>Prof.<br>(m)</th><th>Métrage<br>foré (m)</th><th>Cpt carb.<br>début</th><th>Cpt carb.<br>fin</th><th>Δ marteau</th><th>Δ horam.<br>(h)</th><th>Conso<br>(L)</th><th>Huile<br>(L)</th><th>Filtres</th><th>H.mach.</th><th>Dispo<br>%</th><th>Util.<br>dispo %</th><th>Dispo<br>eff. %</th><th>Arrêt<br>(h)</th><th>Justification arrêts</th></tr></thead><tbody>';
-            
-            records.forEach(function(record) {
-                var drill = findDrillByMachineId(record.machineId);
-                var drillName = drill ? drill.id : record.machineId;
-                var location = record.data.location || (drill ? drill.location : 'N/A');
-                var data = record.data;
-                var shiftLabel = getShiftLabelForReport(data && data.shift);
-                var rowDh = data.downtimeHoursTotal;
-                if (rowDh == null && data.stoppages && data.stoppages.length) {
-                    rowDh = data.stoppages.reduce(function(a, s) { return a + (parseFloat(s.hours) || 0); }, 0);
-                }
-                rowDh = parseFloat(rowDh) || 0;
-                var stopCell = formatStoppagesBriefForReport(data.stoppages || []);
-                var comp = null;
-                if (data.availabilityPct == null) {
-                    comp = computeShiftAvailabilityKpis((data && data.shift) || '', rowDh, data.hours || 0);
-                }
-                var ap = data.availabilityPct != null ? data.availabilityPct : (comp ? comp.availabilityPct : null);
-                var uo = data.useOfAvailabilityPct != null ? data.useOfAvailabilityPct : (comp ? comp.useOfAvailabilityPct : null);
-                var ef = data.effectiveAvailabilityPct != null ? data.effectiveAvailabilityPct : (comp ? comp.effectiveAvailabilityPct : null);
-                var pct = function(v) { return v != null && !isNaN(v) ? Number(v).toFixed(1) : '—'; };
-                var fcEff = getEffectiveFuelConsumptionFromData(data);
-                var fmtC = function(v) { return v != null && v !== '' && !isNaN(parseFloat(v)) ? Number(v).toFixed(1) : '—'; };
-                var cBeg = data.counterStart != null ? data.counterStart : null;
-                var cEnd = data.counterEnd != null ? data.counterEnd : (data.fuelTankReading != null ? data.fuelTankReading : null);
-                var hmDelta = data.hammerCounterDelta;
-                if (hmDelta == null && data.hammerCounterStart != null && data.hammerCounterEnd != null) {
-                    hmDelta = computeDailyEntryCounterDelta(data.hammerCounterStart, data.hammerCounterEnd);
-                }
-                var hoDelta = data.hoursCounterDelta;
-                if (hoDelta == null && data.hoursCounterStart != null && data.hoursCounterEnd != null) {
-                    hoDelta = computeDailyEntryCounterDelta(data.hoursCounterStart, data.hoursCounterEnd);
-                }
-                var fmtDeltaNum = function(v) {
-                    if (v == null || v === '' || (typeof v === 'number' && isNaN(v))) return '—';
-                    return Number(v).toFixed(2);
-                };
-                
-                var saisi = '—';
-                if (record.enteredByName || record.enteredByUsername) {
-                    saisi = escapeHtmlReportCell(String(record.enteredByName || record.enteredByUsername));
-                    if (record.enteredAt) saisi += '<br><span class="text-slate-500" style="font-size:11px">' + escapeHtmlReportCell(formatDateTimeAudit(record.enteredAt)) + '</span>';
-                }
-                html += '<tr>' +
-                    '<td class="r-txt">' + drillName + '</td>' +
-                    '<td class="r-txt">' + shiftLabel + '</td>' +
-                    '<td class="r-txt">' + saisi + '</td>' +
-                    '<td class="r-txt">' + location + '</td>' +
-                    '<td class="r-txt">' + escapeHtmlReportCell(getMaterialTypeLabel(data.materialType)) + '</td>' +
-                    '<td class="r-num">' + (data.depth || 0).toFixed(1) + '</td>' +
-                    '<td class="r-num">' + (data.metersDrilled || 0).toFixed(1) + '</td>' +
-                    '<td class="r-num">' + fmtC(cBeg) + '</td>' +
-                    '<td class="r-num">' + fmtC(cEnd) + '</td>' +
-                    '<td class="r-num">' + fmtDeltaNum(hmDelta) + '</td>' +
-                    '<td class="r-num">' + fmtDeltaNum(hoDelta) + '</td>' +
-                    '<td class="r-num">' + fcEff.toFixed(1) + '</td>' +
-                    '<td class="r-num">' + (data.oilLevel || 0).toFixed(1) + '</td>' +
-                    '<td class="r-num">' + (data.filters || 0) + '</td>' +
-                    '<td class="r-num">' + (data.hours || 0).toFixed(1) + '</td>' +
-                    '<td class="r-num">' + pct(ap) + '</td>' +
-                    '<td class="r-num">' + pct(uo) + '</td>' +
-                    '<td class="r-num">' + pct(ef) + '</td>' +
-                    '<td class="r-num">' + rowDh.toFixed(1) + '</td>' +
-                    '<td class="r-txt">' + stopCell + '</td>' +
-                    '</tr>';
-            });
-            
-            html += '<tr class="total">' +
-                '<td colspan="3" class="r-txt"><strong>TOTAL</strong></td>' +
-                '<td class="r-txt">—</td>' +
-                '<td class="r-txt">—</td>' +
-                '<td class="r-txt">—</td>' +
-                '<td class="r-num"><strong>' + totals.metersDrilled.toFixed(1) + '</strong></td>' +
-                '<td class="r-num">—</td><td class="r-num">—</td><td class="r-num">—</td><td class="r-num">—</td>' +
-                '<td class="r-num"><strong>' + totals.fuelConsumption.toFixed(1) + '</strong></td>' +
-                '<td class="r-num">—</td>' +
-                '<td class="r-num">—</td>' +
-                '<td class="r-num"><strong>' + totals.hours.toFixed(1) + '</strong></td>' +
-                '<td class="r-num">—</td><td class="r-num">—</td><td class="r-num">—</td>' +
-                '<td class="r-num"><strong>' + totals.downtimeHours.toFixed(1) + '</strong></td>' +
-                '<td class="r-txt">—</td>' +
-                '</tr></tbody>' +
-                '</table>' +
-                '<div class="summary">' +
-                '<p style="font-size:16px;margin:5px 0;"><strong>Total métrage foré:</strong> ' + totals.metersDrilled.toFixed(1) + ' m</p>' +
-                '<p style="font-size:16px;margin:5px 0;"><strong>Total consommation carburant:</strong> ' + totals.fuelConsumption.toFixed(1) + ' L</p>' +
-                '<p style="font-size:16px;margin:5px 0;"><strong>Total heures de travail:</strong> ' + totals.hours.toFixed(1) + ' h</p>' +
-                '<p style="font-size:16px;margin:5px 0;"><strong>Total temps d\'arrêt:</strong> ' + totals.downtimeHours.toFixed(1) + ' h</p>' +
-                '</div>' +
-                buildStoppagesDetailSection(records) +
+            html += buildProductionZoneSection(records) +
+                buildPannesSection(records) +
+                buildStandbySection(records) +
+                buildCommentGeneralSection(records) +
                 (chartsBlockDaily ? chartsBlockDaily.html : '') +
                 '<div class="footer">' +
                 '<p>Document généré le ' + new Date().toLocaleString('fr-FR') + '</p>' +
@@ -21952,6 +21870,113 @@
                 uoa: uo,
                 effectiveUoa: ef
             };
+        }
+
+        // ── Sections structurées du rapport (remplace le tableau « Données
+        //    opérationnelles ») — uniquement des données réelles. ──
+        function _rpNa(v) {
+            var s = (v == null ? '' : String(v)).trim();
+            return s !== '' ? escapeHtmlReportCell(s) : '<span style="color:#9ca3af;">Non renseigné</span>';
+        }
+        function _rpStopCat(reason) {
+            var r = String(reason || '');
+            if (/-bdn$/.test(r)) return 'bdn';
+            if (/-stb$/.test(r)) return 'stb';
+            if (/-gsa$/.test(r)) return 'gsa';
+            return 'other';
+        }
+        function _rpZoneForRecord(record) {
+            var data = record.data || {};
+            if (typeof data === 'string') { try { data = JSON.parse(data); } catch (e) { data = {}; } }
+            var names = {};
+            try {
+                var plan = (typeof getFPData === 'function') ? getFPData() : null;
+                (data.holesWorked || []).forEach(function(h) {
+                    var b = plan && (plan.blocks || []).find(function(x) { return x.id === h.blockId; });
+                    if (b && b.name) names[b.name] = true; else if (h.blockId) names[h.blockId] = true;
+                });
+            } catch (e) {}
+            var arr = Object.keys(names);
+            if (arr.length) return arr.join(', ');
+            if (data.location) return data.location;
+            return '';
+        }
+        function _rpData(r) { var d = r.data || {}; if (typeof d === 'string') { try { d = JSON.parse(d); } catch (e) { d = {}; } } return d; }
+        function _rpMachineName(r) { var drill = findDrillByMachineId(r.machineId); return drill ? drill.id : r.machineId; }
+
+        function buildProductionZoneSection(records) {
+            var rows = '', tN = 0, tR = 0, tF = 0, patterns = {};
+            (records || []).forEach(function(r) {
+                var d = _rpData(r);
+                var zone = _rpZoneForRecord(r);
+                var nouveau = parseFloat(d.metersDrilled) || 0, refore = parseFloat(d.redrillMeters) || 0, flush = parseFloat(d.flushingMeters) || 0;
+                tN += nouveau; tR += refore; tF += flush; if (zone) patterns[zone] = true;
+                rows += '<tr><td class="r-txt">' + escapeHtmlReportCell(_rpMachineName(r)) + '</td>' +
+                    '<td class="r-txt">' + _rpNa(zone) + '</td>' +
+                    '<td class="r-num">' + nouveau.toFixed(1) + ' m</td>' +
+                    '<td class="r-num">' + refore.toFixed(1) + ' m</td>' +
+                    '<td class="r-num">' + flush.toFixed(1) + ' m</td></tr>';
+            });
+            return '<h2>Production par zone / pattern</h2>' +
+                '<table class="pro2"><thead><tr><th>Machine</th><th>Zone / pattern</th><th class="num">Nouveau</th><th class="num">Reforé</th><th class="num">Flushing</th></tr></thead><tbody>' +
+                rows +
+                '<tr class="total"><td class="r-txt"><strong>Total</strong></td><td class="r-txt">' + Object.keys(patterns).length + ' zone(s)</td>' +
+                '<td class="r-num"><strong>' + tN.toFixed(1) + ' m</strong></td><td class="r-num"><strong>' + tR.toFixed(1) + ' m</strong></td><td class="r-num"><strong>' + tF.toFixed(1) + ' m</strong></td></tr>' +
+                '</tbody></table>' +
+                '<p style="font-size:10px;color:#475569;margin:5px 0 0;">Réalisé comparé à l\'objectif : <b>mètres nouveaux uniquement</b>. Reforage et flushing suivis séparément.</p>';
+        }
+
+        function buildPannesSection(records) {
+            var rows = '';
+            (records || []).forEach(function(r) {
+                var d = _rpData(r);
+                (d.stoppages || []).forEach(function(s) {
+                    if (_rpStopCat(s.reason) !== 'bdn') return;
+                    var h = parseFloat(s.hours) || 0;
+                    var dur = (s.timeStart && s.timeEnd ? (s.timeStart + '–' + s.timeEnd + ' · ') : '') + h.toFixed(1) + ' h';
+                    rows += '<tr><td class="r-txt">' + escapeHtmlReportCell(_rpMachineName(r)) + '</td>' +
+                        '<td class="r-txt">' + escapeHtmlReportCell(getDailyStoppageReasonLabel(s.reason)) + '</td>' +
+                        '<td class="r-txt">' + dur + '</td>' +
+                        '<td class="r-txt">' + _rpNa(s.detail) + '</td>' +
+                        '<td class="r-txt">' + _rpNa('') + '</td>' +
+                        '<td class="r-txt">' + _rpNa('') + '</td></tr>';
+                });
+            });
+            if (!rows) rows = '<tr><td colspan="6" style="text-align:center;color:#6b7280;">Aucune panne mécanique enregistrée.</td></tr>';
+            return '<h2>Pannes, solutions et remise en service</h2>' +
+                '<table class="pro2"><thead><tr><th>Machine</th><th>Panne / cause</th><th>Début–fin / durée</th><th>Solution / intervention</th><th>Statut</th><th>Responsable / retour</th></tr></thead><tbody>' +
+                rows + '</tbody></table>';
+        }
+
+        function buildStandbySection(records) {
+            var rows = '', total = 0;
+            (records || []).forEach(function(r) {
+                var d = _rpData(r);
+                var zone = _rpZoneForRecord(r);
+                (d.stoppages || []).forEach(function(s) {
+                    var cat = _rpStopCat(s.reason);
+                    if (cat !== 'stb' && cat !== 'gsa') return;
+                    var h = parseFloat(s.hours) || 0; total += h;
+                    var dur = (s.timeStart && s.timeEnd ? (s.timeStart + '–' + s.timeEnd + ' · ') : '') + h.toFixed(1) + ' h';
+                    rows += '<tr><td class="r-txt">' + escapeHtmlReportCell(_rpMachineName(r)) + (zone ? ' <span style="color:#64748b;">· ' + escapeHtmlReportCell(zone) + '</span>' : '') + '</td>' +
+                        '<td class="r-txt">' + dur + '</td>' +
+                        '<td class="r-txt">' + escapeHtmlReportCell(getDailyStoppageReasonLabel(s.reason)) + '</td>' +
+                        '<td class="r-txt">' + _rpNa(s.detail) + '</td>' +
+                        '<td class="r-txt">' + _rpNa('') + '</td></tr>';
+                });
+            });
+            if (!rows) rows = '<tr><td colspan="5" style="text-align:center;color:#6b7280;">Aucun standby enregistré.</td></tr>';
+            return '<h2>Standby, commentaires et explications</h2>' +
+                '<table class="pro2"><thead><tr><th>Machine / pattern</th><th>Horaires / durée</th><th>Motif</th><th>Explication</th><th>Action / suivi</th></tr></thead><tbody>' +
+                rows + '</tbody></table>' +
+                '<p style="font-size:10px;color:#475569;margin:5px 0 0;">Standby total : <b>' + total.toFixed(1) + ' h</b>. Séparé des pannes mécaniques.</p>';
+        }
+
+        function buildCommentGeneralSection(records) {
+            var parts = [];
+            (records || []).forEach(function(r) { var d = _rpData(r); var n = (d.notes || '').trim(); if (n) parts.push(n); });
+            var txt = parts.length ? escapeHtmlReportCell(parts.join(' — ')) : '<span style="color:#9ca3af;">Non renseigné</span>';
+            return '<h2>Commentaire général du poste</h2><div class="summary" style="text-align:left;">' + txt + '</div>';
         }
 
         // Bandeau d'indicateurs clés (KPI) en haut du rapport — données réelles,
