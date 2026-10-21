@@ -17767,7 +17767,7 @@
                     rowDh = data.stoppages.reduce(function(a, s) { return a + (parseFloat(s.hours) || 0); }, 0);
                 }
                 rowDh = parseFloat(rowDh) || 0;
-                var stopCell = formatStoppagesForReport(data.stoppages || []);
+                var stopCell = formatStoppagesBriefForReport(data.stoppages || []);
                 var comp = null;
                 if (data.availabilityPct == null) {
                     comp = computeShiftAvailabilityKpis((data && data.shift) || '', rowDh, data.hours || 0);
@@ -17844,6 +17844,7 @@
                 '<p style="font-size:16px;margin:5px 0;"><strong>Total heures de travail:</strong> ' + totals.hours.toFixed(1) + ' h</p>' +
                 '<p style="font-size:16px;margin:5px 0;"><strong>Total temps d\'arrêt:</strong> ' + totals.downtimeHours.toFixed(1) + ' h</p>' +
                 '</div>' +
+                buildStoppagesDetailSection(records) +
                 (chartsBlockDaily ? chartsBlockDaily.html : '') +
                 '<div class="footer">' +
                 '<p>Document généré le ' + new Date().toLocaleString('fr-FR') + '</p>' +
@@ -17944,7 +17945,7 @@
                     }
                     rowDh = parseFloat(rowDh) || 0;
                     dayTotals.downtimeHours += rowDh;
-                    var stopCell = formatStoppagesForReport(data.stoppages || []);
+                    var stopCell = formatStoppagesBriefForReport(data.stoppages || []);
                     var hmD = data.hammerCounterDelta;
                     if (hmD == null && data.hammerCounterStart != null && data.hammerCounterEnd != null) {
                         hmD = computeDailyEntryCounterDelta(data.hammerCounterStart, data.hammerCounterEnd);
@@ -17996,6 +17997,7 @@
                 '<p style="font-size:16px;margin:5px 0;"><strong>Total heures de travail:</strong> ' + weekTotals.hours.toFixed(1) + ' h</p>' +
                 '<p style="font-size:16px;margin:5px 0;"><strong>Total temps d\'arrêt:</strong> ' + weekTotals.downtimeHours.toFixed(1) + ' h</p>' +
                 '</div>' +
+                buildStoppagesDetailSection(records) +
                 (chartsBlockWeek ? chartsBlockWeek.html : '') +
                 '<div class="footer">' +
                 '<p>Document généré le ' + new Date().toLocaleString('fr-FR') + '</p>' +
@@ -22215,6 +22217,52 @@
                 lines.push(escapeHtmlReportCell(line));
             });
             return lines.length ? lines.join('<br>') : '—';
+        }
+
+        // Version brève pour la colonne (étroite) du tableau : durée + motif seulement.
+        function formatStoppagesBriefForReport(stoppages) {
+            if (!stoppages || !stoppages.length) return '—';
+            var parts = [];
+            stoppages.forEach(function(s) {
+                var h = parseFloat(s.hours) || 0;
+                if (h <= 0 && !s.reason) return;
+                parts.push((h > 0 ? h.toFixed(1) + ' h ' : '') + getDailyStoppageReasonLabel(s.reason));
+            });
+            return parts.length ? escapeHtmlReportCell(parts.join(' ; ')) : '—';
+        }
+
+        // Section pleine largeur, lisible : le détail des arrêts par machine/équipe.
+        function buildStoppagesDetailSection(records) {
+            var blocks = [];
+            (records || []).forEach(function(r) {
+                var data = r.data || {};
+                if (typeof data === 'string') { try { data = JSON.parse(data); } catch (e) { data = {}; } }
+                var st = data.stoppages || [];
+                var items = [];
+                st.forEach(function(s) {
+                    var h = parseFloat(s.hours) || 0;
+                    var reason = getDailyStoppageReasonLabel(s.reason);
+                    var detail = (s.detail || '').trim();
+                    if (h <= 0 && !detail && !s.reason) return;
+                    var timeTxt = (s.timeStart && s.timeEnd) ? (s.timeStart + ' → ' + s.timeEnd) : '';
+                    items.push('<li style="margin:4px 0;line-height:1.4;">' +
+                        '<strong style="color:#b45309;">' + (h > 0 ? h.toFixed(1) + ' h' : '—') + '</strong> · ' +
+                        escapeHtmlReportCell(reason) +
+                        (timeTxt ? ' <span style="color:#6b7280;">(' + timeTxt + ')</span>' : '') +
+                        (detail ? '<br><span style="color:#374151;">↳ ' + escapeHtmlReportCell(detail) + '</span>' : '') +
+                        '</li>');
+                });
+                if (!items.length) return;
+                var drill = findDrillByMachineId(r.machineId);
+                var mName = drill ? drill.id : r.machineId;
+                var shiftLabel = getShiftLabelForReport(data.shift);
+                var dateTxt = r.date ? (' · ' + r.date) : '';
+                blocks.push('<div style="margin:0 0 12px;padding:10px 14px;border:1px solid #e2e8f0;border-left:4px solid #1e40af;border-radius:4px;background:#f8fafc;page-break-inside:avoid;">' +
+                    '<div style="font-weight:700;color:#1e40af;margin-bottom:6px;font-size:13px;">' + escapeHtmlReportCell(mName) + ' · ' + escapeHtmlReportCell(shiftLabel) + dateTxt + '</div>' +
+                    '<ul style="margin:0;padding-left:20px;font-size:12.5px;">' + items.join('') + '</ul></div>');
+            });
+            if (!blocks.length) return '';
+            return '<h2>Justification des arrêts</h2>' + blocks.join('');
         }
 
         /** Normalise "H:MM" ou "HH:MM" pour la valeur des champs heure du navigateur. */
