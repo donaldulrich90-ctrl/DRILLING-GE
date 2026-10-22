@@ -1152,6 +1152,71 @@
         }
         /* Cases à cocher / radios plus visibles sur fond sombre */
         input[type="checkbox"], input[type="radio"] { accent-color: #F5B800; }
+        /* Saisie : panneau clair isolé du thème sombre de la plateforme. */
+        body #dailyEntryModal { background: rgba(15, 23, 42, .68) !important; color: #172b4d !important; }
+        body #dailyEntryModal > div { background: #fff !important; border: 1px solid #cbd5e1 !important; border-radius: 16px; max-width: 900px; padding: 24px; }
+        body #dailyEntryModal h2 { color: #102a43 !important; letter-spacing: -.02em; }
+        body #dailyEntryModal label,
+        body #dailyEntryModal [class*="text-slate-"],
+        body #dailyEntryModal [class*="text-amber-"],
+        body #dailyEntryModal .text-white,
+        body #dailyEntryModal strong[class*="text-amber-"],
+        body #dailyEntryModal b[class*="text-amber-"] { color: #334e68 !important; }
+        body #dailyEntryModal [class*="text-slate-500"],
+        body #dailyEntryModal [class*="text-slate-400"] { color: #486581 !important; }
+        body #dailyEntryModal [class*="bg-slate-900"],
+        body #dailyEntryModal [class*="bg-slate-800"],
+        body #dailyEntryModal [class*="bg-amber-900"] { background: #f1f5f9 !important; border-color: #cbd5e1 !important; }
+        body #dailyEntryModal input:not([type="checkbox"]):not([type="radio"]),
+        body #dailyEntryModal select, body #dailyEntryModal textarea {
+            color: #102a43 !important; -webkit-text-fill-color: #102a43 !important;
+            background: #fff !important; border: 1px solid #94a3b8 !important; min-height: 42px; border-radius: 7px; color-scheme: light;
+        }
+        body #dailyEntryModal input::placeholder, body #dailyEntryModal textarea::placeholder { color: #627d98 !important; opacity: 1 !important; }
+        body #dailyEntryModal select option { color: #102a43 !important; background: #fff !important; }
+        body #dailyEntryModal input:disabled, body #dailyEntryModal select:disabled,
+        body #dailyEntryModal textarea:disabled, body #dailyEntryModal input[readonly] {
+            background: #e9eef4 !important; color: #486581 !important; -webkit-text-fill-color: #486581 !important; opacity: 1 !important;
+        }
+        body #dailyEntryModal input:focus-visible, body #dailyEntryModal select:focus-visible,
+        body #dailyEntryModal textarea:focus-visible, body #dailyEntryModal button:focus-visible {
+            outline: 3px solid #2563eb !important; outline-offset: 2px; box-shadow: 0 0 0 3px #dbeafe !important;
+        }
+        body #dailyEntryModal button { min-height: 40px; border: 1px solid #94a3b8 !important; background: #e2e8f0 !important; color: #172b4d !important; }
+        body #dailyEntryModal button:hover { background: #cbd5e1 !important; }
+        body #dailyEntryModal button[class*="bg-blue-"], body #dailyEntryModal button[class*="bg-cyan-"] { background: #1d4ed8 !important; border-color: #1d4ed8 !important; color: #fff !important; }
+        body #dailyEntryModal button[class*="bg-green-"], body #dailyEntryModal #dailyEntryCompleteButton { background: #047857 !important; border-color: #047857 !important; color: #fff !important; }
+        body #dailyEntryModal button[class*="bg-red-"] { background: #b91c1c !important; border-color: #b91c1c !important; color: #fff !important; }
+        body #dailyEntryModal button:disabled { opacity: .6 !important; cursor: not-allowed; }
+        body #dailyEntryModal #dailyEntryDraftButton { background: #1d4ed8 !important; border-color: #1d4ed8 !important; color: #fff !important; }
+        body #dailyEntryModal #dailyEntryDowntimeTotal, body #dailyEntryModal #dailyEntryHammerDelta,
+        body #dailyEntryModal #dailyEntryHoursCounterDelta, body #dailyEntryModal #dailyEntryHolesTotal { color: #075985 !important; }
+        body #dailyEntryModal #dailyEntrySaveStatus { padding: 10px 12px; border-radius: 7px; border: 1px solid #cbd5e1; background: #eff6ff; color: #1e40af !important; }
+        body #dailyEntryModal #dailyEntrySaveStatus[data-state="saved"] { background: #ecfdf5; border-color: #6ee7b7; color: #065f46 !important; }
+        body #dailyEntryModal #dailyEntryErrorBanner { background: #fef2f2 !important; border-color: #dc2626 !important; color: #991b1b !important; }
+        body #dailyEntryModal #dailyEntryAuditBanner { background: #f0f9ff !important; color: #172b4d !important; border-color: #7dd3fc !important; }
+        body #dailyEntryModal input[type="checkbox"] { accent-color: #1d4ed8; }
+        body #dailyEntryModal .daily-entry-context { margin-left: 0; margin-right: 0; padding: 10px 12px; }
+        body #dailyEntryModal .daily-entry-context .daily-entry-context-fields { display: grid; grid-template-columns: 1fr 1.3fr 1.4fr; gap: 12px; }
+        body #dailyEntryModal #dailyEntryAuditBanner { padding: 6px 10px; margin-bottom: 6px; font-size: 12px; }
+        body #dailyEntryModal #dailyEntrySaveStatus { padding: 6px 10px; margin-bottom: 8px; font-size: 13px; }
+        body #dailyEntryModal .daily-entry-footer { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; padding-top: 10px; }
+        body #dailyEntryModal .daily-entry-footer button { padding: 8px 10px; grid-column: span 2; }
+        body #dailyEntryModal #dailyEntryDraftButton, body #dailyEntryModal #dailyEntryCompleteButton { grid-column: span 3; }
+        body #dailyEntryModal > div > div > button { min-width: 40px; border-radius: 6px; }
+        @media (max-width: 640px) {
+            body #dailyEntryModal { padding: 8px; }
+            body #dailyEntryModal > div { padding: 16px; max-height: calc(100dvh - 16px); margin: 0; }
+            body #dailyEntryModal .daily-entry-context .daily-entry-context-fields { grid-template-columns: 1fr 1fr; gap: 8px; }
+            body #dailyEntryModal .daily-entry-context-fields > :last-child { grid-column: 1 / -1; }
+            body #dailyEntryModal .daily-entry-footer { grid-template-columns: 1fr 1fr; }
+            body #dailyEntryModal .daily-entry-footer button,
+            body #dailyEntryModal #dailyEntryDraftButton, body #dailyEntryModal #dailyEntryCompleteButton { grid-column: auto; font-size: 12px; }
+            body #dailyEntryModal [data-daily-stoppage-row] { display: grid; grid-template-columns: 1fr 1fr; }
+            body #dailyEntryModal [data-daily-stoppage-row] > :first-child,
+            body #dailyEntryModal [data-daily-stoppage-row] > :nth-child(5) { grid-column: 1 / -1; }
+            body #dailyEntryModal [data-daily-stoppage-row] > div { width: auto; min-width: 0; }
+        }
     </style>
 </head>
 <body class="ged-theme-control ged-motion-full">
@@ -4133,9 +4198,9 @@
                     <button type="button" onclick="closeDailyEntryModal()" class="text-slate-400 hover:text-white text-2xl leading-none">&times;</button>
                 </div>
                 <form id="dailyEntryForm" class="flex flex-col min-h-0 flex-1" onsubmit="saveDailyEntry(event)">
-                    <div class="-mx-6 sm:-mx-8 px-6 sm:px-8 py-3 mb-3 bg-slate-900/60 border border-slate-600 rounded-lg shrink-0 space-y-3">
-                        <p class="text-amber-200/90 text-xs font-medium">Date, machine et équipe — toujours visibles (défilez le reste du formulaire ci-dessous)</p>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div class="daily-entry-context py-3 mb-3 bg-slate-900/60 border border-slate-600 rounded-lg shrink-0 space-y-3">
+                        <p class="text-slate-400 text-xs font-medium">Identifiez le poste. Pré-enregistrez à tout moment, puis complétez la saisie avant de la terminer.</p>
+                    <div class="daily-entry-context-fields">
                         <div>
                             <label class="block text-slate-400 mb-1 text-sm">Date *</label>
                             <input type="date" id="dailyEntryDate" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white" required onchange="onDailyEntryContextChanged(); updateDailyEntryShiftConstraints(); updateDailyEntryModalSummary();">
@@ -4146,10 +4211,7 @@
                                 <option value="">Sélectionner une machine</option>
                             </select>
                         </div>
-                    </div>
-
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <div class="md:col-span-2">
+                        <div>
                             <label class="block text-slate-400 mb-1 text-sm">Shift / Équipe</label>
                             <select id="dailyEntryShift" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white" onchange="onDailyEntryShiftChanged(); updateDailyEntryModalSummary();">
                                 <option value="">Journée complète (2 équipes, 24 h nominales)</option>
@@ -4163,6 +4225,7 @@
 
                     <div id="dailyEntryAuditBanner" class="hidden mb-3 px-4 py-2 rounded-lg border text-sm"></div>
                     <div id="dailyEntryErrorBanner" class="hidden mb-3 px-4 py-3 rounded-lg text-sm font-semibold shrink-0 bg-red-900/80 border border-red-400 text-red-50"></div>
+                    <div id="dailyEntrySaveStatus" class="mb-3 text-sm shrink-0" role="status" aria-live="polite">Nouveau poste — aucune donnée enregistrée.</div>
 
                     <div class="overflow-y-auto flex-1 min-h-0 pr-1 space-y-4 pb-2">
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
@@ -4307,7 +4370,7 @@
                         <div class="flex flex-wrap justify-between items-center gap-2 mb-2">
                             <div>
                                 <label class="block text-amber-200 font-semibold">Temps d’arrêt <span class="text-slate-400 font-normal text-sm">(par shift — blast, déplacement, manque de trou, etc.)</span></label>
-                                <p class="text-slate-400 text-xs mt-1">Renseignez <strong class="text-slate-300">Début</strong> et <strong class="text-slate-300">Fin</strong> : la durée est calculée <strong class="text-slate-300">sans arrondir</strong> (valeur exacte). <strong class="text-amber-200">Enregistrement</strong> : total arrêts + heures machine doit égaler la durée du shift (12 h jour/nuit, 24 h si journée complète).</p>
+                                <p class="text-slate-400 text-xs mt-1">Saisissez une durée en heures, ou indiquez Début et Fin pour la calculer. Un arrêt encore en cours peut être pré-enregistré avec son heure de début seule. Pour terminer le poste, complétez les arrêts : heures machine + arrêts doivent totaliser 12 h (jour/nuit) ou 24 h (journée complète).</p>
                             </div>
                             <div class="text-right">
                                 <span class="text-slate-400 text-sm">Total arrêts : </span>
@@ -4380,8 +4443,10 @@
 
                     </div>
 
-                    <div class="flex flex-col sm:flex-row gap-2 shrink-0 pt-4 mt-2 border-t border-slate-600">
-                        <button type="submit" class="flex-1 bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg font-semibold">💾 Enregistrer les données</button>
+                    <div class="daily-entry-footer shrink-0 pt-4 mt-2 border-t border-slate-600">
+                        <button type="button" id="dailyEntryDraftButton" onclick="saveDailyEntryDraft({keepOpen:true})" class="px-4 py-2 rounded-lg font-semibold">Pré-enregistrer</button>
+                        <button type="submit" id="dailyEntryCompleteButton" class="bg-green-600 px-4 py-2 rounded-lg font-semibold">Terminer la saisie</button>
+                        <button type="button" id="dailyEntryMidshiftButton" onclick="generateMidshiftReportFromEntry()" class="px-4 py-2 rounded-lg font-semibold">Rapport de mi-poste</button>
                         <button type="button" id="dailyEntryDeleteRecordBtn" class="hidden bg-red-800 hover:bg-red-700 px-4 py-2 rounded-lg font-semibold text-white whitespace-nowrap" onclick="deleteCurrentDailyEntryRecord()">🗑️ Supprimer cette saisie</button>
                         <button type="button" onclick="closeDailyEntryModal()" class="bg-gray-600 hover:bg-gray-700 px-4 py-2 rounded-lg">Annuler</button>
                     </div>
@@ -5309,12 +5374,22 @@
          * Après suppression de saisies journalières : réaligner profondeur / carburant / conso. sur les lignes restantes.
          * Sans saisie pour cette foreuse : profondeur et niveaux repartent à zéro (comme une foreuse « sans historique journalier »).
          */
+        function isDailyRecordIncompleteDraft(record) {
+            if (!record) return false;
+            var data = record.data || {};
+            if (typeof data === 'string') { try { data = JSON.parse(data); } catch (_) { return false; } }
+            return data.entryStage === 'draft';
+        }
+
         function syncDrillTelemetryFromDailyRecords(drill) {
             if (!drill) return;
             var mid = drill.id;
-            var recs = (dailyDataRecords || []).filter(function(r) {
+            var matchingRecords = (dailyDataRecords || []).filter(function(r) {
                 return drillIdsMatch(r.machineId, mid);
-            }).slice().sort(compareDailyRecordsChronological);
+            });
+            var recs = matchingRecords.filter(function(r) { return !isDailyRecordIncompleteDraft(r); }).sort(compareDailyRecordsChronological);
+            // Un brouillon ne doit ni avancer les compteurs ni effacer leur état.
+            if (!recs.length && matchingRecords.length) return;
             if (!drill.telemetry) drill.telemetry = { rotation_pressure: 0, hyd_temp: 0, depth: 0 };
             if (!drill.fuel) drill.fuel = { level: 0, capacity: 2000, consumption: 0, price: 0, priceCurrency: 'USD' };
             if (!drill.consumables) drill.consumables = { filters: 0, oil: 0, lubricants: 0 };
@@ -5332,6 +5407,17 @@
             var last = recs[recs.length - 1];
             var d = last.data || {};
             var depthVal = typeof d.depth === 'number' && !isNaN(d.depth) ? d.depth : null;
+            // Les postes peuvent être préenregistrés ou terminés dans un ordre différent.
+            // L'origine reste fixe ; seuls les mètres des postes terminés s'additionnent.
+            var anchored = recs.find(function(r) {
+                var data = r.data || {};
+                return data.entryDepthOffset != null && Number.isFinite(Number(data.entryDepthOffset));
+            });
+            if (anchored) {
+                depthVal = Number(anchored.data.entryDepthOffset) + recs.reduce(function(total, r) {
+                    return total + (Number((r.data || {}).metersDrilled) || 0);
+                }, 0);
+            }
             if (depthVal == null) {
                 var sumM = 0;
                 recs.forEach(function(r) {
@@ -5359,7 +5445,9 @@
                     if (!isNaN(lev)) break;
                 }
             }
-            drill.fuel.level = isNaN(lev) ? 0 : lev;
+            // Sans relevé dans les postes terminés, conserver le niveau déjà connu.
+            var knownFuelLevel = parseFloat(drill.fuel.level);
+            drill.fuel.level = isNaN(lev) ? (isNaN(knownFuelLevel) ? 0 : Math.max(0, knownFuelLevel)) : lev;
 
             var hLast = parseFloat(d.hours) || 0;
             var fuelEff = parseFloat(d.fuelConsumptionEffective);
@@ -6132,6 +6220,7 @@
             var curOrd = shiftOrderForSort(shift);
             var prev = null;
             getSortedMachineDailyRecords(machineId).forEach(function(r) {
+                if (isDailyRecordIncompleteDraft(r)) return;
                 if (excludeRecordId != null && r.id === excludeRecordId) return;
                 var rOrd = shiftOrderForSort(dailyRecordShiftKey(r));
                 if (r.date < date || (r.date === date && rOrd < curOrd)) prev = r;
@@ -6430,7 +6519,7 @@
                     : '';
                 var actions = '<div class="flex flex-wrap gap-2 mt-3">';
                 var ownsRecord = String(metaRecord.enteredByUsername || '').trim().toLowerCase() === getDailyDataActorUsername().toLowerCase();
-                if ((workflowStatus === 'draft' || workflowStatus === 'rejected') && (ownsRecord || dailyDataRoleCanOverrideDailyLock())) {
+                if ((workflowStatus === 'draft' || workflowStatus === 'rejected') && (!metaRecord.data || metaRecord.data.entryStage !== 'draft') && (ownsRecord || dailyDataRoleCanOverrideDailyLock())) {
                     actions += '<button type="button" onclick="runDailyWorkflowAction(\'submit\')" class="bg-cyan-700 hover:bg-cyan-600 px-3 py-1.5 rounded text-xs font-semibold">📤 Soumettre au superviseur</button>';
                 }
                 if (workflowStatus === 'submitted' && dailyDataRoleCanOverrideDailyLock()) {
@@ -6464,6 +6553,10 @@
             var meta = getCurrentDailyEntryRecordMeta();
             if (!meta.record || !meta.record.id || !window.API || !window.API.DailyData || !window.API.DailyData[action]) {
                 alert('Cette action nécessite une connexion active au serveur.');
+                return;
+            }
+            if (action === 'submit' && meta.record.data && meta.record.data.entryStage === 'draft') {
+                showDailyEntryError('Complétez les données et cliquez sur « Terminer la saisie » avant de soumettre ce poste.');
                 return;
             }
             var comment = '';
@@ -6550,7 +6643,7 @@
                 var depth = (drill.telemetry && drill.telemetry.depth != null) ? drill.telemetry.depth.toFixed(1) : '0';
                 var press = (drill.telemetry && drill.telemetry.rotation_pressure != null) ? Math.round(drill.telemetry.rotation_pressure) : 0;
                 // Today's production
-                var todayRecs = (dailyDataRecords || []).filter(function(r){ return r.date === todayStr && drillIdsMatch(r.machineId, drill.id); });
+                var todayRecs = (dailyDataRecords || []).filter(function(r){ return !isDailyRecordIncompleteDraft(r) && r.date === todayStr && drillIdsMatch(r.machineId, drill.id); });
                 var todayM = todayRecs.reduce(function(s,r){ return s+( parseFloat((r.data||{}).metersDrilled)||0); }, 0);
                 var todayH = todayRecs.reduce(function(s,r){ return s+( parseFloat((r.data||{}).hours)||0); }, 0);
                 var todayROP = todayH > 0 ? (todayM/todayH).toFixed(2) : '—';
@@ -6814,7 +6907,7 @@
 
             // Métrage du jour from dailyDataRecords
             var todayStr = getLocalDateYYYYMMDD(new Date());
-            var todayRecs = (dailyDataRecords || []).filter(function(r) { return r.date === todayStr; });
+            var todayRecs = (dailyDataRecords || []).filter(function(r) { return !isDailyRecordIncompleteDraft(r) && r.date === todayStr; });
             var dailyM = todayRecs.reduce(function(s, r) { return s + (parseFloat((r.data || {}).metersDrilled) || 0); }, 0);
             var dailyH = todayRecs.reduce(function(s, r) { return s + (parseFloat((r.data || {}).hours) || 0); }, 0);
             var avgROP = dailyH > 0 ? (dailyM / dailyH).toFixed(1) : null;
@@ -6892,7 +6985,7 @@
             for (var i = 6; i >= 0; i--) {
                 var d = new Date(); d.setDate(d.getDate() - i);
                 var dayStr = getLocalDateYYYYMMDD(d);
-                var recs = (dailyDataRecords || []).filter(function(r) { return r.date === dayStr; });
+                var recs = (dailyDataRecords || []).filter(function(r) { return !isDailyRecordIncompleteDraft(r) && r.date === dayStr; });
                 var total = recs.reduce(function(s, r) { return s + (parseFloat((r.data || {}).metersDrilled) || 0); }, 0);
                 labels.push(d.toLocaleDateString('fr-CA', { weekday: 'short', day: '2-digit', month: 'short' }));
                 data.push(parseFloat(total.toFixed(1)));
@@ -10728,7 +10821,7 @@
             _analyticsCharts.forEach(function(c){ try{ c.destroy(); }catch(e){} });
             _analyticsCharts = [];
 
-            var records = dailyDataRecords || [];
+            var records = getDailyDataForSite();
             var fC = function(v){ return Number(v).toLocaleString('fr-CA',{style:'currency',currency:'CAD',minimumFractionDigits:0}); };
             var kpi = function(lbl,val,cls,sub){
                 return '<div class="ged-content-panel rounded-xl px-5 py-4"><p class="text-[10px] uppercase tracking-widest font-semibold mb-1" style="color:#64748B">'+lbl+'</p>'+
@@ -12414,7 +12507,7 @@
                 var c = contracts.find(function(x) { return x.id === d.contractId; });
                 if (!c || c.clientId !== clientId) return;
                 (dailyDataRecords || []).forEach(function(r) {
-                    if (!drillIdsMatch(r.machineId, d.id) || !r.date || r.date.slice(0, 7) !== month) return;
+                    if (isDailyRecordIncompleteDraft(r) || !drillIdsMatch(r.machineId, d.id) || !r.date || r.date.slice(0, 7) !== month) return;
                     var data = r.data || {};
                     if (typeof data === 'string') {
                         try { data = JSON.parse(data); } catch (e) { data = {}; }
@@ -12456,7 +12549,7 @@
                 var contract = contracts.find(function(c) { return c.id === drill.contractId; });
                 if (!contract || contract.clientId !== clientId) return;
                 var records = (dailyDataRecords || []).filter(function(r) {
-                    return drillIdsMatch(r.machineId, drill.id) && r.date && r.date.slice(0, 7) === month;
+                    return !isDailyRecordIncompleteDraft(r) && drillIdsMatch(r.machineId, drill.id) && r.date && r.date.slice(0, 7) === month;
                 });
                 var totalMeters = 0;
                 records.forEach(function(r) {
@@ -14259,7 +14352,7 @@
         function sumMetersForDrillInMonth(drillId, monthYYYYMM) {
             var total = 0;
             (dailyDataRecords || []).forEach(function(r) {
-                if (!r.date || r.date.slice(0, 7) !== monthYYYYMM) return;
+                if (isDailyRecordIncompleteDraft(r) || !r.date || r.date.slice(0, 7) !== monthYYYYMM) return;
                 if (!drillIdsMatch(r.machineId, drillId)) return;
                 var data = r.data || {};
                 if (typeof data === 'string') {
@@ -17197,6 +17290,8 @@
                 '<input type="date" id="reportDailyDate" class="w-full bg-slate-800 border border-slate-600 rounded px-4 py-2 text-white" value="' + today + '">' +
                 '</div>' +
                 '<button onclick="generateDailyReport()" class="w-full ged-btn-primary px-4 py-2 rounded-lg font-semibold">📄 Générer Rapport Journalier</button>' +
+                '<button type="button" onclick="generateMidshiftReport()" class="mt-3 w-full bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-lg font-semibold">Rapport de mi-poste</button>' +
+                '<p class="text-slate-400 text-xs mt-2">Situation provisoire à partir des saisies enregistrées, y compris les brouillons.</p>' +
                 '</div>' +
                 '<div class="ged-content-panel p-6 rounded-xl">' +
                 '<h4 class="text-lg font-bold mb-4">📆 Rapport Hebdomadaire</h4>' +
@@ -17338,7 +17433,7 @@
             if (typeof Chart === 'undefined') return;
             _reportCharts.forEach(function(c) { try { c.destroy(); } catch (e) {} });
             _reportCharts = [];
-            var records = dailyDataRecords || [];
+            var records = getDailyDataForSite();
 
             // Agrégation par machine
             var mm = {};
@@ -17514,7 +17609,7 @@
             }
             
             var records = (dailyDataRecords || []).filter(function(r) {
-                if (r.machineId !== machineId) return false;
+                if (isDailyRecordIncompleteDraft(r) || !drillIdsMatch(r.machineId, machineId)) return false;
                 try {
                     var recordDate = new Date(r.date);
                     return recordDate >= startDate && recordDate <= endDate;
@@ -17569,7 +17664,7 @@
             
             var records = getDailyDataForSite().filter(function(r) { return r.date === date; });
             if (records.length === 0) {
-                alert('Aucune donnée enregistrée pour cette date');
+                alert('Aucune saisie terminée pour cette date. Utilisez le rapport de mi-poste pour consulter les pré-enregistrements.');
                 return;
             }
             window._lastReportShare = {
@@ -17590,6 +17685,42 @@
             ensureReportPlanLoaded(function() { printDailyReport(date, records, reportWindow); }, function() {
                 if (!reportWindow.closed) reportWindow.close();
             });
+        }
+
+        function generateMidshiftReport() {
+            var date = (document.getElementById('reportDailyDate') || {}).value;
+            if (!date) { alert('Veuillez sélectionner une date.'); return; }
+            var records = getDailyDataForSite(true).filter(function(record) { return record.date === date; });
+            if (!records.length) { alert('Pré-enregistrez une saisie avant de générer le rapport de mi-poste.'); return; }
+            var reportWindow = window.open('', '_blank');
+            if (!reportWindow) { alert('Autorisez l’ouverture de la fenêtre du rapport.'); return; }
+            window._lastReportShare = { type: 'midshift', date: date, title: 'Rapport de mi-poste PROVISOIRE ' + date, recordCount: records.length };
+            printDailyReport(date, records, reportWindow, buildMidshiftReportDocumentHtml(date, records));
+        }
+
+        async function generateMidshiftReportFromEntry() {
+            var reportWindow = window.open('', '_blank');
+            if (!reportWindow) { showDailyEntryError('Autorisez l’ouverture de la fenêtre du rapport.'); return null; }
+            var context = getCurrentDailyEntryRecordMeta();
+            var tenantKey = getReportTenantKey();
+            reportWindow.document.write('<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Rapport de mi-poste</title></head><body><p>Pré-enregistrement de la saisie et préparation du rapport…</p></body></html>');
+            reportWindow.document.close();
+            try {
+                var record = await saveDailyEntryDraft({ keepOpen: true, quiet: true });
+                var current = getCurrentDailyEntryRecordMeta();
+                if (!record || tenantKey !== getReportTenantKey() || context.date !== current.date ||
+                    String(context.mid) !== String(current.mid) || context.shift !== current.shift) {
+                    if (!reportWindow.closed) reportWindow.close();
+                    return null;
+                }
+                window._lastReportShare = { type: 'midshift', date: record.date, title: 'Rapport de mi-poste PROVISOIRE ' + record.date, recordCount: 1, machineIds: [record.machineId] };
+                printDailyReport(record.date, [record], reportWindow, buildMidshiftReportDocumentHtml(record.date, [record]));
+                return record;
+            } catch (error) {
+                if (!reportWindow.closed) reportWindow.close();
+                showDailyEntryError('Le rapport de mi-poste ne peut pas être généré : ' + (error.message || error));
+                return null;
+            }
         }
 
         // Le rapport utilise le plan enregistré, jamais un brouillon de Planification.
@@ -17940,7 +18071,7 @@
         ].join('');
 
         function buildDailyReportDocumentHtml(date, records) {
-            records = (records || []).filter(function(record) { return !!record; });
+            records = (records || []).filter(function(record) { return !!record && !isDailyRecordIncompleteDraft(record); });
             var companyName = companyInfo.name || REPORT_BRAND_SUBSCRIBER_NAME;
             var projectLabel = getReportProjectLabel(records);
             if (!currentSiteId) {
@@ -18031,7 +18162,100 @@
                 '</main></body></html>';
         }
 
-        function printDailyReport(date, records, preparedWindow) {
+        function buildMidshiftReportDocumentHtml(date, records) {
+            records = (records || []).filter(function(record) { return !!record; });
+            function number(value) {
+                if (value == null || value === '' || typeof value === 'boolean') return null;
+                var n = Number(value);
+                return isFinite(n) && n >= 0 ? n : null;
+            }
+            function format(value, unit) {
+                return value == null ? 'Non renseigné' : value.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 2 }) + (unit ? ' ' + unit : '');
+            }
+            function recordedTotal(field) {
+                var total = 0, known = 0;
+                records.forEach(function(record) {
+                    var value = number(_rpData(record)[field]);
+                    if (value != null) { total += value; known += 1; }
+                });
+                return { value: known ? total : null, known: known };
+            }
+            var meters = recordedTotal('metersDrilled');
+            var hours = recordedTotal('hours');
+            var stopTotals = { bdn: 0, stb: 0, gsa: 0, prd: 0, other: 0 };
+            var incompleteStops = 0;
+            var rows = '', stopRows = '', notes = '';
+            records.forEach(function(record) {
+                var data = _rpData(record);
+                var machine = escapeHtmlReportCell(_rpMachineName(record) || 'Non renseigné');
+                var shift = escapeHtmlReportCell(getShiftLabelForReport(dailyRecordShiftKey({ data: data, shift: record.shift })));
+                var state = isDailyRecordIncompleteDraft(record) ? 'Brouillon — à compléter' : 'Saisie terminée';
+                var updated = record.lastModifiedAt || record.enteredAt;
+                var updatedText = updated && !isNaN(new Date(updated).getTime()) ? new Date(updated).toLocaleString('fr-FR') : 'Non renseigné';
+                rows += '<tr><td><b>' + machine + '</b><br><small>' + shift + '</small></td><td>' + _rpNa(data.location) +
+                    '</td><td class="r-num">' + format(number(data.metersDrilled), 'm') + '</td><td class="r-num">' + format(number(data.hours), 'h') +
+                    '</td><td>' + state + '<br><small>' + escapeHtmlReportCell(updatedText) + '</small></td></tr>';
+                (Array.isArray(data.stoppages) ? data.stoppages : []).forEach(function(stop) {
+                    var duration = number(stop.hours);
+                    var open = duration == null || !!stop.timeStart !== !!stop.timeEnd;
+                    if (open) incompleteStops += 1;
+                    if (duration != null) stopTotals[classifyStoppageReasonToBucket(stop.reason)] += duration;
+                    stopRows += '<tr><td>' + machine + '<br><small>' + shift + '</small></td><td>' + escapeHtmlReportCell(getDailyStoppageReasonLabel(stop.reason)) +
+                        '</td><td>' + _rpNa(stop.timeStart) + '</td><td>' + _rpNa(stop.timeEnd) + '</td><td class="r-num">' +
+                        (duration == null ? 'En cours / à compléter' : format(duration, 'h') + (open ? '<br><small>Horaire à compléter</small>' : '')) +
+                        '</td><td>' + _rpNa(stop.detail) + '</td></tr>';
+                });
+                var note = String(data.notes || record.notes || '').trim();
+                if (note) notes += '<div class="summary"><b>' + machine + ' · ' + shift + '</b><p>' + escapeHtmlReportCell(note) + '</p></div>';
+            });
+            function card(label, value, detail) {
+                return '<div class="report-kpi-card"><div class="report-kpi-label">' + label +
+                    '</div><div class="report-kpi-value">' + value + '</div><div class="report-kpi-sub">' + detail + '</div></div>';
+            }
+            var projectLabel = getReportProjectLabel(records);
+            if (!currentSiteId) {
+                var siteIds = {};
+                records.forEach(function(record) { var drill = findDrillByMachineId(record.machineId); if (drill && drill.siteId != null) siteIds[String(drill.siteId)] = true; });
+                if (Object.keys(siteIds).length > 1) projectLabel = 'Tous les sites';
+            }
+            var header = buildReportStandardEnteteHtml('RAPPORT DE MI-POSTE', records, [
+                [{ label: 'Projet / site :', value: projectLabel }, { label: 'Date du poste :', value: formatDate(date) }],
+                [{ label: 'Machine(s) :', value: getReportMachinesLabel(records) }, { label: 'Poste(s) :', value: getReportShiftsLabel(records) }]
+            ]);
+            var css = '.midshift-banner{padding:12px 14px;border:2px solid #1565a0;background:#eef6ff;color:#14395e;margin-bottom:18px;}' +
+                '.midshift-banner strong{display:block;font-size:15px;letter-spacing:.05em;margin-bottom:4px;}' +
+                '.midshift-table td small{color:#51657a;font-size:10px;}.midshift-table th:first-child{width:19%;}' +
+                '.midshift-table p{white-space:pre-wrap;}.report-kpi-value{color:#174e7d;}.summary p{margin:6px 0 0;white-space:pre-wrap;}' +
+                '.midshift-stops th:last-child{width:30%;}.daily-section .summary + .summary{margin-top:8px;}' +
+                '.midshift-table th,.midshift-table td{overflow-wrap:anywhere;}';
+            var generatedAt = new Date().toLocaleString('fr-FR');
+            var stopSummary = '<p class="daily-table-note">Durées renseignées : pannes (BDN) ' + format(stopTotals.bdn, 'h') +
+                ' · standby (STB) ' + format(stopTotals.stb, 'h') + ' · services (GSA) ' + format(stopTotals.gsa, 'h') +
+                ' · autres / production ' + format(stopTotals.other + stopTotals.prd, 'h') + '. ' +
+                incompleteStops + ' arrêt(s) en cours ou à compléter. Les durées manquantes ne sont pas ajoutées aux totaux.</p>';
+            return '<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
+                '<title>Rapport de mi-poste PROVISOIRE — ' + escapeHtmlReportCell(date) + '</title><style>' +
+                REPORT_PRINT_ENTETE_CSS + DAILY_REPORT_PRINT_CSS + css + '</style></head><body>' +
+                '<nav class="print-tools" aria-label="Actions du rapport"><button type="button" onclick="window.print()">Imprimer / Enregistrer en PDF</button><button type="button" onclick="window.close()">Fermer</button></nav>' +
+                '<main class="daily-sheet"><header>' + header + '</header><div class="midshift-banner"><strong>PROVISOIRE — POSTE EN COURS</strong>' +
+                'Situation des données enregistrées au ' + escapeHtmlReportCell(generatedAt) + '. Ce document contient des données partielles ; il ne clôture pas le poste et ne vaut pas validation du rapport journalier.</div>' +
+                '<section class="daily-section"><h2><span class="daily-section-number">01</span>Situation enregistrée à mi-poste</h2><div class="report-kpi-grid">' +
+                card('Mètres nouveaux renseignés', format(meters.value, 'm'), meters.known + ' / ' + records.length + ' fiche(s) renseignée(s)') +
+                card('Heures machine renseignées', format(hours.value, 'h'), hours.known + ' / ' + records.length + ' fiche(s) renseignée(s)') +
+                card('Pannes documentées', format(stopTotals.bdn, 'h'), 'durées saisies uniquement') +
+                card('Standby documenté', format(stopTotals.stb, 'h'), 'services suivis séparément') +
+                '</div><p class="daily-table-note">Aucune projection de fin de poste. Les taux de disponibilité et le bilan complet du poste seront calculés à la clôture de la saisie. Non renseigné : donnée encore à compléter.</p></section>' +
+                '<section class="daily-section"><h2><span class="daily-section-number">02</span>Avancement par machine et poste</h2><table class="daily-table midshift-table"><thead><tr><th>Machine / poste</th><th>Zone / lieu</th><th>Nouveaux (m)</th><th>Heures machine (h)</th><th>État / dernière sauvegarde</th></tr></thead><tbody>' +
+                (rows || '<tr><td colspan="5">Aucune saisie enregistrée.</td></tr>') + '</tbody></table></section>' +
+                '<section class="daily-section"><h2><span class="daily-section-number">03</span>Temps d’arrêt saisis et en cours</h2><table class="daily-table midshift-table midshift-stops"><thead><tr><th>Machine / poste</th><th>Motif</th><th>Début</th><th>Fin</th><th>Durée</th><th>Observation</th></tr></thead><tbody>' +
+                (stopRows || '<tr><td colspan="6">Aucun arrêt pré-enregistré à cet instant.</td></tr>') + '</tbody></table>' + stopSummary + '</section>' +
+                '<section class="daily-section"><h2><span class="daily-section-number">04</span>Observations et éléments à compléter</h2>' +
+                (notes || '<div class="summary">Non renseigné</div>') + '</section>' +
+                '<footer class="daily-footer"><span>' + escapeHtmlReportCell(companyInfo.name || REPORT_BRAND_SUBSCRIBER_NAME) +
+                '<br>Rapport de mi-poste — PROVISOIRE</span><span>Généré le ' + escapeHtmlReportCell(generatedAt) + '</span></footer></main></body></html>';
+        }
+
+        function printDailyReport(date, records, preparedWindow, documentHtml) {
             var printWindow = preparedWindow || window.open('', '_blank');
             if (!printWindow || printWindow.closed) {
                 alert('La fenêtre du rapport ne peut pas être ouverte. Autorisez les fenêtres pop-up pour générer le rapport journalier.');
@@ -18039,7 +18263,7 @@
             }
             try {
                 printWindow.document.open();
-                printWindow.document.write(buildDailyReportDocumentHtml(date, records));
+                printWindow.document.write(documentHtml || buildDailyReportDocumentHtml(date, records));
                 printWindow.document.close();
             } catch (error) {
                 alert('Le rapport journalier n’a pas pu être préparé. Veuillez réessayer.');
@@ -22242,7 +22466,7 @@
 
         function buildCommentGeneralSection(records) {
             var parts = [];
-            (records || []).forEach(function(r) { var d = _rpData(r); var n = (d.notes || '').trim(); if (n) parts.push(n); });
+            (records || []).forEach(function(r) { var d = _rpData(r); var n = String(d.notes || r.notes || '').trim(); if (n) parts.push(n); });
             var txt = parts.length ? escapeHtmlReportCell(parts.join(' — ')) : '<span style="color:#9ca3af;">Non renseigné</span>';
             return '<h2>Commentaire général du poste</h2><div class="summary" style="text-align:left;">' + txt + '</div>';
         }
@@ -22725,11 +22949,15 @@
                 var sv = tsEl && tsEl.value ? tsEl.value.trim() : '';
                 var ev = teEl && teEl.value ? teEl.value.trim() : '';
                 var computed = (sv && ev) ? computeHoursFromStoppageTimeRange(sv, ev) : null;
-                var hours = computed != null ? computed : (parseFloat(hoursEl && hoursEl.value) || 0);
+                var hoursRaw = hoursEl && hoursEl.value != null ? String(hoursEl.value).trim() : '';
+                var hours = hoursRaw === '' ? null : parseFloat(hoursRaw);
+                if (!Number.isFinite(hours)) hours = null;
+                var hoursSource = row.dataset && row.dataset.hoursSource === 'manual' ? 'manual' : 'times';
+                if (hoursSource !== 'manual' && computed != null) hours = computed;
                 var reasonVal = reasonEl && reasonEl.value ? reasonEl.value : '';
                 var detail = detailEl && detailEl.value ? detailEl.value.trim() : '';
-                if (hours > 0 || detail || (reasonVal && reasonVal !== 'autre')) {
-                    var item = { reason: reasonVal || 'autre', hours: hours, detail: detail };
+                if (hours !== null || sv || ev || detail || (reasonVal && reasonVal !== 'autre')) {
+                    var item = { reason: reasonVal || 'autre', hours: hours, detail: detail, hoursSource: hoursSource };
                     if (sv) item.timeStart = sv;
                     if (ev) item.timeEnd = ev;
                     out.push(item);
@@ -22807,6 +23035,16 @@
             var dtEl = document.getElementById('dailyEntryDowntimeTotal');
             var downtime = parseFloat(dtEl && dtEl.textContent) || 0;
             ul.innerHTML = '';
+            var nominal = getShiftNominalHours(shift);
+            var openStops = collectDailyEntryStoppages().some(function(stop) {
+                return stop.hours == null || !!stop.timeStart !== !!stop.timeEnd;
+            });
+            if (!hoursEl || hoursEl.value === '' || openStops || Math.abs(hours + downtime - nominal) > .02) {
+                ul.innerHTML = '<li class="list-none">Poste en cours : <strong>' +
+                    formatStoppageHoursExactDisplay(hours + downtime) + ' h renseignées sur ' + nominal +
+                    ' h</strong>. Les taux de disponibilité et d’utilisation seront calculés une fois le bilan du poste complété.</li>';
+                return;
+            }
             if (shift === '' && hours <= 0 && downtime <= 0) {
                 ul.innerHTML = '<li class="list-none -ml-2">Choisissez <strong>jour</strong> ou <strong>nuit</strong> (recommandé) pour des indicateurs alignés sur 12 h chacune. « Journée complète » utilise 24 h nominales (les deux équipes).</li>';
                 return;
@@ -22920,14 +23158,17 @@
 
         function updateDailyEntryHolesTotal(syncMeters) {
             var total = 0;
+            var hasMeters = false;
             document.querySelectorAll('#dailyEntryHolesContainer [data-daily-hole-row]').forEach(function(row) {
-                total += parseFloat((row.querySelector('.daily-hole-meters') || {}).value) || 0;
+                var value = (row.querySelector('.daily-hole-meters') || {}).value;
+                if (value != null && String(value).trim() !== '') hasMeters = true;
+                total += parseFloat(value) || 0;
             });
             var label = document.getElementById('dailyEntryHolesTotal');
             if (label) label.textContent = 'Total affecté : ' + total.toFixed(1) + ' m';
             if (syncMeters) {
                 var meterInput = document.getElementById('dailyEntryMeters');
-                if (meterInput) meterInput.value = total > 0 ? total.toFixed(1) : '';
+                if (meterInput) meterInput.value = hasMeters ? total.toFixed(1) : '';
                 updateDailyEntryKpiPreview();
             }
         }
@@ -22999,10 +23240,12 @@
             var worked = [];
             document.querySelectorAll('#dailyEntryHolesContainer [data-daily-hole-row]').forEach(function(row) {
                 var ref = decodeDailyHoleRef((row.querySelector('.daily-hole-ref') || {}).value);
-                var meters = parseFloat((row.querySelector('.daily-hole-meters') || {}).value) || 0;
+                var metersRaw = (row.querySelector('.daily-hole-meters') || {}).value;
+                var meters = metersRaw === '' || metersRaw == null ? null : parseFloat(metersRaw);
+                if (!Number.isFinite(meters)) meters = null;
                 var finalRaw = (row.querySelector('.daily-hole-final-depth') || {}).value;
                 var finalDepth = finalRaw === '' || finalRaw == null ? null : parseFloat(finalRaw);
-                if (ref.blockId && ref.holeId) worked.push({ blockId: ref.blockId, holeId: ref.holeId, meters: meters, finalDepth: Number.isFinite(finalDepth) ? finalDepth : null });
+                if ((ref.blockId && ref.holeId) || meters !== null || Number.isFinite(finalDepth)) worked.push({ blockId: ref.blockId, holeId: ref.holeId, meters: meters, finalDepth: Number.isFinite(finalDepth) ? finalDepth : null });
             });
             return worked;
         }
@@ -23097,6 +23340,7 @@
                 applyDailyEntryAuditAndLockUi(null);
                 refreshDailyEntryFuelFieldsFromContract();
                 updateDailyEntryDeleteButtonVisibility();
+                markDailyEntryFormClean(null);
                 return;
             }
             setStr('dailyEntryDrillingType', d.drillingType || '');
@@ -23107,7 +23351,7 @@
             setNum('dailyEntryMeters', d.metersDrilled);
             setNum('dailyEntryHours', d.hours);
             var faLoad = parseFloat(d.fuelAdded) || 0;
-            if (faLoad <= 0 && !d.fuelInitialFillOnly) {
+            if (d.entryStage !== 'draft' && faLoad <= 0 && !d.fuelInitialFillOnly) {
                 var migL = deriveFuelLitersFromDailyData(d);
                 if (migL > 0) setNum('dailyEntryFuelAdded', migL);
                 else setNum('dailyEntryFuelAdded', d.fuelAdded != null ? d.fuelAdded : '');
@@ -23115,12 +23359,12 @@
                 setNum('dailyEntryFuelAdded', d.fuelAdded != null ? d.fuelAdded : '');
             }
             setNum('dailyEntryCounterStart', d.counterStart != null ? d.counterStart : '');
-            setNum('dailyEntryCounterEnd', d.counterEnd != null ? d.counterEnd : (d.fuelTankReading != null ? d.fuelTankReading : (d.fuelLevel != null ? d.fuelLevel : '')));
+            setNum('dailyEntryCounterEnd', d.counterEnd != null ? d.counterEnd : (d.entryStage === 'draft' ? '' : (d.fuelTankReading != null ? d.fuelTankReading : (d.fuelLevel != null ? d.fuelLevel : ''))));
             setNum('dailyEntryHammerStart', d.hammerCounterStart != null ? d.hammerCounterStart : '');
             setNum('dailyEntryHammerEnd', d.hammerCounterEnd != null ? d.hammerCounterEnd : '');
             setNum('dailyEntryHoursCounterStart', d.hoursCounterStart != null ? d.hoursCounterStart : '');
             setNum('dailyEntryHoursCounterEnd', d.hoursCounterEnd != null ? d.hoursCounterEnd : '');
-            if (d.fuelPrice != null) setNum('dailyEntryFuelPrice', d.fuelPrice);
+            setNum('dailyEntryFuelPrice', d.fuelPrice);
             var fc = d.fuelPriceCurrency ? normalizeFuelPriceCurrency(d.fuelPriceCurrency) : null;
             if (fc == null && meta.mid) {
                 var drRow = findDrillByMachineId(meta.mid);
@@ -23145,6 +23389,7 @@
             updateDailyEntryKpiPreview();
             applyDailyEntryAuditAndLockUi(meta.record || null);
             updateDailyEntryDeleteButtonVisibility();
+            markDailyEntryFormClean(meta.record);
         }
 
         function removeDailyEntryStoppageRow(btn) {
@@ -23159,6 +23404,7 @@
             if (!container) return;
             var row = document.createElement('div');
             row.setAttribute('data-daily-stoppage-row', '1');
+            row.dataset.hoursSource = preset.hoursSource || ((preset.timeStart && preset.timeEnd) ? 'times' : 'manual');
             row.className = 'flex flex-wrap gap-2 items-end bg-slate-800/50 p-2 rounded border border-slate-600';
 
             var sel = document.createElement('select');
@@ -23193,7 +23439,7 @@
             var timeEndWrap = mkTimeField('daily-stoppage-time-end', 'Fin', normalizeStoppageTimeForInput(preset.timeEnd));
             var timeStartInp = timeStartWrap.querySelector('.daily-stoppage-time-start');
             var timeEndInp = timeEndWrap.querySelector('.daily-stoppage-time-end');
-            var onTimeInput = function() { recalcDailyStoppageRowHoursFromTimes(row); };
+            var onTimeInput = function() { row.dataset.hoursSource = 'times'; recalcDailyStoppageRowHoursFromTimes(row); };
             if (timeStartInp) {
                 timeStartInp.addEventListener('input', onTimeInput);
                 timeStartInp.addEventListener('change', onTimeInput);
@@ -23215,9 +23461,10 @@
             hoursInp.max = '24';
             hoursInp.value = preset.hours != null && preset.hours !== '' ? String(preset.hours) : '';
             hoursInp.className = 'w-full bg-slate-700 border border-slate-600 rounded px-2 py-2 text-white text-sm daily-stoppage-hours';
-            hoursInp.placeholder = '0';
-            hoursInp.addEventListener('input', updateDailyEntryDowntimeTotalDisplay);
-            hoursInp.addEventListener('change', updateDailyEntryDowntimeTotalDisplay);
+            hoursInp.placeholder = 'À compléter';
+            var onManualHoursInput = function() { row.dataset.hoursSource = 'manual'; updateDailyEntryDowntimeTotalDisplay(); };
+            hoursInp.addEventListener('input', onManualHoursInput);
+            hoursInp.addEventListener('change', onManualHoursInput);
             hoursWrap.appendChild(hoursLbl);
             hoursWrap.appendChild(hoursInp);
 
@@ -23248,7 +23495,7 @@
             row.appendChild(detailWrap);
             row.appendChild(rm);
             container.appendChild(row);
-            if (preset.timeStart && preset.timeEnd) {
+            if (preset.timeStart && preset.timeEnd && row.dataset.hoursSource !== 'manual') {
                 recalcDailyStoppageRowHoursFromTimes(row);
             } else {
                 updateDailyEntryDowntimeTotalDisplay();
@@ -23285,7 +23532,8 @@
                     hours: s.hours,
                     detail: s.detail,
                     timeStart: s.timeStart,
-                    timeEnd: s.timeEnd
+                    timeEnd: s.timeEnd,
+                    hoursSource: s.hoursSource
                 });
             });
         }
@@ -23310,6 +23558,7 @@
         }
 
         function onDailyEntryContextChanged() {
+            if (!confirmDailyEntryContextChange()) return;
             preselectDailyEntryShiftWhenSingleRecordForDate();
             loadDailyEntryFormFromRecord();
             updateDailyEntryModalSummary();
@@ -23420,10 +23669,13 @@
                 document.getElementById('dailyEntryLocation').value = drill.location || '';
             }
             updateDailyEntryModalSummary();
+            markDailyEntryFormClean(metaOpen.record);
             document.getElementById('dailyEntryModal').classList.remove('hidden');
         }
 
-        function closeDailyEntryModal() {
+        function closeDailyEntryModal(force) {
+            if (dailyEntrySaveInFlight) return;
+            if (!force && dailyEntryFormIsDirty() && !confirm('Des modifications ne sont pas enregistrées. Fermer et les abandonner ? Pour les conserver, annulez puis cliquez sur « Pré-enregistrer ».')) return;
             document.getElementById('dailyEntryModal').classList.add('hidden');
             var stCont = document.getElementById('dailyEntryStoppagesContainer');
             if (stCont) stCont.innerHTML = '';
@@ -23436,6 +23688,8 @@
             setDailyEntryFormInputsDisabled(false);
             var delBtn = document.getElementById('dailyEntryDeleteRecordBtn');
             if (delBtn) delBtn.classList.add('hidden');
+            dailyEntryLoadedContext = null;
+            dailyEntryLoadedSnapshot = '';
         }
 
         function countDailyRecordsInPurgeScope(dateFrom, dateTo, machineIdOpt) {
@@ -23572,7 +23826,7 @@
                     renderTelemetry(drill);
                 }
                 renderDashboard();
-                closeDailyEntryModal();
+                closeDailyEntryModal(true);
                 alert('Saisie supprimée et enregistrée.');
             } catch (e) {
                 alert((e && e.message) ? e.message : String(e));
@@ -23596,248 +23850,289 @@
             if (banner) { banner.textContent = ''; banner.classList.add('hidden'); }
         }
 
-        function saveDailyEntry(event) {
-            event.preventDefault();
+        var dailyEntrySaveInFlight = false;
+        var dailyEntryLoadedSnapshot = '';
+        var dailyEntryLoadedContext = null;
+
+        function dailyEntryFormSnapshot() {
+            var form = document.getElementById('dailyEntryForm');
+            if (!form) return '';
+            var values = [];
+            form.querySelectorAll('input, select, textarea').forEach(function(el) {
+                if (['dailyEntryDate', 'dailyEntryMachineId', 'dailyEntryShift'].indexOf(el.id) >= 0) return;
+                values.push([el.id || el.className, el.type === 'checkbox' ? !!el.checked : el.value]);
+            });
+            return JSON.stringify(values);
+        }
+
+        function setDailyEntrySaveStatus(message, state) {
+            var el = document.getElementById('dailyEntrySaveStatus');
+            if (!el) return;
+            el.textContent = message;
+            el.setAttribute('data-state', state || 'info');
+        }
+
+        function markDailyEntryFormClean(record) {
+            dailyEntryLoadedSnapshot = dailyEntryFormSnapshot();
+            dailyEntryLoadedContext = {
+                date: (document.getElementById('dailyEntryDate') || {}).value || '',
+                machineId: (document.getElementById('dailyEntryMachineId') || {}).value || '',
+                shift: (document.getElementById('dailyEntryShift') || {}).value || ''
+            };
+            if (!record) {
+                setDailyEntrySaveStatus('Nouveau poste — aucune donnée enregistrée.', 'info');
+                return;
+            }
+            var d = record.data || {};
+            var stamp = d.entrySavedAt || record.lastModifiedAt || record.enteredAt || record.createdAt;
+            var when = stamp ? ' · ' + formatDateTimeAudit(stamp) : '';
+            setDailyEntrySaveStatus(d.entryStage === 'draft'
+                ? 'Brouillon pré-enregistré' + when + ' — vous pouvez continuer et compléter ce poste.'
+                : 'Saisie terminée' + when + ' — prête pour la validation du superviseur.', 'saved');
+        }
+
+        function dailyEntryFormIsDirty() {
+            return !!dailyEntryLoadedContext && dailyEntryFormSnapshot() !== dailyEntryLoadedSnapshot;
+        }
+
+        function confirmDailyEntryContextChange() {
+            if (!dailyEntryLoadedContext) return true;
+            var old = dailyEntryLoadedContext;
+            var changed = old.date !== ((document.getElementById('dailyEntryDate') || {}).value || '') ||
+                old.machineId !== ((document.getElementById('dailyEntryMachineId') || {}).value || '') ||
+                old.shift !== ((document.getElementById('dailyEntryShift') || {}).value || '');
+            if (!changed) return true;
+            if (!dailyEntrySaveInFlight && (!dailyEntryFormIsDirty() || confirm('Ce poste comporte des modifications non enregistrées. Les abandonner pour changer de poste ? Pour les conserver, annulez puis cliquez sur « Pré-enregistrer ».'))) return true;
+            document.getElementById('dailyEntryDate').value = old.date;
+            document.getElementById('dailyEntryMachineId').value = old.machineId;
+            document.getElementById('dailyEntryShift').value = old.shift;
+            updateDailyEntryShiftConstraints();
+            updateDailyEntryModalSummary();
+            return false;
+        }
+
+        function dailyEntryNumberOrNull(id) {
+            var el = document.getElementById(id);
+            if (!el || el.value == null || String(el.value).trim() === '') return null;
+            var n = Number(el.value);
+            return Number.isFinite(n) ? n : null;
+        }
+
+        function dailyEntryText(id) {
+            var el = document.getElementById(id);
+            return el && el.value != null ? String(el.value).trim() : '';
+        }
+
+        function dailyEntryChecked(id) {
+            return !!(document.getElementById(id) || {}).checked;
+        }
+
+        async function saveDailyEntry(event) {
+            if (event && event.preventDefault) event.preventDefault();
+            return persistDailyEntry({ draft: false });
+        }
+
+        async function saveDailyEntryDraft(options) {
+            options = options || {};
+            return persistDailyEntry({ draft: true, keepOpen: options.keepOpen !== false });
+        }
+
+        async function persistDailyEntry(options) {
+            options = options || {};
+            var isDraft = !!options.draft;
+            if (dailyEntrySaveInFlight) return null;
             clearDailyEntryError();
             if (!canEnterDailyData()) {
                 showDailyEntryError('Droits insuffisants : la saisie des données est réservée aux ingénieurs.');
-                return;
+                return null;
             }
-
-            var date = document.getElementById('dailyEntryDate').value;
-            var machineIdRaw = document.getElementById('dailyEntryMachineId').value;
-            var location = document.getElementById('dailyEntryLocation').value.trim();
-            var drillingType = document.getElementById('dailyEntryDrillingType').value;
-            var materialType = (document.getElementById('dailyEntryMaterialType') && document.getElementById('dailyEntryMaterialType').value) || '';
-            var bitType = document.getElementById('dailyEntryBitType').value;
-            var meters = parseFloat(document.getElementById('dailyEntryMeters').value) || 0;
-            var hours = parseFloat(document.getElementById('dailyEntryHours').value) || 0;
-            var fuelAdded = parseFloat(document.getElementById('dailyEntryFuelAdded').value) || 0;
-            var counterStartRaw = document.getElementById('dailyEntryCounterStart');
-            var counterEndRaw = document.getElementById('dailyEntryCounterEnd');
-            var counterStart = counterStartRaw && counterStartRaw.value !== '' ? parseFloat(counterStartRaw.value) : null;
-            var counterEnd = counterEndRaw && counterEndRaw.value !== '' ? parseFloat(counterEndRaw.value) : null;
-            if (counterStart != null && isNaN(counterStart)) counterStart = null;
-            if (counterEnd != null && isNaN(counterEnd)) counterEnd = null;
-            var hammerStartRaw = document.getElementById('dailyEntryHammerStart');
-            var hammerEndRaw = document.getElementById('dailyEntryHammerEnd');
-            var hammerStart = hammerStartRaw && hammerStartRaw.value !== '' ? parseFloat(hammerStartRaw.value) : null;
-            var hammerEnd = hammerEndRaw && hammerEndRaw.value !== '' ? parseFloat(hammerEndRaw.value) : null;
-            if (hammerStart != null && isNaN(hammerStart)) hammerStart = null;
-            if (hammerEnd != null && isNaN(hammerEnd)) hammerEnd = null;
-            var hoursCtStartRaw = document.getElementById('dailyEntryHoursCounterStart');
-            var hoursCtEndRaw = document.getElementById('dailyEntryHoursCounterEnd');
-            var hoursCounterStart = hoursCtStartRaw && hoursCtStartRaw.value !== '' ? parseFloat(hoursCtStartRaw.value) : null;
-            var hoursCounterEnd = hoursCtEndRaw && hoursCtEndRaw.value !== '' ? parseFloat(hoursCtEndRaw.value) : null;
-            if (hoursCounterStart != null && isNaN(hoursCounterStart)) hoursCounterStart = null;
-            if (hoursCounterEnd != null && isNaN(hoursCounterEnd)) hoursCounterEnd = null;
-            var hammerCounterDelta = computeDailyEntryCounterDelta(hammerStart, hammerEnd);
-            var hoursCounterDelta = computeDailyEntryCounterDelta(hoursCounterStart, hoursCounterEnd);
-            var fuelPrice = parseFloat(document.getElementById('dailyEntryFuelPrice').value) || 0;
-            var fuelPriceCurrencyDaily = normalizeFuelPriceCurrency((document.getElementById('dailyEntryFuelPriceCurrency') || {}).value || 'USD');
-            var bitChanged = document.getElementById('dailyEntryBitChanged').checked;
-            var rodChanged = document.getElementById('dailyEntryRodChanged').checked;
-            var oilChanged = document.getElementById('dailyEntryOilChanged').checked;
-            var filterChanged = document.getElementById('dailyEntryFilterChanged').checked;
-            var changesDetails = document.getElementById('dailyEntryChangesDetails').value.trim();
-            var notes = document.getElementById('dailyEntryNotes').value.trim();
-            var holesWorked = collectDailyEntryHoles();
-            
+            var saveTenantKey = getReportTenantKey();
+            var date = dailyEntryText('dailyEntryDate');
+            var machineIdRaw = dailyEntryText('dailyEntryMachineId');
+            if (!date || !machineIdRaw) {
+                showDailyEntryError('Choisissez une date et une machine pour pré-enregistrer ce poste.');
+                return null;
+            }
             var drill = findDrillByMachineId(machineIdRaw);
             if (!drill) {
-                showDailyEntryError('Machine introuvable');
-                return;
+                showDailyEntryError('Machine introuvable.');
+                return null;
             }
             var machineId = drill.id;
-            var shiftForSave = (document.getElementById('dailyEntryShift') && document.getElementById('dailyEntryShift').value) || '';
-            var existingRec = dailyDataRecords.find(function(r) {
-                return drillIdsMatch(r.machineId, machineId) && r.date === date && dailyRecordShiftKey(r) === String(shiftForSave || '');
+            var shift = dailyEntryText('dailyEntryShift');
+            var existingRec = (dailyDataRecords || []).find(function(r) {
+                return drillIdsMatch(r.machineId, machineId) && r.date === date && dailyRecordShiftKey(r) === shift;
             });
             if (existingRec && isDailyDataRecordReadOnlyForCurrentUser(existingRec)) {
                 showDailyEntryError('Cette saisie est verrouillée. Un poste soumis ou approuvé doit d’abord être rejeté ou rouvert par la supervision.');
-                return;
+                return null;
             }
-            var stoppagesForBalance = collectDailyEntryStoppages();
-            var downtimeForBalance = stoppagesForBalance.reduce(function(a, s) { return a + (parseFloat(s.hours) || 0); }, 0);
-            var nominalShiftHours = getShiftNominalHours(shiftForSave);
-            var sumHoursAndDowntime = downtimeForBalance + hours;
-            var shiftBalanceTol = 0.02;
-            if (Math.abs(sumHoursAndDowntime - nominalShiftHours) > shiftBalanceTol) {
-                showDailyEntryError('Durée du shift : ' + nominalShiftHours + ' h (' + getShiftLabelForReport(shiftForSave) + '). La somme des temps d’arrêt (' +
-                    formatStoppageHoursExactDisplay(downtimeForBalance) + ' h) et des heures machine (' +
-                    formatStoppageHoursExactDisplay(hours) + ' h) doit être égale à ' + nominalShiftHours + ' h. Actuellement : ' +
-                    formatStoppageHoursExactDisplay(sumHoursAndDowntime) + ' h. Ajustez les arrêts ou les heures machine avant d’enregistrer.');
-                return;
-            }
-            var fuelInitialFillOnly = !!(document.getElementById('dailyEntryFuelInitialFill') && document.getElementById('dailyEntryFuelInitialFill').checked);
-            var fuelConsumptionDerived = computeShiftFuelLitersStored(counterStart, counterEnd, fuelAdded, fuelInitialFillOnly);
-            var fuelConsumptionEffective = fuelConsumptionDerived;
-            
-            // Mettre à jour la profondeur affichée — à l’édition, ne pas ré-ajouter tout le métrage de la ligne
-            if (existingRec && existingRec.data) {
-                var prevDepth = parseFloat(existingRec.data.depth);
-                if (isNaN(prevDepth)) prevDepth = (drill.telemetry && drill.telemetry.depth) || 0;
-                var oldMeters = parseFloat(existingRec.data.metersDrilled);
-                if (isNaN(oldMeters)) oldMeters = 0;
-                drill.telemetry.depth = Math.max(0, prevDepth - oldMeters + meters);
-            } else if (meters > 0) {
-                drill.telemetry.depth = (drill.telemetry.depth || 0) + meters;
-            }
-            
-            // Carburant / prix : à l’édition, ne pas ré-appliquer conso. et chargements sur l’état déjà synchronisé
-            if (!existingRec) {
-                if (counterEnd != null) {
-                    drill.fuel.level = counterEnd;
-                } else {
-                    if (fuelConsumptionEffective > 0) {
-                        drill.fuel.level = Math.max(0, drill.fuel.level - fuelConsumptionEffective);
-                    }
-                    if (fuelAdded > 0) {
-                        drill.fuel.level = Math.min(drill.fuel.capacity, drill.fuel.level + fuelAdded);
-                    }
-                }
-                if (fuelPrice > 0) {
-                    drill.fuel.price = fuelPrice;
-                    drill.fuel.priceCurrency = fuelPriceCurrencyDaily;
-                }
-                if (hours > 0 && fuelConsumptionEffective > 0) {
-                    drill.fuel.consumption = fuelConsumptionEffective / hours;
-                }
-            }
-            
-            // Préparer les détails des changements
-            var changes = [];
-            if (bitChanged) changes.push('Changement de bit');
-            if (rodChanged) changes.push('Changement de tige');
-            if (oilChanged) changes.push('Changement d\'huile hydraulique');
-            if (filterChanged) changes.push('Changement de filtre(s)');
-            
-            var changesText = changes.length > 0 ? changes.join(', ') : '';
-            if (changesDetails) {
-                changesText += (changesText ? ' - ' : '') + changesDetails;
-            }
-            
-            // Créer ou mettre à jour l'enregistrement journalier (par date, machine, shift)
-            var shift = shiftForSave;
+            // Un aperçu ou une sauvegarde ne doit pas retirer un poste terminé des KPI.
+            if (existingRec && !isDailyRecordIncompleteDraft(existingRec)) isDraft = false;
+            var form = document.getElementById('dailyEntryForm');
+            if (!isDraft && form && form.reportValidity && !form.reportValidity()) return null;
+            var meters = dailyEntryNumberOrNull('dailyEntryMeters');
+            var hours = dailyEntryNumberOrNull('dailyEntryHours');
+            var fuelAdded = dailyEntryNumberOrNull('dailyEntryFuelAdded');
+            var counterStart = dailyEntryNumberOrNull('dailyEntryCounterStart');
+            var counterEnd = dailyEntryNumberOrNull('dailyEntryCounterEnd');
+            var hammerStart = dailyEntryNumberOrNull('dailyEntryHammerStart');
+            var hammerEnd = dailyEntryNumberOrNull('dailyEntryHammerEnd');
+            var hoursCounterStart = dailyEntryNumberOrNull('dailyEntryHoursCounterStart');
+            var hoursCounterEnd = dailyEntryNumberOrNull('dailyEntryHoursCounterEnd');
+            var fuelPrice = dailyEntryNumberOrNull('dailyEntryFuelPrice');
+            var fuelPriceCurrency = normalizeFuelPriceCurrency(dailyEntryText('dailyEntryFuelPriceCurrency') || 'USD');
+            var holesWorked = collectDailyEntryHoles();
             var stoppages = collectDailyEntryStoppages();
-            var downtimeHoursTotal = stoppages.reduce(function(a, s) { return a + (parseFloat(s.hours) || 0); }, 0);
-            var kpi = computeShiftAvailabilityKpis(shift, downtimeHoursTotal, hours);
-            var dailyData = {
-                depth: drill.telemetry.depth,
-                fuelLevel: counterEnd != null ? counterEnd : drill.fuel.level,
-                fuelConsumption: fuelConsumptionEffective,
-                fuelConsumptionDerived: fuelConsumptionDerived,
-                fuelConsumptionEffective: fuelConsumptionEffective,
-                fuelInitialFillOnly: fuelInitialFillOnly,
-                counterStart: counterStart,
-                counterEnd: counterEnd,
-                hammerCounterStart: hammerStart,
-                hammerCounterEnd: hammerEnd,
-                hammerCounterDelta: hammerCounterDelta,
-                hoursCounterStart: hoursCounterStart,
-                hoursCounterEnd: hoursCounterEnd,
-                hoursCounterDelta: hoursCounterDelta,
-                fuelTankReading: counterEnd,
-                fuelAdded: fuelAdded,
-                fuelPrice: fuelPrice,
-                fuelPriceCurrency: fuelPriceCurrencyDaily,
-                oilLevel: drill.consumables ? drill.consumables.oil : 0,
-                filters: drill.consumables ? drill.consumables.filters : 0,
-                hours: hours,
-                metersDrilled: meters,
-                holesWorked: holesWorked,
-                location: location,
-                drillingType: drillingType,
-                materialType: materialType || null,
-                bitType: bitType,
-                bitChanged: bitChanged,
-                rodChanged: rodChanged,
-                oilChanged: oilChanged,
-                filterChanged: filterChanged,
-                changesDetails: changesDetails,
-                shift: shift,
-                stoppages: stoppages,
-                downtimeHoursTotal: downtimeHoursTotal,
-                shiftNominalHours: kpi ? kpi.shiftNominalHours : null,
-                availableHours: kpi ? kpi.availableHours : null,
-                availabilityPct: kpi ? kpi.availabilityPct : null,
-                useOfAvailabilityPct: kpi ? kpi.useOfAvailabilityPct : null,
-                effectiveAvailabilityPct: kpi ? kpi.effectiveAvailabilityPct : null
+            var downtimeHoursTotal = stoppages.reduce(function(total, stop) { return total + (Number(stop.hours) || 0); }, 0);
+            var hasIncompleteStops = stoppages.some(function(stop) { return stop.hours == null || !Number.isFinite(Number(stop.hours)) || Number(stop.hours) < 0; });
+            var location = dailyEntryText('dailyEntryLocation');
+            var drillingType = dailyEntryText('dailyEntryDrillingType');
+            var materialType = dailyEntryText('dailyEntryMaterialType');
+            var bitType = dailyEntryText('dailyEntryBitType');
+            if (!isDraft) {
+                if (!location || !drillingType || !materialType || !bitType || meters == null || hours == null) {
+                    showDailyEntryError('Complétez le lieu, le type de forage, la roche, le bit, le métrage et les heures machine avant de terminer la saisie.');
+                    return null;
+                }
+                if (hasIncompleteStops) {
+                    showDailyEntryError('Un arrêt est encore incomplet. Indiquez sa durée ou ses heures de début et de fin, ou pré-enregistrez le poste pour le compléter plus tard.');
+                    return null;
+                }
+                if (holesWorked.some(function(hole) { return !hole.blockId || !hole.holeId || hole.meters == null; })) {
+                    showDailyEntryError('Complétez les trous travaillés (trou et métrage), ou retirez les lignes inutiles avant de terminer.');
+                    return null;
+                }
+                var nominal = getShiftNominalHours(shift);
+                if (Math.abs(downtimeHoursTotal + hours - nominal) > .02) {
+                    showDailyEntryError('Pour terminer ce poste de ' + nominal + ' h, les heures machine (' + formatStoppageHoursExactDisplay(hours) + ' h) et les arrêts (' + formatStoppageHoursExactDisplay(downtimeHoursTotal) + ' h) doivent totaliser ' + nominal + ' h. Vous pouvez pré-enregistrer les données actuelles puis les compléter.');
+                    return null;
+                }
+            }
+            var fuelInitialFillOnly = dailyEntryChecked('dailyEntryFuelInitialFill');
+            var hasFuelData = fuelAdded != null || (counterStart != null && counterEnd != null);
+            var fuelConsumption = hasFuelData ? computeShiftFuelLitersStored(counterStart, counterEnd, fuelAdded, fuelInitialFillOnly) : null;
+            var wasComplete = !!(existingRec && !isDailyRecordIncompleteDraft(existingRec));
+            var existingData = existingRec ? _rpData(existingRec) : {};
+            var baseDepth = existingData.entryBaseDepth != null ? Number(existingData.entryBaseDepth) : null;
+            if (baseDepth == null || !Number.isFinite(baseDepth)) {
+                baseDepth = wasComplete && existingData.depth != null
+                    ? Number(existingData.depth) - (Number(existingData.metersDrilled) || 0)
+                    : Number((drill.telemetry || {}).depth) || 0;
+            }
+            baseDepth = Math.max(0, baseDepth);
+            var completedMachineRecords = (dailyDataRecords || []).filter(function(r) {
+                return drillIdsMatch(r.machineId, machineId) && !isDailyRecordIncompleteDraft(r);
+            });
+            var completedMeters = completedMachineRecords.reduce(function(total, r) {
+                return total + (Number(_rpData(r).metersDrilled) || 0);
+            }, 0);
+            var anchoredRecord = (dailyDataRecords || []).find(function(r) {
+                var data = _rpData(r);
+                return drillIdsMatch(r.machineId, machineId) && data.entryDepthOffset != null && Number.isFinite(Number(data.entryDepthOffset));
+            });
+            var depthOffset = anchoredRecord ? Number(_rpData(anchoredRecord).entryDepthOffset)
+                : (Number((drill.telemetry || {}).depth) || 0) - completedMeters;
+            var depth = null;
+            if (!isDraft) {
+                baseDepth = depthOffset + completedMeters - (wasComplete ? Number(existingData.metersDrilled) || 0 : 0);
+                depth = Math.max(0, baseDepth + meters);
+            }
+            var kpi = !hasIncompleteStops && hours != null ? computeShiftAvailabilityKpis(shift, downtimeHoursTotal, hours) : null;
+            var now = new Date().toISOString();
+            var record = existingRec ? JSON.parse(JSON.stringify(existingRec)) : {
+                date: date, machineId: machineId, shift: shift, data: {},
+                enteredByUsername: getDailyDataActorUsername(), enteredByName: getDailyDataActorDisplayName(), enteredAt: now,
+                workflowStatus: 'draft', workflowVersion: 0
             };
-            
-            var record = existingRec;
-            
-            if (record) {
-                record.machineId = machineId;
-                record.shift = shift;
-                Object.assign(record.data, dailyData);
-                record.notes = notes || '';
-                if (!(record.enteredByUsername || '').trim()) {
-                    record.enteredByUsername = getDailyDataActorUsername();
-                    record.enteredByName = getDailyDataActorDisplayName();
-                    record.enteredAt = new Date().toISOString();
+            record.date = date;
+            record.machineId = machineId;
+            record.shift = shift;
+            record.notes = dailyEntryText('dailyEntryNotes');
+            record.data = Object.assign({}, record.data || {}, {
+                entryStage: isDraft ? 'draft' : 'complete', entrySavedAt: now,
+                entryBaseDepth: baseDepth,
+                entryDepthOffset: depthOffset,
+                depth: depth, fuelLevel: counterEnd, fuelTankReading: counterEnd,
+                fuelConsumption: fuelConsumption, fuelConsumptionDerived: fuelConsumption, fuelConsumptionEffective: fuelConsumption,
+                fuelInitialFillOnly: fuelInitialFillOnly, counterStart: counterStart, counterEnd: counterEnd,
+                hammerCounterStart: hammerStart, hammerCounterEnd: hammerEnd,
+                hammerCounterDelta: computeDailyEntryCounterDelta(hammerStart, hammerEnd),
+                hoursCounterStart: hoursCounterStart, hoursCounterEnd: hoursCounterEnd,
+                hoursCounterDelta: computeDailyEntryCounterDelta(hoursCounterStart, hoursCounterEnd),
+                fuelAdded: fuelAdded, fuelPrice: fuelPrice, fuelPriceCurrency: fuelPriceCurrency,
+                oilLevel: isDraft ? null : ((drill.consumables || {}).oil == null ? null : drill.consumables.oil),
+                filters: isDraft ? null : ((drill.consumables || {}).filters == null ? null : drill.consumables.filters),
+                hours: hours, metersDrilled: meters, holesWorked: holesWorked,
+                location: location, drillingType: drillingType, materialType: materialType || null, bitType: bitType,
+                bitChanged: dailyEntryChecked('dailyEntryBitChanged'), rodChanged: dailyEntryChecked('dailyEntryRodChanged'),
+                oilChanged: dailyEntryChecked('dailyEntryOilChanged'), filterChanged: dailyEntryChecked('dailyEntryFilterChanged'),
+                changesDetails: dailyEntryText('dailyEntryChangesDetails'), shift: shift, stoppages: stoppages,
+                downtimeHoursTotal: stoppages.length ? downtimeHoursTotal : (isDraft ? null : 0),
+                shiftNominalHours: getShiftNominalHours(shift),
+                availableHours: kpi ? kpi.availableHours : null, availabilityPct: kpi ? kpi.availabilityPct : null,
+                useOfAvailabilityPct: kpi ? kpi.useOfAvailabilityPct : null, effectiveAvailabilityPct: kpi ? kpi.effectiveAvailabilityPct : null
+            });
+            if (existingRec) touchDailyDataLastModified(record);
+            normalizeDailyRecordShiftFields(record);
+            dailyEntrySaveInFlight = true;
+            setDailyEntrySaveStatus('Enregistrement en cours…', 'saving');
+            setDailyEntryFormInputsDisabled(true);
+            ['dailyEntryDraftButton', 'dailyEntryCompleteButton', 'dailyEntryMidshiftButton'].forEach(function(id) {
+                var button = document.getElementById(id);
+                if (button) button.disabled = true;
+            });
+            try {
+                var saved;
+                if (useAPI && window.API && window.API.DailyData && window.API.DailyData.save) {
+                    saved = await window.API.DailyData.save(record);
+                    if (!saved || saved.id == null) throw new Error('Le serveur n’a pas confirmé cet enregistrement.');
+                    if (typeof saved.data === 'string') saved.data = JSON.parse(saved.data);
+                    saved = Object.assign({}, record, saved, { data: Object.assign({}, record.data, saved.data || {}) });
+                } else if (typeof allowLocalCache !== 'undefined' && allowLocalCache) {
+                    record.id = record.id || Math.max.apply(null, [0].concat((dailyDataRecords || []).map(function(r) { return Number(r.id) || 0; }))) + 1;
+                    var localRecords = (dailyDataRecords || []).filter(function(r) { return r !== existingRec; }).concat([record]);
+                    localStorage.setItem('forage_dailyDataRecords', JSON.stringify(localRecords));
+                    saved = record;
                 } else {
-                    touchDailyDataLastModified(record);
+                    throw new Error('Connexion au serveur requise. Vos données restent dans le formulaire ; réessayez après reconnexion.');
                 }
-                normalizeDailyRecordShiftFields(record);
-            } else {
-                // Créer un nouvel enregistrement
-                var newId = dailyDataRecords.length > 0 ? 
-                    Math.max.apply(null, dailyDataRecords.map(function(r) { return r.id; })) + 1 : 1;
-                
-                var fullNotes = notes || '';
-                if (changesText) {
-                    fullNotes = (fullNotes ? fullNotes + '\n' : '') + 'Changements: ' + changesText;
+                var index = existingRec ? dailyDataRecords.indexOf(existingRec) : -1;
+                var afterSaveContext = getCurrentDailyEntryRecordMeta();
+                if (saveTenantKey !== getReportTenantKey() || afterSaveContext.date !== date ||
+                    !drillIdsMatch(afterSaveContext.mid, machineId) || String(afterSaveContext.shift || '') !== shift) {
+                    return null;
                 }
-                
-                var pushed = {
-                    id: newId,
-                    date: date,
-                    machineId: machineId,
-                    shift: shift,
-                    data: dailyData,
-                    notes: fullNotes,
-                    enteredByUsername: getDailyDataActorUsername(),
-                    enteredByName: getDailyDataActorDisplayName(),
-                    enteredAt: new Date().toISOString(),
-                    workflowStatus: 'draft',
-                    workflowVersion: 0
-                };
-                normalizeDailyRecordShiftFields(pushed);
-                dailyDataRecords.push(pushed);
+                if (index >= 0) dailyDataRecords[index] = saved;
+                else dailyDataRecords.push(saved);
+                if (typeof allowLocalCache !== 'undefined' && allowLocalCache) {
+                    try { localStorage.setItem('forage_dailyDataRecords', JSON.stringify(dailyDataRecords)); } catch (_) {}
+                }
+                markDailyEntryFormClean(saved);
+                applyDailyEntryAuditAndLockUi(saved);
+                updateDailyEntryDeleteButtonVisibility();
+                if (!isDraft) {
+                    try {
+                        syncAllDrillsTelemetryFromDailyRecords();
+                        applyDailyHoleProgress(date, machineId, holesWorked);
+                        renderResources(drill);
+                        renderTelemetry(drill);
+                        renderDashboard();
+                    } catch (renderError) {
+                        console.warn('Poste enregistré ; actualisation de l’affichage à relancer :', renderError);
+                        setDailyEntrySaveStatus('Saisie terminée et enregistrée sur le serveur. Actualisez la page pour recharger les indicateurs.', 'saved');
+                    }
+                }
+                return saved;
+            } catch (e) {
+                setDailyEntrySaveStatus('Enregistrement non confirmé — les modifications restent dans le formulaire.', 'error');
+                showDailyEntryError('Enregistrement impossible : ' + ((e && e.message) ? e.message : String(e)));
+                return null;
+            } finally {
+                dailyEntrySaveInFlight = false;
+                var currentMeta = getCurrentDailyEntryRecordMeta();
+                setDailyEntryFormInputsDisabled(isDailyDataRecordReadOnlyForCurrentUser(currentMeta.record));
             }
-            
-            syncAllDrillsTelemetryFromDailyRecords();
-            applyDailyHoleProgress(date, machineId, holesWorked);
-            saveData({ throwOnApiError: true }).catch(alertDailySaveApiError);
-            renderResources(drill);
-            renderTelemetry(drill);
-            renderDashboard();
-            closeDailyEntryModal();
-            
-            var summary = 'Données journalières enregistrées:\n';
-            summary += '- Lieu: ' + location + '\n';
-            if (materialType) summary += '- Type roche: ' + getMaterialTypeLabel(materialType) + '\n';
-            summary += '- Métrage: ' + meters.toFixed(1) + ' m\n';
-            summary += '- Heures: ' + hours.toFixed(1) + ' h\n';
-            if (fuelInitialFillOnly && fuelAdded > 0) {
-                summary += '- Carburant : plein initial ' + fuelAdded.toFixed(1) + ' L (conso. shift = 0)\n';
-            } else if (fuelConsumptionEffective > 0) {
-                var fuelSrc = 'conso. déduite';
-                if (fuelAdded > 0 && !fuelInitialFillOnly) fuelSrc += ' (= litres chargés)';
-                else if (fuelAdded <= 0 && counterStart != null && counterEnd != null && fuelConsumptionDerived > 0) fuelSrc += ' (Δ réservoir début→fin)';
-                summary += '- Carburant — ' + fuelSrc + ': ' + fuelConsumptionEffective.toFixed(1) + ' L\n';
-            }
-            if (fuelAdded > 0 && !fuelInitialFillOnly) summary += '- Litres chargés (saisie): ' + fuelAdded.toFixed(1) + ' L\n';
-            if (hammerCounterDelta != null) summary += '- Δ Compteur marteau: ' + hammerCounterDelta.toFixed(2) + '\n';
-            if (hoursCounterDelta != null) summary += '- Δ Horamètre: ' + hoursCounterDelta.toFixed(2) + ' h\n';
-            if (kpi) {
-                summary += '- Disponibilité: ' + kpi.availabilityPct.toFixed(1) + ' % | Util. dispo: ' + kpi.useOfAvailabilityPct.toFixed(1) + ' % | Dispo effective: ' + kpi.effectiveAvailabilityPct.toFixed(1) + ' %\n';
-            }
-            if (changes.length > 0) summary += '- Changements: ' + changes.join(', ') + '\n';
-            if (downtimeHoursTotal > 0) summary += '- Temps d\'arrêt (total): ' + downtimeHoursTotal.toFixed(1) + ' h\n';
-            
-            alert(summary);
         }
 
         // ============================================
@@ -23921,10 +24216,13 @@
             });
         }
         
-        function getDailyDataForSite() {
-            if (!currentSiteId) return dailyDataRecords || [];
+        function getDailyDataForSite(includeDrafts) {
+            var records = (dailyDataRecords || []).filter(function(record) {
+                return includeDrafts === true || !isDailyRecordIncompleteDraft(record);
+            });
+            if (!currentSiteId) return records;
             var siteDrills = getDrillsForSite();
-            return (dailyDataRecords || []).filter(function(r) {
+            return records.filter(function(r) {
                 return siteDrills.some(function(d) { return drillIdsMatch(r.machineId, d.id); });
             });
         }
@@ -24669,6 +24967,7 @@
         window.showDailyEntryModalFromResources = showDailyEntryModalFromResources;
         window.closeDailyEntryModal = closeDailyEntryModal;
         window.saveDailyEntry = saveDailyEntry;
+        window.saveDailyEntryDraft = saveDailyEntryDraft;
         window.openDailyDataPurgeModal = openDailyDataPurgeModal;
         window.closeDailyDataPurgeModal = closeDailyDataPurgeModal;
         window.confirmDailyDataPurge = confirmDailyDataPurge;
@@ -24677,6 +24976,8 @@
         window.applyHoursCounterDeltaToMachineHours = applyHoursCounterDeltaToMachineHours;
         window.renderReports = renderReports;
         window.generateDailyReport = generateDailyReport;
+        window.generateMidshiftReport = generateMidshiftReport;
+        window.generateMidshiftReportFromEntry = generateMidshiftReportFromEntry;
         window.generateWeeklyReport = generateWeeklyReport;
         window.calculateCumulativeData = calculateCumulativeData;
         window.showAddClientModal = showAddClientModal;

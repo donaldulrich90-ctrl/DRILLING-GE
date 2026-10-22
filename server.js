@@ -364,6 +364,65 @@ function normalizeDailyWorkflowStatus(value) {
     return ['draft', 'submitted', 'approved', 'rejected'].includes(status) ? status : 'draft';
 }
 
+function dailyDataHasValue(value) {
+    return value != null && !(typeof value === 'string' && value.trim() === '');
+}
+
+function dailyDataValidNonnegativeNumber(value) {
+    return (typeof value === 'number' || typeof value === 'string') &&
+        dailyDataHasValue(value) && Number.isFinite(Number(value)) && Number(value) >= 0;
+}
+
+function dailyStopTimeMinutes(value) {
+    if (typeof value !== 'string' || !/^\d{1,2}:\d{2}$/.test(value)) return null;
+    const [hours, minutes] = value.split(':').map(Number);
+    return hours < 24 && minutes < 60 ? hours * 60 + minutes : null;
+}
+
+// Un brouillon conserve les champs vides : un zéro saisi reste distinct d'une donnée absente.
+// Les contrôles de cohérence du poste entier s'appliquent seulement à sa clôture.
+function validateDailyDataValues(data, complete = false) {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return 'Les données du poste doivent être un objet.';
+    if (data.entryStage != null && !['draft', 'complete'].includes(data.entryStage)) return 'État de saisie invalide.';
+    if (data.shift != null && !['', 'day', 'night'].includes(data.shift)) return 'Shift invalide.';
+    const numericFields = ['metersDrilled', 'hours', 'redrillMeters', 'flushingMeters', 'fuelAdded', 'fuelPrice',
+        'counterStart', 'counterEnd', 'hammerCounterStart', 'hammerCounterEnd', 'hoursCounterStart', 'hoursCounterEnd'];
+    for (const field of numericFields) {
+        if (dailyDataHasValue(data[field]) && !dailyDataValidNonnegativeNumber(data[field])) {
+            return `La valeur du champ ${field} doit être un nombre positif ou nul.`;
+        }
+    }
+    for (const field of ['holesWorked', 'stoppages']) {
+        if (data[field] != null && !Array.isArray(data[field])) return `Le champ ${field} doit être une liste.`;
+    }
+    for (const hole of data.holesWorked || []) {
+        if (!hole || typeof hole !== 'object' || Array.isArray(hole)) return 'Une ligne de trou est invalide.';
+        for (const field of ['meters', 'finalDepth']) {
+            if (dailyDataHasValue(hole[field]) && !dailyDataValidNonnegativeNumber(hole[field])) return 'Un métrage ou une profondeur de trou est invalide.';
+        }
+    }
+    for (const stop of data.stoppages || []) {
+        if (!stop || typeof stop !== 'object' || Array.isArray(stop)) return 'Une ligne d’arrêt est invalide.';
+        const hasHours = dailyDataHasValue(stop.hours);
+        if (hasHours && !dailyDataValidNonnegativeNumber(stop.hours)) return 'Une durée d’arrêt est invalide.';
+        const hasStart = dailyDataHasValue(stop.timeStart);
+        const hasEnd = dailyDataHasValue(stop.timeEnd);
+        const start = hasStart ? dailyStopTimeMinutes(stop.timeStart) : null;
+        const end = hasEnd ? dailyStopTimeMinutes(stop.timeEnd) : null;
+        if ((hasStart && start == null) || (hasEnd && end == null)) return 'Un horaire d’arrêt est invalide (HH:MM attendu).';
+        if (hasStart && hasEnd && hasHours) {
+            const elapsedHours = (end - start + (end < start ? 1440 : 0)) / 60;
+            if (Math.abs(Number(stop.hours) - elapsedHours) > 0.000001) return 'La durée d’arrêt doit correspondre aux horaires de début et de fin.';
+        }
+        if (complete) {
+            if (!String(stop.reason || '').trim()) return 'Renseignez le motif de chaque arrêt avant de terminer le poste.';
+            if (!hasHours) return 'Complétez la durée de chaque arrêt avant de terminer le poste.';
+            if (hasStart !== hasEnd) return 'Complétez les horaires de l’arrêt en cours ou utilisez une durée sans horaires.';
+        }
+    }
+    return null;
+}
+
 function validateDailyDataForSubmission(row) {
     let data;
     try {
@@ -371,8 +430,13 @@ function validateDailyDataForSubmission(row) {
     } catch (_) {
         return 'Les données du poste ne sont pas lisibles.';
     }
-    const meters = Number(data.metersDrilled || 0);
-    const machineHours = Number(data.hours || 0);
+    const valuesError = validateDailyDataValues(data, true);
+    if (valuesError) return valuesError;
+    if (data.entryStage === 'draft') return 'Ce poste est préenregistré. Complétez-le et terminez la saisie avant de le soumettre.';
+    if (!dailyDataHasValue(data.metersDrilled)) return 'Le métrage foré doit être renseigné avant soumission (0 si aucun mètre).';
+    if (!dailyDataHasValue(data.hours)) return 'Les heures machine doivent être renseignées avant soumission (0 si la machine n’a pas fonctionné).';
+    const meters = Number(data.metersDrilled);
+    const machineHours = Number(data.hours);
     if (!Number.isFinite(meters) || meters < 0) return 'Le métrage foré est invalide.';
     if (!Number.isFinite(machineHours) || machineHours < 0) return 'Les heures machine sont invalides.';
     if (!String(data.location || '').trim()) return 'Le lieu de forage est requis avant soumission.';
@@ -388,11 +452,12 @@ function validateDailyDataForSubmission(row) {
     let holeMeters = 0;
     for (const hole of holes) {
         const holeId = String(hole && hole.holeId || '').trim();
-        if (!holeId) return 'Chaque ligne de trou doit comporter une référence.';
+        if (!holeId || !String(hole.blockId || '').trim()) return 'Chaque ligne de trou doit comporter une référence de bloc et de trou.';
         const key = `${String(hole.blockId || '').trim()}::${holeId}`.toLowerCase();
         if (seenHoles.has(key)) return `Le trou ${holeId} est présent plusieurs fois.`;
         seenHoles.add(key);
-        const worked = Number(hole.meters || 0);
+        if (!dailyDataHasValue(hole.meters)) return `Renseignez le métrage du trou ${holeId} (0 si aucun mètre).`;
+        const worked = Number(hole.meters);
         if (!Number.isFinite(worked) || worked < 0) return `Le métrage du trou ${holeId} est invalide.`;
         const finalDepth = hole.finalDepth == null || hole.finalDepth === '' ? null : Number(hole.finalDepth);
         if (finalDepth != null && (!Number.isFinite(finalDepth) || finalDepth < 0)) {
@@ -407,7 +472,7 @@ function validateDailyDataForSubmission(row) {
     const stoppages = Array.isArray(data.stoppages) ? data.stoppages : [];
     let downtime = 0;
     for (const stop of stoppages) {
-        const hours = Number(stop && stop.hours || 0);
+        const hours = Number(stop.hours);
         if (!Number.isFinite(hours) || hours < 0) return 'Une durée d’arrêt est invalide.';
         downtime += hours;
     }
@@ -2369,10 +2434,23 @@ app.post('/api/daily-data', (req, res) => {
     if (!dailyDataCanEnterFromAuth(req.auth)) {
         return res.status(403).json({ error: 'Saisie réservée aux ingénieurs (et à la direction). Le tableau de bord reste consultable par tous.' });
     }
+    const parsedDate = typeof record.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(record.date)
+        ? new Date(record.date + 'T00:00:00Z') : null;
+    if (!parsedDate || !Number.isFinite(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== record.date) {
+        return res.status(400).json({ error: 'Date de saisie invalide (AAAA-MM-JJ attendu).' });
+    }
+    const valuesError = validateDailyDataValues(record.data == null ? {} : record.data);
+    if (valuesError) return res.status(400).json({ error: valuesError });
+    // Les anciens clients peuvent toujours enregistrer un poste sans marqueur. Le nouveau
+    // bouton « Terminer » annonce explicitement une saisie complète, à contrôler dès l'enregistrement.
+    if (record.data && record.data.entryStage === 'complete') {
+        const completionError = validateDailyDataForSubmission({ ...record, shift });
+        if (completionError) return res.status(400).json({ error: completionError });
+    }
     assertDrillBelongsToTenant(db, record.machineId, entId, (aerr, ok) => {
         if (aerr) return res.status(500).json({ error: aerr.message });
         if (!ok) return res.status(403).json({ error: 'Machine invalide pour cette entreprise' });
-        getDailyDataActorFromRequest(req, (actorErr, actor) => {
+        const persistRecord = () => getDailyDataActorFromRequest(req, (actorErr, actor) => {
             if (actorErr) return res.status(500).json({ error: actorErr.message });
             const elevated = dailyDataElevatedRoleFromAuth(req.auth);
             const actorUsername = String(actor.username || '').trim();
@@ -2405,7 +2483,7 @@ app.post('/api/daily-data', (req, res) => {
                         entName = actorName || actorUsername;
                         entAt = nowIso;
                     }
-                    let upd = 'UPDATE dailyDataRecords SET data = ?, notes = ?, enteredByUsername = ?, enteredByName = ?, enteredAt = ?, lastModifiedByUsername = ?, lastModifiedByName = ?, lastModifiedAt = ?, workflowVersion = COALESCE(workflowVersion, 0) + 1 WHERE id = ?';
+                    let upd = "UPDATE dailyDataRecords SET data = ?, notes = ?, enteredByUsername = ?, enteredByName = ?, enteredAt = ?, lastModifiedByUsername = ?, lastModifiedByName = ?, lastModifiedAt = ?, workflowVersion = COALESCE(workflowVersion, 0) + 1 WHERE id = ? AND COALESCE(workflowStatus, 'draft') IN ('draft', 'rejected')";
                     const uvals = [
                         JSON.stringify(record.data || {}),
                         record.notes || '',
@@ -2423,7 +2501,7 @@ app.post('/api/daily-data', (req, res) => {
                     }
                     db.run(upd, uvals, function(updateErr) {
                         if (updateErr) return res.status(500).json({ error: updateErr.message });
-                        if (this.changes === 0) return res.status(403).json({ error: 'Mise à jour refusée' });
+                        if (this.changes === 0) return res.status(409).json({ error: 'Le statut du poste a changé. Rechargez les données.' });
                         res.json({ id: existingRow.id, message: 'Données mises à jour' });
                     });
                 } else {
@@ -2447,6 +2525,14 @@ app.post('/api/daily-data', (req, res) => {
                 }
             });
         });
+        if (record.data && record.data.entryStage === 'complete') {
+            return validateDailyHoleReferences(req, record, (referenceError, referenceMessage) => {
+                if (referenceError) return res.status(500).json({ error: referenceError.message });
+                if (referenceMessage) return res.status(400).json({ error: referenceMessage });
+                return persistRecord();
+            });
+        }
+        return persistRecord();
     });
 });
 
@@ -2500,8 +2586,9 @@ app.post('/api/daily-data/:id/submit', (req, res) => {
                     `UPDATE dailyDataRecords SET workflowStatus = 'submitted', submittedByUsername = ?, submittedAt = ?,
                      reviewedByUsername = '', reviewedByName = '', reviewedAt = NULL, reviewComment = '',
                      workflowVersion = COALESCE(workflowVersion, 0) + 1
-                     WHERE id = ? AND COALESCE(workflowStatus, 'draft') IN ('draft', 'rejected')`,
-                    [actor.username || actorFromToken, now, recordId],
+                     WHERE id = ? AND COALESCE(workflowStatus, 'draft') IN ('draft', 'rejected')
+                     AND COALESCE(workflowVersion, 0) = ?`,
+                    [actor.username || actorFromToken, now, recordId, Number(row.workflowVersion || 0)],
                     function submitRecord(updateError) {
                         if (updateError) return res.status(500).json({ error: updateError.message });
                         if (this.changes === 0) return res.status(409).json({ error: 'Le statut du poste a changé. Rechargez les données.' });
