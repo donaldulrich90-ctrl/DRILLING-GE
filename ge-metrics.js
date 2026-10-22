@@ -59,6 +59,7 @@ function registerMetrics(app) {
                 FROM dailyDataRecords d
                 JOIN drills dr ON dr.id = d.machineId
                 WHERE dr.enterpriseId = ?
+                  AND COALESCE(json_extract(d.data, '$.entryStage'), 'complete') <> 'draft'
                 GROUP BY d.date`;
             db.all(sql, [enterpriseId], (e2, rows) => {
                 const byDate = {};
@@ -141,6 +142,7 @@ function registerMetrics(app) {
             FROM dailyDataRecords d
             JOIN drills dr ON dr.id = d.machineId
             WHERE dr.enterpriseId = ? AND d.date >= ? AND d.date <= ?
+              AND COALESCE(json_extract(d.data, '$.entryStage'), 'complete') <> 'draft'
             GROUP BY d.machineId`;
 
         db.all(sqlProd, [enterpriseId, start, end], (err, prodRows) => {
@@ -163,12 +165,14 @@ function registerMetrics(app) {
                             JOIN drills dr ON dr.id = d.machineId
                             JOIN json_each(d.data, '$.stoppages') s
                             WHERE dr.enterpriseId = ? AND d.date >= ? AND d.date <= ?
+                              AND COALESCE(json_extract(d.data, '$.entryStage'), 'complete') <> 'draft'
                             GROUP BY d.machineId, reason`;
                         const sqlDispo = `
                             SELECT d.machineId AS engin,
                                    AVG(CAST(json_extract(d.data,'$.availabilityPct') AS REAL)) AS dispo
                             FROM dailyDataRecords d JOIN drills dr ON dr.id = d.machineId
                             WHERE dr.enterpriseId = ? AND d.date >= ? AND d.date <= ?
+                              AND COALESCE(json_extract(d.data, '$.entryStage'), 'complete') <> 'draft'
                             GROUP BY d.machineId`;
                         const sqlMaint = `
                             SELECT machineId AS engin, date, type, description, duration, technician
