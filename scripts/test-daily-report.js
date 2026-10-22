@@ -29,6 +29,7 @@ function declaration(kind, name, endCharacter) {
 
 const helperNames = [
     'reportCalendarDayNumber', 'getReportPlannedProduction', 'getReportTenantKey', 'ensureReportPlanLoaded',
+    'isDailyRecordIncompleteDraft', 'buildMidshiftReportDocumentHtml',
     'findDrillByMachineId', 'dailyRecordShiftKey', 'getShiftNominalHours', 'getShiftLabelForReport',
     'computeShiftAvailabilityKpis', 'computeDailyEntryCounterDelta', 'deriveFuelLitersFromDailyData',
     'getEffectiveFuelConsumptionFromData', 'classifyStoppageReasonToBucket', 'aggregateStoppageHoursByCategory',
