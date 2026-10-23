@@ -1153,8 +1153,8 @@
         /* Cases à cocher / radios plus visibles sur fond sombre */
         input[type="checkbox"], input[type="radio"] { accent-color: #F5B800; }
         /* Saisie : panneau clair isolé du thème sombre de la plateforme. */
-        body #dailyEntryModal { background: rgba(15, 23, 42, .68) !important; color: #172b4d !important; }
-        body #dailyEntryModal > div { background: #fff !important; border: 1px solid #cbd5e1 !important; border-radius: 16px; max-width: 900px; padding: 24px; }
+        body #dailyEntryModal { background: rgba(15, 23, 42, .68) !important; color: #172b4d !important; padding: 12px!important; align-items: center!important; }
+        body #dailyEntryModal > div { background: #fff !important; border: 1px solid #cbd5e1 !important; border-radius: 16px; max-width: 900px; padding: 24px; margin:0!important; max-height:calc(100dvh - 24px)!important; }
         body #dailyEntryModal h2 { color: #102a43 !important; letter-spacing: -.02em; }
         body #dailyEntryModal label,
         body #dailyEntryModal [class*="text-slate-"],
@@ -4283,7 +4283,7 @@
                         <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
                             <div>
                                 <label class="block text-slate-200 font-semibold">Trous travaillés pendant le poste</label>
-                                <p class="text-xs text-slate-400">Le total des mètres par trou doit correspondre au métrage du poste.</p>
+                                <p class="text-xs text-slate-400">Choisissez dans le plan, saisissez un identifiant ou générez-le. Le total des mètres par trou doit correspondre au métrage du poste.</p>
                             </div>
                             <button type="button" id="dailyEntryAddHoleButton" onclick="addDailyEntryHoleRow()" class="bg-blue-600 hover:bg-blue-700 px-3 py-2 rounded text-sm">+ Ajouter un trou</button>
                         </div>
@@ -17277,6 +17277,9 @@
             
             try {
             var today = getLocalDateYYYYMMDD(new Date());
+            var previousReportDay = new Date();
+            previousReportDay.setDate(previousReportDay.getDate() - 1);
+            var dailyReportDate = getLocalDateYYYYMMDD(previousReportDay);
             var currentWeek = getCurrentWeekISO();
             var drillsList = getDrillsForSite();
             
@@ -17286,8 +17289,9 @@
                 '<div class="ged-content-panel p-6 rounded-xl">' +
                 '<h4 class="text-lg font-bold mb-4">📅 Rapport Journalier</h4>' +
                 '<div class="mb-4">' +
-                '<label class="block text-slate-400 mb-2">Date</label>' +
-                '<input type="date" id="reportDailyDate" class="w-full bg-slate-800 border border-slate-600 rounded px-4 py-2 text-white" value="' + today + '">' +
+                '<label class="block text-slate-400 mb-2">Date du poste — J−1 proposé</label>' +
+                '<input type="date" id="reportDailyDate" class="w-full bg-slate-800 border border-slate-600 rounded px-4 py-2 text-white" value="' + dailyReportDate + '">' +
+                '<p class="text-xs text-slate-400 mt-2">Date modifiable. Jour + Nuit se cumulent sur la date de début du poste. Pour le mi-poste du jour, choisissez aujourd’hui.</p>' +
                 '</div>' +
                 '<button onclick="generateDailyReport()" class="w-full ged-btn-primary px-4 py-2 rounded-lg font-semibold">📄 Générer Rapport Journalier</button>' +
                 '<button type="button" onclick="generateMidshiftReport()" class="mt-3 w-full bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-lg font-semibold">Rapport de mi-poste</button>' +
@@ -18018,12 +18022,68 @@
         }
 
         // Mise en page réservée au rapport journalier : format A4 et tableaux lisibles.
+        function getReportUsedMachineCount(records) {
+            var machines = {};
+            (records || []).forEach(function(record) {
+                var data = _rpData(record);
+                if (Number(data.hours) > 0 || Number(data.metersDrilled) > 0) {
+                    var id = String(record.machineId == null ? '' : record.machineId).trim().toUpperCase();
+                    if (id) machines[id] = true;
+                }
+            });
+            return Object.keys(machines).length;
+        }
+
+        function buildDailyProductionChart(records, date, provisional) {
+            var totals = { day: null, night: null, full: null };
+            var total = null;
+            (records || []).forEach(function(record) {
+                var data = _rpData(record);
+                if (data.metersDrilled == null || data.metersDrilled === '' || !Number.isFinite(Number(data.metersDrilled))) return;
+                var shift = dailyRecordShiftKey(record) || 'full';
+                var meters = Math.max(0, Number(computeOperationalReportMetrics(data).production) || 0);
+                totals[shift] = (totals[shift] || 0) + meters;
+                total = (total || 0) + meters;
+            });
+            var goal = provisional ? null : getReportPlannedProduction(date, records).value;
+            var max = Math.max(1, totals.day || 0, totals.night || 0, totals.full || 0, total || 0, goal || 0);
+            function bar(label, value, color) {
+                var formatted = value == null ? 'Non renseigné' : value.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' m';
+                return '<div class="daily-chart-row"><span>' + label + '</span><div class="daily-chart-track">' +
+                    (value == null ? '' : '<div class="daily-chart-bar" style="width:' + (value / max * 100).toFixed(2) + '%;background:' + color + '"></div>') +
+                    '</div><strong>' + formatted + '</strong></div>';
+            }
+            var shiftBars = bar('Jour', totals.day, '#1d4ed8') + bar('Nuit', totals.night, '#0f766e');
+            if (totals.full != null) shiftBars += bar('Journée complète', totals.full, '#64748b');
+            return '<div class="daily-chart-grid" role="img" aria-label="Graphique de production en mètres nouveaux"><div class="daily-chart-panel"><h3>Production ' +
+                (provisional ? 'renseignée ' : '') + 'par poste</h3>' + shiftBars + '</div><div class="daily-chart-panel"><h3>' +
+                (provisional ? 'Total renseigné à mi-poste' : 'Réalisé et objectif de la journée') + '</h3>' +
+                bar(provisional ? 'Renseigné' : 'Réalisé', total, '#1d4ed8') +
+                (provisional ? '<p>Données partielles — aucune projection de fin de poste.</p>' : bar('Planifié', goal, '#c27803') + '<p>Objectif issu de la planification enregistrée. Aucune barre inventée si l’objectif manque.</p>') +
+                '</div></div>';
+        }
+
+        function buildDailyHoleTraceability(records) {
+            var rows = '';
+            (records || []).forEach(function(record) {
+                (_rpData(record).holesWorked || []).forEach(function(hole) {
+                    var source = hole.source === 'manual' ? 'Manuel' : hole.source === 'automatic' ? 'Automatique' : 'Plan';
+                    rows += '<tr><td>' + escapeHtmlReportCell(_rpMachineName(record)) + '<br><small>' + escapeHtmlReportCell(getShiftLabelForReport(dailyRecordShiftKey(record))) +
+                        '</small></td><td>' + _rpNa(hole.holeId) + '</td><td>' + source + '</td><td>' + _rpNa(hole.blockId) + '</td><td>' +
+                        _rpNa(hole.meters == null ? null : Number(hole.meters).toLocaleString('fr-FR') + ' m') + '</td><td>' +
+                        _rpNa(hole.finalDepth == null ? null : Number(hole.finalDepth).toLocaleString('fr-FR') + ' m') + '</td></tr>';
+                });
+            });
+            return '<h3 class="daily-subtitle">Identifiants et traçabilité des trous</h3><table class="daily-table"><thead><tr><th>Machine / poste</th><th>Identifiant du trou</th><th>Origine</th><th>Bloc du plan</th><th>Mètres forés</th><th>Profondeur finale</th></tr></thead><tbody>' +
+                (rows || '<tr><td colspan="6">Aucun trou renseigné.</td></tr>') + '</tbody></table>';
+        }
+
         var DAILY_REPORT_PRINT_CSS = [
-            '@page{size:A4 portrait;margin:12mm 12mm 14mm;}',
+            '@page{size:A4 landscape;margin:10mm 10mm 12mm;}',
             '*{box-sizing:border-box;}',
             'html{background:#e9edf2;}body{margin:0;color:#182638;font:12px/1.45 Arial,Helvetica,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact;}',
-            '.daily-sheet{width:210mm;margin:22px auto;padding:12mm;background:#fff;box-shadow:0 4px 24px #1020351a;}',
-            '.print-tools{width:210mm;margin:18px auto 0;display:flex;justify-content:flex-end;gap:8px;}',
+            '.daily-sheet{width:297mm;margin:22px auto;padding:10mm;background:#fff;box-shadow:0 4px 24px #1020351a;}',
+            '.print-tools{width:297mm;margin:18px auto 0;display:flex;justify-content:flex-end;gap:8px;}',
             '.print-tools button{border:1px solid #bac6d4;border-radius:4px;padding:9px 14px;background:#fff;color:#1a2b4b;cursor:pointer;font:600 12px Arial,sans-serif;}',
             '.print-tools button:first-child{background:#1a2b4b;color:white;border-color:#1a2b4b;}',
             '.report-logos-row{align-items:center;gap:18px;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid #d5dee8;}',
@@ -18064,10 +18124,14 @@
             '.daily-signature-title{font-size:11px;font-weight:700;color:#243e5c;margin-bottom:12px;}.daily-signature-field{font-size:10px;color:#5a6b7c;margin:8px 0;}',
             '.daily-signature-space{height:22px;}.daily-signature-line{display:inline-block;width:70%;border-bottom:1px solid #c8d3df;}',
             '.daily-approval-section{break-inside:avoid;page-break-inside:avoid;}',
+            '.daily-sheet table th,.daily-sheet table td{text-align:center!important;font-weight:700!important;vertical-align:middle!important;font-size:12px;}.daily-sheet table small{font-weight:700!important;}',
+            '.report-meta-wrap,.report-meta-cell{text-align:center!important;font-weight:700!important;}.report-meta-row{justify-content:center!important;}',
+            '.report-kpi-card{text-align:center;border-top:4px solid #1d4ed8!important;background:#f5f9ff!important;min-height:88px;}.report-kpi-label{font-size:11px!important;font-weight:700!important;color:#243e5c!important;}.report-kpi-value{font-size:25px!important;font-weight:800!important;}.report-kpi-sub{font-weight:700;}',
+            '.daily-chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0 4px;break-inside:avoid;page-break-inside:avoid;}.daily-chart-panel{padding:12px;border:1px solid #bccbda;background:#f8fafc;min-width:0;}.daily-chart-panel h3{margin:0 0 10px;color:#18324f;font-size:12px;}.daily-chart-panel p{font-size:10px;color:#526478;margin:9px 0 0;}.daily-chart-row{display:grid;grid-template-columns:105px 1fr 100px;gap:8px;align-items:center;margin:9px 0;font-size:11px;font-weight:700;}.daily-chart-row strong{text-align:center;}.daily-chart-track{background:#e2e8f0;height:18px;}.daily-chart-bar{height:18px;}',
             '.daily-footer{display:flex;justify-content:space-between;gap:15px;margin-top:20px;padding-top:8px;border-top:1px solid #c8d3df;font-size:9px;color:#64748b;line-height:1.4;}',
             '.daily-empty{text-align:center;color:#64748b;padding:12px!important;}',
             '@media print{html,body{background:#fff;}.print-tools{display:none!important;}.daily-sheet{width:auto;margin:0;padding:0;box-shadow:none;}.daily-section{margin-top:14px;}.daily-footer{margin-top:16px;}a{color:inherit;text-decoration:none;}}',
-            '@media screen and (max-width:820px){.daily-sheet,.print-tools{width:calc(100% - 24px);}.daily-sheet{padding:24px;}.report-logos-row img{max-width:100%!important;}.report-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}'
+            '@media screen and (max-width:1140px){.daily-sheet,.print-tools{width:calc(100% - 24px);}.daily-sheet{padding:24px;}.report-logos-row img{max-width:100%!important;}}@media screen and (max-width:650px){.report-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr));}.daily-chart-grid{grid-template-columns:1fr;}.daily-chart-row{grid-template-columns:80px 1fr 85px;}}'
         ].join('');
 
         function buildDailyReportDocumentHtml(date, records) {
@@ -18089,7 +18153,7 @@
                     { label: 'Poste(s) :', value: getReportShiftsLabel(records) }
                 ],
                 [
-                    { label: 'Machine(s) :', value: getReportMachinesLabel(records) },
+                    { label: 'Machines utilisées :', value: String(getReportUsedMachineCount(records)) },
                     { label: 'Saisi par :', value: getReportResponsableLabel(records) }
                 ]
             ];
@@ -18151,9 +18215,9 @@
                 '<nav class="print-tools" aria-label="Actions du rapport"><button type="button" onclick="window.print()">Imprimer / Enregistrer en PDF</button><button type="button" onclick="window.close()">Fermer</button></nav>' +
                 '<main class="daily-sheet">' +
                 '<header>' + buildReportStandardEnteteHtml('RAPPORT JOURNALIER DE FORAGE', records, metaRowsDaily) + '</header>' +
-                section('01', 'Indicateurs clés de la journée', buildReportKpiBandeau(records, date), 'daily-kpi-section') +
+                section('01', 'INDICATEURS CLÉS — KPI ET PRODUCTION', buildReportKpiBandeau(records, date) + buildDailyProductionChart(records, date, false), 'daily-kpi-section') +
                 section('02', 'Exploitation par machine et poste', operatingTables) +
-                existingSection('03', 'Production par zone / pattern', buildProductionZoneSection(records)) +
+                existingSection('03', 'Production par zone / pattern et trous travaillés', buildProductionZoneSection(records) + buildDailyHoleTraceability(records)) +
                 existingSection('04', 'Pannes mécaniques et observations', buildPannesSection(records)) +
                 existingSection('05', 'Standby et services — motifs et suivi', buildStandbySection(records)) +
                 existingSection('06', 'Observations générales du poste', buildCommentGeneralSection(records)) +
@@ -18220,7 +18284,7 @@
             }
             var header = buildReportStandardEnteteHtml('RAPPORT DE MI-POSTE', records, [
                 [{ label: 'Projet / site :', value: projectLabel }, { label: 'Date du poste :', value: formatDate(date) }],
-                [{ label: 'Machine(s) :', value: getReportMachinesLabel(records) }, { label: 'Poste(s) :', value: getReportShiftsLabel(records) }]
+                [{ label: 'Machines utilisées :', value: String(getReportUsedMachineCount(records)) }, { label: 'Poste(s) :', value: getReportShiftsLabel(records) }]
             ]);
             var css = '.midshift-banner{padding:12px 14px;border:2px solid #1565a0;background:#eef6ff;color:#14395e;margin-bottom:18px;}' +
                 '.midshift-banner strong{display:block;font-size:15px;letter-spacing:.05em;margin-bottom:4px;}' +
@@ -18244,9 +18308,9 @@
                 card('Heures machine renseignées', format(hours.value, 'h'), hours.known + ' / ' + records.length + ' fiche(s) renseignée(s)') +
                 card('Pannes documentées', format(stopTotals.bdn, 'h'), 'durées saisies uniquement') +
                 card('Standby documenté', format(stopTotals.stb, 'h'), 'services suivis séparément') +
-                '</div><p class="daily-table-note">Aucune projection de fin de poste. Les taux de disponibilité et le bilan complet du poste seront calculés à la clôture de la saisie. Non renseigné : donnée encore à compléter.</p></section>' +
+                '</div>' + buildDailyProductionChart(records, date, true) + '<p class="daily-table-note">Aucune projection de fin de poste. Les taux de disponibilité et le bilan complet du poste seront calculés à la clôture de la saisie. Non renseigné : donnée encore à compléter.</p></section>' +
                 '<section class="daily-section"><h2><span class="daily-section-number">02</span>Avancement par machine et poste</h2><table class="daily-table midshift-table"><thead><tr><th>Machine / poste</th><th>Zone / lieu</th><th>Nouveaux (m)</th><th>Heures machine (h)</th><th>État / dernière sauvegarde</th></tr></thead><tbody>' +
-                (rows || '<tr><td colspan="5">Aucune saisie enregistrée.</td></tr>') + '</tbody></table></section>' +
+                (rows || '<tr><td colspan="5">Aucune saisie enregistrée.</td></tr>') + '</tbody></table>' + buildDailyHoleTraceability(records) + '</section>' +
                 '<section class="daily-section"><h2><span class="daily-section-number">03</span>Temps d’arrêt saisis et en cours</h2><table class="daily-table midshift-table midshift-stops"><thead><tr><th>Machine / poste</th><th>Motif</th><th>Début</th><th>Fin</th><th>Durée</th><th>Observation</th></tr></thead><tbody>' +
                 (stopRows || '<tr><td colspan="6">Aucun arrêt pré-enregistré à cet instant.</td></tr>') + '</tbody></table>' + stopSummary + '</section>' +
                 '<section class="daily-section"><h2><span class="daily-section-number">04</span>Observations et éléments à compléter</h2>' +
@@ -23179,16 +23243,43 @@
             updateDailyEntryHolesTotal(true);
         }
 
+        function nextDailyEntryHoleId() {
+            var machine = dailyEntryText('dailyEntryMachineId').replace(/[^A-Za-z0-9_-]/g, '-').slice(0, 35) || 'TROU';
+            var date = dailyEntryText('dailyEntryDate').replace(/-/g, '') || getLocalDateYYYYMMDD(new Date()).replace(/-/g, '');
+            var shift = dailyEntryText('dailyEntryShift');
+            var prefix = machine + '-' + date + '-' + (shift === 'day' ? 'J' : shift === 'night' ? 'N' : 'JC') + '-';
+            var used = {};
+            (dailyDataRecords || []).forEach(function(record) {
+                (_rpData(record).holesWorked || []).forEach(function(hole) { used[String(hole.holeId || '').toUpperCase()] = true; });
+            });
+            (getDailyEntryHoleChoices() || []).forEach(function(hole) { used[String(hole.holeId || '').toUpperCase()] = true; });
+            document.querySelectorAll('#dailyEntryHolesContainer .daily-hole-id').forEach(function(input) { used[String(input.value || '').toUpperCase()] = true; });
+            var index = 1;
+            while (used[(prefix + String(index).padStart(3, '0')).toUpperCase()]) index += 1;
+            return prefix + String(index).padStart(3, '0');
+        }
+
         function addDailyEntryHoleRow(preset) {
             preset = preset || {};
             var container = document.getElementById('dailyEntryHolesContainer');
             if (!container) return;
             var row = document.createElement('div');
             row.setAttribute('data-daily-hole-row', '1');
-            row.className = 'grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_110px_120px_auto] gap-2 items-end bg-slate-800/70 border border-slate-600 rounded p-2';
+            row.className = 'daily-hole-row grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_110px_120px_auto] gap-2 items-end bg-slate-800/70 border border-slate-600 rounded p-2';
+            var identity = document.createElement('div');
+            identity.className = 'min-w-0 space-y-2';
+            var mode = document.createElement('select');
+            mode.className = 'daily-hole-source w-full border rounded px-2 py-2 text-sm';
+            mode.setAttribute('aria-label', 'Mode de saisie du trou');
+            [['plan', 'Sélection dans le plan'], ['manual', 'Identifiant manuel'], ['automatic', 'Identifiant automatique']].forEach(function(item) {
+                var option = document.createElement('option'); option.value = item[0]; option.textContent = item[1]; mode.appendChild(option);
+            });
+            mode.value = preset.source === 'manual' || preset.source === 'automatic' ? preset.source : 'plan';
             var select = document.createElement('select');
-            select.className = 'daily-hole-ref bg-slate-700 border border-slate-600 rounded px-2 py-2 text-white text-sm';
+            select.className = 'daily-hole-ref w-full bg-slate-700 border border-slate-600 rounded px-2 py-2 text-white text-sm';
+            select.setAttribute('aria-label', 'Trou du plan');
             var choices = getDailyEntryHoleChoices();
+            if (!choices.length && !preset.source && !preset.blockId) mode.value = 'manual';
             var empty = document.createElement('option');
             empty.value = '';
             empty.textContent = choices.length ? 'Choisir un trou…' : 'Aucun trou dans le plan';
@@ -23207,11 +23298,27 @@
                 select.appendChild(legacy);
             }
             select.value = preset.blockId && preset.holeId ? presetValue : '';
+            var identifier = document.createElement('input');
+            identifier.type = 'text'; identifier.maxLength = 100;
+            identifier.className = 'daily-hole-id w-full border rounded px-2 py-2 text-sm';
+            identifier.placeholder = 'Ex. RC-001';
+            identifier.setAttribute('aria-label', 'Identifiant du trou');
+            identifier.value = mode.value === 'plan' ? '' : (preset.holeId || '');
+            var updateMode = function(event) {
+                select.classList.toggle('hidden', mode.value !== 'plan');
+                identifier.classList.toggle('hidden', mode.value === 'plan');
+                identifier.readOnly = mode.value === 'automatic';
+                if (mode.value === 'automatic' && (event || !identifier.value.trim())) identifier.value = nextDailyEntryHoleId();
+            };
+            mode.addEventListener('change', updateMode);
+            identity.appendChild(mode); identity.appendChild(select); identity.appendChild(identifier);
+            updateMode();
             var metersInput = document.createElement('input');
             metersInput.type = 'number';
             metersInput.min = '0';
             metersInput.step = '0.1';
             metersInput.placeholder = 'm forés';
+            metersInput.setAttribute('aria-label', 'Mètres forés dans le trou');
             metersInput.className = 'daily-hole-meters bg-slate-700 border border-slate-600 rounded px-2 py-2 text-white text-sm';
             metersInput.value = preset.meters != null ? preset.meters : '';
             metersInput.addEventListener('input', function() { updateDailyEntryHolesTotal(true); });
@@ -23221,6 +23328,7 @@
             depthInput.step = '0.1';
             depthInput.placeholder = 'Prof. finale';
             depthInput.title = 'Profondeur finale du trou en fin de poste';
+            depthInput.setAttribute('aria-label', 'Profondeur finale du trou');
             depthInput.className = 'daily-hole-final-depth bg-slate-700 border border-slate-600 rounded px-2 py-2 text-white text-sm';
             depthInput.value = preset.finalDepth != null ? preset.finalDepth : '';
             var remove = document.createElement('button');
@@ -23228,7 +23336,7 @@
             remove.className = 'bg-red-900 hover:bg-red-800 rounded px-3 py-2 text-sm';
             remove.textContent = '×';
             remove.onclick = function() { removeDailyEntryHoleRow(remove); };
-            row.appendChild(select);
+            row.appendChild(identity);
             row.appendChild(metersInput);
             row.appendChild(depthInput);
             row.appendChild(remove);
@@ -23240,12 +23348,18 @@
             var worked = [];
             document.querySelectorAll('#dailyEntryHolesContainer [data-daily-hole-row]').forEach(function(row) {
                 var ref = decodeDailyHoleRef((row.querySelector('.daily-hole-ref') || {}).value);
+                var source = (row.querySelector('.daily-hole-source') || {}).value || 'plan';
+                if (source !== 'plan') ref = { blockId: '', holeId: String((row.querySelector('.daily-hole-id') || {}).value || '').trim() };
                 var metersRaw = (row.querySelector('.daily-hole-meters') || {}).value;
                 var meters = metersRaw === '' || metersRaw == null ? null : parseFloat(metersRaw);
                 if (!Number.isFinite(meters)) meters = null;
                 var finalRaw = (row.querySelector('.daily-hole-final-depth') || {}).value;
                 var finalDepth = finalRaw === '' || finalRaw == null ? null : parseFloat(finalRaw);
-                if ((ref.blockId && ref.holeId) || meters !== null || Number.isFinite(finalDepth)) worked.push({ blockId: ref.blockId, holeId: ref.holeId, meters: meters, finalDepth: Number.isFinite(finalDepth) ? finalDepth : null });
+                if (ref.holeId || meters !== null || Number.isFinite(finalDepth)) {
+                    var hole = { blockId: ref.blockId, holeId: ref.holeId, meters: meters, finalDepth: Number.isFinite(finalDepth) ? finalDepth : null };
+                    if (source !== 'plan') hole.source = source;
+                    worked.push(hole);
+                }
             });
             return worked;
         }
@@ -23263,6 +23377,7 @@
             var plan = getFPData();
             var changed = false;
             (holesWorked || []).forEach(function(worked) {
+                if (worked.source === 'manual' || worked.source === 'automatic') return;
                 var block = (plan.blocks || []).find(function(item) { return item.id === worked.blockId; });
                 var hole = block && (block.holes || []).find(function(item) { return item.id === worked.holeId; });
                 if (!hole) return;
@@ -23999,7 +24114,7 @@
                     showDailyEntryError('Un arrêt est encore incomplet. Indiquez sa durée ou ses heures de début et de fin, ou pré-enregistrez le poste pour le compléter plus tard.');
                     return null;
                 }
-                if (holesWorked.some(function(hole) { return !hole.blockId || !hole.holeId || hole.meters == null; })) {
+                if (holesWorked.some(function(hole) { return (!hole.blockId && hole.source !== 'manual' && hole.source !== 'automatic') || !hole.holeId || hole.meters == null; })) {
                     showDailyEntryError('Complétez les trous travaillés (trou et métrage), ou retirez les lignes inutiles avant de terminer.');
                     return null;
                 }

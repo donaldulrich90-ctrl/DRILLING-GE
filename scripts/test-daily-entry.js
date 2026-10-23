@@ -76,6 +76,8 @@ function stoppageRow(values = {}) {
 
 function holeRow(values = {}) {
     const fields = {
+        '.daily-hole-source': element(values.source || 'plan'),
+        '.daily-hole-id': element(values.holeId),
         '.daily-hole-ref': element(values.ref),
         '.daily-hole-meters': element(values.meters),
         '.daily-hole-final-depth': element(values.finalDepth)
@@ -87,7 +89,7 @@ function holeRow(values = {}) {
 }
 
 const entryFunctionNames = [
-    'getReportTenantKey', '_rpData', 'isDailyRecordIncompleteDraft',
+    'getReportTenantKey', '_rpData', 'isDailyRecordIncompleteDraft', 'nextDailyEntryHoleId',
     'findDrillByMachineId', 'drillIdsMatch', 'dailyRecordShiftKey', 'normalizeDailyRecordShiftFields',
     'getShiftNominalHours', 'getShiftLabelForReport', 'computeShiftAvailabilityKpis',
     'computeDailyEntryCounterDelta', 'dailyStoppageTimeToMinutes', 'computeHoursFromStoppageTimeRange',
@@ -142,7 +144,7 @@ function fixture(options = {}) {
         localStorage: { setItem: () => {}, getItem: () => null },
         document: {
             getElementById: (id) => fields[id] || null,
-            querySelectorAll: (selector) => selector.includes('daily-hole-row') ? holeRows : [],
+            querySelectorAll: (selector) => selector.includes('daily-hole-row') ? holeRows : selector.includes('.daily-hole-id') ? holeRows.map(row => row.querySelector('.daily-hole-id')) : [],
             createElement: () => element()
         },
         window: { API: { DailyData: {
@@ -185,6 +187,7 @@ function fixture(options = {}) {
         formatDateTimeAudit: (value) => value,
         refreshDailyEntryFuelFieldsFromContract: () => {},
         findPreviousDailyRecord: () => null,
+        getDailyEntryHoleChoices: () => [],
         getContractForDrillFuel: () => null,
         resolveContractFuelCurrency: () => 'USD',
         ...options.globals
@@ -463,6 +466,33 @@ check('completing without a fuel reading preserves the known tank level while re
     assert.ok(emptied);
     assert.equal(emptied.data.counterEnd, 0, 'Un zéro explicitement relevé est conservé');
     assert.equal(app.drills[0].fuel.level, 0, 'Un relevé zéro remplace bien le niveau antérieur');
+});
+
+check('manual and generated identifiers can be saved without a planning reference and then completed', async () => {
+    const {app,calls}=fixture({holes:[{source:'manual',holeId:'RC-001',meters:'5'}, {source:'automatic',holeId:'A-20261022-J-001',meters:'3'}], fields:{
+        dailyEntryMeters:'8',dailyEntryHours:'12',dailyEntryLocation:'Banc Nord',dailyEntryDrillingType:'production',dailyEntryMaterialType:'FrM',dailyEntryBitType:'carbure-115'
+    }});
+    const draft=await app.saveDailyEntryDraft();
+    assert.equal(draft.data.holesWorked[0].source,'manual'); assert.equal(draft.data.holesWorked[0].blockId,'');
+    const completed=await app.saveDailyEntry();
+    assert.ok(completed, calls.errors.join('; ')); assert.equal(completed.data.entryStage,'complete');
+    assert.equal(completed.data.holesWorked[1].holeId,'A-20261022-J-001');
+});
+
+check('automatic identifiers avoid saved and currently entered identifiers and distinguish the night shift', () => {
+    const {app,fields}=fixture({records:[{machineId:'A',data:{holesWorked:[{holeId:'A-20261022-J-001'}]}}],holes:[{source:'manual',holeId:'a-20261022-j-002'}]});
+    assert.equal(app.nextDailyEntryHoleId(),'A-20261022-J-003');
+    fields.dailyEntryShift.value='night';
+    assert.equal(app.nextDailyEntryHoleId(),'A-20261022-N-001');
+});
+
+check('out of plan holes never advance a planned hole even if an old block reference is present', () => {
+    const {app}=fixture();
+    const plan={blocks:[{id:'B1',holes:[{id:'H1',actDepth:2,status:'PLANIFIÉ'}]}]};
+    let writes=0; app.getFPData=()=>plan; app.saveFPData=()=>{writes+=1;};
+    vm.runInContext(declaration('applyDailyHoleProgress'),app);
+    app.applyDailyHoleProgress('2026-10-22','A',[{source:'manual',blockId:'B1',holeId:'H1',meters:8,finalDepth:10}]);
+    assert.equal(plan.blocks[0].holes[0].actDepth,2); assert.equal(writes,0);
 });
 
 async function main() {

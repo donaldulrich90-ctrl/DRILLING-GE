@@ -214,6 +214,24 @@ async function main() {
         status(savedFullDay, 200, 'Clôture journée complète de 24 h');
         status(await request(`/api/daily-data/${savedFullDay.body.id}/submit`, { method: 'POST', token, body: {} }), 200, 'Soumission journée complète');
 
+        const unplannedHoles = [{source:'manual',blockId:'',holeId:'RC-001',meters:5,finalDepth:10}, {source:'automatic',blockId:'',holeId:'DAILY-A-20261025-J-001',meters:3,finalDepth:null}];
+        const unplanned = {...complete,holesWorked:unplannedHoles};
+        const newDay={date:'2026-10-25'};
+        const planBefore=await request('/api/drilling-plan',{token});
+        const savedManual=await save({...unplanned,entryStage:'draft'},newDay);
+        status(savedManual,200,'Identifiants manuel et automatique préenregistrés sans plan');
+        status(await save(unplanned,newDay),200,'Clôture des trous saisis hors plan');
+        status(await save({...unplanned,holesWorked:[unplannedHoles[0],{...unplannedHoles[1],holeId:'rc-001'}]},newDay),400,'Identifiant hors plan dupliqué refusé sans distinction de casse');
+        status(await save({...unplanned,holesWorked:[{...unplannedHoles[0],source:'unknown',meters:8}]},newDay),400,'Origine inconnue refusée');
+        status(await save({...unplanned,holesWorked:[{...unplannedHoles[0],blockId:'DAILY-B-BLOCK',meters:8}]},newDay),400,'Un trou hors plan ne peut pas injecter une référence de bloc');
+        status(await request(`/api/daily-data/${savedManual.body.id}/submit`,{method:'POST',token,body:{}}),200,'Soumission des trous hors plan');
+        status(await request(`/api/daily-data/${savedManual.body.id}/approve`,{method:'POST',token:tenantA.token,body:{comment:'Contrôlé'}}),200,'Approbation des trous hors plan');
+        const planAfter=await request('/api/drilling-plan',{token});
+        check(planAfter.body.version,planBefore.body.version,'Les trous hors plan ne changent pas la version du plan');
+        check(planAfter.body.plan,planBefore.body.plan,'Les profondeurs du plan restent inchangées');
+        const persisted=await request('/api/daily-data?date=2026-10-25&machineId=DAILY-A',{token});
+        check(persisted.body[0].data.holesWorked,unplannedHoles,'Identifiants et origines conservés après approbation');
+
         console.log(`✅ Brouillons journaliers API : ${assertions} contrôles réussis (reprise, arrêts, clôture, soumission, isolation et verrouillage).`);
     } catch (error) {
         if (error && error.message && error.message.includes('Serveur indisponible')) process.stderr.write(logs);

@@ -30,6 +30,7 @@ function declaration(kind, name, endCharacter) {
 const helperNames = [
     'reportCalendarDayNumber', 'getReportPlannedProduction', 'getReportTenantKey', 'ensureReportPlanLoaded',
     'isDailyRecordIncompleteDraft', 'buildMidshiftReportDocumentHtml',
+    'getReportUsedMachineCount', 'buildDailyProductionChart', 'buildDailyHoleTraceability',
     'findDrillByMachineId', 'dailyRecordShiftKey', 'getShiftNominalHours', 'getShiftLabelForReport',
     'computeShiftAvailabilityKpis', 'computeDailyEntryCounterDelta', 'deriveFuelLitersFromDailyData',
     'getEffectiveFuelConsumptionFromData', 'classifyStoppageReasonToBucket', 'aggregateStoppageHoursByCategory',
@@ -427,17 +428,20 @@ check('printing waits for fonts and logo load or error in the prepared window', 
     assert.equal(printed, 1);
 });
 
-check('the daily document contains the report and signatures without chart resources', () => {
+check('the landscape daily document contains visible KPIs, printable charts and signatures without external chart resources', () => {
     const app = fixture();
     usePlan(app, savedPlan());
     const html = app.buildDailyReportDocumentHtml('2026-10-16', [record('A', 'day', 80)]);
     assert.match(html, /<!DOCTYPE html>/);
     assert.match(html, /RAPPORT JOURNALIER DE FORAGE/);
-    for (const title of ['Indicateurs clés', 'Activité et performance', 'Répartition des arrêts', 'Production par zone', 'Observations générales', 'Établi par', 'Contrôlé par', 'Visé par']) {
+    for (const title of ['INDICATEURS CLÉS', 'Activité et performance', 'Répartition des arrêts', 'Production par zone', 'Observations générales', 'Établi par', 'Contrôlé par', 'Visé par']) {
         assert.ok(html.includes(title), `Missing report section: ${title}`);
     }
     assert.doesNotMatch(html, /<canvas\b|<script\b|chart\.js|cdn\.jsdelivr|Forage nouveau réalisé \/ planifié — 7 jours/i);
-    assert.match(html, /@page\{size:A4 portrait/);
+    assert.match(html, /@page\{size:A4 landscape/);
+    assert.match(html, /INDICATEURS CLÉS — KPI ET PRODUCTION/);
+    assert.match(html, /daily-chart-bar/);
+    assert.match(html, /text-align:center!important;font-weight:700!important/);
     assert.match(html, /table-header-group/);
     assert.match(html, /Imprimer \/ Enregistrer en PDF/);
 });
@@ -450,7 +454,7 @@ check('the report header names the full multi-site scope rather than only the fi
     });
     const mixed = app.buildDailyReportDocumentHtml('2026-10-16', [record('A', 'day', 80), record('B', 'night', 100)]);
     assert.match(textContent(mixed), /Projet \/ site : Tous les sites/);
-    assert.match(textContent(mixed), /Indicateurs clés de la journée/);
+    assert.match(textContent(mixed), /INDICATEURS CLÉS — KPI ET PRODUCTION/);
     const single = app.buildDailyReportDocumentHtml('2026-10-16', [record('A', 'day', 80), record('A', 'night', 100)]);
     assert.match(textContent(single), /Projet \/ site : Mine Ouest/);
     assert.doesNotMatch(textContent(single), /Projet \/ site : Tous les sites/);
@@ -489,6 +493,39 @@ check('an empty daily selection still produces a complete, finite printable docu
     assert.match(html, /Aucune donnée enregistrée/);
     assert.doesNotMatch(html, /\bNaN\b|\bInfinity\b|\bundefined\b/);
     assert.match(html, /Visa et signatures/);
+});
+
+check('one machine working day and night is counted once in the header while both shifts sum in KPIs and charts', () => {
+    const app = fixture();
+    const rows = [record('A', 'day', 100), record('A', 'night', 80), record('B', 'day', 0, '2026-10-16', {hours: 0})];
+    assert.equal(app.getReportUsedMachineCount(rows), 1);
+    const html = app.buildDailyReportDocumentHtml('2026-10-16', rows);
+    const header = html.match(/<header>([\s\S]*?)<\/header>/)[1];
+    assert.match(header, /Machines utilisées :/);
+    assert.doesNotMatch(header, /Machine\(s\) :/);
+    assert.equal(kpiValue(html, 'Production réalisée'), '180,0 m');
+    const chart = app.buildDailyProductionChart(rows, '2026-10-16', false);
+    assert.match(chart, />100 m</); assert.match(chart, />80 m</); assert.match(chart, />180 m</);
+    assert.match(chart, /Planifié/); assert.match(chart, /Non renseigné/);
+});
+
+check('the chart retains explicit zero goals and the provisional chart never invents a goal', () => {
+    const app = fixture();
+    usePlan(app, savedPlan({weeks: [{start:'2026-10-15',end:'2026-10-21',target:0}]}));
+    const rows = [record('A','day',0)];
+    const html = app.buildDailyProductionChart(rows,'2026-10-16',false);
+    assert.match(html,/Planifié/); assert.match(html,/>0 m</); assert.doesNotMatch(html,/NaN|Infinity/);
+    assert.doesNotMatch(app.buildDailyProductionChart(rows,'2026-10-16',true),/Planifié|Réalisé et objectif/);
+});
+
+check('manual and generated hole identifiers remain visible and escaped in both reports', () => {
+    const app = fixture();
+    const rows=[record('A','day',8,'2026-10-16',{holesWorked:[{source:'manual',blockId:'',holeId:'RC-001 <test>',meters:5,finalDepth:10},{source:'automatic',blockId:'',holeId:'A-20261016-J-001',meters:3,finalDepth:null}]})];
+    for (const html of [app.buildDailyReportDocumentHtml('2026-10-16',rows), app.buildMidshiftReportDocumentHtml('2026-10-16',rows)]) {
+        assert.match(html,/RC-001 &lt;test&gt;/); assert.match(html,/A-20261016-J-001/);
+        assert.match(html,/>Manuel</); assert.match(html,/>Automatique</);
+        assert.match(html,/@page\{size:A4 landscape/);
+    }
 });
 
 async function main() {
