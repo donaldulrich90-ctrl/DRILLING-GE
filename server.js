@@ -2458,8 +2458,28 @@ app.post('/api/daily-data', (req, res) => {
             const actorUsername = String(actor.username || '').trim();
             const actorName = String(actor.name || actorUsername || '').trim() || actorUsername;
             const nowIso = new Date().toISOString();
-            const checkQuery = 'SELECT * FROM dailyDataRecords WHERE date = ? AND machineId = ? AND COALESCE(shift, \'\') = ?';
-            db.get(checkQuery, [record.date, record.machineId, shift], (err, existingRow) => {
+            // Chercher par ID si fourni (permet de changer le shift d'un record existant)
+            const findExisting = (cb) => {
+                if (record.id != null) {
+                    let byIdSql = 'SELECT * FROM dailyDataRecords WHERE id = ? AND date = ? AND machineId = ?';
+                    const byIdParams = [record.id, record.date, record.machineId];
+                    if (entId !== null) {
+                        byIdSql += ' AND machineId IN (SELECT id FROM drills WHERE enterpriseId = ?)';
+                        byIdParams.push(entId);
+                    }
+                    db.get(byIdSql, byIdParams, (err, row) => {
+                        if (err) return cb(err);
+                        if (row) return cb(null, row);
+                        // Fallback : chercher par date+machine+shift
+                        db.get('SELECT * FROM dailyDataRecords WHERE date = ? AND machineId = ? AND COALESCE(shift, \'\') = ?',
+                            [record.date, record.machineId, shift], cb);
+                    });
+                } else {
+                    db.get('SELECT * FROM dailyDataRecords WHERE date = ? AND machineId = ? AND COALESCE(shift, \'\') = ?',
+                        [record.date, record.machineId, shift], cb);
+                }
+            };
+            findExisting((err, existingRow) => {
                 if (err) return res.status(500).json({ error: err.message });
                 if (existingRow) {
                     const workflowStatus = normalizeDailyWorkflowStatus(existingRow.workflowStatus);
@@ -2485,8 +2505,9 @@ app.post('/api/daily-data', (req, res) => {
                         entName = actorName || actorUsername;
                         entAt = nowIso;
                     }
-                    let upd = "UPDATE dailyDataRecords SET data = ?, notes = ?, enteredByUsername = ?, enteredByName = ?, enteredAt = ?, lastModifiedByUsername = ?, lastModifiedByName = ?, lastModifiedAt = ?, workflowVersion = COALESCE(workflowVersion, 0) + 1 WHERE id = ? AND COALESCE(workflowStatus, 'draft') IN ('draft', 'rejected')";
+                    let upd = "UPDATE dailyDataRecords SET shift = ?, data = ?, notes = ?, enteredByUsername = ?, enteredByName = ?, enteredAt = ?, lastModifiedByUsername = ?, lastModifiedByName = ?, lastModifiedAt = ?, workflowVersion = COALESCE(workflowVersion, 0) + 1 WHERE id = ? AND COALESCE(workflowStatus, 'draft') IN ('draft', 'rejected')";
                     const uvals = [
+                        shift,
                         JSON.stringify(record.data || {}),
                         record.notes || '',
                         entUser,
