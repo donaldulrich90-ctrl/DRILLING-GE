@@ -2458,11 +2458,11 @@ app.post('/api/daily-data', (req, res) => {
             const actorUsername = String(actor.username || '').trim();
             const actorName = String(actor.name || actorUsername || '').trim() || actorUsername;
             const nowIso = new Date().toISOString();
-            // Un ID sert à reprendre une saisie, jamais à déplacer le Jour vers la Nuit.
+            // Un ID sert à reprendre une saisie ; il permet aussi de déplacer la date ou le shift.
             const findExisting = (cb) => {
                 if (record.id != null) {
-                    let byIdSql = 'SELECT * FROM dailyDataRecords WHERE id = ? AND date = ? AND machineId = ?';
-                    const byIdParams = [record.id, record.date, record.machineId];
+                    let byIdSql = 'SELECT * FROM dailyDataRecords WHERE id = ? AND machineId = ?';
+                    const byIdParams = [record.id, record.machineId];
                     if (entId !== null) {
                         byIdSql += ' AND machineId IN (SELECT id FROM drills WHERE enterpriseId = ?)';
                         byIdParams.push(entId);
@@ -2482,11 +2482,9 @@ app.post('/api/daily-data', (req, res) => {
             findExisting((err, existingRow) => {
                 if (err) return res.status(500).json({ error: err.message });
                 if (existingRow) {
-                    if (String(existingRow.shift || '') !== shift) {
-                        return res.status(409).json({
-                            error: 'Ce poste correspond à une autre saisie Jour/Nuit. Rechargez la page, puis choisissez le poste à enregistrer.'
-                        });
-                    }
+                    // Vérifier qu'il n'y a pas déjà un autre record à la date+machine+shift cible
+                    const dateOrShiftMoved = String(existingRow.date) !== record.date || String(existingRow.shift || '') !== shift;
+                    const doUpdate = () => {
                     const workflowStatus = normalizeDailyWorkflowStatus(existingRow.workflowStatus);
                     if (workflowStatus === 'submitted' || workflowStatus === 'approved') {
                         return res.status(409).json({
@@ -2510,8 +2508,9 @@ app.post('/api/daily-data', (req, res) => {
                         entName = actorName || actorUsername;
                         entAt = nowIso;
                     }
-                    let upd = "UPDATE dailyDataRecords SET shift = ?, data = ?, notes = ?, enteredByUsername = ?, enteredByName = ?, enteredAt = ?, lastModifiedByUsername = ?, lastModifiedByName = ?, lastModifiedAt = ?, workflowVersion = COALESCE(workflowVersion, 0) + 1 WHERE id = ? AND COALESCE(workflowStatus, 'draft') IN ('draft', 'rejected')";
+                    let upd = "UPDATE dailyDataRecords SET date = ?, shift = ?, data = ?, notes = ?, enteredByUsername = ?, enteredByName = ?, enteredAt = ?, lastModifiedByUsername = ?, lastModifiedByName = ?, lastModifiedAt = ?, workflowVersion = COALESCE(workflowVersion, 0) + 1 WHERE id = ? AND COALESCE(workflowStatus, 'draft') IN ('draft', 'rejected')";
                     const uvals = [
+                        record.date,
                         shift,
                         JSON.stringify(record.data || {}),
                         record.notes || '',
@@ -2532,6 +2531,17 @@ app.post('/api/daily-data', (req, res) => {
                         if (this.changes === 0) return res.status(409).json({ error: 'Le statut du poste a changé. Rechargez les données.' });
                         res.json({ id: existingRow.id, message: 'Données mises à jour' });
                     });
+                    }; // fin doUpdate
+                    if (dateOrShiftMoved) {
+                        db.get('SELECT id FROM dailyDataRecords WHERE date = ? AND machineId = ? AND COALESCE(shift, \'\') = ? AND id != ?',
+                            [record.date, record.machineId, shift, existingRow.id], (conflictErr, conflictRow) => {
+                                if (conflictErr) return res.status(500).json({ error: conflictErr.message });
+                                if (conflictRow) return res.status(409).json({ error: 'Un enregistrement existe déjà pour cette machine à cette date et ce shift.' });
+                                doUpdate();
+                            });
+                    } else {
+                        doUpdate();
+                    }
                 } else {
                     db.run(
                         'INSERT INTO dailyDataRecords (date, machineId, shift, data, notes, enteredByUsername, enteredByName, enteredAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
