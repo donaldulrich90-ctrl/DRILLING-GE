@@ -23906,7 +23906,31 @@
             if (delBtn) delBtn.classList.add('hidden');
             dailyEntryLoadedContext = null;
             dailyEntryLoadedSnapshot = '';
+            dailyEntryEditingRecordId = null;
         }
+
+        // Navigation par flèches haut/bas entre les champs numériques du formulaire de saisie
+        (function initDailyEntryArrowNavigation() {
+            var form = document.getElementById('dailyEntryForm');
+            if (!form) return;
+            form.addEventListener('keydown', function(e) {
+                if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+                var el = e.target;
+                if (!el || el.tagName !== 'INPUT' || el.type !== 'number') return;
+                e.preventDefault();
+                // Collecter tous les champs numériques visibles du formulaire
+                var inputs = Array.prototype.slice.call(form.querySelectorAll('input[type="number"]')).filter(function(inp) {
+                    return inp.offsetParent !== null && !inp.disabled;
+                });
+                var idx = inputs.indexOf(el);
+                if (idx < 0) return;
+                var next = e.key === 'ArrowDown' ? idx + 1 : idx - 1;
+                if (next >= 0 && next < inputs.length) {
+                    inputs[next].focus();
+                    inputs[next].select();
+                }
+            });
+        })();
 
         function countDailyRecordsInPurgeScope(dateFrom, dateTo, machineIdOpt) {
             var n = 0;
@@ -24069,6 +24093,7 @@
         var dailyEntrySaveInFlight = false;
         var dailyEntryLoadedSnapshot = '';
         var dailyEntryLoadedContext = null;
+        var dailyEntryEditingRecordId = null;
 
         function dailyEntryFormSnapshot() {
             var form = document.getElementById('dailyEntryForm');
@@ -24095,6 +24120,7 @@
                 machineId: (document.getElementById('dailyEntryMachineId') || {}).value || '',
                 shift: (document.getElementById('dailyEntryShift') || {}).value || ''
             };
+            dailyEntryEditingRecordId = record && record.id != null ? record.id : null;
             if (!record) {
                 setDailyEntrySaveStatus('Nouveau poste — aucune donnée enregistrée.', 'info');
                 return;
@@ -24117,7 +24143,26 @@
             var newDate = (document.getElementById('dailyEntryDate') || {}).value || '';
             var newMachine = (document.getElementById('dailyEntryMachineId') || {}).value || '';
             var newShift = (document.getElementById('dailyEntryShift') || {}).value || '';
-            if (old.date === newDate && old.machineId === newMachine && old.shift === newShift) return true;
+            var machineChanged = old.machineId !== newMachine;
+            var dateChanged = old.date !== newDate;
+            var shiftChanged = old.shift !== newShift;
+            if (!machineChanged && !dateChanged && !shiftChanged) return true;
+            // Changement de date ou shift seulement (machine identique) sur un record existant :
+            // garder le formulaire, mettre à jour le contexte — l'enregistrement sera déplacé à la sauvegarde
+            if (!machineChanged && dailyEntryEditingRecordId != null) {
+                if (dateChanged) dailyEntryLoadedContext.date = newDate;
+                if (shiftChanged) dailyEntryLoadedContext.shift = newShift;
+                updateDailyEntryShiftConstraints();
+                updateDailyEntryModalSummary();
+                return false;
+            }
+            // Changement de shift seulement (nouveau poste, pas de record existant)
+            if (!machineChanged && !dateChanged && shiftChanged) {
+                dailyEntryLoadedContext.shift = newShift;
+                updateDailyEntryShiftConstraints();
+                updateDailyEntryModalSummary();
+                return false;
+            }
             if (!dailyEntrySaveInFlight && (!dailyEntryFormIsDirty() || confirm('Ce poste comporte des modifications non enregistrées. Les abandonner pour changer de poste ? Pour les conserver, annulez puis cliquez sur « Pré-enregistrer ».'))) return true;
             document.getElementById('dailyEntryDate').value = old.date;
             document.getElementById('dailyEntryMachineId').value = old.machineId;
@@ -24179,6 +24224,23 @@
             var existingRec = (dailyDataRecords || []).find(function(r) {
                 return drillIdsMatch(r.machineId, machineId) && r.date === date && dailyRecordShiftKey(r) === shift;
             });
+            // Si on change la date ou le shift d'un record existant, retrouver ce record par son ID
+            if (!existingRec && dailyEntryEditingRecordId != null) {
+                existingRec = (dailyDataRecords || []).find(function(r) {
+                    return r.id != null && Number(r.id) === Number(dailyEntryEditingRecordId);
+                }) || null;
+            }
+            // Vérifier qu'il n'y a pas déjà un autre record à la date+machine+shift cible
+            if (existingRec && dailyEntryEditingRecordId != null && Number(existingRec.id) === Number(dailyEntryEditingRecordId)) {
+                var conflictRec = (dailyDataRecords || []).find(function(r) {
+                    return r.id != null && Number(r.id) !== Number(dailyEntryEditingRecordId) &&
+                        drillIdsMatch(r.machineId, machineId) && r.date === date && dailyRecordShiftKey(r) === shift;
+                });
+                if (conflictRec) {
+                    showDailyEntryError('Un enregistrement existe déjà pour cette machine à cette date et ce shift. Modifiez la date ou le shift.');
+                    return null;
+                }
+            }
             if (existingRec && isDailyDataRecordReadOnlyForCurrentUser(existingRec)) {
                 showDailyEntryError('Cette saisie est verrouillée. Un poste soumis ou approuvé doit d’abord être rejeté ou rouvert par la supervision.');
                 return null;
