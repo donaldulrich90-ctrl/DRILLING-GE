@@ -2458,7 +2458,7 @@ app.post('/api/daily-data', (req, res) => {
             const actorUsername = String(actor.username || '').trim();
             const actorName = String(actor.name || actorUsername || '').trim() || actorUsername;
             const nowIso = new Date().toISOString();
-            // Chercher par ID si fourni (permet de changer le shift d'un record existant)
+            // Un ID sert à reprendre une saisie, jamais à déplacer le Jour vers la Nuit.
             const findExisting = (cb) => {
                 if (record.id != null) {
                     let byIdSql = 'SELECT * FROM dailyDataRecords WHERE id = ? AND date = ? AND machineId = ?';
@@ -2482,6 +2482,11 @@ app.post('/api/daily-data', (req, res) => {
             findExisting((err, existingRow) => {
                 if (err) return res.status(500).json({ error: err.message });
                 if (existingRow) {
+                    if (String(existingRow.shift || '') !== shift) {
+                        return res.status(409).json({
+                            error: 'Ce poste correspond à une autre saisie Jour/Nuit. Rechargez la page, puis choisissez le poste à enregistrer.'
+                        });
+                    }
                     const workflowStatus = normalizeDailyWorkflowStatus(existingRow.workflowStatus);
                     if (workflowStatus === 'submitted' || workflowStatus === 'approved') {
                         return res.status(409).json({
