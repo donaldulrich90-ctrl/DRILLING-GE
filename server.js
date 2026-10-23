@@ -449,30 +449,25 @@ function validateDailyDataForSubmission(row) {
     if (!String(data.materialType || '').trim()) return 'Le type de roche ou matériau est requis avant soumission.';
     if (!String(data.bitType || '').trim()) return 'Le type de trépan est requis avant soumission.';
 
-    const holes = Array.isArray(data.holesWorked) ? data.holesWorked : [];
-    if (meters > 0 && holes.length === 0) {
-        return 'Ajoutez au moins un trou travaillé avant de soumettre un poste avec métrage.';
-    }
+    const holes = Array.isArray(data.holesWorked) ? data.holesWorked.filter(h => {
+        const hid = String(h && h.holeId || '').trim();
+        return hid && h.meters != null;
+    }) : [];
+    data.holesWorked = holes;
     const seenHoles = new Set();
-    let holeMeters = 0;
     for (const hole of holes) {
-        const holeId = String(hole && hole.holeId || '').trim();
+        const holeId = String(hole.holeId || '').trim();
         const unplanned = hole.source === 'manual' || hole.source === 'automatic';
-        if (!holeId || (!unplanned && !String(hole.blockId || '').trim())) return 'Chaque ligne de trou doit comporter un identifiant et, pour les trous du plan, un bloc.';
+        if (!unplanned && !String(hole.blockId || '').trim()) return 'Pour les trous du plan, un bloc est requis.';
         const key = `${String(hole.blockId || '').trim()}::${holeId}`.toLowerCase();
         if (seenHoles.has(key)) return `Le trou ${holeId} est présent plusieurs fois.`;
         seenHoles.add(key);
-        if (!dailyDataHasValue(hole.meters)) return `Renseignez le métrage du trou ${holeId} (0 si aucun mètre).`;
         const worked = Number(hole.meters);
         if (!Number.isFinite(worked) || worked < 0) return `Le métrage du trou ${holeId} est invalide.`;
         const finalDepth = hole.finalDepth == null || hole.finalDepth === '' ? null : Number(hole.finalDepth);
         if (finalDepth != null && (!Number.isFinite(finalDepth) || finalDepth < 0)) {
             return `La profondeur finale du trou ${holeId} est invalide.`;
         }
-        holeMeters += worked;
-    }
-    if (holes.length > 0 && Math.abs(holeMeters - meters) > 0.11) {
-        return `La somme des métrages par trou (${holeMeters.toFixed(1)} m) doit correspondre au métrage du poste (${meters.toFixed(1)} m).`;
     }
 
     const stoppages = Array.isArray(data.stoppages) ? data.stoppages : [];
