@@ -18217,7 +18217,7 @@
                 '<header>' + buildReportStandardEnteteHtml('RAPPORT JOURNALIER DE FORAGE', records, metaRowsDaily) + '</header>' +
                 section('01', 'INDICATEURS CLÉS — KPI ET PRODUCTION', buildReportKpiBandeau(records, date) + buildDailyProductionChart(records, date, false), 'daily-kpi-section') +
                 section('02', 'Exploitation par machine et poste', operatingTables) +
-                existingSection('03', 'Production par zone / pattern et trous travaillés', buildProductionZoneSection(records) + buildDailyHoleTraceability(records)) +
+                existingSection('03', 'Production par zone / pattern et trous travaillés', buildProductionZoneSection(records)) +
                 existingSection('04', 'Pannes mécaniques et observations', buildPannesSection(records)) +
                 existingSection('05', 'Standby et services — motifs et suivi', buildStandbySection(records)) +
                 existingSection('06', 'Observations générales du poste', buildCommentGeneralSection(records)) +
@@ -18310,7 +18310,7 @@
                 card('Standby documenté', format(stopTotals.stb, 'h'), 'services suivis séparément') +
                 '</div>' + buildDailyProductionChart(records, date, true) + '<p class="daily-table-note">Aucune projection de fin de poste. Les taux de disponibilité et le bilan complet du poste seront calculés à la clôture de la saisie. Non renseigné : donnée encore à compléter.</p></section>' +
                 '<section class="daily-section"><h2><span class="daily-section-number">02</span>Avancement par machine et poste</h2><table class="daily-table midshift-table"><thead><tr><th>Machine / poste</th><th>Zone / lieu</th><th>Nouveaux (m)</th><th>Heures machine (h)</th><th>État / dernière sauvegarde</th></tr></thead><tbody>' +
-                (rows || '<tr><td colspan="5">Aucune saisie enregistrée.</td></tr>') + '</tbody></table>' + buildDailyHoleTraceability(records) + '</section>' +
+                (rows || '<tr><td colspan="5">Aucune saisie enregistrée.</td></tr>') + '</tbody></table></section>' +
                 '<section class="daily-section"><h2><span class="daily-section-number">03</span>Temps d’arrêt saisis et en cours</h2><table class="daily-table midshift-table midshift-stops"><thead><tr><th>Machine / poste</th><th>Motif</th><th>Début</th><th>Fin</th><th>Durée</th><th>Observation</th></tr></thead><tbody>' +
                 (stopRows || '<tr><td colspan="6">Aucun arrêt pré-enregistré à cet instant.</td></tr>') + '</tbody></table>' + stopSummary + '</section>' +
                 '<section class="daily-section"><h2><span class="daily-section-number">04</span>Observations et éléments à compléter</h2>' +
