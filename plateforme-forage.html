@@ -18063,6 +18063,70 @@
                 '</div></div>';
         }
 
+        function buildForecastVsActualChart(records, date) {
+            var planned = getReportPlannedProduction(date, records);
+            var goal = planned.value;
+            // Réalisé par machine
+            var mm = {};
+            (records || []).forEach(function(r) {
+                var d = _rpData(r);
+                var mid = _rpMachineName(r) || r.machineId || 'Inconnu';
+                if (!mm[mid]) mm[mid] = { nouveau: 0, refore: 0 };
+                mm[mid].nouveau += parseFloat(d.metersDrilled) || 0;
+                mm[mid].refore += parseFloat(d.redrillMeters) || 0;
+            });
+            var machines = Object.keys(mm).sort();
+            if (!machines.length && goal == null) return '';
+            var totalNouveau = 0, totalRefore = 0;
+            machines.forEach(function(m) { totalNouveau += mm[m].nouveau; totalRefore += mm[m].refore; });
+            // Graphique Chart.js : barres groupées Forecast vs Actuel (nouveau + reforé)
+            try {
+                var cv = document.createElement('canvas');
+                cv.width = 600; cv.height = 320;
+                cv.style.position = 'fixed'; cv.style.left = '-10000px'; cv.style.top = '0';
+                document.body.appendChild(cv);
+                var labels = machines.slice();
+                labels.push('TOTAL');
+                var nouveauData = machines.map(function(m) { return parseFloat(mm[m].nouveau.toFixed(1)); });
+                nouveauData.push(parseFloat(totalNouveau.toFixed(1)));
+                var reforeData = machines.map(function(m) { return parseFloat(mm[m].refore.toFixed(1)); });
+                reforeData.push(parseFloat(totalRefore.toFixed(1)));
+                var datasets = [
+                    { label: 'Nouveau (m)', data: nouveauData, backgroundColor: '#1e40af', borderRadius: 3 },
+                    { label: 'Reforé (m)', data: reforeData, backgroundColor: '#7c3aed', borderRadius: 3 }
+                ];
+                if (goal != null) {
+                    var forecastData = machines.map(function() { return null; });
+                    forecastData.push(parseFloat(goal.toFixed(1)));
+                    datasets.push({ label: 'Forecast (m)', data: forecastData, backgroundColor: '#c27803', borderRadius: 3 });
+                }
+                var cfg = {
+                    type: 'bar',
+                    data: { labels: labels, datasets: datasets },
+                    options: {
+                        responsive: false, animation: false, devicePixelRatio: 2,
+                        plugins: { legend: { display: true, position: 'bottom', labels: { font: { size: 11 }, boxWidth: 12, padding: 8 } } },
+                        scales: {
+                            y: { beginAtZero: true, title: { display: true, text: 'Mètres (m)', font: { size: 11 } }, ticks: { color: '#334155', font: { size: 11 } }, grid: { color: 'rgba(0,0,0,0.08)' } },
+                            x: { ticks: { color: '#334155', font: { size: 11 } }, grid: { display: false } }
+                        }
+                    }
+                };
+                var ch = new Chart(cv, cfg);
+                try { ch.draw(); } catch (e) {}
+                var url = cv.toDataURL('image/png');
+                ch.destroy();
+                document.body.removeChild(cv);
+                var taux = goal != null && goal > 0 ? (totalNouveau / goal * 100).toFixed(1).replace('.', ',') + ' %' : 'N/A';
+                return '<div class="daily-chart-grid" style="grid-template-columns:1fr;"><div class="daily-chart-panel"><h3>Forecast vs Actuel — Production par machine</h3>' +
+                    '<img src="' + url + '" alt="Graphique Forecast vs Actuel" style="width:100%;height:auto;display:block;">' +
+                    '<p style="font-size:10px;color:#475569;margin:5px 0 0;">Réalisé total : <b>' + totalNouveau.toFixed(1).replace('.', ',') + ' m</b> nouveau + <b>' + totalRefore.toFixed(1).replace('.', ',') + ' m</b> reforé' +
+                    (goal != null ? ' · Forecast : <b>' + goal.toFixed(1).replace('.', ',') + ' m</b> · Taux : <b>' + taux + '</b>' : '') + '</p></div></div>';
+            } catch (e) {
+                return '<p style="font-size:10px;color:#dc2626;">Graphique Forecast vs Actuel non disponible (Chart.js requis).</p>';
+            }
+        }
+
         function buildDailyHoleTraceability(records) {
             var rows = '';
             (records || []).forEach(function(record) {
@@ -18215,7 +18279,7 @@
                 '<nav class="print-tools" aria-label="Actions du rapport"><button type="button" onclick="window.print()">Imprimer / Enregistrer en PDF</button><button type="button" onclick="window.close()">Fermer</button></nav>' +
                 '<main class="daily-sheet">' +
                 '<header>' + buildReportStandardEnteteHtml('RAPPORT JOURNALIER DE FORAGE', records, metaRowsDaily) + '</header>' +
-                section('01', 'INDICATEURS CLÉS — KPI ET PRODUCTION', buildReportKpiBandeau(records, date) + buildDailyProductionChart(records, date, false), 'daily-kpi-section') +
+                section('01', 'INDICATEURS CLÉS — KPI ET PRODUCTION', buildReportKpiBandeau(records, date) + buildDailyProductionChart(records, date, false) + buildForecastVsActualChart(records, date), 'daily-kpi-section') +
                 section('02', 'Exploitation par machine et poste', operatingTables) +
                 existingSection('03', 'Production par zone / pattern et trous travaillés', buildProductionZoneSection(records)) +
                 existingSection('04', 'Pannes mécaniques et observations', buildPannesSection(records)) +
@@ -18308,7 +18372,7 @@
                 card('Heures machine renseignées', format(hours.value, 'h'), hours.known + ' / ' + records.length + ' fiche(s) renseignée(s)') +
                 card('Pannes documentées', format(stopTotals.bdn, 'h'), 'durées saisies uniquement') +
                 card('Standby documenté', format(stopTotals.stb, 'h'), 'services suivis séparément') +
-                '</div>' + buildDailyProductionChart(records, date, true) + '<p class="daily-table-note">Aucune projection de fin de poste. Les taux de disponibilité et le bilan complet du poste seront calculés à la clôture de la saisie. Non renseigné : donnée encore à compléter.</p></section>' +
+                '</div>' + buildDailyProductionChart(records, date, true) + buildForecastVsActualChart(records, date) + '<p class="daily-table-note">Aucune projection de fin de poste. Les taux de disponibilité et le bilan complet du poste seront calculés à la clôture de la saisie. Non renseigné : donnée encore à compléter.</p></section>' +
                 '<section class="daily-section"><h2><span class="daily-section-number">02</span>Avancement par machine et poste</h2><table class="daily-table midshift-table"><thead><tr><th>Machine / poste</th><th>Zone / lieu</th><th>Nouveaux (m)</th><th>Heures machine (h)</th><th>État / dernière sauvegarde</th></tr></thead><tbody>' +
                 (rows || '<tr><td colspan="5">Aucune saisie enregistrée.</td></tr>') + '</tbody></table></section>' +
                 '<section class="daily-section"><h2><span class="daily-section-number">03</span>Temps d’arrêt saisis et en cours</h2><table class="daily-table midshift-table midshift-stops"><thead><tr><th>Machine / poste</th><th>Motif</th><th>Début</th><th>Fin</th><th>Durée</th><th>Observation</th></tr></thead><tbody>' +
@@ -22600,11 +22664,11 @@
                 card('Heures de panne', agg.bdn.toFixed(1).replace('.', ',') + ' h', '#b91c1c', 'arrêt mécanique') +
                 card('Heures de standby', agg.stb.toFixed(1).replace('.', ',') + ' h', '#b45309', 'immobilisation') +
                 card('Production précédente', prevProd != null ? fmtM(prevProd) : 'N/A', evolColor, prevDate ? ('évol. ' + evolTxt + ' · ' + prevDate) : 'aucune journée comparable') +
+                card('Reforage', fmtM(agg.reforage), '#7c3aed', 'mètres reforés') +
+                card('Flushing', fmtM(agg.flushing), '#0891b2', 'mètres de flushing') +
                 '</div>' +
                 '<div class="report-kpi-notes"><p>' + escapeHtmlReportCell(planned.note) + '</p>' +
-                '<p>Production réalisée = <b>mètres nouveaux</b>. Reforage : <b>' + fmtM(agg.reforage) +
-                '</b> · Flushing : <b>' + fmtM(agg.flushing) + '</b> — suivis séparément. ' +
-                'Comparatif précédent : mêmes machines et postes, sur une journée complète enregistrée.</p></div>';
+                '<p>Comparatif précédent : mêmes machines et postes, sur une journée complète enregistrée.</p></div>';
         }
 
         function renderOperationalKpiTableHtml(records) {
