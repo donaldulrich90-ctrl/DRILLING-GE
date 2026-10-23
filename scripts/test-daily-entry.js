@@ -136,7 +136,7 @@ function fixture(options = {}) {
     const sandbox = {
         console,
         currentUser: { id: 7, username: 'engineer', role: 'ingenieur', enterpriseId: 1 },
-        currentSiteId: 1, drills,
+        currentSiteId: 1, drills, dailyEntryEditingRecordId: null,
         dailyDataRecords: plain(options.records || []),
         SHIFT_NOMINAL_HOURS: { day: 12, night: 12, full: 24 },
         dailyEntrySaveInFlight: false, dailyEntryLoadedSnapshot: '', dailyEntryLoadedContext: null,
@@ -151,7 +151,7 @@ function fixture(options = {}) {
             save: async (candidate) => {
                 calls.api.push(plain(candidate));
                 if (options.save) return options.save(candidate);
-                return { ...plain(candidate), id: candidate.id || 501 };
+                return { ...plain(candidate), id: candidate.id || 500 + calls.api.length };
             }
         } } },
         alert: (message) => calls.alerts.push(String(message)),
@@ -382,6 +382,8 @@ check('two pre-saved shifts accumulate correctly even when completed in reverse 
     vm.runInContext(['dailyRecordShiftOrder', 'compareDailyRecordsChronological', 'syncDrillTelemetryFromDailyRecords'].map(declaration).join('\n'), app);
     app.syncAllDrillsTelemetryFromDailyRecords = () => app.syncDrillTelemetryFromDailyRecords(app.drills[0]);
     await app.saveDailyEntryDraft();
+    // Simulate opening a separate new night entry; changing only the selector now moves the current entry.
+    app.dailyEntryEditingRecordId = null;
     fields.dailyEntryShift.value = 'night';
     fields.dailyEntryMeters.value = '20'; holeRows[0].querySelector('.daily-hole-meters').value = '20';
     await app.saveDailyEntryDraft();
@@ -493,6 +495,40 @@ check('out of plan holes never advance a planned hole even if an old block refer
     vm.runInContext(declaration('applyDailyHoleProgress'),app);
     app.applyDailyHoleProgress('2026-10-22','A',[{source:'manual',blockId:'B1',holeId:'H1',meters:8,finalDepth:10}]);
     assert.equal(plan.blocks[0].holes[0].actDepth,2); assert.equal(writes,0);
+});
+
+check('redrill can be pre-saved and restored while new production remains missing', async () => {
+    const {app,fields}=fixture({fields:{dailyEntryRedrillMeters:'12.5'}});
+    const saved=await app.saveDailyEntryDraft();
+    assert.equal(saved.data.redrillMeters,12.5);
+    assert.equal(saved.data.metersDrilled,null);
+    fields.dailyEntryRedrillMeters.value='';
+    app.loadDailyEntryFormFromRecord();
+    assert.equal(fields.dailyEntryRedrillMeters.value,'12.5');
+    for (const [entered,stored] of [['0',0],['',null]]) {
+        fields.dailyEntryRedrillMeters.value=entered;
+        const updated=await app.saveDailyEntryDraft();
+        assert.equal(updated.data.redrillMeters,stored);
+        app.loadDailyEntryFormFromRecord();
+        assert.equal(fields.dailyEntryRedrillMeters.value,entered);
+    }
+});
+
+check('a redrill-only shift does not add new metres or advance cumulative depth', async () => {
+    const {app,calls}=fixture({fields:{dailyEntryMeters:'0',dailyEntryRedrillMeters:'8.5',dailyEntryHours:'12',
+        dailyEntryLocation:'Banc Nord',dailyEntryDrillingType:'production',dailyEntryMaterialType:'FrM',dailyEntryBitType:'carbure-115'}});
+    vm.runInContext(['dailyRecordShiftOrder','compareDailyRecordsChronological','syncDrillTelemetryFromDailyRecords','syncAllDrillsTelemetryFromDailyRecords'].map(declaration).join('\n'),app);
+    const saved=await app.saveDailyEntry();
+    assert.ok(saved,calls.errors.join('; '));
+    assert.equal(saved.data.metersDrilled,0); assert.equal(saved.data.redrillMeters,8.5);
+    assert.equal(saved.data.depth,200); assert.equal(app.drills[0].telemetry.depth,200);
+});
+
+check('negative redrill is rejected before pre-saving', async () => {
+    const {app,calls,fields}=fixture({fields:{dailyEntryRedrillMeters:'-1'}});
+    assert.equal(await app.saveDailyEntryDraft(),null);
+    assert.equal(calls.api.length,0); assert.equal(fields.dailyEntryRedrillMeters.value,'-1');
+    assert.match(calls.errors[0],/reforés/);
 });
 
 async function main() {

@@ -160,14 +160,17 @@ async function main() {
             ['Clôture avec horaire inachevé', { ...complete, stoppages: [{ reason: 'maintenance', timeStart: '08:00', hours: 4 }] }],
             ['Clôture sans motif arrêt', { ...complete, stoppages: [{ reason: '', hours: 4 }] }],
             ['Bilan incomplet', { ...complete, hours: 7 }],
-            ['Métrage sans trou', { ...complete, holesWorked: [] }],
             ['Référence bloc manquante', { ...complete, holesWorked: [{ holeId: 'T-01', meters: 8 }] }],
-            ['Métrage de trou absent', { ...complete, holesWorked: [{ blockId: 'DAILY-A-BLOCK', holeId: 'T-01', meters: null }] }],
-            ['Métrage de trous incohérent', { ...complete, holesWorked: [{ blockId: 'DAILY-A-BLOCK', holeId: 'T-01', meters: 7 }] }],
             ['Trou dupliqué', { ...complete, holesWorked: [complete.holesWorked[0], complete.holesWorked[0]] }],
             ['Trou introuvable', { ...complete, holesWorked: [{ blockId: 'DAILY-A-BLOCK', holeId: 'ABSENT', meters: 8 }] }],
             ['Trou autre entreprise', { ...complete, holesWorked: [{ blockId: 'DAILY-B-BLOCK', holeId: 'T-01', meters: 8 }] }]
         ]) status(await save(data, extra), 400, label);
+
+        status(await save({ ...complete, holesWorked: [] }), 200, 'Clôture sans détail de trous autorisée');
+
+        status(await save({ ...complete, holesWorked: [{ blockId: 'DAILY-A-BLOCK', holeId: 'T-01', meters: null }] }), 200, 'Ligne de trou incomplète ignorée à la clôture');
+
+        status(await save({ ...complete, holesWorked: [{ blockId: 'DAILY-A-BLOCK', holeId: 'T-01', meters: 7 }] }), 200, 'Détail partiel des trous autorisé');
 
         // Un ancien client garde la possibilité d'enregistrer avant soumission, sans confondre vide et zéro.
         const legacy = { ...complete, shift: 'night' };
@@ -231,6 +234,18 @@ async function main() {
         check(planAfter.body.plan,planBefore.body.plan,'Les profondeurs du plan restent inchangées');
         const persisted=await request('/api/daily-data?date=2026-10-25&machineId=DAILY-A',{token});
         check(persisted.body[0].data.holesWorked,unplannedHoles,'Identifiants et origines conservés après approbation');
+
+        for (const invalid of [-1,'abc',false]) {
+            status(await save({...blank,redrillMeters:invalid},{date:'2026-10-26'}),400,'Métrage reforé invalide refusé');
+        }
+        status(await save({...blank,redrillMeters:12.5,metersDrilled:null},{date:'2026-10-26'}),200,'Préenregistrement des reforés sans mètres nouveaux');
+        const redrillDraft=await request('/api/daily-data?date=2026-10-26&machineId=DAILY-A',{token});
+        check(redrillDraft.body[0].data.redrillMeters,12.5,'Reforage conservé à la reprise');
+        check(redrillDraft.body[0].data.metersDrilled,null,'Le reforage ne crée pas de mètres nouveaux');
+        status(await save({...zeroProduction,hours:12,stoppages:[],redrillMeters:12.5},{date:'2026-10-26'}),200,'Clôture de poste avec reforage seul');
+        const redrillComplete=await request('/api/daily-data?date=2026-10-26&machineId=DAILY-A',{token});
+        check(redrillComplete.body[0].data.redrillMeters,12.5,'Reforage conservé à la clôture');
+        check(redrillComplete.body[0].data.metersDrilled,0,'Mètres nouveaux restent nuls à la clôture');
 
         console.log(`✅ Brouillons journaliers API : ${assertions} contrôles réussis (reprise, arrêts, clôture, soumission, isolation et verrouillage).`);
     } catch (error) {
