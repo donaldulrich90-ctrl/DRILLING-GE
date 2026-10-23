@@ -4218,6 +4218,7 @@
                                 <option value="day">Jour — 6h à 18h (12 h)</option>
                                 <option value="night">Nuit — 18h à 6h (12 h)</option>
                             </select>
+                            <p class="text-xs text-slate-400 mt-1">Jour et Nuit ont chacun leur saisie. Enregistrez le poste avant d’en choisir un autre.</p>
                         </div>
                     </div>
                         <p id="dailyEntryModalSummary" class="text-slate-300 text-xs"></p>
@@ -23182,7 +23183,7 @@
 
         function onDailyEntryShiftChanged() {
             updateDailyEntryShiftConstraints();
-            onDailyEntryContextChanged();
+            onDailyEntryContextChanged(true);
         }
 
         function updateDailyEntryKpiPreview() {
@@ -23771,9 +23772,9 @@
             }
         }
 
-        function onDailyEntryContextChanged() {
+        function onDailyEntryContextChanged(keepSelectedShift) {
             if (!confirmDailyEntryContextChange()) return;
-            preselectDailyEntryShiftWhenSingleRecordForDate();
+            if (!keepSelectedShift) preselectDailyEntryShiftWhenSingleRecordForDate();
             loadDailyEntryFormFromRecord();
             updateDailyEntryModalSummary();
         }
@@ -23905,7 +23906,6 @@
             if (delBtn) delBtn.classList.add('hidden');
             dailyEntryLoadedContext = null;
             dailyEntryLoadedSnapshot = '';
-            dailyEntryEditingRecordId = null;
         }
 
         function countDailyRecordsInPurgeScope(dateFrom, dateTo, machineIdOpt) {
@@ -24069,7 +24069,6 @@
         var dailyEntrySaveInFlight = false;
         var dailyEntryLoadedSnapshot = '';
         var dailyEntryLoadedContext = null;
-        var dailyEntryEditingRecordId = null;
 
         function dailyEntryFormSnapshot() {
             var form = document.getElementById('dailyEntryForm');
@@ -24096,7 +24095,6 @@
                 machineId: (document.getElementById('dailyEntryMachineId') || {}).value || '',
                 shift: (document.getElementById('dailyEntryShift') || {}).value || ''
             };
-            dailyEntryEditingRecordId = record && record.id != null ? record.id : null;
             if (!record) {
                 setDailyEntrySaveStatus('Nouveau poste — aucune donnée enregistrée.', 'info');
                 return;
@@ -24119,16 +24117,7 @@
             var newDate = (document.getElementById('dailyEntryDate') || {}).value || '';
             var newMachine = (document.getElementById('dailyEntryMachineId') || {}).value || '';
             var newShift = (document.getElementById('dailyEntryShift') || {}).value || '';
-            var dateOrMachineChanged = old.date !== newDate || old.machineId !== newMachine;
-            var onlyShiftChanged = !dateOrMachineChanged && old.shift !== newShift;
-            if (!dateOrMachineChanged && !onlyShiftChanged) return true;
-            // Changement de shift seulement : garder le formulaire, mettre à jour le contexte
-            if (onlyShiftChanged) {
-                dailyEntryLoadedContext.shift = newShift;
-                updateDailyEntryShiftConstraints();
-                updateDailyEntryModalSummary();
-                return false;
-            }
+            if (old.date === newDate && old.machineId === newMachine && old.shift === newShift) return true;
             if (!dailyEntrySaveInFlight && (!dailyEntryFormIsDirty() || confirm('Ce poste comporte des modifications non enregistrées. Les abandonner pour changer de poste ? Pour les conserver, annulez puis cliquez sur « Pré-enregistrer ».'))) return true;
             document.getElementById('dailyEntryDate').value = old.date;
             document.getElementById('dailyEntryMachineId').value = old.machineId;
@@ -24190,12 +24179,6 @@
             var existingRec = (dailyDataRecords || []).find(function(r) {
                 return drillIdsMatch(r.machineId, machineId) && r.date === date && dailyRecordShiftKey(r) === shift;
             });
-            // Si on change le shift d'un record existant, retrouver ce record par son ID
-            if (!existingRec && dailyEntryEditingRecordId != null) {
-                existingRec = (dailyDataRecords || []).find(function(r) {
-                    return r.id != null && Number(r.id) === Number(dailyEntryEditingRecordId);
-                }) || null;
-            }
             if (existingRec && isDailyDataRecordReadOnlyForCurrentUser(existingRec)) {
                 showDailyEntryError('Cette saisie est verrouillée. Un poste soumis ou approuvé doit d’abord être rejeté ou rouvert par la supervision.');
                 return null;

@@ -247,6 +247,25 @@ async function main() {
         check(redrillComplete.body[0].data.redrillMeters,12.5,'Reforage conservé à la clôture');
         check(redrillComplete.body[0].data.metersDrilled,0,'Mètres nouveaux restent nuls à la clôture');
 
+        const separateDate={date:'2026-10-27'};
+        const dayData={...complete,metersDrilled:10,holesWorked:[],redrillMeters:2};
+        const daySaved=await save(dayData,{...separateDate,notes:'Jour à conserver'});
+        status(daySaved,200,'Enregistrement du Jour séparé');
+        const nightData={...complete,shift:'night',metersDrilled:20,holesWorked:[],redrillMeters:3};
+        const nightSaved=await save(nightData,{...separateDate,notes:'Nuit à conserver'});
+        status(nightSaved,200,'Enregistrement de la Nuit séparée');
+        check(daySaved.body.id===nightSaved.body.id,false,'Jour et Nuit ont des identifiants distincts');
+        const pairRead=()=>request('/api/daily-data?date=2026-10-27&machineId=DAILY-A',{token});
+        const beforeWrongId=(await pairRead()).body;
+        check(beforeWrongId.length,2,'Les deux postes sont conservés');
+        status(await save({...nightData,metersDrilled:999},{...separateDate,id:daySaved.body.id}),409,'Un ancien formulaire ne peut pas déplacer le Jour vers la Nuit');
+        check((await pairRead()).body,beforeWrongId,'Une tentative de changement par ID ne modifie aucun poste');
+        status(await save({...nightData,metersDrilled:25},{...separateDate,id:nightSaved.body.id,notes:'Nuit corrigée'}),200,'Correction de la Nuit existante');
+        const afterCorrection=(await pairRead()).body;
+        check(afterCorrection.find(r=>r.id===daySaved.body.id),beforeWrongId.find(r=>r.id===daySaved.body.id),'La correction Nuit ne touche pas au Jour');
+        check(afterCorrection.find(r=>r.id===nightSaved.body.id).data.metersDrilled,25,'La Nuit conserve sa correction');
+        check(afterCorrection.reduce((sum,r)=>sum+r.data.metersDrilled,0),35,'Le rapport journalier peut additionner les deux postes');
+
         console.log(`✅ Brouillons journaliers API : ${assertions} contrôles réussis (reprise, arrêts, clôture, soumission, isolation et verrouillage).`);
     } catch (error) {
         if (error && error.message && error.message.includes('Serveur indisponible')) process.stderr.write(logs);

@@ -98,7 +98,9 @@ const entryFunctionNames = [
     'decodeDailyHoleRef', 'getCurrentDailyEntryRecordMeta', 'loadDailyEntryFormFromRecord',
     'dailyEntryNumberOrNull', 'dailyEntryText', 'dailyEntryChecked',
     'setDailyEntrySaveStatus', 'dailyEntryFormSnapshot', 'markDailyEntryFormClean',
-    'saveDailyEntry', 'saveDailyEntryDraft', 'persistDailyEntry'
+    'saveDailyEntry', 'saveDailyEntryDraft', 'persistDailyEntry', 'dailyEntryFormIsDirty',
+    'confirmDailyEntryContextChange', 'onDailyEntryContextChanged', 'onDailyEntryShiftChanged',
+    'updateDailyEntryShiftConstraints', 'preselectDailyEntryShiftWhenSingleRecordForDate'
 ];
 
 function fixture(options = {}) {
@@ -136,7 +138,7 @@ function fixture(options = {}) {
     const sandbox = {
         console,
         currentUser: { id: 7, username: 'engineer', role: 'ingenieur', enterpriseId: 1 },
-        currentSiteId: 1, drills, dailyEntryEditingRecordId: null,
+        currentSiteId: 1, drills,
         dailyDataRecords: plain(options.records || []),
         SHIFT_NOMINAL_HOURS: { day: 12, night: 12, full: 24 },
         dailyEntrySaveInFlight: false, dailyEntryLoadedSnapshot: '', dailyEntryLoadedContext: null,
@@ -382,8 +384,6 @@ check('two pre-saved shifts accumulate correctly even when completed in reverse 
     vm.runInContext(['dailyRecordShiftOrder', 'compareDailyRecordsChronological', 'syncDrillTelemetryFromDailyRecords'].map(declaration).join('\n'), app);
     app.syncAllDrillsTelemetryFromDailyRecords = () => app.syncDrillTelemetryFromDailyRecords(app.drills[0]);
     await app.saveDailyEntryDraft();
-    // Simulate opening a separate new night entry; changing only the selector now moves the current entry.
-    app.dailyEntryEditingRecordId = null;
     fields.dailyEntryShift.value = 'night';
     fields.dailyEntryMeters.value = '20'; holeRows[0].querySelector('.daily-hole-meters').value = '20';
     await app.saveDailyEntryDraft();
@@ -529,6 +529,64 @@ check('negative redrill is rejected before pre-saving', async () => {
     assert.equal(await app.saveDailyEntryDraft(),null);
     assert.equal(calls.api.length,0); assert.equal(fields.dailyEntryRedrillMeters.value,'-1');
     assert.match(calls.errors[0],/reforés/);
+});
+
+check('save day, select night, save night and revisit both keeps two independent entries', async () => {
+    const {app,fields,calls}=fixture({fields:{dailyEntryMeters:'125',dailyEntryRedrillMeters:'8.5',dailyEntryHours:'8',dailyEntryNotes:'Jour sauvegardé'}});
+    const day=await app.saveDailyEntryDraft();
+    app.confirm=()=>assert.fail('A clean saved entry must switch without a warning');
+    fields.dailyEntryShift.value='night';
+    app.onDailyEntryShiftChanged();
+    for(const field of ['dailyEntryMeters','dailyEntryRedrillMeters','dailyEntryHours','dailyEntryNotes','dailyEntryCounterEnd']) assert.equal(fields[field].value,'',field);
+    assert.equal(app.dailyEntryLoadedContext.shift,'night');
+    assert.equal(fields.dailyEntryHours.getAttribute('max'),'12.5');
+    fields.dailyEntryMeters.value='95'; fields.dailyEntryHours.value='6'; fields.dailyEntryNotes.value='Nuit sauvegardée';
+    const night=await app.saveDailyEntryDraft();
+    assert.notEqual(day.id,night.id);
+    assert.equal(app.dailyDataRecords.length,2);
+    assert.equal(calls.api[1].id,undefined);
+    assert.equal(app.dailyDataRecords.find(r=>r.id===day.id).data.metersDrilled,125);
+    for(const [shift,meters,notes] of [['day','125','Jour sauvegardé'],['night','95','Nuit sauvegardée']]) {
+        fields.dailyEntryShift.value=shift; app.onDailyEntryShiftChanged();
+        assert.equal(fields.dailyEntryMeters.value,meters);
+        assert.equal(fields.dailyEntryNotes.value,notes);
+    }
+});
+
+check('switching restores a saved night and keeps the explicit full-day selection', () => {
+    const records=[{id:1,machineId:'A',date:'2026-10-22',data:{shift:'day',entryStage:'draft',metersDrilled:80}},
+        {id:2,machineId:'A',date:'2026-10-22',notes:'Nuit existante',data:{shift:'night',entryStage:'draft',metersDrilled:0,redrillMeters:9}}];
+    const {app,fields}=fixture({records}); app.loadDailyEntryFormFromRecord();
+    app.confirm=()=>assert.fail('Saved entries must not be discarded');
+    fields.dailyEntryShift.value='night'; app.onDailyEntryShiftChanged();
+    assert.equal(fields.dailyEntryMeters.value,'0'); assert.equal(fields.dailyEntryRedrillMeters.value,'9');
+    assert.equal(fields.dailyEntryNotes.value,'Nuit existante');
+    fields.dailyEntryShift.value=''; app.onDailyEntryShiftChanged();
+    assert.equal(fields.dailyEntryShift.value,''); assert.equal(fields.dailyEntryMeters.value,'');
+    assert.equal(fields.dailyEntryHours.getAttribute('max'),'24');
+});
+
+check('unsaved edits are retained when cancelling a switch and discarded only after confirmation', () => {
+    const {app,fields,calls}=fixture();
+    fields.dailyEntryForm.querySelectorAll=()=>[fields.dailyEntryMeters,fields.dailyEntryNotes];
+    app.loadDailyEntryFormFromRecord(); fields.dailyEntryMeters.value='30'; fields.dailyEntryNotes.value='En cours';
+    let warnings=0; app.confirm=()=>{warnings+=1;return false;};
+    fields.dailyEntryShift.value='night'; app.onDailyEntryShiftChanged();
+    assert.equal(warnings,1); assert.equal(fields.dailyEntryShift.value,'day'); assert.equal(fields.dailyEntryMeters.value,'30');
+    assert.equal(app.dailyEntryLoadedContext.shift,'day'); assert.equal(calls.api.length,0);
+    app.confirm=()=>true; fields.dailyEntryShift.value='night'; app.onDailyEntryShiftChanged();
+    assert.equal(fields.dailyEntryMeters.value,''); assert.equal(fields.dailyEntryNotes.value,'');
+    assert.equal(app.dailyEntryLoadedContext.shift,'night'); assert.equal(calls.api.length,0);
+});
+
+check('a shift cannot change while its save is pending', async () => {
+    let finish;
+    const {app,fields}=fixture({fields:{dailyEntryMeters:'12'},save:()=>new Promise(resolve=>{finish=resolve;})});
+    app.markDailyEntryFormClean(null); app.confirm=()=>assert.fail('No discard prompt during a pending save');
+    const pending=app.saveDailyEntryDraft(); fields.dailyEntryShift.value='night'; app.onDailyEntryShiftChanged();
+    assert.equal(fields.dailyEntryShift.value,'day'); assert.equal(fields.dailyEntryMeters.value,'12');
+    finish({id:501}); const day=await pending;
+    assert.equal(day.data.shift,'day'); assert.equal(day.data.metersDrilled,12);
 });
 
 async function main() {
