@@ -397,6 +397,11 @@ function validateDailyDataValues(data, complete = false) {
     }
     for (const hole of data.holesWorked || []) {
         if (!hole || typeof hole !== 'object' || Array.isArray(hole)) return 'Une ligne de trou est invalide.';
+        if (hole.source != null && !['plan', 'manual', 'automatic'].includes(hole.source)) return 'Origine du trou invalide.';
+        if (hole.source === 'manual' || hole.source === 'automatic') {
+            if (String(hole.blockId || '').trim()) return 'Un trou saisi hors plan ne doit pas référencer un bloc du plan.';
+        }
+        if (hole.holeId != null && (typeof hole.holeId !== 'string' || hole.holeId.length > 100)) return 'Identifiant de trou invalide (100 caractères maximum).';
         for (const field of ['meters', 'finalDepth']) {
             if (dailyDataHasValue(hole[field]) && !dailyDataValidNonnegativeNumber(hole[field])) return 'Un métrage ou une profondeur de trou est invalide.';
         }
@@ -452,7 +457,8 @@ function validateDailyDataForSubmission(row) {
     let holeMeters = 0;
     for (const hole of holes) {
         const holeId = String(hole && hole.holeId || '').trim();
-        if (!holeId || !String(hole.blockId || '').trim()) return 'Chaque ligne de trou doit comporter une référence de bloc et de trou.';
+        const unplanned = hole.source === 'manual' || hole.source === 'automatic';
+        if (!holeId || (!unplanned && !String(hole.blockId || '').trim())) return 'Chaque ligne de trou doit comporter un identifiant et, pour les trous du plan, un bloc.';
         const key = `${String(hole.blockId || '').trim()}::${holeId}`.toLowerCase();
         if (seenHoles.has(key)) return `Le trou ${holeId} est présent plusieurs fois.`;
         seenHoles.add(key);
@@ -494,7 +500,7 @@ function parseDailyHolesWorked(row) {
 }
 
 function validateDailyHoleReferences(req, row, cb) {
-    const holes = parseDailyHolesWorked(row);
+    const holes = parseDailyHolesWorked(row).filter(hole => hole.source !== 'manual' && hole.source !== 'automatic');
     if (holes.length === 0) return cb(null);
     const enterpriseId = getEnterpriseId(req);
     if (enterpriseId == null) return cb(new Error('Contexte entreprise requis pour contrôler les trous du poste.'));
@@ -518,7 +524,8 @@ function validateDailyHoleReferences(req, row, cb) {
 }
 
 function applyApprovedDailyHoleProgress(req, row, actorUsername, cb) {
-    const holes = parseDailyHolesWorked(row);
+    // Les identifiants hors plan restent tracés dans le poste sans modifier un trou du plan.
+    const holes = parseDailyHolesWorked(row).filter(hole => hole.source !== 'manual' && hole.source !== 'automatic');
     if (holes.length === 0) return cb(null);
     const enterpriseId = getEnterpriseId(req);
     if (enterpriseId == null) return cb(new Error('Contexte entreprise requis pour mettre à jour le plan.'));
