@@ -18136,7 +18136,7 @@
 
         function buildDailyReportDocumentHtml(date, records) {
             records = (records || []).filter(function(record) { return !!record && !isDailyRecordIncompleteDraft(record); });
-            var companyName = companyInfo.name || REPORT_BRAND_SUBSCRIBER_NAME;
+            var companyName = getReportBrandSubscriberName();
             var projectLabel = getReportProjectLabel(records);
             if (!currentSiteId) {
                 var reportSites = {};
@@ -18315,7 +18315,7 @@
                 (stopRows || '<tr><td colspan="6">Aucun arrêt pré-enregistré à cet instant.</td></tr>') + '</tbody></table>' + stopSummary + '</section>' +
                 '<section class="daily-section"><h2><span class="daily-section-number">04</span>Observations et éléments à compléter</h2>' +
                 (notes || '<div class="summary">Non renseigné</div>') + '</section>' +
-                '<footer class="daily-footer"><span>' + escapeHtmlReportCell(companyInfo.name || REPORT_BRAND_SUBSCRIBER_NAME) +
+                '<footer class="daily-footer"><span>' + escapeHtmlReportCell(getReportBrandSubscriberName()) +
                 '<br>Rapport de mi-poste — PROVISOIRE</span><span>Généré le ' + escapeHtmlReportCell(generatedAt) + '</span></footer></main></body></html>';
         }
 
@@ -18357,7 +18357,7 @@
         }
 
         function printWeeklyReport(year, week, startDate, endDate, records) {
-            var companyName = companyInfo.name || REPORT_BRAND_SUBSCRIBER_NAME;
+            var companyName = getReportBrandSubscriberName();
             var periodLabel = formatDate(startDate.toISOString().split('T')[0]) + ' — ' + formatDate(endDate.toISOString().split('T')[0]);
             var metaRowsWeek = [
                 [
@@ -18588,7 +18588,7 @@
         }
 
         function printFuelConsumptionReport(startDate, endDate, records) {
-            var companyName = companyInfo.name || REPORT_BRAND_SUBSCRIBER_NAME;
+            var companyName = getReportBrandSubscriberName();
             var periodLabelFuel = formatDate(startDate) + ' — ' + formatDate(endDate);
             var metaRowsFuel = [
                 [
@@ -22699,7 +22699,13 @@
                 .replace(/>/g, '&gt;');
         }
 
-        var REPORT_BRAND_SUBSCRIBER_NAME = 'SAHARA MINING AND SERVICES';
+        function getReportBrandSubscriberName() {
+            if (companyInfo && companyInfo.name) return companyInfo.name;
+            var ent = resolveCurrentEnterprise();
+            if (ent && ent.name) return ent.name;
+            return 'Entreprise';
+        }
+        var REPORT_BRAND_SUBSCRIBER_NAME = 'Entreprise';
 
         var REPORT_PRINT_ENTETE_CSS =
             '.report-logos-row{display:flex;justify-content:space-between;align-items:flex-end;padding-bottom:4px;gap:20px;margin-bottom:2px;}' +
@@ -22717,7 +22723,11 @@
 
         function getSubscriberLogoSrcForReport() {
             var raw = (typeof companyLogo !== 'undefined' && companyLogo && String(companyLogo).trim()) ? String(companyLogo).trim() : '';
-            return raw || resolveStaticAssetUrl('logo-sahara-mining-services.png');
+            if (!raw) {
+                var ent = resolveCurrentEnterprise();
+                if (ent && ent.logo) raw = String(ent.logo).trim();
+            }
+            return raw || resolveStaticAssetUrl('ge-logo.png');
         }
 
         function buildReportLogoImgHtml(src, alt, style) {
@@ -22765,7 +22775,7 @@
             var partner = findPartnerClientForReport(records);
             var partnerSrc = getPartnerClientLogoSrc(partner);
             var partnerName = partner && partner.name ? partner.name : 'VITAL';
-            var left = '<div class="logo-section">' + buildReportLogoImgHtml(subSrc, REPORT_BRAND_SUBSCRIBER_NAME) + '</div>';
+            var left = '<div class="logo-section">' + buildReportLogoImgHtml(subSrc, getReportBrandSubscriberName()) + '</div>';
             var center = '<div class="company-info">' +
                 '<div class="report-brand-title">' + escapeHtmlReportCell(companyName) + '</div>' +
                 (companyAddress ? '<div class="report-brand-detail">' + escapeHtmlReportCell(companyAddress) + '</div>' : '') +
@@ -22857,8 +22867,8 @@
             var partner = findPartnerClientForReport(records);
             var partnerSrc = getPartnerClientLogoSrc(partner);
             var partnerName = partner && partner.name ? partner.name : 'VITAL';
-            var left = '<div class="report-logo-left">' + buildReportLogoImgHtml(subSrc, REPORT_BRAND_SUBSCRIBER_NAME) +
-                '<div class="report-logo-caption">' + escapeHtmlReportCell(REPORT_BRAND_SUBSCRIBER_NAME) + '</div></div>';
+            var left = '<div class="report-logo-left">' + buildReportLogoImgHtml(subSrc, getReportBrandSubscriberName()) +
+                '<div class="report-logo-caption">' + escapeHtmlReportCell(getReportBrandSubscriberName()) + '</div></div>';
             var right = '<div class="report-logo-right">' + buildReportLogoImgHtml(partnerSrc, partnerName) +
                 '<div class="report-logo-caption">' + escapeHtmlReportCell(partnerName) + '</div></div>';
             return '<div class="report-logos-row">' + left + right + '</div>';
@@ -24871,7 +24881,7 @@
         function updateHeaderLogo() {
             var el = document.getElementById('headerEnterpriseLogo');
             if (!el) return;
-            var subscriberFallback = resolveStaticAssetUrl('logo-sahara-mining-services.png');
+            var subscriberFallback = resolveStaticAssetUrl('ge-logo.png');
             var raw = (typeof companyLogo !== 'undefined' && companyLogo && String(companyLogo).trim()) ? String(companyLogo).trim() : '';
             // Fallback vers le logo de l'entreprise (table enterprises) si companyInfo.logo absent
             if (!raw && currentUser) {
@@ -24881,7 +24891,7 @@
                 if (curEnt && curEnt.logo) raw = String(curEnt.logo).trim();
             }
             var src = raw || subscriberFallback;
-            var alt = 'SAHARA MINING AND SERVICES';
+            var alt = getReportBrandSubscriberName();
             el.innerHTML = '';
             var img = document.createElement('img');
             img.src = src;
