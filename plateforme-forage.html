@@ -24188,10 +24188,9 @@
                     showDailyEntryError('Un arrêt est encore incomplet. Indiquez sa durée ou ses heures de début et de fin, ou pré-enregistrez le poste pour le compléter plus tard.');
                     return null;
                 }
-                if (holesWorked.some(function(hole) { return (!hole.blockId && hole.source !== 'manual' && hole.source !== 'automatic') || !hole.holeId || hole.meters == null; })) {
-                    showDailyEntryError('Complétez les trous travaillés (trou et métrage), ou retirez les lignes inutiles avant de terminer.');
-                    return null;
-                }
+                holesWorked = holesWorked.filter(function(hole) {
+                    return hole.holeId && hole.meters != null;
+                });
                 var nominal = getShiftNominalHours(shift);
                 if (Math.abs(downtimeHoursTotal + hours - nominal) > .02) {
                     showDailyEntryError('Pour terminer ce poste de ' + nominal + ' h, les heures machine (' + formatStoppageHoursExactDisplay(hours) + ' h) et les arrêts (' + formatStoppageHoursExactDisplay(downtimeHoursTotal) + ' h) doivent totaliser ' + nominal + ' h. Vous pouvez pré-enregistrer les données actuelles puis les compléter.');
