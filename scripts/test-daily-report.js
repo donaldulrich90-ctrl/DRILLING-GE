@@ -30,7 +30,7 @@ function declaration(kind, name, endCharacter) {
 const helperNames = [
     'reportCalendarDayNumber', 'getReportPlannedProduction', 'getReportTenantKey', 'ensureReportPlanLoaded',
     'isDailyRecordIncompleteDraft', 'buildMidshiftReportDocumentHtml',
-    'getReportUsedMachineCount', 'buildDailyProductionChart', 'buildDailyHoleTraceability',
+    'getReportBrandSubscriberName', 'buildForecastVsActualChart', 'getReportUsedMachineCount', 'buildDailyProductionChart', 'buildDailyHoleTraceability',
     'findDrillByMachineId', 'dailyRecordShiftKey', 'getShiftNominalHours', 'getShiftLabelForReport',
     'computeShiftAvailabilityKpis', 'computeDailyEntryCounterDelta', 'deriveFuelLitersFromDailyData',
     'getEffectiveFuelConsumptionFromData', 'classifyStoppageReasonToBucket', 'aggregateStoppageHoursByCategory',
@@ -50,6 +50,7 @@ const reportVariables = ['REPORT_PRINT_ENTETE_CSS', 'DAILY_REPORT_PRINT_CSS', 'D
 function fixture(overrides = {}) {
     const context = vm.createContext({
         console,
+        resolveCurrentEnterprise: () => null,
         currentUser: { enterpriseId: 7 },
         currentSiteId: 1,
         window: { API: { getEnterpriseId: () => 7 } },
@@ -224,8 +225,8 @@ check('the KPI banner compares new metres with the saved goal and reports the si
     assert.equal(kpiValue(html, 'Écart (réel − plan)'), '-20,0 m');
     assert.equal(kpiValue(html, 'Heures de panne'), '2,0 h');
     assert.equal(kpiValue(html, 'Heures de standby'), '1,0 h');
-    assert.match(textContent(html), /Reforage : 7,0 m/);
-    assert.match(textContent(html), /Flushing : 3,0 m/);
+    assert.equal(kpiValue(html, 'Reforage'), '7,0 m');
+    assert.equal(kpiValue(html, 'Flushing'), '3,0 m');
 });
 
 check('a zero goal displays zero and a finite variance but no fabricated percentage', () => {
@@ -434,7 +435,7 @@ check('the landscape daily document contains visible KPIs, printable charts and 
     const html = app.buildDailyReportDocumentHtml('2026-10-16', [record('A', 'day', 80)]);
     assert.match(html, /<!DOCTYPE html>/);
     assert.match(html, /RAPPORT JOURNALIER DE FORAGE/);
-    for (const title of ['INDICATEURS CLÉS', 'Activité et performance', 'Répartition des arrêts', 'Production par zone', 'Observations générales', 'Établi par', 'Contrôlé par', 'Visé par']) {
+    for (const title of ['SYNTHÈSE MANAGEMENT', 'INDICATEURS CLÉS', 'Production de la journée', 'Faits marquants et observations', 'Établi par', 'Contrôlé par', 'Visé par']) {
         assert.ok(html.includes(title), `Missing report section: ${title}`);
     }
     assert.doesNotMatch(html, /<canvas\b|<script\b|chart\.js|cdn\.jsdelivr|Forage nouveau réalisé \/ planifié — 7 jours/i);
@@ -483,14 +484,15 @@ check('report comments, machine names and intervention details remain text', () 
     const html = app.buildDailyReportDocumentHtml('2026-10-16', rows);
     assert.doesNotMatch(html, /<script\b|<img src=x/i);
     assert.ok(html.includes('&lt;script&gt;alert("injected")&lt;/script&gt;'));
-    assert.ok(html.includes('&lt;img src=x onerror=alert(1)&gt;'));
+    const detailed = app.buildDailyReportDocumentHtml('2026-10-16', rows, true);
+    assert.ok(detailed.includes('&lt;img src=x onerror=alert(1)&gt;'));
     assert.ok(textContent(html).includes('80'));
 });
 
 check('an empty daily selection still produces a complete, finite printable document', () => {
     const app = fixture();
     const html = app.buildDailyReportDocumentHtml('2026-10-16', []);
-    assert.match(html, /Aucune donnée enregistrée/);
+    assert.match(html, /Non renseigné/);
     assert.doesNotMatch(html, /\bNaN\b|\bInfinity\b|\bundefined\b/);
     assert.match(html, /Visa et signatures/);
 });
@@ -518,14 +520,59 @@ check('the chart retains explicit zero goals and the provisional chart never inv
     assert.doesNotMatch(app.buildDailyProductionChart(rows,'2026-10-16',true),/Planifié|Réalisé et objectif/);
 });
 
-check('manual and generated hole identifiers remain visible and escaped in both reports', () => {
+check('the management report omits technical tables and the detailed report preserves them', () => {
     const app = fixture();
-    const rows=[record('A','day',8,'2026-10-16',{holesWorked:[{source:'manual',blockId:'',holeId:'RC-001 <test>',meters:5,finalDepth:10},{source:'automatic',blockId:'',holeId:'A-20261016-J-001',meters:3,finalDepth:null}]})];
-    for (const html of [app.buildDailyReportDocumentHtml('2026-10-16',rows), app.buildMidshiftReportDocumentHtml('2026-10-16',rows)]) {
-        assert.match(html,/RC-001 &lt;test&gt;/); assert.match(html,/A-20261016-J-001/);
-        assert.match(html,/>Manuel</); assert.match(html,/>Automatique</);
-        assert.match(html,/@page\{size:A4 landscape/);
+    const rows = [record('A','day',80,'2026-10-16',{fuelConsumption:1234,notes:'Consigne de sécurité & observation',holesWorked:[{source:'manual',holeId:'RC-001',meters:80}]})];
+    const management = app.buildDailyReportDocumentHtml('2026-10-16',rows);
+    const detailed = app.buildDailyReportDocumentHtml('2026-10-16',rows,true);
+    for (const title of ['Exploitation par machine et poste','Répartition des arrêts','Compteurs, carburant et utilisation','Standby et services','Production par zone']) {
+        assert.ok(!management.includes(title), title);
+        assert.ok(detailed.includes(title), title);
     }
+    assert.doesNotMatch(management, /Forecast vs Actuel|<table|1234|RC-001/);
+    assert.match(management, /Consigne de sécurité &amp; observation/);
+    assert.match(detailed, /RAPPORT OPÉRATIONNEL DÉTAILLÉ/);
+    assert.equal(kpiValue(management,'Production réalisée'),kpiValue(detailed,'Production réalisée'));
+    // Keep the latest published choice: hole identities remain in the entry, outside both reports.
+    assert.doesNotMatch(detailed, /RC-001/);
+});
+
+check('both report buttons route to their matching document after the plan loads', async () => {
+    for (const detailed of [false,true]) {
+        const app = fixture();
+        app.document = {getElementById:()=>({value:'2026-10-16'})};
+        app.getDailyDataForSite = ()=>[record('A','day',80)];
+        app.window.open=()=>({document:{write:()=>{},close:()=>{}}});
+        app.alert=assert.fail;
+        app.apiRequest=()=>Promise.resolve({plan:savedPlan(),version:5});
+        const rendered=new Promise(resolve=>{app.printDailyReport=(date,rows,popup,html)=>resolve(html);});
+        app.generateDailyReport(detailed);
+        const html=await rendered;
+        assert.match(html,detailed?/RAPPORT OPÉRATIONNEL DÉTAILLÉ/:/SYNTHÈSE MANAGEMENT/);
+    }
+});
+
+check('missing rework stays unavailable and an explicit zero stays visible', () => {
+    const app=fixture();
+    const missing=app.buildDailyReportDocumentHtml('2026-10-16',[record('A','day',80)]);
+    assert.equal(kpiValue(missing,'Reforage'),'Non renseigné');
+    assert.equal(kpiValue(missing,'Flushing'),'Non renseigné');
+    const known=app.buildDailyReportDocumentHtml('2026-10-16',[record('A','day',80,'2026-10-16',{redrillMeters:0,flushingMeters:0})]);
+    assert.equal(kpiValue(known,'Reforage'),'0,0 m');
+    assert.equal(kpiValue(known,'Flushing'),'0,0 m');
+});
+
+check('day and night redrill adds separately without increasing production or the chart totals', () => {
+    const app=fixture();
+    const rows=[record('A','day',100,'2026-10-22',{redrillMeters:8.5}),record('A','night',80,'2026-10-22',{redrillMeters:4})];
+    const daily=app.buildDailyReportDocumentHtml('2026-10-22',rows);
+    assert.equal(kpiValue(daily,'Production réalisée'),'180,0 m');
+    assert.equal(kpiValue(daily,'Reforage'),'12,5 m');
+    const partial=app.buildMidshiftReportDocumentHtml('2026-10-22',rows);
+    assert.equal(kpiValue(partial,'Mètres reforés renseignés'),'12,5 m');
+    assert.match(partial,/<th>Reforés \(m\)<\/th>/);
+    assert.match(app.buildDailyProductionChart(rows,'2026-10-22',false),/>180 m</);
+    assert.equal(app.getReportUsedMachineCount([record('B','day',0,'2026-10-22',{hours:0,redrillMeters:3})]),1);
 });
 
 async function main() {
