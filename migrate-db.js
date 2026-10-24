@@ -240,7 +240,9 @@ const migrations = [
                 }
             );
         }
-    }
+    },
+    { name: 'drills.parkReason', sql: 'ALTER TABLE drills ADD COLUMN parkReason TEXT DEFAULT NULL' },
+    { name: 'drills.expectedReturnDate', sql: 'ALTER TABLE drills ADD COLUMN expectedReturnDate TEXT DEFAULT NULL' }
 ];
 
 let completed = 0;
