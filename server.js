@@ -1695,6 +1695,88 @@ app.post('/api/claude-ai/parse-plan', (req, res) => {
     });
 });
 
+// Chat IA conversationnel — assistant ingénierie, comptabilité, planification
+app.post('/api/claude-ai/chat', (req, res) => {
+    const entId = getEnterpriseId(req);
+    if (entId == null) return res.status(400).json({ error: 'Entreprise requise' });
+    db.get('SELECT claudeApiKey, name FROM enterprises WHERE id = ?', [entId], async (err, ent) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!ent || !ent.claudeApiKey) return res.status(400).json({ error: 'Clé API Claude non configurée. Allez dans Paramètres > Entreprise pour ajouter votre clé.' });
+        const { messages, context } = req.body;
+        if (!messages || !Array.isArray(messages) || messages.length === 0) return res.status(400).json({ error: 'Messages requis' });
+        try {
+            // Collecter le contexte de l'entreprise
+            const contextData = await new Promise((resolve) => {
+                const ctx = { enterprise: ent.name };
+                db.all('SELECT id, name FROM sites WHERE enterpriseId = ?', [entId], (e, sites) => {
+                    ctx.sites = (sites || []).map(s => s.name);
+                    db.all('SELECT id, name, status, type FROM drills WHERE enterpriseId = ?', [entId], (e2, drills) => {
+                        ctx.machines = (drills || []).map(d => ({ name: d.name, status: d.status, type: d.type }));
+                        ctx.machineCount = (drills || []).length;
+                        ctx.activeMachines = (drills || []).filter(d => d.status === 'active').length;
+                        db.all('SELECT id, name, totalHoles, status FROM drill_plans WHERE enterpriseId = ?', [entId], (e3, plans) => {
+                            ctx.drillPlans = (plans || []).map(p => ({ name: p.name, totalHoles: p.totalHoles, status: p.status }));
+                            db.get('SELECT COUNT(*) as cnt FROM dailyDataRecords WHERE enterpriseId = ?', [entId], (e4, ddr) => {
+                                ctx.totalDailyRecords = ddr ? ddr.cnt : 0;
+                                db.all('SELECT id, fullName, role FROM employees WHERE enterpriseId = ? LIMIT 50', [entId], (e5, emps) => {
+                                    ctx.employeeCount = (emps || []).length;
+                                    resolve(ctx);
+                                });
+                            });
+                        });
+                    });
+                });
+            });
+
+            const systemPrompt = `Tu es l'assistant IA de la plateforme GOOD ENGINEERS - GEDRILLING, un système de gestion de forage et sondage minier. Tu travailles pour l'entreprise "${contextData.enterprise}".
+
+CONTEXTE DE L'ENTREPRISE :
+- Sites : ${contextData.sites.length > 0 ? contextData.sites.join(', ') : 'aucun site'}
+- Machines/foreuses : ${contextData.machineCount} (${contextData.activeMachines} actives)
+- Plans de forage : ${contextData.drillPlans.length > 0 ? contextData.drillPlans.map(p => p.name + ' (' + p.totalHoles + ' trous, ' + p.status + ')').join('; ') : 'aucun'}
+- Saisies journalières : ${contextData.totalDailyRecords} enregistrements
+- Employés : ${contextData.employeeCount}
+
+TES DOMAINES D'EXPERTISE :
+1. INGÉNIERIE DE FORAGE : plans de forage, positionnement des trous, profondeurs, types de sondage (RC, DD, RAB), optimisation du patron de trous, rendements machines, métrages, gestion du reforage
+2. COMPTABILITÉ & FINANCES : facturation des métrages forés, calcul de rentabilité par contrat, suivi des dépenses (carburant, consommables, maintenance), marges opérationnelles, back-charges sous-traitants
+3. PLANIFICATION & LOGISTIQUE : affectation machines aux sites, planification des shifts, gestion de la maintenance préventive, prévision de production (Forecast vs Actuel), suivi d'avancement des plans
+4. SÉCURITÉ & CONFORMITÉ : procédures de sécurité minière, incidents, reporting HSE
+5. RESSOURCES HUMAINES : planning du personnel, pointage, rotation d'équipes
+
+RÈGLES :
+- Réponds en français sauf si on te parle en anglais
+- Sois concis mais complet
+- Utilise les données de l'entreprise quand c'est pertinent
+- Propose des solutions pratiques et actionables
+- Si tu ne connais pas une donnée spécifique, dis-le clairement
+- Tu peux faire des calculs, des estimations et des recommandations`;
+
+            const fetch = require('node-fetch') || globalThis.fetch;
+            const response = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': ent.claudeApiKey,
+                    'anthropic-version': '2023-06-01'
+                },
+                body: JSON.stringify({
+                    model: 'claude-sonnet-4-20250514',
+                    max_tokens: 4096,
+                    system: systemPrompt,
+                    messages: messages.slice(-20) // Garder les 20 derniers messages pour le contexte
+                })
+            });
+            const data = await response.json();
+            if (data.error) return res.status(400).json({ error: data.error.message || 'Erreur API Claude' });
+            const text = data.content && data.content[0] && data.content[0].text || '';
+            res.json({ reply: text });
+        } catch(e) {
+            res.status(500).json({ error: 'Erreur appel API Claude: ' + e.message });
+        }
+    });
+});
+
 // Sauvegarder la clé API Claude
 app.put('/api/enterprises/:id/claude-key', (req, res) => {
     const { claudeApiKey } = req.body;
