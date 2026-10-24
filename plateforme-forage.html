@@ -4283,7 +4283,7 @@
                     <div class="mb-4 rounded-lg border border-slate-600 bg-slate-900/40 p-3">
                         <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
                             <div>
-                                <label class="block text-slate-200 font-semibold">Trous travaillés pendant le poste</label>
+                                <label class="block text-slate-200 font-semibold">Trous travaillés pendant le poste <span id="dailyEntryHolesCount" class="text-cyan-300 font-normal text-sm">(0)</span></label>
                                 <p class="text-xs text-slate-400">Choisissez dans le plan, saisissez un identifiant ou générez-le. Le total par trou alimente les mètres nouveaux ; renseignez le reforage séparément ci-dessous.</p>
                             </div>
                             <button type="button" id="dailyEntryAddHoleButton" onclick="addDailyEntryHoleRow()" class="bg-blue-600 hover:bg-blue-700 px-3 py-2 rounded text-sm">+ Ajouter un trou</button>
@@ -4375,7 +4375,7 @@
                     <div class="mb-4 p-4 bg-amber-900/20 rounded-lg border border-amber-700/50">
                         <div class="flex flex-wrap justify-between items-center gap-2 mb-2">
                             <div>
-                                <label class="block text-amber-200 font-semibold">Temps d’arrêt <span class="text-slate-400 font-normal text-sm">(par shift — blast, déplacement, manque de trou, etc.)</span></label>
+                                <label class="block text-amber-200 font-semibold">Temps d’arrêt <span id="dailyEntryStoppagesCount" class="text-amber-300 font-normal text-sm">(0)</span> <span class="text-slate-400 font-normal text-sm">(par shift — blast, déplacement, manque de trou, etc.)</span></label>
                                 <p class="text-slate-400 text-xs mt-1">Saisissez une durée en heures, ou indiquez Début et Fin pour la calculer. Un arrêt encore en cours peut être pré-enregistré avec son heure de début seule. Pour terminer le poste, complétez les arrêts : heures machine + arrêts doivent totaliser 12 h (jour/nuit) ou 24 h (journée complète).</p>
                             </div>
                             <div class="text-right">
@@ -23143,6 +23143,7 @@
             var sum = list.reduce(function(a, s) { return a + (parseFloat(s.hours) || 0); }, 0);
             el.textContent = formatStoppageHoursExactDisplay(sum);
             updateDailyEntryKpiPreview();
+            renumberDailyEntryRows();
         }
 
         /** Pré-remplit prix / devise carburant depuis le contrat lié (ou repli), si aucune ligne du jour n’est chargée. */
@@ -23326,6 +23327,34 @@
             return { blockId: decodeURIComponent(parts[0]), holeId: decodeURIComponent(parts[1]) };
         }
 
+        function renumberDailyEntryRows() {
+            var holeRows = document.querySelectorAll('#dailyEntryHolesContainer [data-daily-hole-row]');
+            holeRows.forEach(function(row, i) {
+                var badge = row.querySelector('.daily-row-number');
+                if (!badge) {
+                    badge = document.createElement('span');
+                    badge.className = 'daily-row-number inline-flex items-center justify-center w-6 h-6 rounded-full bg-cyan-700 text-white text-xs font-bold mr-1 flex-shrink-0';
+                    row.insertBefore(badge, row.firstChild);
+                }
+                badge.textContent = String(i + 1);
+            });
+            var countEl = document.getElementById('dailyEntryHolesCount');
+            if (countEl) countEl.textContent = '(' + holeRows.length + ')';
+
+            var stopRows = document.querySelectorAll('#dailyEntryStoppagesContainer [data-daily-stoppage-row]');
+            stopRows.forEach(function(row, i) {
+                var badge = row.querySelector('.daily-row-number');
+                if (!badge) {
+                    badge = document.createElement('span');
+                    badge.className = 'daily-row-number inline-flex items-center justify-center w-6 h-6 rounded-full bg-amber-700 text-white text-xs font-bold mr-1 flex-shrink-0';
+                    row.insertBefore(badge, row.firstChild);
+                }
+                badge.textContent = String(i + 1);
+            });
+            var stopCountEl = document.getElementById('dailyEntryStoppagesCount');
+            if (stopCountEl) stopCountEl.textContent = '(' + stopRows.length + ')';
+        }
+
         function updateDailyEntryHolesTotal(syncMeters) {
             var total = 0;
             var hasMeters = false;
@@ -23341,6 +23370,7 @@
                 if (meterInput) meterInput.value = hasMeters ? total.toFixed(1) : '';
                 updateDailyEntryKpiPreview();
             }
+            renumberDailyEntryRows();
         }
 
         function removeDailyEntryHoleRow(button) {
@@ -23619,6 +23649,7 @@
             var row = btn.closest('[data-daily-stoppage-row]');
             if (row) row.remove();
             updateDailyEntryDowntimeTotalDisplay();
+            renumberDailyEntryRows();
         }
 
         function addDailyEntryStoppageRow(preset) {
