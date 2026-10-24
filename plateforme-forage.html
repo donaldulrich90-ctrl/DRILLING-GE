@@ -18318,9 +18318,18 @@
                 var siteName = site ? escapeHtmlReportCell(site.name) : '—';
                 var reason = d.parkReason ? escapeHtmlReportCell(d.parkReason) : '—';
                 var returnDate = d.expectedReturnDate ? formatDate(d.expectedReturnDate) : 'Non définie';
+                // Lieu de forage : dernière saisie journalière de cette machine
+                var machineRecords = (dailyDataRecords || []).filter(function(r) { return drillIdsMatch(r.machineId, d.id); });
+                machineRecords.sort(function(a, b) { return (b.date || '').localeCompare(a.date || '') || (b.shift || '').localeCompare(a.shift || ''); });
+                var lastLoc = '';
+                for (var i = 0; i < machineRecords.length; i++) {
+                    var rd = _rpData(machineRecords[i]);
+                    if (rd.location) { lastLoc = rd.location; break; }
+                }
+                var lieuForage = lastLoc ? escapeHtmlReportCell(lastLoc) : escapeHtmlReportCell(d.location || '—');
                 return '<tr>' +
                     '<td style="font-weight:700">' + escapeHtmlReportCell(String(d.id)) + '</td>' +
-                    '<td>' + escapeHtmlReportCell(d.location || '') + '</td>' +
+                    '<td>' + lieuForage + '</td>' +
                     '<td>' + siteName + '</td>' +
                     '<td><span class="parked-status ' + sc + '">' + escapeHtmlReportCell(d.status) + '</span></td>' +
                     '<td>' + reason + '</td>' +
@@ -18328,7 +18337,7 @@
                     '</tr>';
             }).join('');
             return '<table class="parked-table"><thead><tr>' +
-                '<th>Machine</th><th>Lieu</th><th>Site</th><th>Statut</th><th>Motif d\'arrêt</th><th>Date de sortie probable</th>' +
+                '<th>Machine</th><th>Lieu de forage</th><th>Site</th><th>Statut</th><th>Motif d\'arrêt</th><th>Date de sortie probable</th>' +
                 '</tr></thead><tbody>' + rows + '</tbody></table>';
         }
 
