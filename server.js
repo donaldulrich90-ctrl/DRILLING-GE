@@ -1331,12 +1331,12 @@ app.get('/api/drills', (req, res) => {
 });
 
 app.post('/api/drills', (req, res) => {
-    const { id, location, status, siteId, contractId, telemetry, maintenance, fuel, rods, consumables, connectionMode, connectionStatus, connectionConfig, subcontractorId } = req.body;
+    const { id, location, status, siteId, contractId, telemetry, maintenance, fuel, rods, consumables, connectionMode, connectionStatus, connectionConfig, subcontractorId, parkReason, expectedReturnDate } = req.body;
     const entId = resolveCreateEnterpriseId(req, req.body);
     const subId = (subcontractorId === '' || subcontractorId == null) ? null : parseInt(subcontractorId, 10);
     db.run(
-        `INSERT INTO drills (id, enterpriseId, location, status, siteId, contractId, telemetry, maintenance, fuel, rods, consumables, connectionMode, connectionStatus, connectionConfig, subcontractorId)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO drills (id, enterpriseId, location, status, siteId, contractId, telemetry, maintenance, fuel, rods, consumables, connectionMode, connectionStatus, connectionConfig, subcontractorId, parkReason, expectedReturnDate)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
             id, entId, location, status, siteId || null, contractId || null,
             JSON.stringify(telemetry || {}),
@@ -1347,7 +1347,9 @@ app.post('/api/drills', (req, res) => {
             connectionMode || 'manual',
             connectionStatus || 'disconnected',
             JSON.stringify(connectionConfig || {}),
-            Number.isFinite(subId) ? subId : null
+            Number.isFinite(subId) ? subId : null,
+            parkReason || null,
+            expectedReturnDate || null
         ],
         function(err) {
             if (err) {
@@ -1362,11 +1364,12 @@ app.post('/api/drills', (req, res) => {
 app.put('/api/drills/:id', (req, res) => {
     const { id } = req.params;
     const entId = getEnterpriseId(req);
-    const { location, status, siteId, contractId, telemetry, maintenance, fuel, rods, consumables, connectionMode, connectionStatus, connectionConfig } = req.body;
-    let sql = `UPDATE drills SET 
-            location = ?, status = ?, siteId = ?, contractId = ?, telemetry = ?, maintenance = ?, 
-            fuel = ?, rods = ?, consumables = ?, connectionMode = ?, 
-            connectionStatus = ?, connectionConfig = ?
+    const { location, status, siteId, contractId, telemetry, maintenance, fuel, rods, consumables, connectionMode, connectionStatus, connectionConfig, parkReason, expectedReturnDate } = req.body;
+    let sql = `UPDATE drills SET
+            location = ?, status = ?, siteId = ?, contractId = ?, telemetry = ?, maintenance = ?,
+            fuel = ?, rods = ?, consumables = ?, connectionMode = ?,
+            connectionStatus = ?, connectionConfig = ?,
+            parkReason = ?, expectedReturnDate = ?
          WHERE id = ?`;
     const vals = [
         location, status, siteId || null, contractId || null,
@@ -1378,6 +1381,8 @@ app.put('/api/drills/:id', (req, res) => {
         connectionMode,
         connectionStatus,
         JSON.stringify(connectionConfig || {}),
+        parkReason || null,
+        expectedReturnDate || null,
         id
     ];
     if (entId !== null) {

@@ -2006,6 +2006,42 @@
             </div>
         </div>
 
+        <!-- Modal Modifier statut foreuse (garée / date sortie probable) -->
+        <div id="drillStatusModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+            <div class="ged-modal-panel p-6 rounded-xl w-full max-w-md">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-bold">Modifier le statut</h2>
+                    <button type="button" onclick="closeDrillStatusModal()" class="text-slate-400 hover:text-white text-2xl">&times;</button>
+                </div>
+                <form id="drillStatusForm" onsubmit="saveDrillStatusChange(event)">
+                    <input type="hidden" id="drillStatusMachineId">
+                    <div class="mb-4">
+                        <label class="block text-slate-400 mb-2">Statut *</label>
+                        <select id="drillStatusSelect" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white" onchange="toggleDrillStatusParkFields()">
+                            <option value="EN FORAGE">EN FORAGE</option>
+                            <option value="EN PAUSE">EN PAUSE</option>
+                            <option value="EN MAINTENANCE">EN MAINTENANCE</option>
+                            <option value="HORS SERVICE">HORS SERVICE</option>
+                        </select>
+                    </div>
+                    <div id="drillStatusParkFields">
+                        <div class="mb-4">
+                            <label class="block text-slate-400 mb-2">Motif d'arrêt</label>
+                            <input type="text" id="drillStatusParkReason" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white" placeholder="Ex : panne moteur, attente pièces…">
+                        </div>
+                        <div class="mb-4">
+                            <label class="block text-slate-400 mb-2">Date de sortie probable</label>
+                            <input type="date" id="drillStatusExpectedReturn" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white">
+                        </div>
+                    </div>
+                    <div class="flex gap-2">
+                        <button type="submit" class="flex-1 bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg font-semibold">Enregistrer</button>
+                        <button type="button" onclick="closeDrillStatusModal()" class="bg-gray-600 hover:bg-gray-700 px-4 py-2 rounded-lg">Annuler</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
         <!-- Modal Lier foreuse ↔ contrat -->
         <div id="linkDrillContractModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
             <div class="ged-modal-panel p-6 rounded-xl w-full max-w-lg">
@@ -5327,7 +5363,9 @@
                 consumables: cons,
                 connectionMode: d.connectionMode || 'manual',
                 connectionStatus: d.connectionStatus || 'disconnected',
-                connectionConfig: cfg
+                connectionConfig: cfg,
+                parkReason: d.parkReason || null,
+                expectedReturnDate: d.expectedReturnDate || null
             };
         }
 
@@ -6682,7 +6720,7 @@
                     '<button type="button" class="text-xs ged-btn-primary px-2 py-1 rounded cursor-pointer" onclick=\'event.stopPropagation();openDrillManualDataEntry('+idJs+');\'>' + String(tUi('drill.data')).replace(/</g,'&lt;') + '</button>' +
                     '<button type="button" class="text-xs ged-btn-secondary px-2 py-1 rounded cursor-pointer" onclick=\'event.stopPropagation();showLinkDrillContractModal('+idJs+');\'>' + String(tUi('drill.contract_btn')).replace(/</g,'&lt;') + '</button>' +
                     '<button type="button" style="font-size:11px;background:#DC3545;color:#fff;padding:2px 8px;border-radius:4px;border:none;cursor:pointer" onclick=\'event.stopPropagation();removeDrillByIdSafe('+idJs+');\'>' + String(tUi('drill.remove')).replace(/</g,'&lt;') + '</button>' +
-                    '<span style="background:'+statusBg+';color:'+statusColor+';border:1px solid '+statusColor+'44;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700">' + String(drill.status).replace(/</g,'&lt;') + '</span>' +
+                    '<button type="button" style="background:'+statusBg+';color:'+statusColor+';border:1px solid '+statusColor+'44;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer" onclick=\'event.stopPropagation();openDrillStatusModal('+idJs+');\'>' + String(drill.status).replace(/</g,'&lt;') + '</button>' +
                     '</div></div>' +
                     '<p style="font-size:12px;color:#8fa3b0;margin:6px 0 2px">' + String(drill.location||'').replace(/</g,'&lt;') + '</p>' +
                     ctInfo + (siteInfo ? '<p style="margin-bottom:4px">'+siteInfo+'</p>' : '') +
@@ -13444,6 +13482,47 @@
             }
         }
 
+        // ---- Modal statut foreuse (garée / date de sortie probable) ----
+        function openDrillStatusModal(drillId) {
+            var drill = findDrillByMachineId(drillId);
+            if (!drill) return;
+            document.getElementById('drillStatusMachineId').value = drill.id;
+            document.getElementById('drillStatusSelect').value = drill.status || 'EN PAUSE';
+            document.getElementById('drillStatusParkReason').value = drill.parkReason || '';
+            document.getElementById('drillStatusExpectedReturn').value = drill.expectedReturnDate || '';
+            toggleDrillStatusParkFields();
+            document.getElementById('drillStatusModal').classList.remove('hidden');
+        }
+        function closeDrillStatusModal() {
+            document.getElementById('drillStatusModal').classList.add('hidden');
+        }
+        function toggleDrillStatusParkFields() {
+            var st = document.getElementById('drillStatusSelect').value;
+            var fields = document.getElementById('drillStatusParkFields');
+            if (st === 'EN FORAGE') {
+                fields.classList.add('hidden');
+            } else {
+                fields.classList.remove('hidden');
+            }
+        }
+        function saveDrillStatusChange(event) {
+            event.preventDefault();
+            var machineId = document.getElementById('drillStatusMachineId').value;
+            var drill = findDrillByMachineId(machineId);
+            if (!drill) { alert('Foreuse introuvable.'); return; }
+            var newStatus = document.getElementById('drillStatusSelect').value;
+            drill.status = newStatus;
+            if (newStatus === 'EN FORAGE') {
+                drill.parkReason = null;
+                drill.expectedReturnDate = null;
+            } else {
+                drill.parkReason = document.getElementById('drillStatusParkReason').value.trim() || null;
+                drill.expectedReturnDate = document.getElementById('drillStatusExpectedReturn').value || null;
+            }
+            persistDrillUpdate(drill);
+            closeDrillStatusModal();
+        }
+
         function showAddContractModal() {
             if (clients.length === 0) {
                 if (confirm('Aucun client enregistré. Voulez-vous créer un nouveau client d\'abord?')) {
@@ -18216,9 +18295,42 @@
             'table.kpi-table tbody tr:nth-child(even):not(.total){background:#f7f9fb;}',
             'table.kpi-table tr.total td{background:#d1fae5;font-weight:700;}',
             'table.kpi-table tr{break-inside:avoid;page-break-inside:avoid;}',
+            'table.parked-table{width:100%;border-collapse:collapse;font-size:11px;margin:12px 0;border:1px solid #fca5a5;}',
+            'table.parked-table th,table.parked-table td{padding:6px 8px;border:1px solid #fecaca;vertical-align:middle;text-align:left;}',
+            'table.parked-table thead th{background:#991b1b;color:#fff;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.03em;}',
+            'table.parked-table tbody tr:nth-child(even){background:#fef2f2;}',
+            'table.parked-table tr{break-inside:avoid;page-break-inside:avoid;}',
+            'table.parked-table .parked-status{display:inline-block;padding:2px 6px;border-radius:3px;font-size:9px;font-weight:700;text-transform:uppercase;}',
+            'table.parked-table .parked-status-pause{background:#fef3c7;color:#92400e;}',
+            'table.parked-table .parked-status-maintenance{background:#dbeafe;color:#1e40af;}',
+            'table.parked-table .parked-status-hs{background:#fee2e2;color:#991b1b;}',
             '@media print{html,body{background:#fff;}.print-tools{display:none!important;}.daily-sheet{width:auto;margin:0;padding:0;box-shadow:none;}.daily-section{margin-top:14px;}.daily-footer{margin-top:16px;}a{color:inherit;text-decoration:none;}}',
             '@media screen and (max-width:1140px){.daily-sheet,.print-tools{width:calc(100% - 24px);}.daily-sheet{padding:24px;}.report-logos-row img{max-width:100%!important;}}@media screen and (max-width:650px){.report-kpi-grid,.daily-management .report-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr));}.daily-chart-grid{grid-template-columns:1fr;}.daily-chart-row{grid-template-columns:80px 1fr 85px;}}'
         ].join('');
+
+        function renderParkedMachinesTableHtml() {
+            var parked = (drills || []).filter(function(d) { return d.status && d.status !== 'EN FORAGE'; });
+            if (parked.length === 0) return '<p style="font-style:italic;color:#6b7280;margin:8px 0;">Toutes les machines sont en forage — aucune machine garée.</p>';
+            var statusClasses = { 'EN PAUSE': 'parked-status-pause', 'EN MAINTENANCE': 'parked-status-maintenance', 'HORS SERVICE': 'parked-status-hs' };
+            var rows = parked.map(function(d) {
+                var sc = statusClasses[d.status] || 'parked-status-hs';
+                var site = d.siteId && sites ? sites.find(function(s) { return s.id == d.siteId; }) : null;
+                var siteName = site ? escapeHtmlReportCell(site.name) : '—';
+                var reason = d.parkReason ? escapeHtmlReportCell(d.parkReason) : '—';
+                var returnDate = d.expectedReturnDate ? formatDate(d.expectedReturnDate) : 'Non définie';
+                return '<tr>' +
+                    '<td style="font-weight:700">' + escapeHtmlReportCell(String(d.id)) + '</td>' +
+                    '<td>' + escapeHtmlReportCell(d.location || '') + '</td>' +
+                    '<td>' + siteName + '</td>' +
+                    '<td><span class="parked-status ' + sc + '">' + escapeHtmlReportCell(d.status) + '</span></td>' +
+                    '<td>' + reason + '</td>' +
+                    '<td style="font-weight:700">' + returnDate + '</td>' +
+                    '</tr>';
+            }).join('');
+            return '<table class="parked-table"><thead><tr>' +
+                '<th>Machine</th><th>Lieu</th><th>Site</th><th>Statut</th><th>Motif d\'arrêt</th><th>Date de sortie probable</th>' +
+                '</tr></thead><tbody>' + rows + '</tbody></table>';
+        }
 
         function buildDailyReportDocumentHtml(date, records, detailed) {
             records = (records || []).filter(function(record) { return !!record && !isDailyRecordIncompleteDraft(record); });
@@ -18308,11 +18420,13 @@
                 existingSection('04', 'Pannes mécaniques et observations', buildPannesSection(records)) +
                 existingSection('05', 'Standby et services — motifs et suivi', buildStandbySection(records)) +
                 existingSection('06', 'Observations générales du poste', buildCommentGeneralSection(records)) +
-                section('07', 'Visa et signatures', '<div class="daily-signatures">' + signatures + '</div>', 'daily-approval-section') ) : (
+                section('07', 'Machines garées — état du parc', renderParkedMachinesTableHtml()) +
+                section('08', 'Visa et signatures', '<div class="daily-signatures">' + signatures + '</div>', 'daily-approval-section') ) : (
                 section('01', 'INDICATEURS CLÉS — KPI ET PRODUCTION', buildReportKpiBandeau(records, date) + '<h3 class="daily-subtitle">Tableau KPI par machine et poste</h3>' + renderOperationalKpiTableHtml(records), 'daily-management-kpis') +
                 section('02', 'Production de la journée', buildDailyProductionChart(records, date, false), 'daily-management-charts') +
                 existingSection('03', 'Faits marquants et observations', buildCommentGeneralSection(records)) +
-                section('04', 'Visa et signatures', '<div class="daily-signatures">' + signatures + '</div>', 'daily-approval-section')
+                section('04', 'Machines garées — état du parc', renderParkedMachinesTableHtml()) +
+                section('05', 'Visa et signatures', '<div class="daily-signatures">' + signatures + '</div>', 'daily-approval-section')
                 )) +
                 '<footer class="daily-footer"><span>' + escapeHtmlReportCell(companyName) + '<br>Rapport journalier de forage · ' + escapeHtmlReportCell(formatDate(date)) + '</span><span>Document généré le ' + escapeHtmlReportCell(generatedAt) + '</span></footer>' +
                 '</main></body></html>';
@@ -25204,6 +25318,10 @@
         window.showMainView = showMainView;
         window.showDashboard = showDashboard;
         window.showDrillDetails = showDrillDetails;
+        window.openDrillStatusModal = openDrillStatusModal;
+        window.closeDrillStatusModal = closeDrillStatusModal;
+        window.toggleDrillStatusParkFields = toggleDrillStatusParkFields;
+        window.saveDrillStatusChange = saveDrillStatusChange;
         window.switchTab = switchTab;
         window.showAddAssignmentModal = showAddAssignmentModal;
         window.closeAssignmentModal = closeAssignmentModal;
