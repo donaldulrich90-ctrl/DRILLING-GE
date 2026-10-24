@@ -24155,21 +24155,27 @@
             var dateChanged = old.date !== newDate;
             var shiftChanged = old.shift !== newShift;
             if (!machineChanged && !dateChanged && !shiftChanged) return true;
-            // Changement de date ou shift seulement (machine identique) sur un record existant :
+            // Changement de date seulement (machine identique) sur un record existant :
             // garder le formulaire, mettre à jour le contexte — l'enregistrement sera déplacé à la sauvegarde
-            if (!machineChanged && dailyEntryEditingRecordId != null) {
-                if (dateChanged) dailyEntryLoadedContext.date = newDate;
-                if (shiftChanged) dailyEntryLoadedContext.shift = newShift;
+            if (!machineChanged && dateChanged && !shiftChanged && dailyEntryEditingRecordId != null) {
+                dailyEntryLoadedContext.date = newDate;
                 updateDailyEntryShiftConstraints();
                 updateDailyEntryModalSummary();
                 return false;
             }
-            // Changement de shift seulement (nouveau poste, pas de record existant)
-            if (!machineChanged && !dateChanged && shiftChanged) {
+            // Changement de shift : charger le record de l'autre poste (ou un formulaire vide)
+            if (!machineChanged && shiftChanged) {
+                if (!dailyEntrySaveInFlight && dailyEntryFormIsDirty() && !confirm('Ce poste comporte des modifications non enregistrées. Les abandonner pour changer de poste ? Pour les conserver, annulez puis cliquez sur « Pré-enregistrer ».')) {
+                    document.getElementById('dailyEntryShift').value = old.shift;
+                    if (dateChanged) document.getElementById('dailyEntryDate').value = old.date;
+                    updateDailyEntryShiftConstraints();
+                    updateDailyEntryModalSummary();
+                    return false;
+                }
                 dailyEntryLoadedContext.shift = newShift;
-                updateDailyEntryShiftConstraints();
-                updateDailyEntryModalSummary();
-                return false;
+                if (dateChanged) dailyEntryLoadedContext.date = newDate;
+                dailyEntryEditingRecordId = null;
+                return true;
             }
             if (!dailyEntrySaveInFlight && (!dailyEntryFormIsDirty() || confirm('Ce poste comporte des modifications non enregistrées. Les abandonner pour changer de poste ? Pour les conserver, annulez puis cliquez sur « Pré-enregistrer ».'))) return true;
             document.getElementById('dailyEntryDate').value = old.date;
