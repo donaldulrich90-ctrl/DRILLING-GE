@@ -17379,6 +17379,7 @@
                 '<p class="text-xs text-slate-400 mt-2">Date modifiable. Jour + Nuit se cumulent sur la date de début du poste. Pour le mi-poste du jour, choisissez aujourd’hui.</p>' +
                 '</div>' +
                 '<button onclick="generateDailyReport()" class="w-full ged-btn-primary px-4 py-2 rounded-lg font-semibold">📄 Rapport de synthèse management</button>' +
+                '<button type="button" onclick="generateSyntheticReport()" class="mt-3 w-full bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-semibold">📊 Synthèse exécutive (sans détail machine)</button>' +
                 '<button type="button" onclick="generateDailyReport(true)" class="mt-3 w-full ged-btn-secondary px-4 py-2 rounded-lg font-semibold">Rapport opérationnel détaillé</button>' +
                 '<button type="button" onclick="generateMidshiftReport()" class="mt-3 w-full bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-lg font-semibold">Rapport de mi-poste</button>' +
                 '<p class="text-slate-400 text-xs mt-2">Situation provisoire à partir des saisies enregistrées, y compris les brouillons.</p>' +
@@ -17773,6 +17774,30 @@
             reportWindow.document.write('<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Préparation du rapport</title></head><body><p>Préparation du rapport journalier…</p></body></html>');
             reportWindow.document.close();
             ensureReportPlanLoaded(function() { printDailyReport(date, records, reportWindow, buildDailyReportDocumentHtml(date, records, detailed === true)); }, function() {
+                if (!reportWindow.closed) reportWindow.close();
+            });
+        }
+
+        function generateSyntheticReport() {
+            var date = document.getElementById('reportDailyDate').value;
+            if (!date) { alert('Veuillez sélectionner une date.'); return; }
+            var records = getDailyDataForSite().filter(function(r) { return r.date === date; });
+            if (records.length === 0) {
+                alert('Aucune saisie terminée pour cette date. Utilisez le rapport de mi-poste pour consulter les pré-enregistrements.');
+                return;
+            }
+            window._lastReportShare = {
+                type: 'synthetic',
+                date: date,
+                title: 'Rapport synthétique ' + date,
+                recordCount: records.length,
+                machineIds: records.map(function(r) { return r.machineId; })
+            };
+            var reportWindow = window.open('', '_blank');
+            if (!reportWindow) { alert('Autorisez l\'ouverture de la fenêtre du rapport.'); return; }
+            reportWindow.document.write('<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Préparation du rapport</title></head><body><p>Préparation du rapport synthétique…</p></body></html>');
+            reportWindow.document.close();
+            ensureReportPlanLoaded(function() { printDailyReport(date, records, reportWindow, buildDailyReportSyntheticHtml(date, records)); }, function() {
                 if (!reportWindow.closed) reportWindow.close();
             });
         }
@@ -18425,7 +18450,7 @@
                 (detailed ? (
                 section('01', 'INDICATEURS CLÉS — KPI ET PRODUCTION', buildReportKpiBandeau(records, date) + '<h3 class="daily-subtitle">Tableau KPI détaillé par machine et poste</h3>' + renderOperationalKpiTableHtml(records) + buildDailyProductionChart(records, date, false) + buildForecastVsActualChart(records, date), 'daily-kpi-section') +
                 section('02', 'Exploitation par machine et poste', operatingTables) +
-                existingSection('03', 'Production par zone / pattern et trous travaillés', buildProductionZoneSection(records)) +
+                existingSection('03', 'Production par zone / pattern et trous travaillés', buildProductionZoneSection(records) + buildDailyHoleTraceability(records)) +
                 existingSection('04', 'Pannes mécaniques et observations', buildPannesSection(records)) +
                 existingSection('05', 'Standby et services — motifs et suivi', buildStandbySection(records)) +
                 existingSection('06', 'Observations générales du poste', buildCommentGeneralSection(records)) +
@@ -18433,11 +18458,181 @@
                 section('08', 'Visa et signatures', '<div class="daily-signatures">' + signatures + '</div>', 'daily-approval-section') ) : (
                 section('01', 'INDICATEURS CLÉS — KPI ET PRODUCTION', buildReportKpiBandeau(records, date) + '<h3 class="daily-subtitle">Tableau KPI par machine et poste</h3>' + renderOperationalKpiTableHtml(records), 'daily-management-kpis') +
                 section('02', 'Production de la journée', buildDailyProductionChart(records, date, false), 'daily-management-charts') +
-                existingSection('03', 'Faits marquants et observations', buildCommentGeneralSection(records)) +
-                section('04', 'Machines garées — état du parc', renderParkedMachinesTableHtml()) +
-                section('05', 'Visa et signatures', '<div class="daily-signatures">' + signatures + '</div>', 'daily-approval-section')
+                existingSection('03', 'Zones forées et trous travaillés', buildProductionZoneSection(records) + buildDailyHoleTraceability(records)) +
+                existingSection('04', 'Faits marquants et observations', buildCommentGeneralSection(records)) +
+                section('05', 'Machines garées — état du parc', renderParkedMachinesTableHtml()) +
+                section('06', 'Visa et signatures', '<div class="daily-signatures">' + signatures + '</div>', 'daily-approval-section')
                 )) +
                 '<footer class="daily-footer"><span>' + escapeHtmlReportCell(companyName) + '<br>Rapport journalier de forage · ' + escapeHtmlReportCell(formatDate(date)) + '</span><span>Document généré le ' + escapeHtmlReportCell(generatedAt) + '</span></footer>' +
+                '</main></body></html>';
+        }
+
+        function buildDailyReportSyntheticHtml(date, records) {
+            records = (records || []).filter(function(record) { return !!record && !isDailyRecordIncompleteDraft(record); });
+            var companyName = getReportBrandSubscriberName();
+            var projectLabel = getReportProjectLabel(records);
+            if (!currentSiteId) {
+                var reportSites = {};
+                records.forEach(function(record) {
+                    var drill = findDrillByMachineId(record.machineId);
+                    if (drill && drill.siteId != null) reportSites[String(drill.siteId)] = true;
+                });
+                if (Object.keys(reportSites).length > 1) projectLabel = 'Tous les sites';
+            }
+            var metaRows = [
+                [
+                    { label: 'Projet / site :', value: projectLabel },
+                    { label: 'Date :', value: formatDate(date) },
+                    { label: 'Poste(s) :', value: getReportShiftsLabel(records) }
+                ],
+                [
+                    { label: 'Machines utilisées :', value: String(getReportUsedMachineCount(records)) },
+                    { label: 'Saisi par :', value: getReportResponsableLabel(records) }
+                ]
+            ];
+            function section(number, title, body, extraClass) {
+                return '<section class="daily-section ' + (extraClass || '') + '"><h2><span class="daily-section-number">' + number + '</span>' + title + '</h2>' + body + '</section>';
+            }
+            var fmtM = function(v) { return v.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' m'; };
+            var fmtH = function(v) { return v.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' h'; };
+            var fmtP = function(v) { return v.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' %'; };
+
+            // ── Agrégation globale ──
+            var agg = { scheduled: 0, usedHours: 0, productiveHours: 0, production: 0, reforage: 0, flushing: 0, bdn: 0, stb: 0, gsa: 0, prd: 0, other: 0, fuel: 0 };
+            var wMech = 0, sMech = 0, wUoa = 0, sUoa = 0;
+            var machinesActive = {}, zones = {}, holesMap = {};
+            records.forEach(function(r) {
+                var data = _rpData(r);
+                var m = computeOperationalReportMetrics(data);
+                agg.scheduled += m.scheduled || 0;
+                agg.usedHours += m.usedHours || 0;
+                agg.productiveHours += m.productiveHours || 0;
+                agg.production += m.production || 0;
+                agg.reforage += parseFloat(m.redrillM) || 0;
+                agg.flushing += parseFloat(m.flushM) || 0;
+                agg.bdn += m.bdn || 0;
+                agg.stb += m.stb || 0;
+                agg.gsa += m.gsa || 0;
+                agg.prd += m.prd || 0;
+                agg.other += m.other || 0;
+                agg.fuel += m.fuel || 0;
+                if (m.scheduled > 0 && m.mechAvail != null && !isNaN(m.mechAvail)) { wMech += m.mechAvail * m.scheduled; sMech += m.scheduled; }
+                if (m.scheduled > 0 && m.uoa != null && !isNaN(m.uoa)) { wUoa += m.uoa * m.scheduled; sUoa += m.scheduled; }
+                machinesActive[String(r.machineId)] = true;
+                var zone = _rpZoneForRecord(r);
+                if (zone) zone.split(', ').forEach(function(z) { zones[z] = true; });
+                (data.holesWorked || []).forEach(function(h) {
+                    if (h.holeId) {
+                        var key = String(h.holeId);
+                        if (!holesMap[key]) holesMap[key] = { meters: 0, machines: {} };
+                        holesMap[key].meters += parseFloat(h.meters) || 0;
+                        holesMap[key].machines[String(r.machineId)] = true;
+                    }
+                });
+            });
+            var totalStops = agg.bdn + agg.stb + agg.gsa + agg.prd + agg.other;
+            var dispo = sMech > 0 ? (wMech / sMech) : null;
+            var uoa = sUoa > 0 ? (wUoa / sUoa) : null;
+            var rendement = agg.usedHours > 0 ? agg.production / agg.usedHours : null;
+            var nbMachines = Object.keys(machinesActive).length;
+            var nbZones = Object.keys(zones).length;
+            var nbHoles = Object.keys(holesMap).length;
+
+            var planned = getReportPlannedProduction(date, records);
+            var goal = planned.value;
+            var rate = goal != null && goal > 0 ? agg.production / goal * 100 : null;
+
+            // ── Section 01 : Résumé de production ──
+            var prodBody = '<table class="daily-table"><thead><tr><th style="width:50%;">Indicateur</th><th style="width:50%;">Valeur</th></tr></thead><tbody>' +
+                '<tr><td><strong>Production réalisée (mètres nouveaux)</strong></td><td style="font-size:18px;font-weight:900;color:#1e40af;">' + fmtM(agg.production) + '</td></tr>' +
+                '<tr><td>Production planifiée</td><td>' + (goal != null ? fmtM(goal) : 'Non renseigné') + '</td></tr>' +
+                '<tr><td>Taux de réalisation</td><td style="font-weight:700;' + (rate != null && rate >= 100 ? 'color:#16a34a;' : rate != null ? 'color:#dc2626;' : '') + '">' + (rate != null ? fmtP(rate) : 'N/A') + '</td></tr>' +
+                '<tr><td>Reforage</td><td>' + fmtM(agg.reforage) + '</td></tr>' +
+                '<tr><td>Flushing</td><td>' + fmtM(agg.flushing) + '</td></tr>' +
+                '<tr><td>Rendement moyen (m/h utilisée)</td><td>' + (rendement != null ? rendement.toFixed(2).replace('.', ',') + ' m/h' : 'N/A') + '</td></tr>' +
+                '<tr><td>Machines actives</td><td>' + nbMachines + '</td></tr>' +
+                '</tbody></table>';
+
+            // ── Section 02 : Zones forées et trous ──
+            var zonesBody = '';
+            if (nbHoles > 0) {
+                var holeRows = '';
+                var totalHoleMeters = 0;
+                Object.keys(holesMap).forEach(function(holeId) {
+                    var h = holesMap[holeId];
+                    totalHoleMeters += h.meters;
+                    holeRows += '<tr><td>' + escapeHtmlReportCell(holeId) + '</td><td class="r-num">' + h.meters.toFixed(1).replace('.', ',') + ' m</td><td>' + Object.keys(h.machines).map(function(mid) { return escapeHtmlReportCell(mid); }).join(', ') + '</td></tr>';
+                });
+                zonesBody = '<p style="margin:0 0 8px;font-size:11px;"><strong>' + nbZones + '</strong> zone(s) travaillée(s) · <strong>' + nbHoles + '</strong> trou(s) travaillé(s) · <strong>' + fmtM(totalHoleMeters) + '</strong> total forés</p>' +
+                    '<table class="daily-table"><thead><tr><th>Trou</th><th class="r-num">Mètres forés</th><th>Machine(s)</th></tr></thead><tbody>' + holeRows +
+                    '<tr class="total"><td><strong>Total</strong></td><td class="r-num"><strong>' + fmtM(totalHoleMeters) + '</strong></td><td>' + nbMachines + ' machine(s)</td></tr>' +
+                    '</tbody></table>';
+            } else {
+                zonesBody = '<p style="color:#9ca3af;">Aucun trou renseigné pour cette journée.</p>';
+            }
+            if (nbZones > 0) {
+                zonesBody = '<p style="margin:0 0 8px;font-size:11px;"><strong>Zones :</strong> ' + escapeHtmlReportCell(Object.keys(zones).join(', ')) + '</p>' + zonesBody;
+            }
+
+            // ── Section 03 : Analyse disponibilité et arrêts ──
+            var analyseBody = '<table class="daily-table"><thead><tr><th style="width:50%;">Indicateur</th><th style="width:50%;">Valeur</th></tr></thead><tbody>' +
+                '<tr><td>Heures programmées (total)</td><td>' + fmtH(agg.scheduled) + '</td></tr>' +
+                '<tr><td>Heures utilisées (total)</td><td>' + fmtH(agg.usedHours) + '</td></tr>' +
+                '<tr><td>Heures productives (total)</td><td>' + fmtH(agg.productiveHours) + '</td></tr>' +
+                '<tr><td><strong>Disponibilité mécanique (moy. pondérée)</strong></td><td style="font-weight:700;' + (dispo != null && dispo >= 85 ? 'color:#16a34a;' : dispo != null ? 'color:#dc2626;' : '') + '">' + (dispo != null ? fmtP(dispo) : 'N/A') + '</td></tr>' +
+                '<tr><td>Utilisation de la disponibilité — UoA</td><td>' + (uoa != null ? fmtP(uoa) : 'N/A') + '</td></tr>' +
+                '<tr><td>Carburant total</td><td>' + agg.fuel.toFixed(1).replace('.', ',') + ' L</td></tr>' +
+                '</tbody></table>' +
+                '<h3 class="daily-subtitle">Répartition des arrêts</h3>' +
+                '<table class="daily-table"><thead><tr><th>Type d\'arrêt</th><th class="r-num">Heures</th><th class="r-num">% du total</th></tr></thead><tbody>' +
+                '<tr><td>Pannes mécaniques (BDN)</td><td class="r-num">' + fmtH(agg.bdn) + '</td><td class="r-num">' + (totalStops > 0 ? (agg.bdn / totalStops * 100).toFixed(1).replace('.', ',') + ' %' : '—') + '</td></tr>' +
+                '<tr><td>Standby (STB)</td><td class="r-num">' + fmtH(agg.stb) + '</td><td class="r-num">' + (totalStops > 0 ? (agg.stb / totalStops * 100).toFixed(1).replace('.', ',') + ' %' : '—') + '</td></tr>' +
+                '<tr><td>Services généraux (GSA)</td><td class="r-num">' + fmtH(agg.gsa) + '</td><td class="r-num">' + (totalStops > 0 ? (agg.gsa / totalStops * 100).toFixed(1).replace('.', ',') + ' %' : '—') + '</td></tr>' +
+                '<tr><td>Production / autres</td><td class="r-num">' + fmtH(agg.prd + agg.other) + '</td><td class="r-num">' + (totalStops > 0 ? ((agg.prd + agg.other) / totalStops * 100).toFixed(1).replace('.', ',') + ' %' : '—') + '</td></tr>' +
+                '<tr class="total"><td><strong>Total arrêts</strong></td><td class="r-num"><strong>' + fmtH(totalStops) + '</strong></td><td class="r-num"><strong>100 %</strong></td></tr>' +
+                '</tbody></table>';
+
+            // ── Analyse textuelle automatique ──
+            var analyseTexte = [];
+            if (rate != null) {
+                if (rate >= 100) analyseTexte.push('✅ Objectif de production atteint (' + fmtP(rate) + ' du planifié).');
+                else analyseTexte.push('⚠️ Objectif non atteint : ' + fmtP(rate) + ' du planifié, écart de ' + fmtM(Math.abs(agg.production - goal)) + '.');
+            }
+            if (dispo != null) {
+                if (dispo >= 85) analyseTexte.push('✅ Disponibilité mécanique satisfaisante à ' + fmtP(dispo) + '.');
+                else analyseTexte.push('⚠️ Disponibilité mécanique faible : ' + fmtP(dispo) + ' (seuil recommandé : 85 %).');
+            }
+            if (agg.bdn > 0) analyseTexte.push('🔧 ' + fmtH(agg.bdn) + ' de pannes mécaniques enregistrées.');
+            if (agg.stb > 2) analyseTexte.push('⏸️ Standby élevé : ' + fmtH(agg.stb) + '. À investiguer.');
+            var parked = (drills || []).filter(function(d) { return d.status && d.status !== 'EN FORAGE'; });
+            if (parked.length > 0) analyseTexte.push('🅿️ ' + parked.length + ' machine(s) garée(s) actuellement.');
+
+            analyseBody += '<div class="summary" style="text-align:left;margin-top:10px;">' +
+                '<h3 class="daily-subtitle" style="margin-top:0;">Analyse automatique</h3>' +
+                (analyseTexte.length ? analyseTexte.map(function(t) { return '<div style="margin-bottom:4px;">' + t + '</div>'; }).join('') : '<span style="color:#9ca3af;">Données insuffisantes pour l\'analyse.</span>') +
+                '</div>';
+
+            // ── Section 04 : Observations ──
+            var commentBody = buildCommentGeneralSection(records).replace(/^<h2>[\s\S]*?<\/h2>/, '');
+
+            // ── Signatures ──
+            var signatures = ['Établi par', 'Contrôlé par', 'Visé par'].map(function(label) {
+                return '<div class="daily-signature"><div class="daily-signature-title">' + label + '</div><div class="daily-signature-field">Nom / fonction : <span class="daily-signature-line"></span></div><div class="daily-signature-field">Date : <span class="daily-signature-line"></span></div><div class="daily-signature-field">Signature / cachet :</div><div class="daily-signature-space"></div></div>';
+            }).join('');
+
+            var generatedAt = new Date().toLocaleString('fr-FR');
+            return '<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rapport synthétique — ' + escapeHtmlReportCell(date) + '</title><style>' +
+                REPORT_PRINT_ENTETE_CSS + DAILY_REPORT_PRINT_CSS + '</style></head><body>' +
+                '<nav class="print-tools" aria-label="Actions du rapport"><button type="button" onclick="window.print()">Imprimer / Enregistrer en PDF</button><button type="button" onclick="window.close()">Fermer</button></nav>' +
+                '<main class="daily-sheet daily-management">' +
+                '<header>' + buildReportStandardEnteteHtml('RAPPORT JOURNALIER DE FORAGE', records, metaRows) + '<p class="daily-report-audience">SYNTHÈSE EXÉCUTIVE</p></header>' +
+                section('01', 'Résumé de production', prodBody + buildDailyProductionChart(records, date, false), 'daily-management-kpis') +
+                section('02', 'Zones forées et trous travaillés', zonesBody) +
+                section('03', 'Disponibilité, arrêts et analyse', analyseBody) +
+                section('04', 'Faits marquants et observations', commentBody) +
+                section('05', 'Machines garées — état du parc', renderParkedMachinesTableHtml()) +
+                section('06', 'Visa et signatures', '<div class="daily-signatures">' + signatures + '</div>', 'daily-approval-section') +
+                '<footer class="daily-footer"><span>' + escapeHtmlReportCell(companyName) + '<br>Rapport journalier de forage — Synthèse exécutive · ' + escapeHtmlReportCell(formatDate(date)) + '</span><span>Document généré le ' + escapeHtmlReportCell(generatedAt) + '</span></footer>' +
                 '</main></body></html>';
         }
 
@@ -25440,6 +25635,7 @@
         window.applyHoursCounterDeltaToMachineHours = applyHoursCounterDeltaToMachineHours;
         window.renderReports = renderReports;
         window.generateDailyReport = generateDailyReport;
+        window.generateSyntheticReport = generateSyntheticReport;
         window.generateMidshiftReport = generateMidshiftReport;
         window.generateMidshiftReportFromEntry = generateMidshiftReportFromEntry;
         window.generateWeeklyReport = generateWeeklyReport;
