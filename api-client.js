@@ -244,6 +244,25 @@ const InvoicesAPI = {
     delete: (id) => apiRequest(`/invoices/${encodeURIComponent(id)}`, 'DELETE')
 };
 
+const PaymentsAPI = {
+    getAll: (params) => {
+        var q = [];
+        if (params) {
+            if (params.invoiceId) q.push('invoiceId=' + encodeURIComponent(params.invoiceId));
+            if (params.clientId) q.push('clientId=' + encodeURIComponent(params.clientId));
+            if (params.from) q.push('from=' + encodeURIComponent(params.from));
+            if (params.to) q.push('to=' + encodeURIComponent(params.to));
+            if (params.method) q.push('method=' + encodeURIComponent(params.method));
+        }
+        return apiRequest('/payments' + (q.length ? '?' + q.join('&') : ''));
+    },
+    getByInvoice: (invoiceId) => apiRequest('/payments/invoice/' + encodeURIComponent(invoiceId)),
+    getStats: () => apiRequest('/payments/stats'),
+    create: (payment) => apiRequest('/payments', 'POST', payment),
+    update: (id, payment) => apiRequest('/payments/' + encodeURIComponent(id), 'PUT', payment),
+    delete: (id) => apiRequest('/payments/' + encodeURIComponent(id), 'DELETE')
+};
+
 const DrillMonthBillingAPI = {
     getAll: (params) => {
         var q = '';
@@ -371,7 +390,8 @@ async function loadAllData() {
             invoicesData,
             inventoryData,
             companyData,
-            drillMonthBillingData
+            drillMonthBillingData,
+            paymentsData
         ] = await Promise.all([
             UsersAPI.getAll().catch((err) => {
                 console.warn('API users:', err && err.message);
@@ -413,6 +433,10 @@ async function loadAllData() {
             DrillMonthBillingAPI.getAll().catch((err) => {
                 console.warn('API drill-month-billing:', err && err.message);
                 return null;
+            }),
+            PaymentsAPI.getAll().catch((err) => {
+                console.warn('API payments:', err && err.message);
+                return null;
             })
         ]);
         
@@ -427,7 +451,8 @@ async function loadAllData() {
             invoices: invoicesData,
             inventory: inventoryData,
             companyInfo: companyData,
-            drillMonthBilling: drillMonthBillingData
+            drillMonthBilling: drillMonthBillingData,
+            payments: paymentsData
         };
     } catch (error) {
         console.error('❌ Erreur lors du chargement des données:', error);
@@ -581,6 +606,7 @@ if (typeof window !== 'undefined') {
         Employees: EmployeesAPI,
         Assignments: AssignmentsAPI,
         Invoices: InvoicesAPI,
+        Payments: PaymentsAPI,
         DrillMonthBilling: DrillMonthBillingAPI,
         Inventory: InventoryAPI,
         DailyData: DailyDataAPI,

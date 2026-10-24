@@ -402,6 +402,28 @@ db.serialize(() => {
         else console.log('✅ Table invoices');
     });
 
+    // Table des paiements (suivi des encaissements contre factures)
+    db.run(`
+        CREATE TABLE IF NOT EXISTS payments (
+            id TEXT PRIMARY KEY,
+            enterpriseId INTEGER NOT NULL DEFAULT 1,
+            invoiceId TEXT NOT NULL,
+            date TEXT NOT NULL,
+            amount REAL NOT NULL DEFAULT 0,
+            currency TEXT DEFAULT 'XOF',
+            method TEXT DEFAULT 'cash',
+            reference TEXT DEFAULT '',
+            notes TEXT DEFAULT '',
+            receivedBy TEXT DEFAULT '',
+            createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (enterpriseId) REFERENCES enterprises(id),
+            FOREIGN KEY (invoiceId) REFERENCES invoices(id)
+        )
+    `, (err) => {
+        if (err) console.error('Erreur table payments:', err);
+        else console.log('✅ Table payments');
+    });
+
     // Table de l'inventaire
     db.run(`
         CREATE TABLE IF NOT EXISTS inventory (

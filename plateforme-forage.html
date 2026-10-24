@@ -1338,6 +1338,7 @@
                     <button type="button" onclick="showMainView('clients')" class="ged-nav-item main-nav-btn" id="nav-clients">▰ &nbsp;Clients</button>
                     <button type="button" onclick="showMainView('sites')" class="ged-nav-item main-nav-btn" id="nav-sites">⌖ &nbsp;Sites</button>
                     <button type="button" onclick="showMainView('invoices')" class="ged-nav-item main-nav-btn" id="nav-invoices">▧ &nbsp;Factures</button>
+                    <button type="button" onclick="showMainView('payments')" class="ged-nav-item main-nav-btn" id="nav-payments">💰 &nbsp;Paiements</button>
                     <button type="button" onclick="showMainView('revenue')" class="ged-nav-item main-nav-btn" id="nav-revenue">◍ &nbsp;Revenus</button>
                     <button type="button" onclick="showMainView('soustraitants')" class="ged-nav-item main-nav-btn" id="nav-soustraitants">⚒ &nbsp;Sous-traitants</button>
                     <button type="button" onclick="showMainView('site_meals')" class="ged-nav-item main-nav-btn" id="nav-site_meals">◌ &nbsp;Repas chantier</button>
@@ -1528,6 +1529,11 @@
         <div id="mainView-invoices" class="main-view hidden">
             <h2 class="text-2xl font-semibold mb-4" data-i18n="view.invoices">Factures</h2>
             <div id="invoicesContent" class="ged-content-panel p-6 rounded-xl"></div>
+        </div>
+
+        <div id="mainView-payments" class="main-view hidden">
+            <h2 class="text-2xl font-semibold mb-4">💰 Paiements</h2>
+            <div id="paymentsContent" class="ged-content-panel p-6 rounded-xl"></div>
         </div>
 
         <div id="mainView-contracts" class="main-view hidden">
@@ -2124,6 +2130,7 @@
                             <label class="block text-slate-400 mb-2">Statut</label>
                             <select id="invoiceStatus" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white">
                                 <option value="pending">En attente</option>
+                                <option value="partial">Partiellement payée</option>
                                 <option value="paid">Payée</option>
                                 <option value="overdue">Impayée</option>
                             </select>
@@ -5583,6 +5590,7 @@
         var assignments = [];
         var employees = [];
         var invoices = [];
+        var payments = [];
         /** Clôtures mensuelles foreuse (API / localStorage) : { drillId, yearMonth, status, invoiceId? } */
         var drillMonthBilling = [];
         
@@ -6166,7 +6174,7 @@
                 view !== 'enterprises' && subNav.indexOf(view) < 0) {
                 view = 'dashboard';
             }
-            var views = ['consumables', 'dashboard', 'connections', 'assignments', 'maintenance', 'bit_sharpening', 'invoices', 'contracts', 'sites', 'enterprises', 'revenue', 'site_meals', 'reports', 'project_overview', 'planification', 'besoins', 'rh', 'inventory', 'accounts', 'clients', 'translator', 'team_chat', 'company_info', 'forage_plan', 'rentabilite', 'depenses_pm', 'analytics', 'hse', 'soustraitants'];
+            var views = ['consumables', 'dashboard', 'connections', 'assignments', 'maintenance', 'bit_sharpening', 'invoices', 'payments', 'contracts', 'sites', 'enterprises', 'revenue', 'site_meals', 'reports', 'project_overview', 'planification', 'besoins', 'rh', 'inventory', 'accounts', 'clients', 'translator', 'team_chat', 'company_info', 'forage_plan', 'rentabilite', 'depenses_pm', 'analytics', 'hse', 'soustraitants'];
             views.forEach(function(v) {
                 var el = document.getElementById('mainView-' + v);
                 if (el) el.classList.add('hidden');
@@ -6192,7 +6200,7 @@
 
         /** Premier onglet métier encore visible après applyUserPermissions (évite d’ouvrir un onglet masqué par restrictions). */
         function getFirstVisibleMainNavView() {
-            var order = ['dashboard', 'connections', 'assignments', 'maintenance', 'invoices', 'contracts', 'sites', 'revenue', 'site_meals', 'reports', 'project_overview', 'rh', 'inventory', 'accounts', 'clients', 'translator', 'team_chat', 'company_info'];
+            var order = ['dashboard', 'connections', 'assignments', 'maintenance', 'invoices', 'payments', 'contracts', 'sites', 'revenue', 'site_meals', 'reports', 'project_overview', 'rh', 'inventory', 'accounts', 'clients', 'translator', 'team_chat', 'company_info'];
             for (var i = 0; i < order.length; i++) {
                 var el = document.getElementById('nav-' + order[i]);
                 if (!el) continue;
@@ -8766,6 +8774,8 @@
                 renderMaintenanceView();
             } else if (view === 'invoices') {
                 renderInvoices();
+            } else if (view === 'payments') {
+                renderPayments();
             } else if (view === 'contracts') {
                 renderContracts();
             } else if (view === 'sites') {
@@ -12817,8 +12827,8 @@
             } else {
                 html += '<div class="space-y-4">';
                 invoicesToShow.forEach(function(inv) {
-                    var statusColor = inv.status === 'paid' ? 'bg-green-500' : inv.status === 'pending' ? 'bg-yellow-500' : 'bg-red-500';
-                    var statusText = inv.status === 'paid' ? 'Payée' : inv.status === 'pending' ? 'En attente' : 'Impayée';
+                    var statusColor = inv.status === 'paid' ? 'bg-green-500' : inv.status === 'partial' ? 'bg-orange-500' : inv.status === 'pending' ? 'bg-yellow-500' : 'bg-red-500';
+                    var statusText = inv.status === 'paid' ? 'Payée' : inv.status === 'partial' ? 'Partielle' : inv.status === 'pending' ? 'En attente' : 'Impayée';
                     var invoiceClient = clients.find(function(c) { return c.id === inv.clientId; });
                 var clientName = invoiceClient ? invoiceClient.name : (typeof inv.client === 'object' ? inv.client.name : inv.client);
                     var total = inv.total || inv.amount;
@@ -12828,7 +12838,7 @@
                         '<div class="flex-1">' +
                         '<div class="flex items-center gap-3 mb-2">' +
                         '<p class="font-bold text-lg">' + inv.invoiceNumber + '</p>' +
-                        '<span class="' + statusColor + ' px-2 py-1 rounded text-sm">' + statusText + '</span>' +
+                        '<span class="' + statusColor + ' px-2 py-1 rounded text-sm cursor-pointer" onclick="payShowInvoicePayments(\'' + escapeHtmlForAttr(inv.id) + '\')" title="Voir les paiements">' + statusText + '</span>' +
                         '</div>' +
                         '<p class="font-semibold text-blue-400 mb-1">' + clientName + '</p>' +
                         (invoiceClient && invoiceClient.country ? '<p class="text-xs text-slate-400">' + invoiceClient.country + ' (' + inv.currency + ')</p>' : '') +
@@ -12841,6 +12851,7 @@
                         '<button onclick="exportInvoicePDF(\'' + invoiceButtonIdArg(inv.id) + '\')" class="bg-emerald-700 hover:bg-emerald-600 px-3 py-1 rounded text-sm border border-amber-700/50" title="Aperçu professionnel · impression ou PDF">Aperçu / PDF</button>' +
                         '<button onclick="editInvoice(\'' + invoiceButtonIdArg(inv.id) + '\')" class="bg-yellow-600 hover:bg-yellow-700 px-3 py-1 rounded text-sm">Modifier</button>' +
                         '<button onclick="deleteInvoice(\'' + invoiceButtonIdArg(inv.id) + '\')" class="bg-red-600 hover:bg-red-700 px-3 py-1 rounded text-sm">Supprimer</button>' +
+                        '<button onclick="payAddInvoiceButton(\'' + invoiceButtonIdArg(inv.id) + '\')" class="bg-teal-600 hover:bg-teal-700 px-3 py-1 rounded text-sm">💰 Encaisser</button>' +
                         '<button onclick="generateInvoiceFromClient(' + (invoiceClient ? invoiceClient.id : 'null') + ')" class="bg-purple-600 hover:bg-purple-700 px-3 py-1 rounded text-sm">🔄 Générer</button>' +
                         '</div>' +
                         '</div>' +
@@ -13528,7 +13539,7 @@
                 title: ((document.getElementById('invSignCliTitle') || {}).value || '').trim()
             };
             var statusEl = document.getElementById('invoiceStatus');
-            var statusVal = statusEl && ['paid', 'pending', 'overdue'].indexOf(statusEl.value) >= 0 ? statusEl.value : 'pending';
+            var statusVal = statusEl && ['paid', 'pending', 'partial', 'overdue'].indexOf(statusEl.value) >= 0 ? statusEl.value : 'pending';
 
             var invContractEl = document.getElementById('invoiceContract');
             var invContractId = invContractEl && invContractEl.value ? invContractEl.value : null;
@@ -14416,7 +14427,7 @@
             document.getElementById('invoicePaymentTerms').value = invoice.paymentTerms || 'Net 30 jours';
             document.getElementById('invoiceNotes').value = invoice.notes || '';
             var stEl = document.getElementById('invoiceStatus');
-            if (stEl) stEl.value = ['paid', 'pending', 'overdue'].indexOf(invoice.status) >= 0 ? invoice.status : 'pending';
+            if (stEl) stEl.value = ['paid', 'pending', 'partial', 'overdue'].indexOf(invoice.status) >= 0 ? invoice.status : 'pending';
 
             var sp = invoice.signProvider && typeof invoice.signProvider === 'object' ? invoice.signProvider : {};
             var sc = invoice.signClient && typeof invoice.signClient === 'object' ? invoice.signClient : {};
@@ -14548,8 +14559,8 @@
                     ? '<br><strong>Web :</strong> ' + esc(websiteForInvoice)
                     : '');
 
-            var statusLabel = invoice.status === 'paid' ? 'PAYÉE' : invoice.status === 'pending' ? 'EN ATTENTE' : 'IMPAYÉE';
-            var statusClass = invoice.status === 'paid' ? 'status-paid' : invoice.status === 'pending' ? 'status-pending' : 'status-overdue';
+            var statusLabel = invoice.status === 'paid' ? 'PAYÉE' : invoice.status === 'partial' ? 'PARTIELLE' : invoice.status === 'pending' ? 'EN ATTENTE' : 'IMPAYÉE';
+            var statusClass = invoice.status === 'paid' ? 'status-paid' : invoice.status === 'partial' ? 'status-partial' : invoice.status === 'pending' ? 'status-pending' : 'status-overdue';
             var retenueRate = invoice.retenueSourceRate || 0;
 
             var provSig = invoice.signProvider && typeof invoice.signProvider === 'object' ? Object.assign({}, invoice.signProvider) : {};
@@ -14688,6 +14699,7 @@
                 '.payment-lines { font-size: 12px; line-height: 1.8; color: #44403c; }' +
                 '.status-badge { display: inline-block; padding: 6px 14px; border-radius: 999px; font-weight: 800; font-size: 11px; letter-spacing: 0.06em; margin-top: 10px; }' +
                 '.status-paid { background: #28A745; color: #fff; }' +
+                '.status-partial { background: #EA580C; color: #fff; }' +
                 '.status-pending { background: #b45309; color: #fff; }' +
                 '.status-overdue { background: #b91c1c; color: #fff; }' +
                 '.footer { margin-top: 32px; padding: 20px 0 8px; border-top: 2px solid #d6d3d1; font-size: 10px; color: #78716c; text-align: center; line-height: 1.65; }' +
@@ -15039,6 +15051,405 @@
                 });
             }
             return activeContract || null;
+        }
+
+        // ============================================
+        // PAIEMENTS (Module de suivi des encaissements)
+        // ============================================
+
+        var _payFilterMethod = '';
+        var _payFilterFrom = '';
+        var _payFilterTo = '';
+        var _payView = 'list'; // 'list' | 'stats'
+
+        function renderPayments() {
+            var content = document.getElementById('paymentsContent');
+            if (!content) return;
+            var html = '';
+
+            // Sous-onglets
+            html += '<div class="flex gap-2 mb-4">' +
+                '<button onclick="_payView=\'list\';renderPayments()" class="px-4 py-2 rounded-lg text-sm font-semibold ' + (_payView === 'list' ? 'bg-emerald-600' : 'bg-slate-700 hover:bg-slate-600') + '">📋 Liste des paiements</button>' +
+                '<button onclick="_payView=\'stats\';renderPayments()" class="px-4 py-2 rounded-lg text-sm font-semibold ' + (_payView === 'stats' ? 'bg-emerald-600' : 'bg-slate-700 hover:bg-slate-600') + '">📊 Tableau de bord</button>' +
+                '</div>';
+
+            if (_payView === 'stats') {
+                html += renderPaymentsDashboard();
+            } else {
+                html += renderPaymentsList();
+            }
+            content.innerHTML = html;
+        }
+
+        function renderPaymentsList() {
+            var html = '';
+            // Barre d'actions
+            html += '<div class="flex flex-wrap justify-between items-center gap-3 mb-4">' +
+                '<h3 class="text-xl font-bold">Suivi des encaissements</h3>' +
+                '<button onclick="payShowAddModal()" class="bg-emerald-600 hover:bg-emerald-700 px-4 py-2 rounded-lg font-semibold">+ Enregistrer un paiement</button>' +
+                '</div>';
+
+            // Filtres
+            html += '<div class="flex flex-wrap gap-3 mb-4 p-3 bg-slate-800/50 rounded-lg">' +
+                '<div><label class="text-xs text-slate-400 block mb-1">Méthode</label>' +
+                '<select onchange="_payFilterMethod=this.value;renderPayments()" class="bg-slate-700 border border-slate-600 rounded px-3 py-1.5 text-sm text-white">' +
+                '<option value="">Toutes</option>' +
+                '<option value="cash"' + (_payFilterMethod === 'cash' ? ' selected' : '') + '>Espèces</option>' +
+                '<option value="mobile_money"' + (_payFilterMethod === 'mobile_money' ? ' selected' : '') + '>Mobile Money</option>' +
+                '<option value="bank_transfer"' + (_payFilterMethod === 'bank_transfer' ? ' selected' : '') + '>Virement bancaire</option>' +
+                '<option value="check"' + (_payFilterMethod === 'check' ? ' selected' : '') + '>Chèque</option>' +
+                '<option value="other"' + (_payFilterMethod === 'other' ? ' selected' : '') + '>Autre</option>' +
+                '</select></div>' +
+                '<div><label class="text-xs text-slate-400 block mb-1">Du</label>' +
+                '<input type="date" value="' + _payFilterFrom + '" onchange="_payFilterFrom=this.value;renderPayments()" class="bg-slate-700 border border-slate-600 rounded px-3 py-1.5 text-sm text-white"></div>' +
+                '<div><label class="text-xs text-slate-400 block mb-1">Au</label>' +
+                '<input type="date" value="' + _payFilterTo + '" onchange="_payFilterTo=this.value;renderPayments()" class="bg-slate-700 border border-slate-600 rounded px-3 py-1.5 text-sm text-white"></div>' +
+                '<div class="flex items-end"><button onclick="_payFilterMethod=\'\';_payFilterFrom=\'\';_payFilterTo=\'\';renderPayments()" class="bg-slate-600 hover:bg-slate-500 px-3 py-1.5 rounded text-sm">Réinitialiser</button></div>' +
+                '</div>';
+
+            // Filtrer
+            var filtered = (payments || []).filter(function(p) {
+                if (_payFilterMethod && p.method !== _payFilterMethod) return false;
+                if (_payFilterFrom && p.date < _payFilterFrom) return false;
+                if (_payFilterTo && p.date > _payFilterTo) return false;
+                return true;
+            });
+
+            if (filtered.length === 0) {
+                html += '<p class="text-slate-400 text-center py-8">Aucun paiement enregistré</p>';
+            } else {
+                // Total filtré
+                var totals = {};
+                filtered.forEach(function(p) {
+                    if (!totals[p.currency]) totals[p.currency] = 0;
+                    totals[p.currency] += p.amount || 0;
+                });
+                var totalStr = Object.keys(totals).map(function(c) {
+                    return totals[c].toLocaleString('fr-FR', { style: 'currency', currency: c });
+                }).join(' + ');
+                html += '<div class="mb-3 text-sm text-slate-300">Total filtré : <span class="font-bold text-emerald-400">' + totalStr + '</span> (' + filtered.length + ' paiement' + (filtered.length > 1 ? 's' : '') + ')</div>';
+
+                html += '<div class="overflow-x-auto"><table class="w-full text-sm">' +
+                    '<thead><tr class="text-left text-slate-400 border-b border-slate-700">' +
+                    '<th class="py-2 px-2">Date</th>' +
+                    '<th class="py-2 px-2">Facture</th>' +
+                    '<th class="py-2 px-2">Client</th>' +
+                    '<th class="py-2 px-2">Montant</th>' +
+                    '<th class="py-2 px-2">Méthode</th>' +
+                    '<th class="py-2 px-2">Référence</th>' +
+                    '<th class="py-2 px-2">Reçu par</th>' +
+                    '<th class="py-2 px-2">Actions</th>' +
+                    '</tr></thead><tbody>';
+
+                filtered.forEach(function(p) {
+                    var inv = (invoices || []).find(function(i) { return i.id === p.invoiceId; });
+                    var invNum = inv ? inv.invoiceNumber : p.invoiceId;
+                    var cl = inv ? (clients || []).find(function(c) { return c.id === inv.clientId; }) : null;
+                    var clientName = cl ? cl.name : '-';
+                    var methodLabel = payMethodLabel(p.method);
+
+                    html += '<tr class="border-b border-slate-700/50 hover:bg-slate-700/30">' +
+                        '<td class="py-2 px-2">' + (p.date || '') + '</td>' +
+                        '<td class="py-2 px-2 text-blue-400 cursor-pointer" onclick="payShowInvoicePayments(\'' + escapeHtmlForAttr(p.invoiceId) + '\')">' + escapeHtml(invNum) + '</td>' +
+                        '<td class="py-2 px-2">' + escapeHtml(clientName) + '</td>' +
+                        '<td class="py-2 px-2 font-bold text-emerald-400">' + (p.amount || 0).toLocaleString('fr-FR', { style: 'currency', currency: p.currency || 'XOF' }) + '</td>' +
+                        '<td class="py-2 px-2"><span class="px-2 py-0.5 rounded text-xs ' + payMethodColor(p.method) + '">' + methodLabel + '</span></td>' +
+                        '<td class="py-2 px-2 text-slate-400">' + escapeHtml(p.reference || '-') + '</td>' +
+                        '<td class="py-2 px-2 text-slate-400">' + escapeHtml(p.receivedBy || '-') + '</td>' +
+                        '<td class="py-2 px-2">' +
+                        '<button onclick="payEditPayment(\'' + escapeHtmlForAttr(p.id) + '\')" class="bg-yellow-600 hover:bg-yellow-700 px-2 py-1 rounded text-xs mr-1">Modifier</button>' +
+                        '<button onclick="payDeletePayment(\'' + escapeHtmlForAttr(p.id) + '\')" class="bg-red-600 hover:bg-red-700 px-2 py-1 rounded text-xs">Suppr</button>' +
+                        '</td></tr>';
+                });
+                html += '</tbody></table></div>';
+            }
+            return html;
+        }
+
+        function renderPaymentsDashboard() {
+            var html = '';
+            // KPIs par devise
+            var currencies = {};
+            (invoices || []).forEach(function(inv) {
+                var c = inv.currency || 'XOF';
+                if (!currencies[c]) currencies[c] = { totalInvoiced: 0, totalPaid: 0, totalOutstanding: 0, countPaid: 0, countPartial: 0, countPending: 0, countOverdue: 0 };
+                currencies[c].totalInvoiced += inv.total || 0;
+                if (inv.status === 'paid') currencies[c].countPaid++;
+                else if (inv.status === 'partial') currencies[c].countPartial++;
+                else if (inv.status === 'overdue') currencies[c].countOverdue++;
+                else currencies[c].countPending++;
+            });
+            (payments || []).forEach(function(p) {
+                var inv = (invoices || []).find(function(i) { return i.id === p.invoiceId; });
+                var c = p.currency || (inv && inv.currency) || 'XOF';
+                if (!currencies[c]) currencies[c] = { totalInvoiced: 0, totalPaid: 0, totalOutstanding: 0, countPaid: 0, countPartial: 0, countPending: 0, countOverdue: 0 };
+                currencies[c].totalPaid += p.amount || 0;
+            });
+
+            Object.keys(currencies).forEach(function(c) {
+                currencies[c].totalOutstanding = currencies[c].totalInvoiced - currencies[c].totalPaid;
+            });
+
+            html += '<h3 class="text-xl font-bold mb-4">Tableau de bord des encaissements</h3>';
+
+            Object.keys(currencies).forEach(function(cur) {
+                var d = currencies[cur];
+                var pct = d.totalInvoiced > 0 ? Math.round((d.totalPaid / d.totalInvoiced) * 100) : 0;
+                html += '<div class="mb-6 p-4 bg-slate-800/50 rounded-xl">' +
+                    '<h4 class="text-lg font-semibold mb-3 text-slate-200">' + cur + '</h4>' +
+                    '<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">' +
+                    '<div class="bg-slate-700/50 p-3 rounded-lg text-center"><p class="text-xs text-slate-400">Total facturé</p><p class="text-lg font-bold text-blue-400">' + d.totalInvoiced.toLocaleString('fr-FR', { style: 'currency', currency: cur }) + '</p></div>' +
+                    '<div class="bg-slate-700/50 p-3 rounded-lg text-center"><p class="text-xs text-slate-400">Total encaissé</p><p class="text-lg font-bold text-emerald-400">' + d.totalPaid.toLocaleString('fr-FR', { style: 'currency', currency: cur }) + '</p></div>' +
+                    '<div class="bg-slate-700/50 p-3 rounded-lg text-center"><p class="text-xs text-slate-400">Reste à percevoir</p><p class="text-lg font-bold ' + (d.totalOutstanding > 0 ? 'text-orange-400' : 'text-emerald-400') + '">' + d.totalOutstanding.toLocaleString('fr-FR', { style: 'currency', currency: cur }) + '</p></div>' +
+                    '<div class="bg-slate-700/50 p-3 rounded-lg text-center"><p class="text-xs text-slate-400">Taux d\'encaissement</p><p class="text-lg font-bold ' + (pct >= 80 ? 'text-emerald-400' : pct >= 50 ? 'text-yellow-400' : 'text-red-400') + '">' + pct + '%</p></div>' +
+                    '</div>';
+                // Barre de progression
+                html += '<div class="w-full bg-slate-700 rounded-full h-3 mb-3">' +
+                    '<div class="bg-emerald-500 h-3 rounded-full transition-all" style="width:' + Math.min(100, pct) + '%"></div></div>';
+                // Compteurs statuts factures
+                html += '<div class="flex flex-wrap gap-3 text-xs">' +
+                    '<span class="px-2 py-1 bg-green-500/20 text-green-400 rounded">✓ ' + d.countPaid + ' payée' + (d.countPaid > 1 ? 's' : '') + '</span>' +
+                    '<span class="px-2 py-1 bg-orange-500/20 text-orange-400 rounded">◐ ' + d.countPartial + ' partielle' + (d.countPartial > 1 ? 's' : '') + '</span>' +
+                    '<span class="px-2 py-1 bg-yellow-500/20 text-yellow-400 rounded">⏳ ' + d.countPending + ' en attente</span>' +
+                    '<span class="px-2 py-1 bg-red-500/20 text-red-400 rounded">✗ ' + d.countOverdue + ' impayée' + (d.countOverdue > 1 ? 's' : '') + '</span>' +
+                    '</div></div>';
+            });
+
+            if (Object.keys(currencies).length === 0) {
+                html += '<p class="text-slate-400 text-center py-8">Aucune facture ou paiement enregistré</p>';
+            }
+
+            // Derniers paiements
+            var recent = (payments || []).slice(0, 10);
+            if (recent.length > 0) {
+                html += '<h4 class="text-lg font-semibold mt-6 mb-3">Derniers paiements</h4>';
+                html += '<div class="space-y-2">';
+                recent.forEach(function(p) {
+                    var inv = (invoices || []).find(function(i) { return i.id === p.invoiceId; });
+                    var cl = inv ? (clients || []).find(function(c) { return c.id === inv.clientId; }) : null;
+                    html += '<div class="flex justify-between items-center p-2 bg-slate-700/30 rounded-lg">' +
+                        '<div class="flex-1">' +
+                        '<span class="text-sm">' + (p.date || '') + '</span>' +
+                        '<span class="text-blue-400 ml-2 text-sm">' + escapeHtml(inv ? inv.invoiceNumber : p.invoiceId) + '</span>' +
+                        '<span class="text-slate-400 ml-2 text-sm">' + escapeHtml(cl ? cl.name : '') + '</span>' +
+                        '</div>' +
+                        '<div class="text-right">' +
+                        '<span class="font-bold text-emerald-400">' + (p.amount || 0).toLocaleString('fr-FR', { style: 'currency', currency: p.currency || 'XOF' }) + '</span>' +
+                        '<span class="ml-2 px-2 py-0.5 rounded text-xs ' + payMethodColor(p.method) + '">' + payMethodLabel(p.method) + '</span>' +
+                        '</div></div>';
+                });
+                html += '</div>';
+            }
+
+            return html;
+        }
+
+        function payMethodLabel(m) {
+            var labels = { cash: 'Espèces', mobile_money: 'Mobile Money', bank_transfer: 'Virement', check: 'Chèque', other: 'Autre' };
+            return labels[m] || m || 'Espèces';
+        }
+
+        function payMethodColor(m) {
+            var colors = { cash: 'bg-emerald-700/60 text-emerald-300', mobile_money: 'bg-orange-700/60 text-orange-300', bank_transfer: 'bg-blue-700/60 text-blue-300', check: 'bg-purple-700/60 text-purple-300', other: 'bg-slate-600 text-slate-300' };
+            return colors[m] || colors.cash;
+        }
+
+        function payShowAddModal(preselectedInvoiceId) {
+            var invOptions = (invoices || []).filter(function(i) { return i.status !== 'paid'; }).map(function(i) {
+                var cl = (clients || []).find(function(c) { return c.id === i.clientId; });
+                return '<option value="' + escapeHtmlForAttr(i.id) + '"' + (preselectedInvoiceId === i.id ? ' selected' : '') + '>' +
+                    escapeHtml(i.invoiceNumber) + ' — ' + escapeHtml(cl ? cl.name : '?') + ' (' + (i.total || 0).toLocaleString('fr-FR') + ' ' + (i.currency || 'XOF') + ')</option>';
+            }).join('');
+
+            var today = new Date().toISOString().slice(0, 10);
+            var modal = document.createElement('div');
+            modal.id = 'paymentModal';
+            modal.className = 'fixed inset-0 z-[200] flex items-center justify-center bg-black/60';
+            modal.innerHTML = '<div class="bg-slate-800 rounded-xl p-6 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">' +
+                '<h3 class="text-xl font-bold mb-4">Enregistrer un paiement</h3>' +
+                '<form onsubmit="paySubmitPayment(event)" class="space-y-3">' +
+                '<div><label class="block text-slate-400 text-sm mb-1">Facture *</label>' +
+                '<select id="payInvoiceId" required class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white" onchange="payUpdateRemainder()">' +
+                '<option value="">Sélectionner une facture…</option>' + invOptions + '</select></div>' +
+                '<div id="payRemainderInfo" class="text-sm text-slate-400"></div>' +
+                '<div class="grid grid-cols-2 gap-3">' +
+                '<div><label class="block text-slate-400 text-sm mb-1">Montant *</label>' +
+                '<input type="number" id="payAmount" step="0.01" min="0.01" required class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white"></div>' +
+                '<div><label class="block text-slate-400 text-sm mb-1">Date *</label>' +
+                '<input type="date" id="payDate" value="' + today + '" required class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white"></div>' +
+                '</div>' +
+                '<div class="grid grid-cols-2 gap-3">' +
+                '<div><label class="block text-slate-400 text-sm mb-1">Méthode</label>' +
+                '<select id="payMethod" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white">' +
+                '<option value="cash">Espèces</option>' +
+                '<option value="mobile_money">Mobile Money</option>' +
+                '<option value="bank_transfer">Virement bancaire</option>' +
+                '<option value="check">Chèque</option>' +
+                '<option value="other">Autre</option>' +
+                '</select></div>' +
+                '<div><label class="block text-slate-400 text-sm mb-1">Référence</label>' +
+                '<input type="text" id="payReference" placeholder="N° transaction, chèque…" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white"></div>' +
+                '</div>' +
+                '<div><label class="block text-slate-400 text-sm mb-1">Reçu par</label>' +
+                '<input type="text" id="payReceivedBy" placeholder="Nom du responsable" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white"></div>' +
+                '<div><label class="block text-slate-400 text-sm mb-1">Notes</label>' +
+                '<textarea id="payNotes" rows="2" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white" placeholder="Détails supplémentaires…"></textarea></div>' +
+                '<input type="hidden" id="payEditId" value="">' +
+                '<div class="flex gap-2 pt-2">' +
+                '<button type="submit" class="flex-1 bg-emerald-600 hover:bg-emerald-700 px-4 py-2 rounded-lg font-semibold" id="paySubmitBtn">Enregistrer</button>' +
+                '<button type="button" onclick="payCloseModal()" class="px-4 py-2 bg-slate-600 hover:bg-slate-500 rounded-lg">Annuler</button>' +
+                '</div></form></div>';
+            document.body.appendChild(modal);
+            if (preselectedInvoiceId) payUpdateRemainder();
+        }
+
+        function payUpdateRemainder() {
+            var sel = document.getElementById('payInvoiceId');
+            var info = document.getElementById('payRemainderInfo');
+            if (!sel || !info) return;
+            var invId = sel.value;
+            if (!invId) { info.innerHTML = ''; return; }
+            var inv = (invoices || []).find(function(i) { return i.id === invId; });
+            if (!inv) { info.innerHTML = ''; return; }
+            var paid = (payments || []).filter(function(p) { return p.invoiceId === invId; }).reduce(function(s, p) { return s + (p.amount || 0); }, 0);
+            var remaining = (inv.total || 0) - paid;
+            info.innerHTML = 'Total facture : <span class="text-blue-400">' + (inv.total || 0).toLocaleString('fr-FR', { style: 'currency', currency: inv.currency || 'XOF' }) + '</span>' +
+                ' | Déjà payé : <span class="text-emerald-400">' + paid.toLocaleString('fr-FR', { style: 'currency', currency: inv.currency || 'XOF' }) + '</span>' +
+                ' | Reste : <span class="font-bold ' + (remaining > 0 ? 'text-orange-400' : 'text-emerald-400') + '">' + remaining.toLocaleString('fr-FR', { style: 'currency', currency: inv.currency || 'XOF' }) + '</span>';
+            // Pré-remplir le montant avec le reste
+            var amountEl = document.getElementById('payAmount');
+            var editId = document.getElementById('payEditId');
+            if (amountEl && !amountEl.value && (!editId || !editId.value)) {
+                amountEl.value = remaining > 0 ? remaining.toFixed(2) : '';
+            }
+        }
+
+        function payCloseModal() {
+            var m = document.getElementById('paymentModal');
+            if (m) m.remove();
+        }
+
+        async function paySubmitPayment(e) {
+            e.preventDefault();
+            var editId = document.getElementById('payEditId').value;
+            var inv = (invoices || []).find(function(i) { return i.id === document.getElementById('payInvoiceId').value; });
+            var data = {
+                invoiceId: document.getElementById('payInvoiceId').value,
+                amount: parseFloat(document.getElementById('payAmount').value),
+                date: document.getElementById('payDate').value,
+                method: document.getElementById('payMethod').value,
+                reference: document.getElementById('payReference').value,
+                receivedBy: document.getElementById('payReceivedBy').value,
+                notes: document.getElementById('payNotes').value,
+                currency: inv ? inv.currency || 'XOF' : 'XOF'
+            };
+            try {
+                if (editId) {
+                    await window.API.Payments.update(editId, data);
+                } else {
+                    await window.API.Payments.create(data);
+                }
+                payCloseModal();
+                // Recharger les paiements
+                payments = await window.API.Payments.getAll();
+                // Recharger les factures (statut peut avoir changé)
+                var freshInvoices = await window.API.Invoices.getAll();
+                if (Array.isArray(freshInvoices)) invoices = freshInvoices;
+                renderPayments();
+                // Rafraîchir la vue factures si visible
+                if (document.getElementById('mainView-invoices') && !document.getElementById('mainView-invoices').classList.contains('hidden')) {
+                    renderInvoices();
+                }
+            } catch (err) {
+                alert('Erreur : ' + (err.message || err));
+            }
+        }
+
+        async function payDeletePayment(payId) {
+            if (!confirm('Supprimer ce paiement ? Le statut de la facture sera recalculé.')) return;
+            try {
+                await window.API.Payments.delete(payId);
+                payments = await window.API.Payments.getAll();
+                var freshInvoices = await window.API.Invoices.getAll();
+                if (Array.isArray(freshInvoices)) invoices = freshInvoices;
+                renderPayments();
+            } catch (err) {
+                alert('Erreur : ' + (err.message || err));
+            }
+        }
+
+        function payEditPayment(payId) {
+            var p = (payments || []).find(function(x) { return x.id === payId; });
+            if (!p) return;
+            payShowAddModal(p.invoiceId);
+            setTimeout(function() {
+                document.getElementById('payEditId').value = p.id;
+                document.getElementById('payInvoiceId').value = p.invoiceId;
+                document.getElementById('payAmount').value = p.amount;
+                document.getElementById('payDate').value = p.date;
+                document.getElementById('payMethod').value = p.method || 'cash';
+                document.getElementById('payReference').value = p.reference || '';
+                document.getElementById('payReceivedBy').value = p.receivedBy || '';
+                document.getElementById('payNotes').value = p.notes || '';
+                document.getElementById('paySubmitBtn').textContent = 'Modifier';
+                payUpdateRemainder();
+            }, 50);
+        }
+
+        function payShowInvoicePayments(invoiceId) {
+            var inv = (invoices || []).find(function(i) { return i.id === invoiceId; });
+            if (!inv) return;
+            var cl = (clients || []).find(function(c) { return c.id === inv.clientId; });
+            var invPayments = (payments || []).filter(function(p) { return p.invoiceId === invoiceId; });
+            var totalPaid = invPayments.reduce(function(s, p) { return s + (p.amount || 0); }, 0);
+            var remaining = (inv.total || 0) - totalPaid;
+
+            var modal = document.createElement('div');
+            modal.id = 'paymentModal';
+            modal.className = 'fixed inset-0 z-[200] flex items-center justify-center bg-black/60';
+            var h = '<div class="bg-slate-800 rounded-xl p-6 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">' +
+                '<h3 class="text-xl font-bold mb-2">Paiements — Facture ' + escapeHtml(inv.invoiceNumber) + '</h3>' +
+                '<p class="text-slate-400 text-sm mb-4">' + escapeHtml(cl ? cl.name : '') + '</p>' +
+                '<div class="grid grid-cols-3 gap-3 mb-4">' +
+                '<div class="bg-slate-700/50 p-3 rounded text-center"><p class="text-xs text-slate-400">Total</p><p class="font-bold text-blue-400">' + (inv.total || 0).toLocaleString('fr-FR', { style: 'currency', currency: inv.currency || 'XOF' }) + '</p></div>' +
+                '<div class="bg-slate-700/50 p-3 rounded text-center"><p class="text-xs text-slate-400">Payé</p><p class="font-bold text-emerald-400">' + totalPaid.toLocaleString('fr-FR', { style: 'currency', currency: inv.currency || 'XOF' }) + '</p></div>' +
+                '<div class="bg-slate-700/50 p-3 rounded text-center"><p class="text-xs text-slate-400">Reste</p><p class="font-bold ' + (remaining > 0 ? 'text-orange-400' : 'text-emerald-400') + '">' + remaining.toLocaleString('fr-FR', { style: 'currency', currency: inv.currency || 'XOF' }) + '</p></div>' +
+                '</div>';
+
+            if (invPayments.length === 0) {
+                h += '<p class="text-slate-400 text-center py-4">Aucun paiement enregistré</p>';
+            } else {
+                h += '<div class="space-y-2">';
+                invPayments.forEach(function(p) {
+                    h += '<div class="flex justify-between items-center p-2 bg-slate-700/30 rounded">' +
+                        '<div><span class="text-sm">' + (p.date || '') + '</span>' +
+                        '<span class="ml-2 px-2 py-0.5 rounded text-xs ' + payMethodColor(p.method) + '">' + payMethodLabel(p.method) + '</span>' +
+                        (p.reference ? '<span class="text-slate-500 ml-2 text-xs">' + escapeHtml(p.reference) + '</span>' : '') +
+                        '</div>' +
+                        '<span class="font-bold text-emerald-400">' + (p.amount || 0).toLocaleString('fr-FR', { style: 'currency', currency: p.currency || 'XOF' }) + '</span>' +
+                        '</div>';
+                });
+                h += '</div>';
+            }
+
+            // Bouton de progression
+            var pct = inv.total > 0 ? Math.round((totalPaid / inv.total) * 100) : 0;
+            h += '<div class="mt-4 w-full bg-slate-700 rounded-full h-2"><div class="bg-emerald-500 h-2 rounded-full" style="width:' + Math.min(100, pct) + '%"></div></div>';
+            h += '<p class="text-center text-xs text-slate-400 mt-1">' + pct + '% encaissé</p>';
+
+            h += '<div class="flex gap-2 mt-4">';
+            if (remaining > 0) {
+                h += '<button onclick="payCloseModal();payShowAddModal(\'' + escapeHtmlForAttr(invoiceId) + '\')" class="flex-1 bg-emerald-600 hover:bg-emerald-700 px-4 py-2 rounded-lg font-semibold">+ Ajouter un paiement</button>';
+            }
+            h += '<button onclick="payCloseModal()" class="px-4 py-2 bg-slate-600 hover:bg-slate-500 rounded-lg">Fermer</button>';
+            h += '</div></div>';
+            modal.innerHTML = h;
+            document.body.appendChild(modal);
+        }
+
+        // Bouton "Encaisser" dans la liste des factures — on l'ajoute dynamiquement
+        function payAddInvoiceButton(invoiceId) {
+            payShowAddModal(invoiceId);
         }
 
         // ============================================
@@ -25644,6 +26055,7 @@
                         employees = pickArrayFromApiOrLocalStorage(apiData.employees, 'forage_employees', null, true);
                         assignments = dedupeAssignmentsList(pickArrayFromApiOrLocalStorage(apiData.assignments, 'forage_assignments', null, true));
                         invoices = pickArrayFromApiOrLocalStorage(apiData.invoices, 'forage_invoices', null, false);
+                        payments = Array.isArray(apiData.payments) ? apiData.payments : [];
                         if (Array.isArray(apiData.drillMonthBilling)) {
                             drillMonthBilling = apiData.drillMonthBilling.slice();
                         } else {

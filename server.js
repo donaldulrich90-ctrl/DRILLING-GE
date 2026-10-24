@@ -789,6 +789,7 @@ function deleteEnterpriseCascade(enterpriseId, cb) {
         ['DELETE FROM maintenanceSchedules WHERE machineId IN (SELECT id FROM drills WHERE enterpriseId = ?)', [eid]],
         ['DELETE FROM assignments WHERE drillId IN (SELECT id FROM drills WHERE enterpriseId = ?)', [eid]],
         ['DELETE FROM dailyDataRecords WHERE machineId IN (SELECT id FROM drills WHERE enterpriseId = ?)', [eid]],
+        ['DELETE FROM payments WHERE enterpriseId = ?', [eid]],
         ['DELETE FROM invoices WHERE enterpriseId = ?', [eid]],
         ['DELETE FROM drills WHERE enterpriseId = ?', [eid]],
         ['DELETE FROM contracts WHERE enterpriseId = ?', [eid]],
@@ -2475,6 +2476,162 @@ app.delete('/api/invoices/:id', (req, res) => {
             if (err2) return res.status(500).json({ error: err2.message });
             db.run('UPDATE drill_month_billing SET invoiceId = NULL WHERE invoiceId = ?', [realId], function() {
                 res.json({ message: 'Facture supprimée' });
+            });
+        });
+    });
+});
+
+// ─── ROUTES API - PAYMENTS (Suivi des paiements / encaissements) ───
+
+/** Helper : recalcule le statut d'une facture d'après ses paiements */
+function recalcInvoiceStatus(db, invoiceId, done) {
+    db.get('SELECT total, currency FROM invoices WHERE id = ?', [invoiceId], (err, inv) => {
+        if (err || !inv) return done && done();
+        db.get('SELECT COALESCE(SUM(amount), 0) AS paid FROM payments WHERE invoiceId = ?', [invoiceId], (err2, row) => {
+            if (err2) return done && done();
+            const paid = row.paid || 0;
+            const total = inv.total || 0;
+            let status = 'pending';
+            if (paid >= total && total > 0) status = 'paid';
+            else if (paid > 0) status = 'partial';
+            else status = 'pending';
+            db.run('UPDATE invoices SET status = ? WHERE id = ?', [status, invoiceId], () => done && done());
+        });
+    });
+}
+
+// GET /api/payments — liste tous les paiements (filtres : invoiceId, clientId, from, to, method)
+app.get('/api/payments', (req, res) => {
+    const entId = getEnterpriseId(req);
+    const plat = isPlatformAdmin(req);
+    let sql = 'SELECT p.*, i.invoiceNumber, i.clientId, i.total AS invoiceTotal FROM payments p LEFT JOIN invoices i ON p.invoiceId = i.id';
+    const conditions = [];
+    const params = [];
+    if (!plat) { conditions.push('p.enterpriseId = ?'); params.push(entId); }
+    if (req.query.invoiceId) { conditions.push('p.invoiceId = ?'); params.push(req.query.invoiceId); }
+    if (req.query.clientId) { conditions.push('i.clientId = ?'); params.push(req.query.clientId); }
+    if (req.query.from) { conditions.push('p.date >= ?'); params.push(req.query.from); }
+    if (req.query.to) { conditions.push('p.date <= ?'); params.push(req.query.to); }
+    if (req.query.method) { conditions.push('p.method = ?'); params.push(req.query.method); }
+    if (conditions.length) sql += ' WHERE ' + conditions.join(' AND ');
+    sql += ' ORDER BY p.date DESC, p.createdAt DESC';
+    db.all(sql, params, (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(rows || []);
+    });
+});
+
+// GET /api/payments/stats — statistiques globales des encaissements
+app.get('/api/payments/stats', (req, res) => {
+    const entId = getEnterpriseId(req);
+    const plat = isPlatformAdmin(req);
+    const where = plat ? '' : ' WHERE p.enterpriseId = ' + Number(entId);
+    const today = new Date().toISOString().slice(0, 10);
+    const monthStart = today.slice(0, 7) + '-01';
+    db.all(`SELECT p.currency,
+            SUM(p.amount) AS totalReceived,
+            SUM(CASE WHEN p.date >= '${monthStart}' THEN p.amount ELSE 0 END) AS receivedThisMonth,
+            SUM(CASE WHEN p.date = '${today}' THEN p.amount ELSE 0 END) AS receivedToday,
+            COUNT(*) AS count
+        FROM payments p${where} GROUP BY p.currency`, [], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        // Aussi le total impayé
+        const wInv = plat ? '' : ' WHERE enterpriseId = ' + Number(entId);
+        db.all(`SELECT currency, SUM(total) AS totalDue,
+                SUM(CASE WHEN status IN ('pending','overdue','partial') THEN total ELSE 0 END) AS outstanding
+            FROM invoices${wInv} GROUP BY currency`, [], (err2, invRows) => {
+            if (err2) return res.status(500).json({ error: err2.message });
+            res.json({ payments: rows || [], invoices: invRows || [] });
+        });
+    });
+});
+
+// GET /api/payments/invoice/:invoiceId — paiements d'une facture + solde restant
+app.get('/api/payments/invoice/:invoiceId', (req, res) => {
+    const entId = getEnterpriseId(req);
+    const plat = isPlatformAdmin(req);
+    const invoiceId = req.params.invoiceId;
+    db.get('SELECT * FROM invoices WHERE id = ?', [invoiceId], (err, inv) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!inv) return res.status(404).json({ error: 'Facture introuvable' });
+        if (!plat && inv.enterpriseId !== entId) return res.status(403).json({ error: 'Accès non autorisé' });
+        db.all('SELECT * FROM payments WHERE invoiceId = ? ORDER BY date DESC', [invoiceId], (err2, payments) => {
+            if (err2) return res.status(500).json({ error: err2.message });
+            const totalPaid = (payments || []).reduce((s, p) => s + (p.amount || 0), 0);
+            res.json({
+                invoice: inv,
+                payments: payments || [],
+                totalPaid,
+                remaining: (inv.total || 0) - totalPaid,
+                fullyPaid: totalPaid >= (inv.total || 0)
+            });
+        });
+    });
+});
+
+// POST /api/payments — enregistrer un paiement
+app.post('/api/payments', (req, res) => {
+    const p = req.body;
+    const entId = resolveCreateEnterpriseId(req, p);
+    if (!p.invoiceId) return res.status(400).json({ error: 'invoiceId requis' });
+    if (!p.amount || p.amount <= 0) return res.status(400).json({ error: 'Montant invalide' });
+    const id = p.id || ('PAY-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6));
+    db.run(`INSERT INTO payments (id, enterpriseId, invoiceId, date, amount, currency, method, reference, notes, receivedBy)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [id, entId, p.invoiceId, p.date || new Date().toISOString().slice(0, 10),
+         p.amount, p.currency || 'XOF', p.method || 'cash', p.reference || '', p.notes || '', p.receivedBy || ''],
+        function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+            // Met à jour le statut de la facture automatiquement
+            recalcInvoiceStatus(db, p.invoiceId, () => {
+                res.json({ id, message: 'Paiement enregistré' });
+            });
+        }
+    );
+});
+
+// PUT /api/payments/:id — modifier un paiement
+app.put('/api/payments/:id', (req, res) => {
+    const entId = getEnterpriseId(req);
+    const plat = isPlatformAdmin(req);
+    const p = req.body;
+    db.get('SELECT * FROM payments WHERE id = ?', [req.params.id], (err, existing) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!existing) return res.status(404).json({ error: 'Paiement introuvable' });
+        if (!plat && existing.enterpriseId !== entId) return res.status(403).json({ error: 'Accès non autorisé' });
+        const oldInvoiceId = existing.invoiceId;
+        db.run(`UPDATE payments SET date = ?, amount = ?, currency = ?, method = ?, reference = ?, notes = ?, receivedBy = ?, invoiceId = ?
+            WHERE id = ?`,
+            [p.date || existing.date, p.amount || existing.amount, p.currency || existing.currency,
+             p.method || existing.method, p.reference ?? existing.reference, p.notes ?? existing.notes,
+             p.receivedBy ?? existing.receivedBy, p.invoiceId || existing.invoiceId, req.params.id],
+            function(err2) {
+                if (err2) return res.status(500).json({ error: err2.message });
+                // Recalculer l'ancienne et la nouvelle facture si changée
+                recalcInvoiceStatus(db, p.invoiceId || oldInvoiceId, () => {
+                    if (oldInvoiceId !== (p.invoiceId || oldInvoiceId)) {
+                        recalcInvoiceStatus(db, oldInvoiceId, () => res.json({ message: 'Paiement modifié' }));
+                    } else {
+                        res.json({ message: 'Paiement modifié' });
+                    }
+                });
+            }
+        );
+    });
+});
+
+// DELETE /api/payments/:id — supprimer un paiement
+app.delete('/api/payments/:id', (req, res) => {
+    const entId = getEnterpriseId(req);
+    const plat = isPlatformAdmin(req);
+    db.get('SELECT * FROM payments WHERE id = ?', [req.params.id], (err, existing) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!existing) return res.status(404).json({ error: 'Paiement introuvable' });
+        if (!plat && existing.enterpriseId !== entId) return res.status(403).json({ error: 'Accès non autorisé' });
+        db.run('DELETE FROM payments WHERE id = ?', [req.params.id], function(err2) {
+            if (err2) return res.status(500).json({ error: err2.message });
+            recalcInvoiceStatus(db, existing.invoiceId, () => {
+                res.json({ message: 'Paiement supprimé' });
             });
         });
     });
