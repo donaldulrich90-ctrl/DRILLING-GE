@@ -7845,7 +7845,9 @@
         }
 
         async function loadFPDataFromServerOnce() {
-            if (FP_REMOTE_STATE !== 'idle' || !window.API || !window.API.DrillingPlan || !window.API.getAuthToken || !window.API.getAuthToken()) return;
+            // Autoriser le rechargement si le dernier essai avait échoué (offline)
+            if (FP_REMOTE_STATE === 'loading' || FP_REMOTE_STATE === 'ready') return;
+            if (!window.API || !window.API.DrillingPlan || !window.API.getAuthToken || !window.API.getAuthToken()) return;
             FP_REMOTE_STATE = 'loading';
             try {
                 var remote = await window.API.DrillingPlan.get();
@@ -10322,8 +10324,13 @@
             DP_STATE.loading = true;
             try {
                 var resp = await fetch('/api/drill-plans', { headers: { 'Authorization': 'Bearer ' + (window.API && window.API.getAuthToken ? window.API.getAuthToken() : '') } });
-                DP_STATE.plans = await resp.json();
-            } catch(e) { DP_STATE.plans = []; }
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                var data = await resp.json();
+                DP_STATE.plans = Array.isArray(data) ? data : [];
+            } catch(e) {
+                console.warn('Erreur chargement plans serveur:', e && e.message ? e.message : e);
+                DP_STATE.plans = [];
+            }
             DP_STATE.loading = false;
             dpRender();
         }
@@ -10332,10 +10339,15 @@
             DP_STATE.loading = true;
             try {
                 var resp = await fetch('/api/drill-plans/' + planId + '/full', { headers: { 'Authorization': 'Bearer ' + (window.API && window.API.getAuthToken ? window.API.getAuthToken() : '') } });
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
                 var plan = await resp.json();
                 DP_STATE.currentPlan = plan;
                 DP_STATE.holes = plan.holes || [];
-            } catch(e) { DP_STATE.currentPlan = null; DP_STATE.holes = []; }
+            } catch(e) {
+                console.warn('Erreur chargement plan détaillé:', e && e.message ? e.message : e);
+                DP_STATE.currentPlan = null;
+                DP_STATE.holes = [];
+            }
             DP_STATE.loading = false;
             dpRender();
         }
