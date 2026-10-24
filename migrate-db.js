@@ -278,7 +278,23 @@ const migrations = [
         notes TEXT DEFAULT '',
         FOREIGN KEY (planId) REFERENCES drill_plans(id) ON DELETE CASCADE
     )` },
-    { name: 'enterprises.claudeApiKey', sql: 'ALTER TABLE enterprises ADD COLUMN claudeApiKey TEXT DEFAULT NULL' }
+    { name: 'enterprises.claudeApiKey', sql: 'ALTER TABLE enterprises ADD COLUMN claudeApiKey TEXT DEFAULT NULL' },
+    // Module paiements
+    { name: 'payments.table', sql: `CREATE TABLE IF NOT EXISTS payments (
+        id TEXT PRIMARY KEY,
+        enterpriseId INTEGER NOT NULL DEFAULT 1,
+        invoiceId TEXT NOT NULL,
+        date TEXT NOT NULL,
+        amount REAL NOT NULL DEFAULT 0,
+        currency TEXT DEFAULT 'XOF',
+        method TEXT DEFAULT 'cash',
+        reference TEXT DEFAULT '',
+        notes TEXT DEFAULT '',
+        receivedBy TEXT DEFAULT '',
+        createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (enterpriseId) REFERENCES enterprises(id),
+        FOREIGN KEY (invoiceId) REFERENCES invoices(id)
+    )` }
 ];
 
 let completed = 0;
