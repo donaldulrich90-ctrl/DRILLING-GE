@@ -4238,7 +4238,10 @@
             <div class="bg-slate-800 p-6 sm:p-8 rounded-xl border border-slate-700 w-full max-w-2xl my-2 sm:my-8 max-h-[calc(100vh-2rem)] flex flex-col shadow-2xl">
                 <div class="flex justify-between items-center mb-4 shrink-0">
                     <h2 class="text-xl sm:text-2xl font-bold pr-2">📅 Saisie journalière</h2>
-                    <button type="button" onclick="closeDailyEntryModal()" class="text-slate-400 hover:text-white text-2xl leading-none">&times;</button>
+                    <div class="flex items-center gap-2">
+                        <button type="button" onclick="openReportPhotoExtractor()" class="bg-purple-700 hover:bg-purple-600 px-3 py-1.5 rounded-lg text-sm font-semibold flex items-center gap-1" title="Remplir les champs depuis une photo de rapport papier">📷 Photo → Rapport</button>
+                        <button type="button" onclick="closeDailyEntryModal()" class="text-slate-400 hover:text-white text-2xl leading-none">&times;</button>
+                    </div>
                 </div>
                 <form id="dailyEntryForm" class="flex flex-col min-h-0 flex-1" onsubmit="saveDailyEntry(event)">
                     <div class="daily-entry-context py-3 mb-3 bg-slate-900/60 border border-slate-600 rounded-lg shrink-0 space-y-3">
@@ -25146,6 +25149,204 @@
             document.getElementById('dailyEntryModal').classList.remove('hidden');
         }
 
+        // ============================================================
+        // Extraction de données depuis photo de rapport (OCR/Vision IA)
+        // ============================================================
+        function openReportPhotoExtractor() {
+            var inp = document.getElementById('reportPhotoInput');
+            if (!inp) {
+                inp = document.createElement('input');
+                inp.type = 'file';
+                inp.id = 'reportPhotoInput';
+                inp.accept = 'image/*';
+                inp.capture = 'environment';
+                inp.style.display = 'none';
+                inp.onchange = function() {
+                    if (inp.files && inp.files[0]) processReportPhoto(inp.files[0]);
+                    inp.value = '';
+                };
+                document.body.appendChild(inp);
+            }
+            inp.click();
+        }
+
+        async function processReportPhoto(file) {
+            if (!file || !file.type.startsWith('image/')) {
+                alert('Veuillez sélectionner une image.');
+                return;
+            }
+            if (file.size > 20 * 1024 * 1024) {
+                alert('L\'image est trop volumineuse (max 20 Mo). Réduisez la résolution ou recadrez.');
+                return;
+            }
+            // Afficher un indicateur de chargement
+            var btn = document.querySelector('[onclick="openReportPhotoExtractor()"]');
+            var origText = btn ? btn.innerHTML : '';
+            if (btn) { btn.innerHTML = '⏳ Analyse en cours…'; btn.disabled = true; }
+
+            try {
+                var base64 = await fileToBase64(file);
+                var token = window.API && window.API.getAuthToken ? window.API.getAuthToken() : '';
+                var resp = await fetch('/api/claude-ai/extract-report', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                    body: JSON.stringify({ imageBase64: base64, mediaType: file.type })
+                });
+                var result = await resp.json();
+                if (!resp.ok) throw new Error(result.error || 'Erreur serveur');
+                if (!result.parsed) {
+                    alert('L\'IA n\'a pas pu extraire les données du rapport. Vérifiez que la photo est lisible et réessayez.');
+                    return;
+                }
+                applyExtractedReportData(result.parsed);
+                alert('✅ Données extraites et pré-remplies ! Vérifiez chaque champ avant d\'enregistrer.');
+            } catch (e) {
+                alert('Erreur lors de l\'extraction : ' + (e.message || e));
+            } finally {
+                if (btn) { btn.innerHTML = origText; btn.disabled = false; }
+            }
+        }
+
+        function fileToBase64(file) {
+            return new Promise(function(resolve, reject) {
+                var reader = new FileReader();
+                reader.onload = function() {
+                    var dataUrl = reader.result;
+                    var base64 = dataUrl.split(',')[1];
+                    resolve(base64);
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function applyExtractedReportData(data) {
+            if (!data) return;
+            // Date
+            if (data.date) {
+                var dateEl = document.getElementById('dailyEntryDate');
+                if (dateEl) { dateEl.value = data.date; dateEl.dispatchEvent(new Event('change')); }
+            }
+            // Machine — chercher par nom dans le select
+            if (data.machineName) {
+                var machSel = document.getElementById('dailyEntryMachineId');
+                if (machSel) {
+                    var found = false;
+                    var nameNorm = (data.machineName || '').toLowerCase().trim();
+                    for (var i = 0; i < machSel.options.length; i++) {
+                        var optText = machSel.options[i].text.toLowerCase().trim();
+                        if (optText.indexOf(nameNorm) >= 0 || nameNorm.indexOf(optText) >= 0) {
+                            machSel.selectedIndex = i; found = true; break;
+                        }
+                    }
+                    if (!found) {
+                        // Essayer une correspondance partielle (numéro)
+                        var numMatch = nameNorm.match(/\d+/);
+                        if (numMatch) {
+                            for (var j = 0; j < machSel.options.length; j++) {
+                                if (machSel.options[j].text.indexOf(numMatch[0]) >= 0) {
+                                    machSel.selectedIndex = j; found = true; break;
+                                }
+                            }
+                        }
+                    }
+                    if (found) machSel.dispatchEvent(new Event('change'));
+                }
+            }
+            // Shift
+            if (data.shift) {
+                var shiftEl = document.getElementById('dailyEntryShift');
+                if (shiftEl) { shiftEl.value = data.shift; shiftEl.dispatchEvent(new Event('change')); }
+            }
+            // Type de forage
+            if (data.drillingType) setSelectVal('dailyEntryDrillingType', data.drillingType);
+            // Type de roche
+            if (data.materialType) setSelectVal('dailyEntryMaterialType', data.materialType);
+            // Lieu
+            if (data.location) setInputVal('dailyEntryLocation', data.location);
+            // Mètres et heures
+            if (data.meters != null) setInputVal('dailyEntryMeters', data.meters);
+            if (data.redrillMeters != null) setInputVal('dailyEntryRedrillMeters', data.redrillMeters);
+            if (data.hours != null) setInputVal('dailyEntryHours', data.hours);
+            // Carburant
+            if (data.fuelAdded != null) setInputVal('dailyEntryFuelAdded', data.fuelAdded);
+            if (data.fuelPrice != null) setInputVal('dailyEntryFuelPrice', data.fuelPrice);
+            if (data.counterStart != null) setInputVal('dailyEntryCounterStart', data.counterStart);
+            if (data.counterEnd != null) setInputVal('dailyEntryCounterEnd', data.counterEnd);
+            // Compteurs marteau et horamètre
+            if (data.hammerStart != null) setInputVal('dailyEntryHammerStart', data.hammerStart);
+            if (data.hammerEnd != null) setInputVal('dailyEntryHammerEnd', data.hammerEnd);
+            if (data.hoursCounterStart != null) setInputVal('dailyEntryHoursCounterStart', data.hoursCounterStart);
+            if (data.hoursCounterEnd != null) setInputVal('dailyEntryHoursCounterEnd', data.hoursCounterEnd);
+            // Changements
+            if (data.bitChanged) setCheckbox('dailyEntryBitChanged', true);
+            if (data.rodChanged) setCheckbox('dailyEntryRodChanged', true);
+            if (data.oilChanged) setCheckbox('dailyEntryOilChanged', true);
+            if (data.filterChanged) setCheckbox('dailyEntryFilterChanged', true);
+            if (data.changesDetails) setInputVal('dailyEntryChangesDetails', data.changesDetails);
+            // Notes
+            if (data.notes) setInputVal('dailyEntryNotes', data.notes);
+            // Trous
+            if (Array.isArray(data.holes) && data.holes.length > 0) {
+                data.holes.forEach(function(hole) {
+                    if (typeof addDailyEntryHoleRow === 'function') {
+                        addDailyEntryHoleRow();
+                        var rows = document.querySelectorAll('#dailyEntryHolesContainer > div');
+                        var lastRow = rows[rows.length - 1];
+                        if (lastRow) {
+                            var idInp = lastRow.querySelector('input[placeholder*="dentifiant"], input[type="text"]');
+                            if (idInp && hole.holeId) idInp.value = hole.holeId;
+                            var mInp = lastRow.querySelector('input[type="number"]');
+                            if (mInp && hole.meters != null) { mInp.value = hole.meters; mInp.dispatchEvent(new Event('input')); }
+                        }
+                    }
+                });
+            }
+            // Arrêts
+            if (Array.isArray(data.stoppages) && data.stoppages.length > 0) {
+                data.stoppages.forEach(function(st) {
+                    if (typeof addDailyEntryStoppageRow === 'function') {
+                        addDailyEntryStoppageRow();
+                        var rows = document.querySelectorAll('#dailyEntryStoppagesContainer > div');
+                        var lastRow = rows[rows.length - 1];
+                        if (lastRow) {
+                            var reasonSel = lastRow.querySelector('select');
+                            if (reasonSel && st.reason) {
+                                // Chercher la meilleure correspondance
+                                var rNorm = st.reason.toLowerCase();
+                                for (var k = 0; k < reasonSel.options.length; k++) {
+                                    if (reasonSel.options[k].text.toLowerCase().indexOf(rNorm) >= 0 || rNorm.indexOf(reasonSel.options[k].value) >= 0) {
+                                        reasonSel.selectedIndex = k; break;
+                                    }
+                                }
+                            }
+                            var durInp = lastRow.querySelector('input[placeholder*="durée"], input[step="0.25"], input.stoppage-duration');
+                            if (!durInp) durInp = lastRow.querySelector('input[type="number"]');
+                            if (durInp && st.duration != null) { durInp.value = st.duration; durInp.dispatchEvent(new Event('input')); }
+                        }
+                    }
+                });
+            }
+            // Mettre à jour les KPI et indicateurs
+            if (typeof updateDailyEntryKpiPreview === 'function') updateDailyEntryKpiPreview();
+            if (typeof updateDailyEntryFuelDerivedHint === 'function') updateDailyEntryFuelDerivedHint();
+            if (typeof updateDailyEntryCounterDeltas === 'function') updateDailyEntryCounterDeltas();
+            if (typeof updateDailyEntryModalSummary === 'function') updateDailyEntryModalSummary();
+        }
+
+        function setInputVal(id, val) {
+            var el = document.getElementById(id);
+            if (el) { el.value = val; el.dispatchEvent(new Event('input')); el.dispatchEvent(new Event('change')); }
+        }
+        function setSelectVal(id, val) {
+            var el = document.getElementById(id);
+            if (el) { el.value = val; el.dispatchEvent(new Event('change')); }
+        }
+        function setCheckbox(id, checked) {
+            var el = document.getElementById(id);
+            if (el) { el.checked = !!checked; el.dispatchEvent(new Event('change')); }
+        }
+
         function closeDailyEntryModal(force) {
             if (dailyEntrySaveInFlight) return;
             if (!force && dailyEntryFormIsDirty() && !confirm('Des modifications ne sont pas enregistrées. Fermer et les abandonner ? Pour les conserver, annulez puis cliquez sur « Pré-enregistrer ».')) return;
@@ -26516,6 +26717,7 @@
         window.showDailyEntryModal = showDailyEntryModal;
         window.showDailyEntryModalFromResources = showDailyEntryModalFromResources;
         window.closeDailyEntryModal = closeDailyEntryModal;
+        window.openReportPhotoExtractor = openReportPhotoExtractor;
         window.saveDailyEntry = saveDailyEntry;
         window.saveDailyEntryDraft = saveDailyEntryDraft;
         window.openDailyDataPurgeModal = openDailyDataPurgeModal;

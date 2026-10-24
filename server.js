@@ -1696,6 +1696,81 @@ app.post('/api/claude-ai/parse-plan', (req, res) => {
     });
 });
 
+// Extraction de données d'un rapport depuis une photo (OCR/Vision IA)
+app.post('/api/claude-ai/extract-report', (req, res) => {
+    const entId = getEnterpriseId(req);
+    if (entId == null) return res.status(400).json({ error: 'Entreprise requise' });
+    db.get('SELECT claudeApiKey FROM enterprises WHERE id = ?', [entId], async (err, ent) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!ent || !ent.claudeApiKey) return res.status(400).json({ error: 'Clé API Claude non configurée. Allez dans Paramètres > Entreprise pour ajouter votre clé.' });
+        const { imageBase64, mediaType } = req.body;
+        if (!imageBase64) return res.status(400).json({ error: 'Image requise' });
+        const mime = mediaType || 'image/jpeg';
+        try {
+            const fetch = require('node-fetch') || globalThis.fetch;
+            const response = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': ent.claudeApiKey,
+                    'anthropic-version': '2023-06-01'
+                },
+                body: JSON.stringify({
+                    model: 'claude-sonnet-4-20250514',
+                    max_tokens: 4096,
+                    messages: [{
+                        role: 'user',
+                        content: [
+                            { type: 'image', source: { type: 'base64', media_type: mime, data: imageBase64 } },
+                            { type: 'text', text: `Analyse cette photo d'un rapport de forage journalier (daily drilling report).
+Extrais TOUTES les données visibles et retourne UNIQUEMENT un objet JSON (sans texte autour) avec les champs suivants (laisse null si non trouvé) :
+{
+  "date": "YYYY-MM-DD",
+  "machineName": "nom ou numéro de la machine",
+  "shift": "day" | "night" | null,
+  "drillingType": "exploration" | "production" | "drainage" | "injection" | "geotechnique" | "eau" | "autre" | null,
+  "materialType": "FrM" | "TrM" | "OxM" | null,
+  "location": "lieu de forage",
+  "meters": nombre de mètres forés (nouveaux),
+  "redrillMeters": mètres reforés,
+  "hours": heures machine (fonctionnement),
+  "fuelAdded": litres de carburant chargés,
+  "fuelPrice": prix du litre,
+  "counterStart": compteur carburant début,
+  "counterEnd": compteur carburant fin,
+  "hammerStart": compteur marteau début,
+  "hammerEnd": compteur marteau fin,
+  "hoursCounterStart": horamètre début,
+  "hoursCounterEnd": horamètre fin,
+  "bitChanged": true/false,
+  "rodChanged": true/false,
+  "oilChanged": true/false,
+  "filterChanged": true/false,
+  "changesDetails": "détails des changements",
+  "notes": "notes générales ou observations",
+  "holes": [{"holeId": "identifiant du trou", "meters": profondeur forée}],
+  "stoppages": [{"reason": "raison", "duration": heures, "startTime": "HH:MM", "endTime": "HH:MM"}]
+}
+Sois précis avec les nombres. Si le rapport est manuscrit, fais de ton mieux pour déchiffrer l'écriture. Retourne UNIQUEMENT le JSON.` }
+                        ]
+                    }]
+                })
+            });
+            const data = await response.json();
+            if (data.error) return res.status(400).json({ error: data.error.message || 'Erreur API Claude' });
+            const text = data.content && data.content[0] && data.content[0].text || '';
+            let parsed = null;
+            try {
+                const jsonMatch = text.match(/\{[\s\S]*\}/);
+                if (jsonMatch) parsed = JSON.parse(jsonMatch[0]);
+            } catch(e) {}
+            res.json({ raw: text, parsed: parsed });
+        } catch(e) {
+            res.status(500).json({ error: 'Erreur appel API Claude: ' + e.message });
+        }
+    });
+});
+
 // Chat IA conversationnel — assistant ingénierie, comptabilité, planification
 app.post('/api/claude-ai/chat', (req, res) => {
     const entId = getEnterpriseId(req);
