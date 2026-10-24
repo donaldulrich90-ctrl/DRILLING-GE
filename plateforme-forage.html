@@ -9901,9 +9901,25 @@
             });
         }
 
+        // État global plans serveur
+        var DP_STATE = { plans: [], currentPlan: null, holes: [], tab: 'list', loading: false };
+        var DP_HOLE_COLORS = { planned:'#3B82F6', drilled:'#22C55E', redrilled:'#F59E0B', abandoned:'#6B7280' };
+        var DP_HOLE_LABELS = { planned:'Planifié', drilled:'Foré', redrilled:'Reforé', abandoned:'Abandonné' };
+        var _fpSubTab = 'local'; // 'local' ou 'server'
+
         function renderForagePlan() {
             var el = document.getElementById('forage_planContent');
             if (!el) return;
+            // Sous-onglets
+            var subTabs = '<div class="flex gap-2 mb-5">' +
+                '<button onclick="_fpSubTab=\'local\';renderForagePlan()" class="px-5 py-2.5 rounded-lg text-sm font-semibold transition-all ' + (_fpSubTab === 'local' ? 'ged-btn-primary' : 'bg-slate-700 hover:bg-slate-600 text-slate-300') + '">📋 Plan local (blocs)</button>' +
+                '<button onclick="_fpSubTab=\'server\';renderForagePlan()" class="px-5 py-2.5 rounded-lg text-sm font-semibold transition-all ' + (_fpSubTab === 'server' ? 'ged-btn-primary' : 'bg-slate-700 hover:bg-slate-600 text-slate-300') + '">🗺️ Plans serveur (import & carte)</button>' +
+                '</div>';
+            if (_fpSubTab === 'server') {
+                el.innerHTML = subTabs + '<div id="dpServerContent"><div class="text-center py-8 text-slate-400">Chargement…</div></div>';
+                dpLoadPlans();
+                return;
+            }
             loadFPDataFromServerOnce();
             var fpData = getFPData();
             var blocks = fpData.blocks || [];
@@ -9937,7 +9953,7 @@
             blockSel += '</div>';
 
             if (blocks.length === 0 || !block) {
-                el.innerHTML = blockSel + '<div class="text-center text-slate-500 py-20"><p class="text-lg font-semibold mb-2">Aucun bloc de forage créé</p><p class="text-sm mb-4">Créez votre premier bloc pour commencer à planifier les trous.</p><button onclick="showAddBlockModal()" class="ged-btn-primary px-6 py-3 rounded-lg">+ Créer un bloc de forage</button></div>';
+                el.innerHTML = subTabs + blockSel + '<div class="text-center text-slate-500 py-20"><p class="text-lg font-semibold mb-2">Aucun bloc de forage créé</p><p class="text-sm mb-4">Créez votre premier bloc pour commencer à planifier les trous.</p><button onclick="showAddBlockModal()" class="ged-btn-primary px-6 py-3 rounded-lg">+ Créer un bloc de forage</button></div>';
                 return;
             }
 
@@ -10019,6 +10035,7 @@
             });
 
             el.innerHTML = [
+                subTabs,
                 blockSel,
                 '<div class="flex gap-3 flex-wrap mb-5">',
                 kpi('Total trous',holes.length,'text-white'),
@@ -10285,6 +10302,444 @@
             (block.holes||[]).forEach(function(h){ rows.push([h.id,h.status,h.planDepth||0,h.actDepth||0,h.diameterMm||'',h.easting!=null?h.easting:'',h.northing!=null?h.northing:'',h.elevation!=null?h.elevation:'',h.geology||'',h.waterEncountered?'Oui':'Non',h.waterDepth!=null?h.waterDepth:'',h.azimuth||0,h.inclination!=null?h.inclination:90,h.drillId||'',h.operatorName||'',h.startDate||'',h.endDate||'',h.notes||'']); });
             var csv=rows.map(function(r){ return r.map(function(v){ return '"'+String(v).replace(/"/g,'""')+'"'; }).join(','); }).join('\n');
             var a=document.createElement('a'); a.href='data:text/csv;charset=utf-8,﻿'+encodeURIComponent(csv); a.download='plan-forage-'+(block.name||block.id).replace(/\s+/g,'_')+'.csv'; a.click();
+        }
+
+        // ============================================
+        // PLANS SERVEUR — Import CSV, carte SVG, synchro
+        // ============================================
+
+        async function dpLoadPlans() {
+            DP_STATE.loading = true;
+            try {
+                var resp = await fetch('/api/drill-plans', { headers: { 'Authorization': 'Bearer ' + (window.API && window.API.getAuthToken ? window.API.getAuthToken() : '') } });
+                DP_STATE.plans = await resp.json();
+            } catch(e) { DP_STATE.plans = []; }
+            DP_STATE.loading = false;
+            dpRender();
+        }
+
+        async function dpLoadPlanFull(planId) {
+            DP_STATE.loading = true;
+            try {
+                var resp = await fetch('/api/drill-plans/' + planId + '/full', { headers: { 'Authorization': 'Bearer ' + (window.API && window.API.getAuthToken ? window.API.getAuthToken() : '') } });
+                var plan = await resp.json();
+                DP_STATE.currentPlan = plan;
+                DP_STATE.holes = plan.holes || [];
+            } catch(e) { DP_STATE.currentPlan = null; DP_STATE.holes = []; }
+            DP_STATE.loading = false;
+            dpRender();
+        }
+
+        function dpRender() {
+            var el = document.getElementById('dpServerContent');
+            if (!el) return;
+            if (DP_STATE.loading) { el.innerHTML = '<div class="text-center py-8 text-slate-400">Chargement…</div>'; return; }
+            if (DP_STATE.currentPlan) {
+                dpRenderPlanDetail(el);
+            } else {
+                dpRenderList(el);
+            }
+        }
+
+        function dpRenderList(el) {
+            var plans = DP_STATE.plans || [];
+            var html = '<div class="flex justify-between items-center mb-5">' +
+                '<h3 class="font-bold text-lg text-white">Plans de forage enregistrés</h3>' +
+                '<button onclick="dpShowCreateModal()" class="ged-btn-primary px-4 py-2 rounded-lg text-sm">+ Nouveau plan</button>' +
+                '</div>';
+            if (plans.length === 0) {
+                html += '<div class="text-center py-16 text-slate-500"><p class="text-lg font-semibold mb-2">Aucun plan de forage</p><p class="text-sm mb-4">Créez un plan puis importez vos trous depuis un CSV ou via l\'IA.</p></div>';
+            } else {
+                html += '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">';
+                plans.forEach(function(p) {
+                    var statusBadge = p.status === 'active' ? '<span style="background:#DCFCE7;color:#16A34A;padding:2px 8px;border-radius:999px;font-size:11px">Actif</span>' : '<span style="background:#FEF3C7;color:#92400E;padding:2px 8px;border-radius:999px;font-size:11px">' + escapeHtml(p.status) + '</span>';
+                    html += '<div class="bg-slate-800 border border-slate-700 rounded-xl p-5 hover:border-yellow-600 transition-colors cursor-pointer" onclick="dpOpenPlan(' + p.id + ')">' +
+                        '<div class="flex justify-between items-start mb-3">' +
+                        '<h4 class="font-bold text-white">' + escapeHtml(p.name) + '</h4>' + statusBadge +
+                        '</div>' +
+                        '<p class="text-slate-400 text-xs mb-2">' + escapeHtml(p.description || 'Pas de description') + '</p>' +
+                        '<div class="flex justify-between text-xs text-slate-500">' +
+                        '<span>' + (p.totalHoles || 0) + ' trous</span>' +
+                        '<span>' + (p.zoneLabel || '—') + '</span>' +
+                        '</div></div>';
+                });
+                html += '</div>';
+            }
+            el.innerHTML = html;
+        }
+
+        function dpOpenPlan(planId) {
+            dpLoadPlanFull(planId);
+        }
+
+        function dpBackToList() {
+            DP_STATE.currentPlan = null;
+            DP_STATE.holes = [];
+            dpLoadPlans();
+        }
+
+        function dpRenderPlanDetail(el) {
+            var plan = DP_STATE.currentPlan;
+            var holes = DP_STATE.holes || [];
+            var stats = { planned: 0, drilled: 0, redrilled: 0, abandoned: 0, totalMeters: 0 };
+            holes.forEach(function(h) {
+                if (stats[h.status] !== undefined) stats[h.status]++;
+                stats.totalMeters += parseFloat(h.actualDepth) || 0;
+            });
+            var pct = holes.length > 0 ? Math.round(((stats.drilled + stats.redrilled) / holes.length) * 100) : 0;
+
+            var kpi = function(lbl, val, cls) {
+                return '<div class="bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 flex-1 min-w-[110px]">' +
+                    '<p class="text-slate-500 text-[10px] uppercase tracking-widest mb-1">' + lbl + '</p>' +
+                    '<p class="text-2xl font-black font-mono ' + cls + '">' + val + '</p></div>';
+            };
+
+            // SVG carte interactive
+            var svgContent = '';
+            var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+            holes.forEach(function(h) {
+                var hx = parseFloat(h.x) || 0, hy = parseFloat(h.y) || 0;
+                if (hx < minX) minX = hx; if (hx > maxX) maxX = hx;
+                if (hy < minY) minY = hy; if (hy > maxY) maxY = hy;
+            });
+            if (holes.length === 0) { minX = 0; maxX = 100; minY = 0; maxY = 100; }
+            var pad = 40;
+            var rangeX = Math.max(maxX - minX, 1);
+            var rangeY = Math.max(maxY - minY, 1);
+            var svgW2 = 600, svgH2 = Math.max(300, Math.round(svgW2 * rangeY / rangeX));
+            if (svgH2 > 500) { svgH2 = 500; svgW2 = Math.round(svgH2 * rangeX / rangeY); }
+            svgW2 = Math.max(svgW2, 400);
+            svgH2 = Math.max(svgH2, 250);
+
+            holes.forEach(function(h) {
+                var hx = parseFloat(h.x) || 0, hy = parseFloat(h.y) || 0;
+                var cx = pad + ((hx - minX) / rangeX) * (svgW2 - 2 * pad);
+                var cy = pad + ((hy - minY) / rangeY) * (svgH2 - 2 * pad);
+                var fill = DP_HOLE_COLORS[h.status] || '#3B82F6';
+                svgContent += '<g onclick="dpSelectHole(' + h.id + ')" style="cursor:pointer">';
+                svgContent += '<circle cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="10" fill="' + fill + '" opacity="0.2"/>';
+                svgContent += '<circle cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="7" fill="' + fill + '" stroke="' + fill + '" stroke-width="1"/>';
+                svgContent += '<text x="' + cx.toFixed(1) + '" y="' + (cy + 3).toFixed(1) + '" text-anchor="middle" fill="white" font-size="5" font-weight="bold">' + escapeHtml(String(h.holeId).substring(0, 5)) + '</text>';
+                svgContent += '</g>';
+            });
+
+            // Légende
+            var legend = '<div class="flex gap-4 flex-wrap mt-3">';
+            Object.keys(DP_HOLE_COLORS).forEach(function(k) {
+                var count = stats[k] || 0;
+                legend += '<span class="flex items-center gap-1.5 text-xs text-slate-400"><span style="width:10px;height:10px;border-radius:50%;background:' + DP_HOLE_COLORS[k] + ';display:inline-block"></span>' + DP_HOLE_LABELS[k] + ' (' + count + ')</span>';
+            });
+            legend += '</div>';
+
+            // Tableau des trous
+            var tblRows = '';
+            holes.forEach(function(h, idx) {
+                var c = DP_HOLE_COLORS[h.status] || '#3B82F6';
+                var bg = idx % 2 ? 'background:rgba(255,255,255,0.02)' : '';
+                tblRows += '<tr style="' + bg + ';border-bottom:1px solid rgba(255,255,255,0.06)" class="hover:bg-slate-700 transition-colors">';
+                tblRows += '<td class="px-3 py-2 font-mono font-semibold" style="color:#F5B800">' + escapeHtml(h.holeId) + '</td>';
+                tblRows += '<td class="px-3 py-2"><span style="display:flex;align-items:center;gap:6px;color:' + c + ';font-weight:600;font-size:12px"><span style="width:8px;height:8px;border-radius:50%;background:' + c + ';display:inline-block"></span>' + escapeHtml(DP_HOLE_LABELS[h.status] || h.status) + '</span></td>';
+                tblRows += '<td class="px-3 py-2 text-slate-400 text-xs">' + escapeHtml(h.zone || '—') + '</td>';
+                tblRows += '<td class="px-3 py-2 text-slate-400 text-xs">' + escapeHtml(h.blockId || '—') + '</td>';
+                tblRows += '<td class="px-3 py-2 font-mono text-slate-300 text-right">' + (parseFloat(h.plannedDepth) || 0).toFixed(1) + '</td>';
+                tblRows += '<td class="px-3 py-2 font-mono text-right ' + (parseFloat(h.actualDepth) > 0 ? 'text-green-400' : 'text-slate-600') + '">' + (parseFloat(h.actualDepth) > 0 ? parseFloat(h.actualDepth).toFixed(1) : '—') + '</td>';
+                tblRows += '<td class="px-3 py-2 text-slate-400 text-xs">' + escapeHtml(h.machineId || '—') + '</td>';
+                tblRows += '<td class="px-3 py-2 font-mono text-slate-500 text-xs">' + escapeHtml(h.drilledDate || '—') + '</td>';
+                tblRows += '</tr>';
+            });
+
+            el.innerHTML = [
+                '<div class="flex items-center gap-3 mb-5">',
+                '<button onclick="dpBackToList()" class="bg-slate-700 hover:bg-slate-600 px-3 py-2 rounded text-sm">← Retour</button>',
+                '<h3 class="font-bold text-lg text-white">' + escapeHtml(plan.name) + '</h3>',
+                '<span class="text-slate-500 text-sm">' + escapeHtml(plan.zoneLabel || '') + '</span>',
+                '<div class="ml-auto flex gap-2">',
+                '<button onclick="dpSyncPlan(' + plan.id + ')" class="bg-green-700 hover:bg-green-600 px-4 py-2 rounded text-sm font-semibold">🔄 Synchroniser avec saisies</button>',
+                '<button onclick="dpShowImportModal(' + plan.id + ')" class="ged-btn-primary px-4 py-2 rounded text-sm">📥 Importer CSV</button>',
+                '<button onclick="dpShowAiParseModal(' + plan.id + ')" class="bg-purple-700 hover:bg-purple-600 px-4 py-2 rounded text-sm">🤖 IA — Analyser image</button>',
+                '<button onclick="dpExportCsv(' + plan.id + ')" class="bg-slate-600 hover:bg-slate-500 px-3 py-2 rounded text-sm">⬇ CSV</button>',
+                '<button onclick="dpDeletePlan(' + plan.id + ')" class="bg-red-800 hover:bg-red-700 px-3 py-2 rounded text-sm">🗑</button>',
+                '</div></div>',
+                '<div class="flex gap-3 flex-wrap mb-5">',
+                kpi('Total trous', holes.length, 'text-white'),
+                kpi('Planifiés', stats.planned, 'text-blue-400'),
+                kpi('Forés', stats.drilled, 'text-green-400'),
+                kpi('Reforés', stats.redrilled, 'text-yellow-400'),
+                kpi('Abandonnés', stats.abandoned, 'text-slate-400'),
+                kpi('Mètres forés', stats.totalMeters.toFixed(1) + ' m', 'text-yellow-400'),
+                kpi('Avancement', pct + '%', pct > 70 ? 'text-green-400' : pct > 40 ? 'text-yellow-400' : 'text-red-400'),
+                '</div>',
+                // Carte SVG
+                '<div class="bg-slate-800 border border-slate-700 rounded-xl p-5 mb-5">',
+                '<p class="text-[11px] uppercase tracking-widest text-slate-500 mb-3">Carte des trous — ' + escapeHtml(plan.name) + '</p>',
+                '<div style="display:flex;justify-content:center;overflow-x:auto">',
+                '<svg viewBox="0 0 ' + svgW2 + ' ' + svgH2 + '" style="width:100%;max-width:' + Math.min(700, svgW2) + 'px;background:rgba(0,0,0,0.15);border-radius:8px">',
+                svgContent,
+                (holes.length === 0 ? '<text x="' + (svgW2 / 2) + '" y="' + (svgH2 / 2) + '" fill="#475569" font-size="13" text-anchor="middle">Aucun trou — Importez un CSV ou utilisez l\'IA</text>' : ''),
+                '</svg></div>',
+                legend,
+                // Barre de progression
+                '<div class="mt-3"><div class="flex justify-between text-[11px] text-slate-500 mb-1"><span>Progression</span><span>' + pct + '%</span></div><div class="w-full bg-slate-900 rounded-full h-3 overflow-hidden"><div style="width:' + pct + '%;background:linear-gradient(to right,#3B82F6,#22C55E)" class="h-3 rounded-full transition-all"></div></div></div>',
+                '</div>',
+                // Tableau
+                '<div class="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">',
+                '<div class="ged-section-header px-5 py-3 flex justify-between items-center">',
+                '<h3 class="font-semibold text-sm">Détail des trous — ' + escapeHtml(plan.name) + '</h3>',
+                '<span class="text-xs text-slate-500">' + (stats.drilled + stats.redrilled) + ' / ' + holes.length + ' forés</span>',
+                '</div>',
+                '<div style="overflow-x:auto">',
+                '<table style="width:100%;font-size:12.5px;border-collapse:collapse">',
+                '<thead><tr style="border-bottom:1px solid rgba(255,255,255,0.1);font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:#64748B;background:rgba(0,0,0,0.2)">',
+                '<th class="px-3 py-2 text-left">N° Trou</th><th class="px-3 py-2 text-left">Statut</th><th class="px-3 py-2 text-left">Zone</th><th class="px-3 py-2 text-left">Bloc</th><th class="px-3 py-2 text-right">Plan (m)</th><th class="px-3 py-2 text-right">Act. (m)</th><th class="px-3 py-2 text-left">Machine</th><th class="px-3 py-2 text-left">Date</th>',
+                '</tr></thead><tbody>',
+                (tblRows || '<tr><td colspan="8" class="text-center py-8 text-slate-500 italic">Aucun trou</td></tr>'),
+                '</tbody></table></div></div>'
+            ].join('');
+        }
+
+        function dpSelectHole(holeDbId) {
+            // Pour l'instant, highlight dans le tableau (futur: panneau détail)
+            var h = DP_STATE.holes.find(function(x) { return x.id === holeDbId; });
+            if (h) alert('Trou ' + h.holeId + '\nStatut: ' + (DP_HOLE_LABELS[h.status] || h.status) + '\nProf. planifiée: ' + (h.plannedDepth || 0) + ' m\nProf. actuelle: ' + (h.actualDepth || 0) + ' m\nZone: ' + (h.zone || '—') + '\nBloc: ' + (h.blockId || '—') + '\nMachine: ' + (h.machineId || '—') + '\nDate: ' + (h.drilledDate || '—'));
+        }
+
+        function dpShowCreateModal() {
+            var html = '<div id="dpCreateModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">' +
+                '<div class="ged-modal-panel p-8 rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">' +
+                '<div class="flex justify-between items-center mb-6"><h2 class="text-xl font-bold text-white">Nouveau plan de forage</h2>' +
+                '<button onclick="document.getElementById(\'dpCreateModal\').remove()" class="text-slate-400 hover:text-white text-2xl">&times;</button></div>' +
+                '<form onsubmit="dpCreatePlan(event)">' +
+                '<div class="mb-4"><label class="block text-slate-400 text-sm mb-1">Nom du plan *</label><input type="text" id="dpNewName" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white" required></div>' +
+                '<div class="mb-4"><label class="block text-slate-400 text-sm mb-1">Description</label><textarea id="dpNewDesc" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white" rows="2"></textarea></div>' +
+                '<div class="grid grid-cols-2 gap-4 mb-4">' +
+                '<div><label class="block text-slate-400 text-sm mb-1">Zone / Label</label><input type="text" id="dpNewZone" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white" placeholder="Ex: Zone A"></div>' +
+                '<div><label class="block text-slate-400 text-sm mb-1">Site</label><select id="dpNewSite" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white"><option value="">— Aucun —</option></select></div>' +
+                '</div>' +
+                '<button type="submit" class="ged-btn-primary w-full py-3 rounded-lg font-semibold">Créer le plan</button>' +
+                '</form></div></div>';
+            document.body.insertAdjacentHTML('beforeend', html);
+            var sel = document.getElementById('dpNewSite');
+            (window.sites || []).forEach(function(s) { var o = document.createElement('option'); o.value = s.id; o.textContent = s.name || s.id; sel.appendChild(o); });
+        }
+
+        async function dpCreatePlan(event) {
+            event.preventDefault();
+            var name = document.getElementById('dpNewName').value.trim();
+            if (!name) return;
+            try {
+                await fetch('/api/drill-plans', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (window.API && window.API.getAuthToken ? window.API.getAuthToken() : '') },
+                    body: JSON.stringify({ name: name, description: document.getElementById('dpNewDesc').value.trim(), zoneLabel: document.getElementById('dpNewZone').value.trim(), siteId: document.getElementById('dpNewSite').value || null })
+                });
+                var m = document.getElementById('dpCreateModal'); if (m) m.remove();
+                dpLoadPlans();
+            } catch(e) { alert('Erreur: ' + e.message); }
+        }
+
+        async function dpDeletePlan(planId) {
+            if (!confirm('Supprimer ce plan et tous ses trous ? Action irréversible.')) return;
+            try {
+                await fetch('/api/drill-plans/' + planId, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + (window.API && window.API.getAuthToken ? window.API.getAuthToken() : '') } });
+                dpBackToList();
+            } catch(e) { alert('Erreur: ' + e.message); }
+        }
+
+        async function dpSyncPlan(planId) {
+            try {
+                var resp = await fetch('/api/drill-plans/' + planId + '/sync', { method: 'POST', headers: { 'Authorization': 'Bearer ' + (window.API && window.API.getAuthToken ? window.API.getAuthToken() : '') } });
+                var result = await resp.json();
+                alert('Synchronisation terminée !\n' + (result.updated || 0) + ' trous mis à jour depuis les saisies journalières.\n' + (result.totalDrilled || 0) + ' trous trouvés dans les données.');
+                dpLoadPlanFull(planId);
+            } catch(e) { alert('Erreur synchro: ' + e.message); }
+        }
+
+        function dpShowImportModal(planId) {
+            var html = '<div id="dpImportModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">' +
+                '<div class="ged-modal-panel p-8 rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">' +
+                '<div class="flex justify-between items-center mb-6"><h2 class="text-xl font-bold text-white">📥 Importer des trous (CSV)</h2>' +
+                '<button onclick="document.getElementById(\'dpImportModal\').remove()" class="text-slate-400 hover:text-white text-2xl">&times;</button></div>' +
+                '<div class="mb-4 p-4 bg-slate-900 rounded-lg">' +
+                '<p class="text-sm text-slate-300 mb-2"><strong>Format CSV attendu :</strong></p>' +
+                '<code class="text-xs text-green-400 block">holeId,x,y,row,col,zone,blockId,source,plannedDepth</code>' +
+                '<p class="text-xs text-slate-500 mt-2">Exemple : <code>T-001,100,200,R1,C1,Zone A,BLK-1,Mine,12.5</code></p>' +
+                '<p class="text-xs text-slate-500 mt-1">Séparateur : virgule ou point-virgule. Encodage UTF-8.</p>' +
+                '</div>' +
+                '<div class="mb-4"><label class="block text-slate-400 text-sm mb-2">Fichier CSV</label>' +
+                '<input type="file" id="dpImportFile" accept=".csv,.txt" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white text-sm"></div>' +
+                '<div class="mb-4"><label class="block text-slate-400 text-sm mb-2">Ou coller le CSV ici</label>' +
+                '<textarea id="dpImportText" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white text-sm font-mono" rows="6" placeholder="holeId,x,y,row,col,zone,blockId,source,plannedDepth&#10;T-001,100,200,R1,C1,Zone A,BLK-1,Mine,12.5"></textarea></div>' +
+                '<div id="dpImportPreview" class="mb-4"></div>' +
+                '<button type="button" onclick="dpImportCsv(' + planId + ')" class="ged-btn-primary w-full py-3 rounded-lg font-semibold">Importer les trous</button>' +
+                '</div></div>';
+            document.body.insertAdjacentHTML('beforeend', html);
+            document.getElementById('dpImportFile').addEventListener('change', function(e) {
+                var file = e.target.files[0]; if (!file) return;
+                var reader = new FileReader();
+                reader.onload = function(ev) { document.getElementById('dpImportText').value = ev.target.result; dpPreviewImport(); };
+                reader.readAsText(file);
+            });
+            document.getElementById('dpImportText').addEventListener('input', dpPreviewImport);
+        }
+
+        function dpPreviewImport() {
+            var text = (document.getElementById('dpImportText').value || '').trim();
+            var prev = document.getElementById('dpImportPreview');
+            if (!text) { prev.innerHTML = ''; return; }
+            var holes = dpParseCsv(text);
+            prev.innerHTML = '<p class="text-sm text-slate-300 mb-1"><strong>' + holes.length + ' trous</strong> détectés</p>' +
+                (holes.length > 0 ? '<div class="max-h-32 overflow-y-auto text-xs text-slate-400 bg-slate-900 rounded p-2">' +
+                holes.slice(0, 10).map(function(h) { return escapeHtml(h.holeId) + ' (' + h.x + ',' + h.y + ') — ' + (h.zone || '') + ' — ' + (h.plannedDepth || 0) + 'm'; }).join('<br>') +
+                (holes.length > 10 ? '<br>… et ' + (holes.length - 10) + ' autres' : '') + '</div>' : '');
+        }
+
+        function dpParseCsv(text) {
+            var lines = text.split(/\r?\n/).filter(function(l) { return l.trim(); });
+            if (lines.length < 2) return [];
+            // Detect separator
+            var sep = lines[0].indexOf(';') >= 0 ? ';' : ',';
+            var headers = lines[0].split(sep).map(function(h) { return h.trim().toLowerCase().replace(/['"]/g, ''); });
+            var idxMap = {};
+            ['holeid', 'x', 'y', 'row', 'col', 'zone', 'blockid', 'source', 'planneddepth'].forEach(function(k) {
+                var i = headers.indexOf(k);
+                if (i < 0) {
+                    // Try common aliases
+                    var aliases = { holeid: ['hole_id', 'id', 'trou', 'n°'], blockid: ['block_id', 'bloc'], planneddepth: ['planned_depth', 'depth', 'profondeur', 'prof'] };
+                    (aliases[k] || []).forEach(function(a) { if (i < 0) i = headers.indexOf(a); });
+                }
+                idxMap[k] = i;
+            });
+            var holes = [];
+            for (var i = 1; i < lines.length; i++) {
+                var vals = lines[i].split(sep).map(function(v) { return v.trim().replace(/^["']|["']$/g, ''); });
+                var holeId = idxMap.holeid >= 0 ? vals[idxMap.holeid] : '';
+                if (!holeId) continue;
+                holes.push({
+                    holeId: holeId,
+                    x: parseFloat(idxMap.x >= 0 ? vals[idxMap.x] : 0) || 0,
+                    y: parseFloat(idxMap.y >= 0 ? vals[idxMap.y] : 0) || 0,
+                    row: idxMap.row >= 0 ? vals[idxMap.row] || '' : '',
+                    col: idxMap.col >= 0 ? vals[idxMap.col] || '' : '',
+                    zone: idxMap.zone >= 0 ? vals[idxMap.zone] || '' : '',
+                    blockId: idxMap.blockid >= 0 ? vals[idxMap.blockid] || '' : '',
+                    source: idxMap.source >= 0 ? vals[idxMap.source] || '' : '',
+                    plannedDepth: parseFloat(idxMap.planneddepth >= 0 ? vals[idxMap.planneddepth] : 0) || 0,
+                    status: 'planned'
+                });
+            }
+            return holes;
+        }
+
+        async function dpImportCsv(planId) {
+            var text = (document.getElementById('dpImportText').value || '').trim();
+            if (!text) { alert('Veuillez sélectionner un fichier ou coller du CSV.'); return; }
+            var holes = dpParseCsv(text);
+            if (holes.length === 0) { alert('Aucun trou détecté. Vérifiez le format CSV.'); return; }
+            try {
+                var resp = await fetch('/api/drill-plans/' + planId + '/holes', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (window.API && window.API.getAuthToken ? window.API.getAuthToken() : '') },
+                    body: JSON.stringify({ holes: holes })
+                });
+                var result = await resp.json();
+                alert(result.message || (result.inserted || 0) + ' trous importés avec succès !');
+                var m = document.getElementById('dpImportModal'); if (m) m.remove();
+                dpLoadPlanFull(planId);
+            } catch(e) { alert('Erreur import: ' + e.message); }
+        }
+
+        function dpExportCsv(planId) {
+            var holes = DP_STATE.holes || [];
+            if (holes.length === 0) { alert('Aucun trou à exporter.'); return; }
+            var rows = [['holeId', 'x', 'y', 'row', 'col', 'zone', 'blockId', 'source', 'plannedDepth', 'actualDepth', 'status', 'drilledDate', 'machineId', 'notes']];
+            holes.forEach(function(h) {
+                rows.push([h.holeId, h.x, h.y, h.row, h.col, h.zone, h.blockId, h.source, h.plannedDepth, h.actualDepth, h.status, h.drilledDate || '', h.machineId || '', h.notes || '']);
+            });
+            var csv = rows.map(function(r) { return r.map(function(v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; }).join(','); }).join('\n');
+            var plan = DP_STATE.currentPlan;
+            var a = document.createElement('a');
+            a.href = 'data:text/csv;charset=utf-8,﻿' + encodeURIComponent(csv);
+            a.download = 'plan-' + (plan ? (plan.name || 'forage').replace(/\s+/g, '_') : 'forage') + '.csv';
+            a.click();
+        }
+
+        function dpShowAiParseModal(planId) {
+            var html = '<div id="dpAiModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">' +
+                '<div class="ged-modal-panel p-8 rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">' +
+                '<div class="flex justify-between items-center mb-6"><h2 class="text-xl font-bold text-white">🤖 Analyse IA — Plan de forage</h2>' +
+                '<button onclick="document.getElementById(\'dpAiModal\').remove()" class="text-slate-400 hover:text-white text-2xl">&times;</button></div>' +
+                '<div class="mb-4 p-4 bg-purple-900/30 border border-purple-700/50 rounded-lg">' +
+                '<p class="text-sm text-purple-300 mb-1"><strong>Fonctionnalité optionnelle</strong></p>' +
+                '<p class="text-xs text-purple-400">Nécessite une clé API Claude configurée dans Paramètres > Entreprise. L\'IA analysera l\'image de votre plan de forage et extraira automatiquement les trous.</p>' +
+                '</div>' +
+                '<div class="mb-4"><label class="block text-slate-400 text-sm mb-2">Image du plan de forage</label>' +
+                '<input type="file" id="dpAiFile" accept="image/*" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white text-sm"></div>' +
+                '<div id="dpAiPreview" class="mb-4"></div>' +
+                '<div id="dpAiResult" class="mb-4"></div>' +
+                '<button type="button" id="dpAiAnalyzeBtn" onclick="dpAiAnalyze(' + planId + ')" class="ged-btn-primary w-full py-3 rounded-lg font-semibold bg-purple-700 hover:bg-purple-600">Analyser avec l\'IA</button>' +
+                '</div></div>';
+            document.body.insertAdjacentHTML('beforeend', html);
+            document.getElementById('dpAiFile').addEventListener('change', function(e) {
+                var file = e.target.files[0]; if (!file) return;
+                var reader = new FileReader();
+                reader.onload = function(ev) {
+                    document.getElementById('dpAiPreview').innerHTML = '<img src="' + ev.target.result + '" style="max-height:200px;border-radius:8px;border:1px solid #475569" />';
+                    document.getElementById('dpAiFile').dataset.base64 = ev.target.result.split(',')[1] || '';
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        async function dpAiAnalyze(planId) {
+            var fileInput = document.getElementById('dpAiFile');
+            var base64 = fileInput.dataset.base64;
+            if (!base64) { alert('Veuillez sélectionner une image.'); return; }
+            var btn = document.getElementById('dpAiAnalyzeBtn');
+            btn.disabled = true; btn.textContent = 'Analyse en cours…';
+            var resultDiv = document.getElementById('dpAiResult');
+            resultDiv.innerHTML = '<div class="text-center py-4 text-purple-400"><span class="animate-pulse">🔄 L\'IA analyse le plan…</span></div>';
+            try {
+                var resp = await fetch('/api/claude-ai/parse-plan', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (window.API && window.API.getAuthToken ? window.API.getAuthToken() : '') },
+                    body: JSON.stringify({ imageBase64: base64 })
+                });
+                var data = await resp.json();
+                if (data.error) { resultDiv.innerHTML = '<div class="p-3 bg-red-900/30 border border-red-700/50 rounded-lg text-red-300 text-sm">' + escapeHtml(data.error) + '</div>'; btn.disabled = false; btn.textContent = 'Réessayer'; return; }
+                if (data.parsed && data.parsed.holes && data.parsed.holes.length > 0) {
+                    var holes = data.parsed.holes;
+                    resultDiv.innerHTML = '<div class="p-3 bg-green-900/30 border border-green-700/50 rounded-lg text-green-300 text-sm mb-3">' +
+                        '<strong>' + holes.length + ' trous détectés par l\'IA !</strong></div>' +
+                        '<div class="max-h-40 overflow-y-auto text-xs text-slate-400 bg-slate-900 rounded p-2">' +
+                        holes.slice(0, 15).map(function(h) { return escapeHtml(h.holeId || '?') + ' (' + (h.x || 0) + ',' + (h.y || 0) + ') — ' + (h.zone || '') + ' — ' + (h.plannedDepth || 0) + 'm'; }).join('<br>') +
+                        (holes.length > 15 ? '<br>… et ' + (holes.length - 15) + ' autres' : '') + '</div>';
+                    btn.textContent = 'Importer les ' + holes.length + ' trous';
+                    btn.disabled = false;
+                    btn.onclick = async function() {
+                        btn.disabled = true; btn.textContent = 'Import…';
+                        try {
+                            var importResp = await fetch('/api/drill-plans/' + planId + '/holes', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (window.API && window.API.getAuthToken ? window.API.getAuthToken() : '') },
+                                body: JSON.stringify({ holes: holes.map(function(h) { return { holeId: h.holeId || '', x: h.x || 0, y: h.y || 0, row: h.row || '', col: h.col || '', zone: h.zone || '', blockId: h.blockId || '', plannedDepth: h.plannedDepth || 0, status: 'planned' }; }) })
+                            });
+                            var r = await importResp.json();
+                            alert((r.inserted || 0) + ' trous importés via IA !');
+                            var m = document.getElementById('dpAiModal'); if (m) m.remove();
+                            dpLoadPlanFull(planId);
+                        } catch(e) { alert('Erreur: ' + e.message); btn.disabled = false; btn.textContent = 'Réessayer'; }
+                    };
+                } else {
+                    resultDiv.innerHTML = '<div class="p-3 bg-yellow-900/30 border border-yellow-700/50 rounded-lg text-yellow-300 text-sm">' +
+                        '<p class="mb-2">L\'IA n\'a pas pu extraire de trous structurés.</p>' +
+                        '<p class="text-xs text-slate-400">Réponse brute :</p>' +
+                        '<pre class="text-xs text-slate-400 mt-1 whitespace-pre-wrap max-h-40 overflow-y-auto">' + escapeHtml(data.raw || '(vide)') + '</pre></div>';
+                    btn.disabled = false; btn.textContent = 'Réessayer';
+                }
+            } catch(e) {
+                resultDiv.innerHTML = '<div class="p-3 bg-red-900/30 border border-red-700/50 rounded-lg text-red-300 text-sm">' + escapeHtml(e.message) + '</div>';
+                btn.disabled = false; btn.textContent = 'Réessayer';
+            }
         }
 
         // ============================================

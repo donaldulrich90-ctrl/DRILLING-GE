@@ -242,7 +242,43 @@ const migrations = [
         }
     },
     { name: 'drills.parkReason', sql: 'ALTER TABLE drills ADD COLUMN parkReason TEXT DEFAULT NULL' },
-    { name: 'drills.expectedReturnDate', sql: 'ALTER TABLE drills ADD COLUMN expectedReturnDate TEXT DEFAULT NULL' }
+    { name: 'drills.expectedReturnDate', sql: 'ALTER TABLE drills ADD COLUMN expectedReturnDate TEXT DEFAULT NULL' },
+    { name: 'drill_plans.table', sql: `CREATE TABLE IF NOT EXISTS drill_plans (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        enterpriseId INTEGER NOT NULL DEFAULT 1,
+        siteId INTEGER,
+        name TEXT NOT NULL,
+        description TEXT DEFAULT '',
+        zoneLabel TEXT DEFAULT '',
+        gridType TEXT DEFAULT 'cartesian',
+        originX REAL DEFAULT 0,
+        originY REAL DEFAULT 0,
+        scale REAL DEFAULT 1,
+        totalHoles INTEGER DEFAULT 0,
+        status TEXT DEFAULT 'active',
+        createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+        updatedAt TEXT DEFAULT CURRENT_TIMESTAMP
+    )` },
+    { name: 'drill_plan_holes.table', sql: `CREATE TABLE IF NOT EXISTS drill_plan_holes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        planId INTEGER NOT NULL,
+        holeId TEXT NOT NULL,
+        x REAL DEFAULT 0,
+        y REAL DEFAULT 0,
+        row TEXT DEFAULT '',
+        col TEXT DEFAULT '',
+        zone TEXT DEFAULT '',
+        blockId TEXT DEFAULT '',
+        source TEXT DEFAULT '',
+        plannedDepth REAL DEFAULT 0,
+        actualDepth REAL DEFAULT 0,
+        status TEXT DEFAULT 'planned',
+        drilledDate TEXT DEFAULT NULL,
+        machineId TEXT DEFAULT NULL,
+        notes TEXT DEFAULT '',
+        FOREIGN KEY (planId) REFERENCES drill_plans(id) ON DELETE CASCADE
+    )` },
+    { name: 'enterprises.claudeApiKey', sql: 'ALTER TABLE enterprises ADD COLUMN claudeApiKey TEXT DEFAULT NULL' }
 ];
 
 let completed = 0;

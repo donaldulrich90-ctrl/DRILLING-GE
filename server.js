@@ -1441,6 +1441,270 @@ app.delete('/api/drills/:id', (req, res) => {
 });
 
 // ============================================
+// ROUTES API - PLANS DE FORAGE
+// ============================================
+
+// Liste des plans
+app.get('/api/drill-plans', (req, res) => {
+    const entId = getEnterpriseId(req);
+    const where = entId != null ? ' WHERE enterpriseId = ?' : '';
+    const params = entId != null ? [entId] : [];
+    db.all('SELECT * FROM drill_plans' + where + ' ORDER BY updatedAt DESC', params, (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(rows || []);
+    });
+});
+
+// Créer un plan
+app.post('/api/drill-plans', (req, res) => {
+    const entId = getEnterpriseId(req);
+    const { name, description, siteId, zoneLabel, gridType, originX, originY, scale } = req.body;
+    if (!name) return res.status(400).json({ error: 'Le nom du plan est requis' });
+    db.run(`INSERT INTO drill_plans (enterpriseId, siteId, name, description, zoneLabel, gridType, originX, originY, scale)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [entId || 1, siteId || null, name, description || '', zoneLabel || '', gridType || 'cartesian', originX || 0, originY || 0, scale || 1],
+        function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ id: this.lastID, message: 'Plan créé' });
+        }
+    );
+});
+
+// Modifier un plan
+app.put('/api/drill-plans/:id', (req, res) => {
+    const entId = getEnterpriseId(req);
+    const { name, description, siteId, zoneLabel, gridType, originX, originY, scale, status } = req.body;
+    const whereEnt = entId != null ? ' AND enterpriseId = ?' : '';
+    const params = [name, description || '', siteId || null, zoneLabel || '', gridType || 'cartesian',
+                    originX || 0, originY || 0, scale || 1, status || 'active', req.params.id];
+    if (entId != null) params.push(entId);
+    db.run(`UPDATE drill_plans SET name=?, description=?, siteId=?, zoneLabel=?, gridType=?, originX=?, originY=?, scale=?, status=?, updatedAt=CURRENT_TIMESTAMP
+            WHERE id=?` + whereEnt, params, function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        if (this.changes === 0) return res.status(404).json({ error: 'Plan introuvable' });
+        res.json({ message: 'Plan mis à jour' });
+    });
+});
+
+// Supprimer un plan (et ses trous)
+app.delete('/api/drill-plans/:id', (req, res) => {
+    const entId = getEnterpriseId(req);
+    const whereEnt = entId != null ? ' AND enterpriseId = ?' : '';
+    const params = [req.params.id];
+    if (entId != null) params.push(entId);
+    db.run('DELETE FROM drill_plans WHERE id = ?' + whereEnt, params, function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        if (this.changes === 0) return res.status(404).json({ error: 'Plan introuvable' });
+        res.json({ message: 'Plan supprimé' });
+    });
+});
+
+// Récupérer les trous d'un plan
+app.get('/api/drill-plans/:id/holes', (req, res) => {
+    const entId = getEnterpriseId(req);
+    const whereEnt = entId != null ? ' AND dp.enterpriseId = ?' : '';
+    const params = [req.params.id];
+    if (entId != null) params.push(entId);
+    db.all(`SELECT dph.* FROM drill_plan_holes dph
+            JOIN drill_plans dp ON dph.planId = dp.id
+            WHERE dph.planId = ?` + whereEnt + ` ORDER BY dph.holeId`, params, (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(rows || []);
+    });
+});
+
+// Récupérer un plan avec ses trous
+app.get('/api/drill-plans/:id/full', (req, res) => {
+    const entId = getEnterpriseId(req);
+    const whereEnt = entId != null ? ' AND enterpriseId = ?' : '';
+    const params = [req.params.id];
+    if (entId != null) params.push(entId);
+    db.get('SELECT * FROM drill_plans WHERE id = ?' + whereEnt, params, (err, plan) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!plan) return res.status(404).json({ error: 'Plan introuvable' });
+        db.all('SELECT * FROM drill_plan_holes WHERE planId = ? ORDER BY holeId', [plan.id], (err2, holes) => {
+            if (err2) return res.status(500).json({ error: err2.message });
+            plan.holes = holes || [];
+            res.json(plan);
+        });
+    });
+});
+
+// Importer des trous dans un plan (bulk)
+app.post('/api/drill-plans/:id/holes', (req, res) => {
+    const entId = getEnterpriseId(req);
+    const planId = req.params.id;
+    const whereEnt = entId != null ? ' AND enterpriseId = ?' : '';
+    const pCheck = [planId];
+    if (entId != null) pCheck.push(entId);
+    db.get('SELECT id FROM drill_plans WHERE id = ?' + whereEnt, pCheck, (err, plan) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!plan) return res.status(404).json({ error: 'Plan introuvable' });
+        const holes = req.body.holes || [];
+        if (!Array.isArray(holes) || holes.length === 0) return res.status(400).json({ error: 'Aucun trou à importer' });
+        const stmt = db.prepare(`INSERT INTO drill_plan_holes (planId, holeId, x, y, row, col, zone, blockId, source, plannedDepth, status)
+                                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+        let inserted = 0;
+        holes.forEach(h => {
+            stmt.run([planId, h.holeId || '', h.x || 0, h.y || 0, h.row || '', h.col || '', h.zone || '', h.blockId || '', h.source || '', h.plannedDepth || 0, h.status || 'planned'], function(e) {
+                if (!e) inserted++;
+            });
+        });
+        stmt.finalize(function() {
+            db.run('UPDATE drill_plans SET totalHoles = (SELECT COUNT(*) FROM drill_plan_holes WHERE planId = ?), updatedAt = CURRENT_TIMESTAMP WHERE id = ?', [planId, planId]);
+            res.json({ message: inserted + ' trous importés', inserted: inserted });
+        });
+    });
+});
+
+// Mettre à jour un trou
+app.put('/api/drill-plan-holes/:id', (req, res) => {
+    const { holeId, x, y, row, col, zone, blockId, source, plannedDepth, actualDepth, status, drilledDate, machineId, notes } = req.body;
+    db.run(`UPDATE drill_plan_holes SET holeId=?, x=?, y=?, row=?, col=?, zone=?, blockId=?, source=?, plannedDepth=?, actualDepth=?, status=?, drilledDate=?, machineId=?, notes=?
+            WHERE id=?`,
+        [holeId, x || 0, y || 0, row || '', col || '', zone || '', blockId || '', source || '', plannedDepth || 0, actualDepth || 0, status || 'planned', drilledDate || null, machineId || null, notes || '', req.params.id],
+        function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+            if (this.changes === 0) return res.status(404).json({ error: 'Trou introuvable' });
+            res.json({ message: 'Trou mis à jour' });
+        }
+    );
+});
+
+// Supprimer un trou
+app.delete('/api/drill-plan-holes/:id', (req, res) => {
+    db.run('DELETE FROM drill_plan_holes WHERE id = ?', [req.params.id], function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ message: 'Trou supprimé' });
+    });
+});
+
+// Synchroniser les trous avec les saisies journalières
+app.post('/api/drill-plans/:id/sync', (req, res) => {
+    const entId = getEnterpriseId(req);
+    const planId = req.params.id;
+    const whereEnt = entId != null ? ' AND dp.enterpriseId = ?' : '';
+    const params = [planId];
+    if (entId != null) params.push(entId);
+    db.all(`SELECT dph.id, dph.holeId, dph.status FROM drill_plan_holes dph
+            JOIN drill_plans dp ON dph.planId = dp.id
+            WHERE dph.planId = ?` + whereEnt, params, (err, holes) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!holes || holes.length === 0) return res.json({ message: 'Aucun trou', updated: 0 });
+        // Récupérer toutes les saisies journalières de cette entreprise
+        const entWhere = entId != null ? ' WHERE enterpriseId = ?' : '';
+        const entP = entId != null ? [entId] : [];
+        db.all('SELECT * FROM dailyDataRecords' + entWhere, entP, (err2, records) => {
+            if (err2) return res.status(500).json({ error: err2.message });
+            // Construire un index des trous forés depuis les saisies
+            var drilledHoles = {};
+            (records || []).forEach(function(r) {
+                var data = r.data;
+                if (typeof data === 'string') { try { data = JSON.parse(data); } catch(e) { return; } }
+                if (!data) return;
+                (data.holesWorked || []).forEach(function(hw) {
+                    if (hw.holeId) {
+                        var key = String(hw.holeId).trim().toUpperCase();
+                        if (!drilledHoles[key]) drilledHoles[key] = { meters: 0, machine: '', date: r.date, isRedrill: false };
+                        drilledHoles[key].meters += parseFloat(hw.meters) || 0;
+                        drilledHoles[key].machine = r.machineId || drilledHoles[key].machine;
+                        drilledHoles[key].date = r.date || drilledHoles[key].date;
+                        if (hw.source && /refor/i.test(String(hw.source))) drilledHoles[key].isRedrill = true;
+                    }
+                });
+            });
+            // Mettre à jour les statuts
+            let updated = 0;
+            const stmt = db.prepare('UPDATE drill_plan_holes SET status = ?, actualDepth = ?, drilledDate = ?, machineId = ? WHERE id = ?');
+            holes.forEach(h => {
+                var key = String(h.holeId).trim().toUpperCase();
+                var match = drilledHoles[key];
+                if (match) {
+                    var newStatus = match.isRedrill ? 'redrilled' : 'drilled';
+                    stmt.run([newStatus, match.meters, match.date, match.machine, h.id]);
+                    updated++;
+                }
+            });
+            stmt.finalize(function() {
+                res.json({ message: updated + ' trous mis à jour depuis les saisies', updated: updated, totalDrilled: Object.keys(drilledHoles).length });
+            });
+        });
+    });
+});
+
+// Vider tous les trous d'un plan
+app.delete('/api/drill-plans/:id/holes', (req, res) => {
+    const entId = getEnterpriseId(req);
+    const whereEnt = entId != null ? ' AND enterpriseId = ?' : '';
+    const params = [req.params.id];
+    if (entId != null) params.push(entId);
+    db.get('SELECT id FROM drill_plans WHERE id = ?' + whereEnt, params, (err, plan) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!plan) return res.status(404).json({ error: 'Plan introuvable' });
+        db.run('DELETE FROM drill_plan_holes WHERE planId = ?', [plan.id], function(e) {
+            if (e) return res.status(500).json({ error: e.message });
+            db.run('UPDATE drill_plans SET totalHoles = 0, updatedAt = CURRENT_TIMESTAMP WHERE id = ?', [plan.id]);
+            res.json({ message: 'Trous supprimés', deleted: this.changes });
+        });
+    });
+});
+
+// Proxy Claude API (optionnel — utilise la clé API stockée dans l'entreprise)
+app.post('/api/claude-ai/parse-plan', (req, res) => {
+    const entId = getEnterpriseId(req);
+    if (entId == null) return res.status(400).json({ error: 'Entreprise requise' });
+    db.get('SELECT claudeApiKey FROM enterprises WHERE id = ?', [entId], async (err, ent) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!ent || !ent.claudeApiKey) return res.status(400).json({ error: 'Clé API Claude non configurée. Allez dans Paramètres > Entreprise pour ajouter votre clé.' });
+        const { imageBase64, prompt } = req.body;
+        if (!imageBase64) return res.status(400).json({ error: 'Image requise' });
+        try {
+            const fetch = require('node-fetch') || globalThis.fetch;
+            const response = await fetch('https://api.anthropic.com/v1/messages', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': ent.claudeApiKey,
+                    'anthropic-version': '2023-06-01'
+                },
+                body: JSON.stringify({
+                    model: 'claude-sonnet-4-20250514',
+                    max_tokens: 4096,
+                    messages: [{
+                        role: 'user',
+                        content: [
+                            { type: 'image', source: { type: 'base64', media_type: 'image/png', data: imageBase64 } },
+                            { type: 'text', text: prompt || 'Analyse ce plan de forage. Extrais tous les trous avec leurs identifiants, positions (rangée, colonne ou coordonnées X,Y), zone et bloc si visible. Retourne un JSON avec un tableau "holes" contenant des objets {holeId, x, y, row, col, zone, blockId, plannedDepth}. Ne retourne QUE le JSON, sans texte autour.' }
+                        ]
+                    }]
+                })
+            });
+            const data = await response.json();
+            if (data.error) return res.status(400).json({ error: data.error.message || 'Erreur API Claude' });
+            const text = data.content && data.content[0] && data.content[0].text || '';
+            // Essayer d'extraire le JSON
+            let parsed = null;
+            try {
+                const jsonMatch = text.match(/\{[\s\S]*\}/);
+                if (jsonMatch) parsed = JSON.parse(jsonMatch[0]);
+            } catch(e) {}
+            res.json({ raw: text, parsed: parsed });
+        } catch(e) {
+            res.status(500).json({ error: 'Erreur appel API Claude: ' + e.message });
+        }
+    });
+});
+
+// Sauvegarder la clé API Claude
+app.put('/api/enterprises/:id/claude-key', (req, res) => {
+    const { claudeApiKey } = req.body;
+    db.run('UPDATE enterprises SET claudeApiKey = ? WHERE id = ?', [claudeApiKey || null, req.params.id], function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ message: 'Clé API sauvegardée' });
+    });
+});
+
+// ============================================
 // ROUTES API - SITES
 // ============================================
 app.get('/api/sites', (req, res) => {
