@@ -18351,7 +18351,7 @@
                     var rd = _rpData(machineRecords[i]);
                     if (rd.location) { lastLoc = rd.location; break; }
                 }
-                var lieuForage = lastLoc ? escapeHtmlReportCell(lastLoc) : escapeHtmlReportCell(d.location || '—');
+                var lieuForage = lastLoc ? escapeHtmlReportCell(lastLoc) : '—';
                 return '<tr>' +
                     '<td style="font-weight:700">' + escapeHtmlReportCell(String(d.id)) + '</td>' +
                     '<td>' + lieuForage + '</td>' +
@@ -18421,7 +18421,8 @@
                         weighted[key].hours += metrics.scheduled;
                     }
                 });
-                var machineCell = '<td class="machine-cell">' + escapeHtmlReportCell(_rpMachineName(record) || 'Non renseigné') + '<small>' + escapeHtmlReportCell(getShiftLabelForReport(data.shift) || 'Poste non renseigné') + '</small></td>';
+                var machineLoc = data.location ? ' — ' + escapeHtmlReportCell(data.location) : '';
+                var machineCell = '<td class="machine-cell">' + escapeHtmlReportCell(_rpMachineName(record) || 'Non renseigné') + '<small>' + escapeHtmlReportCell(getShiftLabelForReport(data.shift) || 'Poste non renseigné') + machineLoc + '</small></td>';
                 activityRows += '<tr>' + machineCell + numericCells([decimal(metrics.scheduled), decimal(metrics.usedHours), decimal(metrics.productiveHours), decimal(metrics.production), decimal(metrics.productivity, 2), decimal(metrics.mechAvail)]) + '</tr>';
                 var stops = metrics.bdn + metrics.stb + metrics.gsa + metrics.prd + metrics.other;
                 stopRows += '<tr>' + machineCell + numericCells([decimal(metrics.bdn), decimal(metrics.stb), decimal(metrics.gsa), decimal(metrics.prd), decimal(metrics.other), decimal(stops)]) + '</tr>';
@@ -23033,7 +23034,7 @@
 
         function renderOperationalKpiTableHtml(records) {
             var hdr = '<thead><tr>' +
-                '<th>Machine</th><th>Shift</th>' +
+                '<th>Machine</th><th>Shift</th><th>Lieu</th>' +
                 '<th>Programmé (h)</th><th>Standby (h)</th><th>GSA (h)</th><th>Arrêt méca. (h)</th><th>PRD (h)</th><th>Autres (h)</th>' +
                 '<th>SMU (h)</th><th>Heures utilisées</th><th>Heures productives</th>' +
                 '<th>Production (m)</th><th>Productivité (m/h)</th><th>Reforage (m)</th><th>Flushing (m)</th><th>Carburant (L)</th>' +
@@ -23071,9 +23072,11 @@
                     wE += m.effectiveUoa * m.scheduled;
                     sE += m.scheduled;
                 }
+                var kpiLoc = data && data.location ? escapeHtmlReportCell(data.location) : '—';
                 body += '<tr>' +
                     '<td>' + escapeHtmlReportCell(drillName) + '</td>' +
                     '<td>' + shiftLabel + '</td>' +
+                    '<td>' + kpiLoc + '</td>' +
                     '<td>' + formatReportDecimal(m.scheduled, 1) + '</td>' +
                     '<td>' + formatReportDecimal(m.stb, 1) + '</td>' +
                     '<td>' + formatReportDecimal(m.gsa, 1) + '</td>' +
@@ -23095,7 +23098,7 @@
             });
             var totProd = t.used > 0 ? t.production / t.used : null;
             body += '<tr class="total">' +
-                '<td colspan="2"><strong>Total</strong></td>' +
+                '<td colspan="3"><strong>Total</strong></td>' +
                 '<td><strong>' + formatReportDecimal(t.scheduled, 1) + '</strong></td>' +
                 '<td><strong>' + formatReportDecimal(t.stb, 1) + '</strong></td>' +
                 '<td><strong>' + formatReportDecimal(t.gsa, 1) + '</strong></td>' +
