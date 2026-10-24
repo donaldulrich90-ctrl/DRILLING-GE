@@ -18329,7 +18329,7 @@
             'table.parked-table .parked-status-pause{background:#fef3c7;color:#92400e;}',
             'table.parked-table .parked-status-maintenance{background:#dbeafe;color:#1e40af;}',
             'table.parked-table .parked-status-hs{background:#fee2e2;color:#991b1b;}',
-            '@media print{html,body{background:#fff;}.print-tools{display:none!important;}.daily-sheet{width:auto;margin:0;padding:0;box-shadow:none;}.daily-section{margin-top:14px;}.daily-footer{margin-top:16px;}a{color:inherit;text-decoration:none;}}',
+            '@media print{html,body{background:#fff;}.print-tools{display:none!important;}.daily-sheet{width:auto;margin:0;padding:0;box-shadow:none;}.daily-section{margin-top:14px;}.daily-footer{margin-top:16px;}a{color:inherit;text-decoration:none;}.ge-brand-top,.ge-brand-bottom{display:block!important;}}',
             '@media screen and (max-width:1140px){.daily-sheet,.print-tools{width:calc(100% - 24px);}.daily-sheet{padding:24px;}.report-logos-row img{max-width:100%!important;}}@media screen and (max-width:650px){.report-kpi-grid,.daily-management .report-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr));}.daily-chart-grid{grid-template-columns:1fr;}.daily-chart-row{grid-template-columns:80px 1fr 85px;}}'
         ].join('');
 
@@ -18352,9 +18352,11 @@
                     if (rd.location) { lastLoc = rd.location; break; }
                 }
                 var lieuForage = lastLoc ? escapeHtmlReportCell(lastLoc) : '—';
+                var lieuStationnement = d.location ? escapeHtmlReportCell(d.location) : '—';
                 return '<tr>' +
                     '<td style="font-weight:700">' + escapeHtmlReportCell(String(d.id)) + '</td>' +
                     '<td>' + lieuForage + '</td>' +
+                    '<td>' + lieuStationnement + '</td>' +
                     '<td>' + siteName + '</td>' +
                     '<td><span class="parked-status ' + sc + '">' + escapeHtmlReportCell(d.status) + '</span></td>' +
                     '<td>' + reason + '</td>' +
@@ -18362,7 +18364,7 @@
                     '</tr>';
             }).join('');
             return '<table class="parked-table"><thead><tr>' +
-                '<th>Machine</th><th>Lieu de forage</th><th>Site</th><th>Statut</th><th>Motif d\'arrêt</th><th>Date de sortie probable</th>' +
+                '<th>Machine</th><th>Lieu de forage</th><th>Lieu de stationnement</th><th>Site</th><th>Statut</th><th>Motif d\'arrêt</th><th>Date de sortie probable</th>' +
                 '</tr></thead><tbody>' + rows + '</tbody></table>';
         }
 
@@ -18445,6 +18447,7 @@
             var generatedAt = new Date().toLocaleString('fr-FR');
             return '<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rapport journalier de forage — ' + escapeHtmlReportCell(date) + '</title><style>' +
                 REPORT_PRINT_ENTETE_CSS + DAILY_REPORT_PRINT_CSS + '</style></head><body>' +
+                '<div class="ge-brand-top">GOOD ENGINEERS</div><div class="ge-brand-bottom">GOOD ENGINEERS — Plateforme de forage</div>' +
                 '<nav class="print-tools" aria-label="Actions du rapport"><button type="button" onclick="window.print()">Imprimer / Enregistrer en PDF</button><button type="button" onclick="window.close()">Fermer</button></nav>' +
                 '<main class="daily-sheet' + (detailed ? '' : ' daily-management') + '">' +
                 '<header>' + buildReportStandardEnteteHtml('RAPPORT JOURNALIER DE FORAGE', records, metaRowsDaily) + '<p class="daily-report-audience">' + (detailed ? 'RAPPORT OPÉRATIONNEL DÉTAILLÉ' : 'SYNTHÈSE MANAGEMENT') + '</p></header>' +
@@ -18624,6 +18627,7 @@
             var generatedAt = new Date().toLocaleString('fr-FR');
             return '<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rapport synthétique — ' + escapeHtmlReportCell(date) + '</title><style>' +
                 REPORT_PRINT_ENTETE_CSS + DAILY_REPORT_PRINT_CSS + '</style></head><body>' +
+                '<div class="ge-brand-top">GOOD ENGINEERS</div><div class="ge-brand-bottom">GOOD ENGINEERS — Plateforme de forage</div>' +
                 '<nav class="print-tools" aria-label="Actions du rapport"><button type="button" onclick="window.print()">Imprimer / Enregistrer en PDF</button><button type="button" onclick="window.close()">Fermer</button></nav>' +
                 '<main class="daily-sheet daily-management">' +
                 '<header>' + buildReportStandardEnteteHtml('RAPPORT JOURNALIER DE FORAGE', records, metaRows) + '<p class="daily-report-audience">SYNTHÈSE EXÉCUTIVE</p></header>' +
@@ -18712,6 +18716,7 @@
             return '<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
                 '<title>Rapport de mi-poste PROVISOIRE — ' + escapeHtmlReportCell(date) + '</title><style>' +
                 REPORT_PRINT_ENTETE_CSS + DAILY_REPORT_PRINT_CSS + css + '</style></head><body>' +
+                '<div class="ge-brand-top">GOOD ENGINEERS</div><div class="ge-brand-bottom">GOOD ENGINEERS — Plateforme de forage</div>' +
                 '<nav class="print-tools" aria-label="Actions du rapport"><button type="button" onclick="window.print()">Imprimer / Enregistrer en PDF</button><button type="button" onclick="window.close()">Fermer</button></nav>' +
                 '<main class="daily-sheet"><header>' + header + '</header><div class="midshift-banner"><strong>PROVISOIRE — POSTE EN COURS</strong>' +
                 'Situation des données enregistrées au ' + escapeHtmlReportCell(generatedAt) + '. Ce document contient des données partielles ; il ne clôture pas le poste et ne vaut pas validation du rapport journalier.</div>' +
@@ -18814,6 +18819,7 @@
                 'table.kpi-table tr.total td{background:#d1fae5;font-weight:600;}' +
                 '.footer{text-align:center;margin-top:36px;padding-top:18px;border-top:1px solid #e5e7eb;font-size:11px;color:#6b7280;}' +
                 '</style></head><body>' +
+                '<div class="ge-brand-top">GOOD ENGINEERS</div><div class="ge-brand-bottom">GOOD ENGINEERS — Plateforme de forage</div>' +
                 reportEnteteHtml;
             
             // Grouper par jour
@@ -19090,6 +19096,7 @@
                 '.footer{text-align:center;margin-top:36px;padding-top:18px;border-top:1px solid #e5e7eb;font-size:11px;color:#6b7280;}';
             var note = '<div class="noteBox"><strong>Méthode (hors télémétrie)</strong> : la consommation par shift est surtout basée sur les <strong>litres ajoutés en clôture</strong> (plein pour l’équipe suivante). À défaut, on utilise la <strong>baisse du compteur réservoir</strong> (relevé début − fin de shift, en L). Une <strong>saisie directe</strong> en litres sert de repli. Les ratios L/m et L/h sont calculés sur les totaux de chaque ligne.</div>';
             var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Rapport Consommation Carburant</title><style>' + style + '</style></head><body>' +
+                '<div class="ge-brand-top">GOOD ENGINEERS</div><div class="ge-brand-bottom">GOOD ENGINEERS — Plateforme de forage</div>' +
                 reportEnteteHtml +
                 note;
             html += '<div class="report-block"><h2>Synthèse — total période</h2><table class="fuel-report-table">' + thead + '<tbody>' + rowFuel('grand-total', 'Total', periodTotal) + '</tbody></table></div>';
@@ -23146,7 +23153,9 @@
             '.report-meta-wrap{text-align:center;font-size:14px;color:#1a2b4b;margin:0 0 24px;line-height:1.8;font-weight:500;}' +
             '.report-meta-row{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;row-gap:10px;margin:8px 0;}' +
             '.report-meta-sep{color:#94a3b8;padding:0 14px;font-weight:200;font-size:16px;line-height:1;user-select:none;}' +
-            '.report-meta-cell strong{font-weight:700;}';
+            '.report-meta-cell strong{font-weight:700;}' +
+            '.ge-brand-top{position:fixed;top:4mm;right:6mm;font-size:7px;color:#94a3b8;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;font-family:Arial,Helvetica,sans-serif;z-index:9999;}' +
+            '.ge-brand-bottom{position:fixed;bottom:4mm;left:6mm;font-size:7px;color:#94a3b8;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;font-family:Arial,Helvetica,sans-serif;z-index:9999;}';
 
         function getSubscriberLogoSrcForReport() {
             var raw = (typeof companyLogo !== 'undefined' && companyLogo && String(companyLogo).trim()) ? String(companyLogo).trim() : '';
