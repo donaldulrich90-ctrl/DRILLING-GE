@@ -22747,8 +22747,18 @@
 
         function buildCommentGeneralSection(records) {
             var parts = [];
-            (records || []).forEach(function(r) { var d = _rpData(r); var n = String(d.notes || r.notes || '').trim(); if (n) parts.push(n); });
-            var txt = parts.length ? escapeHtmlReportCell(parts.join(' — ')) : '<span style="color:#9ca3af;">Non renseigné</span>';
+            (records || []).forEach(function(r) {
+                var d = _rpData(r);
+                var n = String(d.notes || r.notes || '').trim();
+                if (n) {
+                    var machine = r.machineId ? String(r.machineId) : '—';
+                    var lieu = d.location ? String(d.location) : '';
+                    var prefix = '<strong>' + escapeHtmlReportCell(machine) + '</strong>';
+                    if (lieu) prefix += ' <span style="color:#6b7280;">(' + escapeHtmlReportCell(lieu) + ')</span>';
+                    parts.push('<div style="margin-bottom:8px;">' + prefix + ' : ' + escapeHtmlReportCell(n) + '</div>');
+                }
+            });
+            var txt = parts.length ? parts.join('') : '<span style="color:#9ca3af;">Non renseigné</span>';
             return '<h2>Commentaire général du poste</h2><div class="summary" style="text-align:left;">' + txt + '</div>';
         }
 
