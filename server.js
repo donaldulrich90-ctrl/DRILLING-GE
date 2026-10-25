@@ -147,10 +147,15 @@ function requireUserManagementRole(req, res, next) {
 
 function enrichEnterpriseRows(rows) {
     const list = rows || [];
-    return list.map((row) => ({
-        ...row,
-        effectiveAllowedTabs: planRoles.getEffectiveAllowedTabs(row)
-    }));
+    return list.map((row) => {
+        // Ne jamais exposer la clé API Claude en clair : on remplace par un booléen.
+        const { claudeApiKey, ...safe } = row;
+        return {
+            ...safe,
+            claudeApiKeySet: !!(claudeApiKey && String(claudeApiKey).trim()),
+            effectiveAllowedTabs: planRoles.getEffectiveAllowedTabs(row)
+        };
+    });
 }
 
 function alignEnterpriseMaxSitesWithSiteCounts(dbConn, cb) {
@@ -1856,11 +1861,34 @@ RÈGLES :
 });
 
 // Sauvegarder la clé API Claude
+// Statut de la clé API Claude (jamais la clé en clair : booléen + indice masqué)
+app.get('/api/enterprises/:id/claude-key', (req, res) => {
+    const isAdmin = req.auth && (req.auth.isSuperAdmin || req.auth.isPlatformOwner);
+    const ownId = getEnterpriseId(req);
+    const targetId = isAdmin ? parseInt(req.params.id, 10) : ownId;
+    if (targetId == null || isNaN(targetId)) return res.status(400).json({ error: 'Entreprise non résolue.' });
+    db.get('SELECT claudeApiKey FROM enterprises WHERE id = ?', [targetId], (err, ent) => {
+        if (err) return res.status(500).json({ error: err.message });
+        const key = ent && ent.claudeApiKey ? String(ent.claudeApiKey).trim() : '';
+        const hint = key ? (key.slice(0, 7) + '…' + key.slice(-4)) : '';
+        res.json({ configured: !!key, hint });
+    });
+});
+
 app.put('/api/enterprises/:id/claude-key', (req, res) => {
     const { claudeApiKey } = req.body;
-    db.run('UPDATE enterprises SET claudeApiKey = ? WHERE id = ?', [claudeApiKey || null, req.params.id], function(err) {
+    // Un utilisateur ne peut écrire que sur sa propre entreprise ; l'admin plateforme peut cibler via l'URL.
+    const isAdmin = req.auth && (req.auth.isSuperAdmin || req.auth.isPlatformOwner);
+    const ownId = getEnterpriseId(req);
+    const targetId = isAdmin ? parseInt(req.params.id, 10) : ownId;
+    if (targetId == null || isNaN(targetId)) return res.status(400).json({ error: 'Entreprise non résolue.' });
+    const key = claudeApiKey == null ? '' : String(claudeApiKey).trim();
+    if (key && !/^sk-ant-/.test(key)) {
+        return res.status(400).json({ error: 'Clé API Claude invalide : elle doit commencer par « sk-ant- ».' });
+    }
+    db.run('UPDATE enterprises SET claudeApiKey = ? WHERE id = ?', [key || null, targetId], function(err) {
         if (err) return res.status(500).json({ error: err.message });
-        res.json({ message: 'Clé API sauvegardée' });
+        res.json({ message: key ? 'Clé API sauvegardée' : 'Clé API supprimée' });
     });
 });
 
