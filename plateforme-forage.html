@@ -24301,8 +24301,10 @@
             '.report-meta-row{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;row-gap:10px;margin:8px 0;}' +
             '.report-meta-sep{color:#94a3b8;padding:0 14px;font-weight:200;font-size:16px;line-height:1;user-select:none;}' +
             '.report-meta-cell strong{font-weight:700;}' +
-            '.ge-brand-bottom{position:fixed;bottom:4mm;left:6mm;z-index:9999;}' +
-            '.ge-brand-logo{height:30px;width:auto;opacity:0.85;display:block;}';
+            '.ge-brand-bottom{position:fixed;bottom:2mm;left:6mm;z-index:9999;background:#fff;padding:1px 3px;border-radius:3px;}' +
+            '.ge-brand-logo{height:18px;width:auto;opacity:0.9;display:block;}' +
+            '@media screen{.ge-brand-bottom{display:none;}}' +
+            '@media print{.ge-brand-bottom{display:block;}}';
 
         function getSubscriberLogoSrcForReport() {
             var raw = (typeof companyLogo !== 'undefined' && companyLogo && String(companyLogo).trim()) ? String(companyLogo).trim() : '';
