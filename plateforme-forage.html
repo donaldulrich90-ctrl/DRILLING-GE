@@ -12046,6 +12046,14 @@
                 '<button onclick="document.getElementById(\'companyLogoInput\').click()" class="ged-btn-primary px-4 py-2 rounded">Choisir logo</button>' +
                 '</div>' +
                 '</div>' +
+                '<div class="border border-purple-700/50 rounded-lg p-4 bg-slate-900/40 mt-2">' +
+                '<h4 class="text-sm font-semibold text-purple-300 mb-2">🤖 Intelligence artificielle — Clé API Anthropic (Claude)</h4>' +
+                '<p class="text-xs text-slate-400 mb-3">Active l\'assistant IA, l\'extraction de rapport depuis une photo et la lecture automatique des plans de forage. Clé propre à votre entreprise, stockée côté serveur et jamais réaffichée.</p>' +
+                '<p class="text-xs mb-3" id="compClaudeKeyStatus" style="color:#94A3B8">Vérification de l\'état…</p>' +
+                '<label class="block text-slate-400 mb-2 text-sm">Clé API (format <span class="font-mono text-purple-300">sk-ant-…</span>)</label>' +
+                '<input type="password" id="compClaudeKey" autocomplete="off" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white font-mono text-sm" placeholder="Laisser vide pour conserver la clé actuelle">' +
+                '<p class="text-xs text-slate-500 mt-2">Obtenez une clé sur <span class="text-purple-300">console.anthropic.com → API Keys</span>. Pour supprimer la clé, saisissez le mot <span class="font-mono">SUPPRIMER</span>.</p>' +
+                '</div>' +
                 '<div class="flex gap-2 mt-6">' +
                 '<button onclick="saveCompanySettings()" class="flex-1 bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg">Enregistrer</button>' +
                 '<button onclick="document.getElementById(\'companySettingsModal\').remove()" class="bg-gray-600 hover:bg-gray-700 px-4 py-2 rounded-lg">Annuler</button>' +
@@ -12059,6 +12067,27 @@
             modal.innerHTML = html;
             document.body.appendChild(modal);
             updateMatriculePreview();
+            loadClaudeKeyStatus();
+        }
+
+        function loadClaudeKeyStatus() {
+            var el = document.getElementById('compClaudeKeyStatus');
+            if (!el) return;
+            var entId = window.currentUser && (window.currentUser.currentEnterpriseId || window.currentUser.enterpriseId);
+            if (!entId) { el.textContent = 'Entreprise non détectée.'; return; }
+            fetch('/api/enterprises/' + entId + '/claude-key', {
+                headers: { 'Authorization': 'Bearer ' + (window.API && window.API.getAuthToken ? window.API.getAuthToken() : '') }
+            }).then(function(r) { return r.json(); }).then(function(d) {
+                if (d && d.configured) {
+                    el.innerHTML = '✅ Clé configurée (<span class="font-mono">' + escapeHtml(d.hint || '') + '</span>). Saisissez une nouvelle clé ci-dessous pour la remplacer.';
+                    el.style.color = '#6EE7B7';
+                } else {
+                    el.innerHTML = '⚠️ Aucune clé configurée — les fonctions IA sont désactivées.';
+                    el.style.color = '#FCD34D';
+                }
+            }).catch(function() {
+                el.textContent = 'Impossible de vérifier l\'état de la clé.';
+            });
         }
 
         function uploadCompanyLogo() {
@@ -12120,6 +12149,32 @@
             if (my) companyInfo.matriculeIncludeYear = !!my.checked;
 
             saveData();
+
+            // Clé API Claude (optionnelle) : seulement si une valeur est saisie.
+            var keyEl = document.getElementById('compClaudeKey');
+            var keyVal = keyEl ? keyEl.value.trim() : '';
+            if (keyVal) {
+                var entId = window.currentUser && (window.currentUser.currentEnterpriseId || window.currentUser.enterpriseId);
+                var toSend = (keyVal.toUpperCase() === 'SUPPRIMER') ? '' : keyVal;
+                fetch('/api/enterprises/' + entId + '/claude-key', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (window.API && window.API.getAuthToken ? window.API.getAuthToken() : '') },
+                    body: JSON.stringify({ claudeApiKey: toSend })
+                }).then(function(r) { return r.json().then(function(d) { return { ok: r.ok, d: d }; }); })
+                  .then(function(res) {
+                    if (!res.ok || (res.d && res.d.error)) {
+                        alert('Paramètres enregistrés, mais la clé API n\'a pas pu être sauvegardée : ' + ((res.d && res.d.error) || 'erreur inconnue'));
+                    } else {
+                        var m = document.getElementById('companySettingsModal');
+                        if (m) m.remove();
+                        alert('Paramètres enregistrés' + (toSend ? ' — clé API Claude activée !' : ' ; clé API Claude supprimée.'));
+                    }
+                  }).catch(function(e) {
+                    alert('Paramètres enregistrés, mais la clé API n\'a pas pu être sauvegardée : ' + e.message);
+                  });
+                return;
+            }
+
             document.getElementById('companySettingsModal').remove();
             alert('Paramètres enregistrés avec succès!');
         }
