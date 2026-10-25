@@ -18327,6 +18327,12 @@
                 '<button type="button" onclick="generateDailyReport(true)" class="mt-3 w-full ged-btn-secondary px-4 py-2 rounded-lg font-semibold">Rapport opérationnel détaillé</button>' +
                 '<button type="button" onclick="generateMidshiftReport()" class="mt-3 w-full bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-lg font-semibold">Rapport de mi-poste</button>' +
                 '<p class="text-slate-400 text-xs mt-2">Situation provisoire à partir des saisies enregistrées, y compris les brouillons.</p>' +
+                '<div class="border-t border-slate-600 mt-4 pt-4">' +
+                '<p class="text-amber-300 text-sm font-semibold mb-2">🧭 Fiche de production &amp; programme du matin</p>' +
+                '<button type="button" onclick="generateProductionProgramReport()" class="w-full bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-lg font-semibold">📋 Générer la fiche (imprimable / PDF)</button>' +
+                '<button type="button" onclick="exportProductionProgramXlsx()" class="mt-3 w-full bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg font-semibold">⬇️ Exporter en Excel</button>' +
+                '<p class="text-slate-400 text-xs mt-2">Programme = trous encore à forer du plan du site. Production = saisies de la date choisie.</p>' +
+                '</div>' +
                 '</div>' +
                 '<div class="ged-content-panel p-6 rounded-xl">' +
                 '<h4 class="text-lg font-bold mb-4">📆 Rapport Hebdomadaire</h4>' +
@@ -18782,6 +18788,213 @@
             }
         }
 
+        // ============================================================
+        // FICHE DE PRODUCTION & PROGRAMME DU MATIN
+        //  - Programme  : trous encore « Planifié » du/des plan(s) du site.
+        //  - Production : saisies journalières de la date sélectionnée.
+        // Sorties : rapport imprimable (PDF) + export Excel (.xlsx).
+        // ============================================================
+        function fpnAuthHeader() {
+            return 'Bearer ' + (window.API && window.API.getAuthToken ? window.API.getAuthToken() : '');
+        }
+
+        // Rassemble programme (trous à forer) + production (saisies) pour une date.
+        async function collectProductionProgramData(date) {
+            var out = { date: date, program: [], programMeters: 0, programCount: 0, plansUsed: [], records: [], planError: '' };
+            out.records = getDailyDataForSite().filter(function(r) { return r.date === date; });
+            try {
+                var resp = await fetch('/api/drill-plans', { headers: { 'Authorization': fpnAuthHeader() } });
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                var plans = await resp.json();
+                plans = Array.isArray(plans) ? plans : [];
+                if (currentSiteId != null && currentSiteId !== '') {
+                    plans = plans.filter(function(p) { return String(p.siteId) === String(currentSiteId); });
+                }
+                for (var i = 0; i < plans.length; i++) {
+                    try {
+                        var fr = await fetch('/api/drill-plans/' + plans[i].id + '/full', { headers: { 'Authorization': fpnAuthHeader() } });
+                        if (!fr.ok) continue;
+                        var full = await fr.json();
+                        var holes = (full && full.holes) || [];
+                        var planName = plans[i].name || ('Plan #' + plans[i].id);
+                        var remaining = holes.filter(function(h) { return (h.status || 'planned') === 'planned'; });
+                        if (remaining.length) out.plansUsed.push(planName);
+                        remaining.forEach(function(h) {
+                            var pd = parseFloat(h.plannedDepth) || 0;
+                            out.program.push({
+                                holeId: h.holeId || h.id || '—',
+                                zone: h.zone || full.zoneLabel || '—',
+                                blockId: h.blockId || '—',
+                                machineId: h.machineId || '',
+                                plannedDepth: pd,
+                                plan: planName
+                            });
+                            out.programMeters += pd;
+                        });
+                    } catch (e) { /* plan ignoré */ }
+                }
+                out.programCount = out.program.length;
+            } catch (e) {
+                out.planError = 'Plans de forage indisponibles : ' + (e && e.message ? e.message : e);
+            }
+            return out;
+        }
+
+        function buildMorningProgramSection(data) {
+            if (data.planError) {
+                return '<p class="daily-table-note" style="color:#b45309;">' + escapeHtmlReportCell(data.planError) + '</p>';
+            }
+            var prog = (data.program || []).slice();
+            if (!prog.length) {
+                return '<p class="daily-empty">Aucun trou en attente de foration pour ce site — le plan est entièrement foré ou aucun plan actif n’est associé à ce site.</p>';
+            }
+            prog.sort(function(a, b) {
+                return String(a.zone).localeCompare(String(b.zone), 'fr') || String(a.holeId).localeCompare(String(b.holeId), 'fr', { numeric: true });
+            });
+            var dec = function(v) { return Number(v || 0).toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }); };
+            var byZone = {};
+            prog.forEach(function(p) { if (!byZone[p.zone]) byZone[p.zone] = 0; byZone[p.zone]++; });
+            var cards = '<div class="report-kpi-grid">' +
+                '<div class="report-kpi-card"><div class="report-kpi-label">Trous à forer</div><div class="report-kpi-value">' + data.programCount + '</div></div>' +
+                '<div class="report-kpi-card"><div class="report-kpi-label">Mètres planifiés restants</div><div class="report-kpi-value">' + dec(data.programMeters) + '</div><div class="report-kpi-sub">m</div></div>' +
+                '<div class="report-kpi-card"><div class="report-kpi-label">Zones concernées</div><div class="report-kpi-value">' + Object.keys(byZone).length + '</div></div>' +
+                '<div class="report-kpi-card"><div class="report-kpi-label">Plan(s) source</div><div class="report-kpi-value" style="font-size:12px!important;overflow-wrap:anywhere;">' + escapeHtmlReportCell((data.plansUsed || []).join(', ') || '—') + '</div></div>' +
+                '</div>';
+            var rows = prog.map(function(p) {
+                return '<tr><td>' + escapeHtmlReportCell(p.zone) + '</td><td>' + escapeHtmlReportCell(p.holeId) + '</td><td>' + escapeHtmlReportCell(p.blockId) + '</td><td>' + (p.machineId ? escapeHtmlReportCell(p.machineId) : '—') + '</td><td class="r-num">' + dec(p.plannedDepth) + '</td></tr>';
+            }).join('');
+            var table = '<table class="daily-table"><thead><tr><th class="machine-cell">Zone</th><th>Trou</th><th>Bloc</th><th>Machine assignée</th><th class="r-num">Prof. planifiée (m)</th></tr></thead><tbody>' +
+                rows + '<tr class="total"><td colspan="4">Total à forer</td><td class="r-num">' + dec(data.programMeters) + '</td></tr></tbody></table>';
+            return cards + '<p class="daily-table-note">Programme établi à partir des trous encore au statut « Planifié ». Mettez à jour le statut des trous dans Planification pour les retirer du programme.</p>' + table;
+        }
+
+        function buildProductionDaySection(records, date) {
+            records = (records || []).filter(function(r) { return r && !isDailyRecordIncompleteDraft(r); });
+            var dec = function(v, d) { if (v == null || v === '' || !isFinite(Number(v))) return 'N/A'; return Number(v).toLocaleString('fr-FR', { minimumFractionDigits: d == null ? 1 : d, maximumFractionDigits: d == null ? 1 : d }); };
+            if (!records.length) {
+                return '<p class="daily-empty">Aucune saisie terminée pour cette date. La production apparaîtra une fois les rapports journaliers validés.</p>';
+            }
+            var totals = { scheduled: 0, usedHours: 0, productiveHours: 0, production: 0, redrill: 0, bdn: 0, stb: 0, gsa: 0, prd: 0, other: 0, fuel: 0 };
+            var activityRows = '', stopRows = '';
+            records.forEach(function(record) {
+                var d = _rpData(record);
+                var m = computeOperationalReportMetrics(d);
+                totals.scheduled += m.scheduled || 0; totals.usedHours += m.usedHours || 0; totals.productiveHours += m.productiveHours || 0;
+                totals.production += m.production || 0; totals.redrill += (m.redrillM || 0);
+                totals.bdn += m.bdn || 0; totals.stb += m.stb || 0; totals.gsa += m.gsa || 0; totals.prd += m.prd || 0; totals.other += m.other || 0;
+                totals.fuel += m.fuel || 0;
+                var loc = d.location ? ' — ' + escapeHtmlReportCell(d.location) : '';
+                var mc = '<td class="machine-cell">' + escapeHtmlReportCell(_rpMachineName(record) || 'Non renseigné') + '<small>' + escapeHtmlReportCell(getShiftLabelForReport(d.shift) || 'Poste n.r.') + loc + '</small></td>';
+                activityRows += '<tr>' + mc + '<td class="r-num">' + dec(m.scheduled) + '</td><td class="r-num">' + dec(m.usedHours) + '</td><td class="r-num">' + dec(m.productiveHours) + '</td><td class="r-num">' + dec(m.production) + '</td><td class="r-num">' + dec(m.productivity, 2) + '</td><td class="r-num">' + dec(m.mechAvail) + '</td></tr>';
+                var st = (m.bdn + m.stb + m.gsa + m.prd + m.other);
+                stopRows += '<tr>' + mc + '<td class="r-num">' + dec(m.bdn) + '</td><td class="r-num">' + dec(m.stb) + '</td><td class="r-num">' + dec(m.gsa) + '</td><td class="r-num">' + dec(m.prd) + '</td><td class="r-num">' + dec(m.other) + '</td><td class="r-num">' + dec(st) + '</td></tr>';
+            });
+            var planned = getReportPlannedProduction(date, records);
+            var goal = planned && planned.value;
+            var taux = (goal != null && goal > 0) ? (totals.production / goal * 100).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' %' : 'N/A';
+            var cards = '<div class="report-kpi-grid">' +
+                '<div class="report-kpi-card"><div class="report-kpi-label">Mètres nouveaux</div><div class="report-kpi-value">' + dec(totals.production) + '</div><div class="report-kpi-sub">m</div></div>' +
+                '<div class="report-kpi-card"><div class="report-kpi-label">Reforés</div><div class="report-kpi-value">' + dec(totals.redrill) + '</div><div class="report-kpi-sub">m</div></div>' +
+                '<div class="report-kpi-card"><div class="report-kpi-label">Objectif du jour</div><div class="report-kpi-value">' + (goal != null ? dec(goal) : 'N/A') + '</div><div class="report-kpi-sub">m</div></div>' +
+                '<div class="report-kpi-card"><div class="report-kpi-label">Taux de réalisation</div><div class="report-kpi-value">' + taux + '</div></div>' +
+                '</div>';
+            var actTable = '<h3 class="daily-subtitle">Activité et rendement par machine</h3><table class="daily-table"><thead><tr><th class="machine-cell">Machine / poste</th><th class="r-num">Programmé (h)</th><th class="r-num">Utilisé (h)</th><th class="r-num">Productif (h)</th><th class="r-num">Nouveau (m)</th><th class="r-num">Rendement (m/h)</th><th class="r-num">Dispo. méca. (%)</th></tr></thead><tbody>' +
+                activityRows + '<tr class="total"><td>Total / ensemble</td><td class="r-num">' + dec(totals.scheduled) + '</td><td class="r-num">' + dec(totals.usedHours) + '</td><td class="r-num">' + dec(totals.productiveHours) + '</td><td class="r-num">' + dec(totals.production) + '</td><td class="r-num">' + dec(totals.usedHours > 0 ? totals.production / totals.usedHours : null, 2) + '</td><td class="r-num">—</td></tr></tbody></table>';
+            var stopTable = '<h3 class="daily-subtitle">Arrêts et carburant</h3><table class="daily-table"><thead><tr><th class="machine-cell">Machine / poste</th><th class="r-num">Pannes (h)</th><th class="r-num">Standby (h)</th><th class="r-num">Services (h)</th><th class="r-num">Production (h)</th><th class="r-num">Autres (h)</th><th class="r-num">Total arrêts (h)</th></tr></thead><tbody>' +
+                stopRows + '<tr class="total"><td>Total</td><td class="r-num">' + dec(totals.bdn) + '</td><td class="r-num">' + dec(totals.stb) + '</td><td class="r-num">' + dec(totals.gsa) + '</td><td class="r-num">' + dec(totals.prd) + '</td><td class="r-num">' + dec(totals.other) + '</td><td class="r-num">' + dec(totals.bdn + totals.stb + totals.gsa + totals.prd + totals.other) + '</td></tr></tbody></table>' +
+                '<p class="daily-table-note">Carburant total consommé : <b>' + dec(totals.fuel) + ' L</b>' + (planned && planned.note ? ' · ' + escapeHtmlReportCell(planned.note) : '') + '</p>';
+            var trace = buildDailyHoleTraceability(records);
+            return cards + actTable + stopTable + trace;
+        }
+
+        function buildProductionProgramReportHtml(data) {
+            var date = data.date;
+            var records = data.records || [];
+            var companyName = getReportBrandSubscriberName();
+            var metaRows = [
+                [ { label: 'Projet / site :', value: getReportProjectLabel(records) }, { label: 'Date :', value: formatDate(date) } ],
+                [ { label: 'Machines ayant produit :', value: String(getReportUsedMachineCount(records)) }, { label: 'Établi par :', value: getReportResponsableLabel(records) } ]
+            ];
+            function section(number, title, body, extraClass) {
+                return '<section class="daily-section ' + (extraClass || '') + '"><h2><span class="daily-section-number">' + number + '</span>' + title + '</h2>' + body + '</section>';
+            }
+            var generatedAt = new Date().toLocaleString('fr-FR');
+            return '<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fiche de production & programme — ' + escapeHtmlReportCell(date) + '</title><style>' +
+                REPORT_PRINT_ENTETE_CSS + DAILY_REPORT_PRINT_CSS + '</style></head><body>' +
+                '<div class="ge-brand-bottom"><img src="' + resolveStaticAssetUrl('ge-logo.png') + '" alt="GOOD ENGINEERS" class="ge-brand-logo"></div>' +
+                '<nav class="print-tools" aria-label="Actions du rapport"><button type="button" onclick="window.print()">Imprimer / Enregistrer en PDF</button><button type="button" onclick="window.close()">Fermer</button></nav>' +
+                '<main class="daily-sheet">' +
+                '<header>' + buildReportStandardEnteteHtml('FICHE DE PRODUCTION & PROGRAMME DU MATIN', records, metaRows) + '<p class="daily-report-audience">PROGRAMME DE FORATION + PRODUCTION DU JOUR</p></header>' +
+                section('01', 'Programme du matin — trous à forer', buildMorningProgramSection(data), 'daily-kpi-section') +
+                section('02', 'Production du jour', buildProductionDaySection(records, date)) +
+                '<footer class="daily-footer"><span>' + escapeHtmlReportCell(companyName) + '<br>Fiche de production & programme · ' + escapeHtmlReportCell(formatDate(date)) + '</span><span>Document généré le ' + escapeHtmlReportCell(generatedAt) + '</span></footer>' +
+                '</main></body></html>';
+        }
+
+        function generateProductionProgramReport() {
+            var date = document.getElementById('reportDailyDate').value;
+            if (!date) { alert('Veuillez sélectionner une date.'); return; }
+            var reportWindow = window.open('', '_blank');
+            if (!reportWindow) { alert('Autorisez l’ouverture de la fenêtre du rapport.'); return; }
+            reportWindow.document.write('<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Préparation…</title></head><body><p>Préparation de la fiche de production et du programme…</p></body></html>');
+            reportWindow.document.close();
+            window._lastReportShare = { type: 'production-program', date: date, title: 'Fiche de production & programme ' + date };
+            ensureReportPlanLoaded(function() {
+                collectProductionProgramData(date).then(function(data) {
+                    printDailyReport(date, data.records, reportWindow, buildProductionProgramReportHtml(data));
+                }).catch(function(e) {
+                    if (!reportWindow.closed) reportWindow.close();
+                    alert('Fiche de production non générée : ' + (e && e.message ? e.message : e));
+                });
+            }, function() {
+                if (!reportWindow.closed) reportWindow.close();
+            });
+        }
+
+        function buildProductionProgramXlsx(data) {
+            var date = data.date;
+            var wb = XLSX.utils.book_new();
+            var num = function(v, d) { return (v == null || !isFinite(Number(v))) ? '' : Number(Number(v).toFixed(d == null ? 1 : d)); };
+            // Feuille Programme
+            var progAoa = [['Zone', 'Trou', 'Bloc', 'Machine assignée', 'Prof. planifiée (m)']];
+            (data.program || []).slice().sort(function(a, b) {
+                return String(a.zone).localeCompare(String(b.zone), 'fr') || String(a.holeId).localeCompare(String(b.holeId), 'fr', { numeric: true });
+            }).forEach(function(p) { progAoa.push([p.zone, p.holeId, p.blockId, p.machineId || '', num(p.plannedDepth)]); });
+            progAoa.push([]);
+            progAoa.push(['Total trous', data.programCount, '', '', num(data.programMeters)]);
+            var wsP = XLSX.utils.aoa_to_sheet(progAoa);
+            wsP['!cols'] = [{ wch: 16 }, { wch: 14 }, { wch: 12 }, { wch: 18 }, { wch: 18 }];
+            XLSX.utils.book_append_sheet(wb, wsP, 'Programme');
+            // Feuille Production
+            var records = (data.records || []).filter(function(r) { return r && !isDailyRecordIncompleteDraft(r); });
+            var prodAoa = [['Machine', 'Poste', 'Lieu', 'Programmé (h)', 'Utilisé (h)', 'Productif (h)', 'Nouveau (m)', 'Reforé (m)', 'Rendement (m/h)', 'Dispo. méca. (%)', 'Pannes (h)', 'Standby (h)', 'Services (h)', 'Autres (h)', 'Carburant (L)']];
+            var t = { sched: 0, used: 0, prod: 0, nouveau: 0, refore: 0, bdn: 0, stb: 0, gsa: 0, other: 0, fuel: 0 };
+            records.forEach(function(r) {
+                var d = _rpData(r); var m = computeOperationalReportMetrics(d);
+                prodAoa.push([_rpMachineName(r), getShiftLabelForReport(d.shift) || '', d.location || '', num(m.scheduled), num(m.usedHours), num(m.productiveHours), num(m.production), num(m.redrillM), num(m.productivity, 2), num(m.mechAvail), num(m.bdn), num(m.stb), num(m.gsa), num(m.other), num(m.fuel)]);
+                t.sched += m.scheduled || 0; t.used += m.usedHours || 0; t.prod += m.productiveHours || 0; t.nouveau += m.production || 0; t.refore += (m.redrillM || 0); t.bdn += m.bdn || 0; t.stb += m.stb || 0; t.gsa += m.gsa || 0; t.other += m.other || 0; t.fuel += m.fuel || 0;
+            });
+            prodAoa.push([]);
+            prodAoa.push(['TOTAL', '', '', num(t.sched), num(t.used), num(t.prod), num(t.nouveau), num(t.refore), t.used > 0 ? num(t.nouveau / t.used, 2) : '', '', num(t.bdn), num(t.stb), num(t.gsa), num(t.other), num(t.fuel)]);
+            var wsProd = XLSX.utils.aoa_to_sheet(prodAoa);
+            wsProd['!cols'] = [{ wch: 12 }, { wch: 10 }, { wch: 14 }].concat(Array(12).fill({ wch: 13 }));
+            XLSX.utils.book_append_sheet(wb, wsProd, 'Production');
+            XLSX.writeFile(wb, 'fiche-production-' + date + '.xlsx');
+        }
+
+        function exportProductionProgramXlsx() {
+            var date = document.getElementById('reportDailyDate').value;
+            if (!date) { alert('Veuillez sélectionner une date.'); return; }
+            ensureReportPlanLoaded(function() {
+                collectProductionProgramData(date).then(function(data) {
+                    plan2LoadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js').then(function() {
+                        try { buildProductionProgramXlsx(data); }
+                        catch (e) { alert('Export Excel impossible : ' + (e && e.message ? e.message : e)); }
+                    }).catch(function() { alert('Impossible de charger la librairie Excel (connexion internet requise).'); });
+                }).catch(function(e) { alert('Export impossible : ' + (e && e.message ? e.message : e)); });
+            }, function() { /* annulé (tenant/site changé) */ });
+        }
+
         // Le rapport utilise le plan enregistré, jamais un brouillon de Planification.
         var reportPlanSnapshot = { plan: null, version: 0, error: '' };
         var reportPlanRequestSeq = 0;
@@ -19207,7 +19420,7 @@
             '.print-tools button:first-child{background:#1a2b4b;color:white;border-color:#1a2b4b;}',
             '.report-logos-row{align-items:center;gap:18px;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid #d5dee8;}',
             '.report-logo-left,.report-logo-right{max-width:45%;min-width:0;}',
-            '.report-logos-row img{max-height:62px!important;max-width:200px!important;width:auto;height:auto;}',
+            '.report-logos-row img{max-height:120px!important;max-width:300px!important;width:auto;}',
             '.report-logo-caption{font-size:9px;letter-spacing:.06em;margin-top:5px;overflow-wrap:anywhere;}',
             '.report-doc-title{font-size:20px;line-height:1.2;letter-spacing:.035em;margin:16px 0 10px;color:#142c49;}',
             '.report-title-rule{height:3px;margin-bottom:12px;border-radius:0;}',
