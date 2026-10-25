@@ -243,6 +243,7 @@ const migrations = [
     },
     { name: 'drills.parkReason', sql: 'ALTER TABLE drills ADD COLUMN parkReason TEXT DEFAULT NULL' },
     { name: 'drills.expectedReturnDate', sql: 'ALTER TABLE drills ADD COLUMN expectedReturnDate TEXT DEFAULT NULL' },
+    { name: 'drills.parkLocation', sql: 'ALTER TABLE drills ADD COLUMN parkLocation TEXT DEFAULT NULL' },
     { name: 'drill_plans.table', sql: `CREATE TABLE IF NOT EXISTS drill_plans (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         enterpriseId INTEGER NOT NULL DEFAULT 1,
