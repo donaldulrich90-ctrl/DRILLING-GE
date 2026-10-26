@@ -6414,10 +6414,14 @@
             return 0;
         }
 
-        function computeShiftAvailabilityKpis(shift, downtimeHours, machineHours) {
+        // Disponibilité = temps où l'engin n'est PAS en panne.
+        // Seules les pannes (BDN) réduisent la disponibilité ; le standby
+        // (manque de trous, météo…) et les services baissent l'utilisation,
+        // pas la disponibilité. 2e paramètre = heures de PANNE (pas tous les arrêts).
+        function computeShiftAvailabilityKpis(shift, breakdownHours, machineHours) {
             var Tnom = getShiftNominalHours(shift);
             if (Tnom <= 0) return null;
-            var downtime = Math.max(0, parseFloat(downtimeHours) || 0);
+            var downtime = Math.max(0, parseFloat(breakdownHours) || 0);
             var hours = Math.max(0, parseFloat(machineHours) || 0);
             var availTime = Math.max(0, Tnom - downtime);
             var availabilityPct = (availTime / Tnom) * 100;
@@ -23958,12 +23962,13 @@
             var hours = Math.max(0, parseFloat(data.hours) || 0);
             var comp = null;
             if (data.availabilityPct == null) {
-                comp = computeShiftAvailabilityKpis((data && data.shift) || '', rowDh, hours);
+                // Seules les pannes (BDN) réduisent la disponibilité.
+                comp = computeShiftAvailabilityKpis((data && data.shift) || '', cat.bdn, hours);
             }
             var Tnom = data.shiftNominalHours != null ? parseFloat(data.shiftNominalHours) : getShiftNominalHours((data && data.shift) || '');
             if (isNaN(Tnom) || Tnom <= 0) Tnom = getShiftNominalHours((data && data.shift) || '');
-            var availH = data.availableHours != null ? parseFloat(data.availableHours) : (comp ? comp.availableHours : Math.max(0, Tnom - rowDh));
-            if (isNaN(availH)) availH = Math.max(0, Tnom - rowDh);
+            var availH = data.availableHours != null ? parseFloat(data.availableHours) : (comp ? comp.availableHours : Math.max(0, Tnom - cat.bdn));
+            if (isNaN(availH)) availH = Math.max(0, Tnom - cat.bdn);
 
             var ap = data.availabilityPct != null ? parseFloat(data.availabilityPct) : (comp ? comp.availabilityPct : null);
             var uo = data.useOfAvailabilityPct != null ? parseFloat(data.useOfAvailabilityPct) : (comp ? comp.useOfAvailabilityPct : null);
@@ -24709,7 +24714,8 @@
                 ul.innerHTML = '<li class="list-none -ml-2">Choisissez <strong>jour</strong> ou <strong>nuit</strong> (recommandé) pour des indicateurs alignés sur 12 h chacune. « Journée complète » utilise 24 h nominales (les deux équipes).</li>';
                 return;
             }
-            var k = computeShiftAvailabilityKpis(shift, downtime, hours);
+            var breakdownHours = aggregateStoppageHoursByCategory(collectDailyEntryStoppages()).bdn;
+            var k = computeShiftAvailabilityKpis(shift, breakdownHours, hours);
             if (!k) return;
             var li = function(html) {
                 var n = document.createElement('li');
@@ -24718,9 +24724,9 @@
                 ul.appendChild(n);
             };
             li('Durée nominale du shift : <strong class="text-slate-200">' + k.shiftNominalHours.toFixed(1) + ' h</strong> <span class="text-slate-500">(' + getShiftLabelForReport(shift) + ')</span>');
-            li('Temps disponible (nominal − arrêts) : <strong class="text-slate-200">' + k.availableHours.toFixed(1) + ' h</strong>');
-            li('<strong class="text-emerald-300">Disponibilité</strong> (temps dispo / nominal) : <strong class="text-white">' + k.availabilityPct.toFixed(1) + ' %</strong>');
-            li('<strong class="text-sky-300">Utilisation de la disponibilité</strong> (heures machine / temps dispo) : <strong class="text-white">' + k.useOfAvailabilityPct.toFixed(1) + ' %</strong>');
+            li('Temps disponible (nominal − pannes) : <strong class="text-slate-200">' + k.availableHours.toFixed(1) + ' h</strong> <span class="text-slate-500">(hors standby / services)</span>');
+            li('<strong class="text-emerald-300">Disponibilité</strong> (temps dispo / nominal — ne baisse que pour les pannes) : <strong class="text-white">' + k.availabilityPct.toFixed(1) + ' %</strong>');
+            li('<strong class="text-sky-300">Utilisation de la disponibilité</strong> (heures machine / temps dispo — baisse avec le standby) : <strong class="text-white">' + k.useOfAvailabilityPct.toFixed(1) + ' %</strong>');
             li('<strong class="text-amber-300">Disponibilité effective</strong> (heures machine / nominal) : <strong class="text-white">' + k.effectiveAvailabilityPct.toFixed(1) + ' %</strong>');
             if (downtime > k.shiftNominalHours + 0.01) {
                 li('<span class="text-red-400"> Les heures d’arrêt dépassent la durée nominale : vérifiez la saisie.</span>');
@@ -26052,7 +26058,8 @@
                 baseDepth = depthOffset + completedMeters - (wasComplete ? Number(existingData.metersDrilled) || 0 : 0);
                 depth = Math.max(0, baseDepth + meters);
             }
-            var kpi = !hasIncompleteStops && hours != null ? computeShiftAvailabilityKpis(shift, downtimeHoursTotal, hours) : null;
+            var breakdownHoursTotal = aggregateStoppageHoursByCategory(stoppages).bdn;
+            var kpi = !hasIncompleteStops && hours != null ? computeShiftAvailabilityKpis(shift, breakdownHoursTotal, hours) : null;
             var now = new Date().toISOString();
             var record = existingRec ? JSON.parse(JSON.stringify(existingRec)) : {
                 date: date, machineId: machineId, shift: shift, data: {},
