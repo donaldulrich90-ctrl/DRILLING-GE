@@ -71,6 +71,14 @@ module.exports = function registerSoustraitantsRoutes(app, options) {
             createdBy TEXT DEFAULT ''
         )`);
         db.run('CREATE INDEX IF NOT EXISTS idx_bc_enterprise ON back_charges(enterpriseId, period)');
+
+        // Migrations additives (bases créées avant ces champs)
+        db.run("ALTER TABLE rented_machines ADD COLUMN drillId TEXT DEFAULT NULL", (e) => {
+            if (e && !String(e.message || '').includes('duplicate column')) console.warn('rented_machines.drillId:', e.message);
+        });
+        db.run("ALTER TABLE subcontractors ADD COLUMN currency TEXT DEFAULT 'XOF'", (e) => {
+            if (e && !String(e.message || '').includes('duplicate column')) console.warn('subcontractors.currency:', e.message);
+        });
     });
 
     const storage = multer.diskStorage({
@@ -115,8 +123,8 @@ module.exports = function registerSoustraitantsRoutes(app, options) {
         const b = req.body || {};
         const name = text(b.name, 160);
         if (!name) return res.status(400).json({ error: 'Nom requis' });
-        db.run('INSERT INTO subcontractors (enterpriseId, name, contact, phone, email, note, active) VALUES (?,?,?,?,?,?,?)',
-            [eid, name, text(b.contact, 160), text(b.phone, 60), text(b.email, 160), text(b.note, 1000), b.active === false ? 0 : 1],
+        db.run('INSERT INTO subcontractors (enterpriseId, name, contact, phone, email, note, active, currency) VALUES (?,?,?,?,?,?,?,?)',
+            [eid, name, text(b.contact, 160), text(b.phone, 60), text(b.email, 160), text(b.note, 1000), b.active === false ? 0 : 1, text(b.currency, 8) || 'XOF'],
             function (err) {
                 if (err) return res.status(500).json({ error: err.message });
                 db.get('SELECT * FROM subcontractors WHERE id = ?', [this.lastID], (e, r) => res.json(r));
@@ -129,8 +137,8 @@ module.exports = function registerSoustraitantsRoutes(app, options) {
         const id = Number(req.params.id); const b = req.body || {};
         const name = text(b.name, 160);
         if (!name) return res.status(400).json({ error: 'Nom requis' });
-        db.run('UPDATE subcontractors SET name=?, contact=?, phone=?, email=?, note=?, active=? WHERE id=? AND enterpriseId=?',
-            [name, text(b.contact, 160), text(b.phone, 60), text(b.email, 160), text(b.note, 1000), b.active === false ? 0 : 1, id, eid],
+        db.run('UPDATE subcontractors SET name=?, contact=?, phone=?, email=?, note=?, active=?, currency=? WHERE id=? AND enterpriseId=?',
+            [name, text(b.contact, 160), text(b.phone, 60), text(b.email, 160), text(b.note, 1000), b.active === false ? 0 : 1, text(b.currency, 8) || 'XOF', id, eid],
             function (err) {
                 if (err) return res.status(500).json({ error: err.message });
                 db.get('SELECT * FROM subcontractors WHERE id = ?', [id], (e, r) => res.json(r || {}));
@@ -167,8 +175,9 @@ module.exports = function registerSoustraitantsRoutes(app, options) {
         if (!label) return res.status(400).json({ error: 'Nom de machine requis' });
         if (!Number.isFinite(subId)) return res.status(400).json({ error: 'Sous-traitant requis' });
         const unit = UNITS.has(b.unit) ? b.unit : 'jour';
-        db.run('INSERT INTO rented_machines (enterpriseId, subcontractorId, label, model, rate, unit, active) VALUES (?,?,?,?,?,?,?)',
-            [eid, subId, label, text(b.model, 120), num(b.rate, 0, 1e12, 0), unit, b.active === false ? 0 : 1],
+        const drillId = b.drillId != null && String(b.drillId).trim() !== '' ? text(b.drillId, 120) : null;
+        db.run('INSERT INTO rented_machines (enterpriseId, subcontractorId, label, model, rate, unit, active, drillId) VALUES (?,?,?,?,?,?,?,?)',
+            [eid, subId, label, text(b.model, 120), num(b.rate, 0, 1e12, 0), unit, b.active === false ? 0 : 1, drillId],
             function (err) {
                 if (err) return res.status(500).json({ error: err.message });
                 db.get('SELECT * FROM rented_machines WHERE id = ?', [this.lastID], (e, r) => res.json(r));
@@ -184,8 +193,9 @@ module.exports = function registerSoustraitantsRoutes(app, options) {
         if (!label) return res.status(400).json({ error: 'Nom de machine requis' });
         if (!Number.isFinite(subId)) return res.status(400).json({ error: 'Sous-traitant requis' });
         const unit = UNITS.has(b.unit) ? b.unit : 'jour';
-        db.run('UPDATE rented_machines SET subcontractorId=?, label=?, model=?, rate=?, unit=?, active=? WHERE id=? AND enterpriseId=?',
-            [subId, label, text(b.model, 120), num(b.rate, 0, 1e12, 0), unit, b.active === false ? 0 : 1, id, eid],
+        const drillId = b.drillId != null && String(b.drillId).trim() !== '' ? text(b.drillId, 120) : null;
+        db.run('UPDATE rented_machines SET subcontractorId=?, label=?, model=?, rate=?, unit=?, active=?, drillId=? WHERE id=? AND enterpriseId=?',
+            [subId, label, text(b.model, 120), num(b.rate, 0, 1e12, 0), unit, b.active === false ? 0 : 1, drillId, id, eid],
             function (err) {
                 if (err) return res.status(500).json({ error: err.message });
                 db.get('SELECT * FROM rented_machines WHERE id = ?', [id], (e, r) => res.json(r || {}));

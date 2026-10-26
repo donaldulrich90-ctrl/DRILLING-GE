@@ -10857,11 +10857,54 @@
         }
 
         // ---- État de paiement mensuel -------------------------------------
+        // Usage auto d'une foreuse sur un mois (mètres/heures/jours), depuis les saisies validées.
+        function stAutoUsageForDrill(drillId, unit, periodYM) {
+            if (!drillId || unit === 'forfait') return null;
+            var days = {}, total = 0;
+            (dailyDataRecords || []).forEach(function (r) {
+                if (isDailyRecordIncompleteDraft(r) || !r.date || r.date.slice(0, 7) !== periodYM) return;
+                if (!drillIdsMatch(r.machineId, drillId)) return;
+                var data = r.data || {}; if (typeof data === 'string') { try { data = JSON.parse(data); } catch (e) { data = {}; } }
+                var meters = parseFloat(data.metersDrilled) || 0, hours = parseFloat(data.hours) || 0;
+                if (unit === 'metre') total += meters;
+                else if (unit === 'heure') total += hours;
+                else if (unit === 'jour') { if (meters > 0 || hours > 0) days[r.date] = 1; }
+            });
+            if (unit === 'jour') return Object.keys(days).length;
+            return total;
+        }
+
+        // Remplace l'usage manuel par l'usage auto (foreuse liée) et recalcule les totaux.
+        function stApplyAutoUsage(st) {
+            if (!st || !st.subcontractors) return st;
+            var gTot = 0, bTot = 0, nTot = 0;
+            st.subcontractors.forEach(function (s) {
+                var gross = 0;
+                (s.machines || []).forEach(function (m) {
+                    if (m.drillId && m.unit !== 'forfait') {
+                        var au = stAutoUsageForDrill(m.drillId, m.unit, ST.period);
+                        if (au != null) { m.quantity = au; m.gross = (Number(m.rate) || 0) * au; m.auto = true; }
+                    }
+                    gross += Number(m.gross) || 0;
+                });
+                s.grossTotal = gross;
+                s.net = gross - (Number(s.backTotal) || 0);
+                gTot += gross; bTot += (Number(s.backTotal) || 0); nTot += s.net;
+            });
+            st.totals = st.totals || {};
+            st.totals.gross = gTot;
+            st.totals.subcontractorBackCharges = bTot;
+            st.totals.netToPay = nTot;
+            st.totals.totalCosts = nTot + (Number(st.totals.enterpriseBackCharges) || 0);
+            return st;
+        }
+
         async function stRenderStatement() {
             var el = document.getElementById('soustraitantsContent');
             el.innerHTML = '<div class="text-slate-400 p-4">Calcul de l\'état…</div>';
             var st; try { st = await apiRequest('/soustraitants/statement?period=' + encodeURIComponent(ST.period), 'GET'); }
             catch (e) { el.innerHTML = '<div class="text-red-400 p-4">Erreur de calcul.</div>'; return; }
+            stApplyAutoUsage(st);
             ST.statement = st; var t = st.totals || {};
             var html = '<div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-5">';
             html += stKpi('Brut sous-traitants', stFmt(t.gross), 'Tarif × usage du mois');
@@ -10882,11 +10925,13 @@
             st.subcontractors.forEach(function (s) {
                 html += '<div class="bg-slate-800 border border-slate-700 rounded-xl p-4 mb-3">';
                 html += '<div class="flex items-center justify-between flex-wrap gap-2 mb-2"><div><strong class="text-lg">' + escapeHtml(s.name) + '</strong>' + (s.phone ? ' <span class="text-slate-400 text-sm">· ' + escapeHtml(s.phone) + '</span>' : '') + '</div>'
-                    + '<div class="text-right"><div class="text-xs text-slate-400 uppercase">Net à payer</div><div class="text-xl font-extrabold" style="color:var(--ged-yellow)">' + stFmt(s.net) + '</div></div></div>';
+                    + '<div class="flex items-center gap-3"><button type="button" onclick="stGenerateInvoice(' + s.id + ')" class="bg-cyan-700 hover:bg-cyan-600 text-white px-3 py-1.5 rounded text-sm font-semibold">🧾 Facture PDF</button>'
+                    + '<div class="text-right"><div class="text-xs text-slate-400 uppercase">Net à payer</div><div class="text-xl font-extrabold" style="color:var(--ged-yellow)">' + stFmt(s.net) + '</div></div></div></div>';
                 if (s.machines.length) {
-                    html += '<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-slate-400 text-left"><th class="py-1">Machine</th><th>Tarif</th><th>Usage</th><th class="text-right">Brut</th></tr></thead><tbody>';
+                    html += '<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-slate-400 text-left"><th class="py-1">Machine</th><th>Foreuse</th><th>Tarif</th><th>Usage</th><th class="text-right">Brut</th></tr></thead><tbody>';
                     s.machines.forEach(function (m) {
-                        html += '<tr class="border-t border-slate-700"><td class="py-1">' + escapeHtml(m.label) + '</td><td>' + stFmt(m.rate) + ' ' + stUnitLabel(m.unit) + '</td><td>' + (m.unit === 'forfait' ? 'forfait' : (Number(m.quantity) || 0) + ' ' + stUnitQty(m.unit)) + '</td><td class="text-right">' + stFmt(m.gross) + '</td></tr>';
+                        var usageCell = m.unit === 'forfait' ? 'forfait' : ((Number(m.quantity) || 0) + ' ' + stUnitQty(m.unit) + (m.auto ? ' <span class="text-emerald-400 text-xs">auto</span>' : ''));
+                        html += '<tr class="border-t border-slate-700"><td class="py-1">' + escapeHtml(m.label) + '</td><td class="text-slate-400">' + (m.drillId ? escapeHtml(String(m.drillId)) : '—') + '</td><td>' + stFmt(m.rate) + ' ' + stUnitLabel(m.unit) + '</td><td>' + usageCell + '</td><td class="text-right">' + stFmt(m.gross) + '</td></tr>';
                     });
                     html += '</tbody></table></div>';
                 } else { html += '<p class="text-slate-500 text-sm">Aucune machine louée.</p>'; }
@@ -10910,6 +10955,65 @@
             if (sp) { sp.textContent = stFmt(p); sp.className = 'text-lg font-bold ' + (p >= 0 ? 'text-green-400' : 'text-red-400'); }
         }
 
+        function stInvoiceMoney(n, cur) {
+            return (Number(n) || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' ' + (cur || 'XOF');
+        }
+
+        // Facture / relevé de paiement individuel d'un sous-traitant (imprimable / PDF).
+        function stGenerateInvoice(subId) {
+            var st = ST.statement;
+            if (!st) { alert('Génère d\'abord le relevé (onglet Relevé).'); return; }
+            var s = (st.subcontractors || []).find(function (x) { return Number(x.id) === Number(subId); });
+            if (!s) { alert('Sous-traitant introuvable.'); return; }
+            var subInfo = (ST.subs || []).find(function (x) { return Number(x.id) === Number(subId); }) || {};
+            var cur = subInfo.currency || companyInfo.currency || 'XOF';
+            var win = window.open('', '_blank');
+            if (!win) { alert('Autorisez l\'ouverture de la fenêtre.'); return; }
+            var pParts = String(ST.period || '').split('-');
+            var periodLabel = ST.period;
+            if (pParts.length === 2) {
+                try { periodLabel = new Date(parseInt(pParts[0], 10), parseInt(pParts[1], 10) - 1, 1).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }); } catch (e) {}
+            }
+            var rows = (s.machines || []).map(function (m) {
+                var usage = m.unit === 'forfait' ? 'forfait' : ((Number(m.quantity) || 0) + ' ' + stUnitQty(m.unit) + (m.auto ? ' (auto)' : ''));
+                return '<tr><td>' + escapeHtmlReportCell(m.label) + '</td><td>' + escapeHtmlReportCell(m.drillId || '—') + '</td><td>' + escapeHtmlReportCell(stUnitLabel(m.unit)) + '</td><td class="num">' + usage + '</td><td class="num">' + stInvoiceMoney(m.rate, cur) + '</td><td class="num">' + stInvoiceMoney(m.gross, cur) + '</td></tr>';
+            }).join('') || '<tr><td colspan="6" style="text-align:center;color:#64748b">Aucune machine</td></tr>';
+            var bcRows = (s.backCharges || []).map(function (c) {
+                return '<tr><td colspan="5">Back-charge : ' + escapeHtmlReportCell(c.label) + '</td><td class="num" style="color:#b91c1c">− ' + stInvoiceMoney(c.amount, cur) + '</td></tr>';
+            }).join('');
+            var logo = (typeof companyLogo !== 'undefined' && companyLogo) ? ('<img src="' + String(companyLogo).replace(/"/g, '&quot;') + '" alt="logo" style="max-height:70px;max-width:200px;object-fit:contain">') : '';
+            var doc = '<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Facture sous-traitant — ' + escapeHtmlReportCell(s.name) + ' — ' + escapeHtmlReportCell(ST.period) + '</title><style>'
+                + '*{box-sizing:border-box}body{margin:0;font:13px/1.45 Arial,Helvetica,sans-serif;color:#111827;background:#e9edf2}'
+                + '.tools{max-width:800px;margin:14px auto 0;display:flex;justify-content:flex-end;gap:8px}.tools button{border:1px solid #bac6d4;border-radius:4px;padding:9px 14px;background:#fff;color:#1a2b4b;cursor:pointer;font:600 12px Arial}.tools button:first-child{background:#1a2b4b;color:#fff;border-color:#1a2b4b}'
+                + '.sheet{max-width:800px;margin:14px auto;background:#fff;padding:26px 28px;box-shadow:0 4px 24px #1020351a}'
+                + '.head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;border-bottom:2px solid #1a2b4b;padding-bottom:12px}'
+                + '.parties{display:flex;justify-content:space-between;gap:20px;margin:16px 0}.party{font-size:12.5px}.party h4{margin:0 0 4px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#64748b}'
+                + 'h1{font-size:19px;color:#142c49;margin:0 0 2px;text-transform:uppercase}.sub{color:#b45309;font-weight:700;font-size:12px}'
+                + 'table{width:100%;border-collapse:collapse;margin-top:10px;font-size:12px}th,td{border:1px solid #cbd5e1;padding:7px 8px;text-align:left}th{background:#eaf0f6;color:#18324f;font-size:11px}td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}'
+                + 'tfoot td{font-weight:700;background:#f7f9fb}.net{font-size:16px;color:#142c49}'
+                + '.sign{display:flex;gap:30px;margin-top:28px}.sign div{flex:1;border-top:1px solid #94a3b8;padding-top:6px;font-size:11px;color:#475569}'
+                + '@media print{body{background:#fff}.tools{display:none}.sheet{box-shadow:none;margin:0;max-width:none}@page{size:A4 portrait;margin:12mm}}'
+                + '</style></head><body>'
+                + '<nav class="tools"><button onclick="window.print()">Imprimer / PDF</button><button onclick="window.close()">Fermer</button></nav>'
+                + '<div class="sheet">'
+                + '<div class="head"><div>' + logo + '<h1>Facture sous-traitant</h1><div class="sub">Relevé de paiement — ' + escapeHtmlReportCell(periodLabel) + '</div></div>'
+                + '<div style="text-align:right;font-size:12px"><strong>' + escapeHtmlReportCell(companyInfo.name || 'Entreprise') + '</strong>'
+                + (companyInfo.address ? '<br>' + escapeHtmlReportCell(companyInfo.address) : '') + (companyInfo.phone ? '<br>Tél : ' + escapeHtmlReportCell(companyInfo.phone) : '') + (companyInfo.ifu ? '<br>IFU : ' + escapeHtmlReportCell(companyInfo.ifu) : '') + '</div></div>'
+                + '<div class="parties"><div class="party"><h4>Payeur (prestataire principal)</h4><strong>' + escapeHtmlReportCell(companyInfo.name || '—') + '</strong>' + (companyInfo.rccm ? '<br>RCCM : ' + escapeHtmlReportCell(companyInfo.rccm) : '') + '</div>'
+                + '<div class="party" style="text-align:right"><h4>Sous-traitant</h4><strong>' + escapeHtmlReportCell(s.name) + '</strong>' + (subInfo.contact ? '<br>' + escapeHtmlReportCell(subInfo.contact) : '') + (s.phone ? '<br>Tél : ' + escapeHtmlReportCell(s.phone) : '') + (s.email ? '<br>' + escapeHtmlReportCell(s.email) : '') + '</div></div>'
+                + '<table><thead><tr><th>Machine louée</th><th>Foreuse</th><th>Unité</th><th class="num">Usage</th><th class="num">Tarif</th><th class="num">Montant</th></tr></thead>'
+                + '<tbody>' + rows + bcRows + '</tbody>'
+                + '<tfoot><tr><td colspan="5" class="num">Brut</td><td class="num">' + stInvoiceMoney(s.grossTotal, cur) + '</td></tr>'
+                + (Number(s.backTotal) ? '<tr><td colspan="5" class="num">Back-charges déduites</td><td class="num" style="color:#b91c1c">− ' + stInvoiceMoney(s.backTotal, cur) + '</td></tr>' : '')
+                + '<tr><td colspan="5" class="num net">NET À PAYER</td><td class="num net">' + stInvoiceMoney(s.net, cur) + '</td></tr></tfoot></table>'
+                + '<div class="sign"><div>Le prestataire principal<br><br></div><div>Le sous-traitant<br><br></div></div>'
+                + '<p style="font-size:10px;color:#94a3b8;margin-top:18px">Usage « auto » = calculé automatiquement depuis les saisies journalières de la foreuse liée. Montants en ' + escapeHtmlReportCell(cur) + '.</p>'
+                + '</div></body></html>';
+            win.document.write(doc);
+            win.document.close();
+        }
+        window.stGenerateInvoice = stGenerateInvoice;
+
         // ---- Sous-traitants (CRUD) ----------------------------------------
         function stRenderSubs() {
             var el = document.getElementById('soustraitantsContent'); var w = stCanWrite(); var html = '';
@@ -10921,7 +11025,8 @@
                     + '<input id="subContact" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm" placeholder="Personne de contact">'
                     + '<input id="subPhone" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm" placeholder="Téléphone">'
                     + '<input id="subEmail" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm" placeholder="Email">'
-                    + '</div><textarea id="subNote" rows="2" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm w-full mt-2" placeholder="Note"></textarea>'
+                    + '<select id="subCurrency" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm"><option value="XOF">XOF (FCFA)</option><option value="EUR">EUR</option><option value="USD">USD</option></select>'
+                    + '</div><textarea id="subNote" rows="2" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm w-full mt-2" placeholder="Note (ex: référence du contrat, conditions de paiement)"></textarea>'
                     + '<div class="mt-2 flex gap-2"><button class="ged-btn-primary px-4 py-2 rounded text-sm" onclick="stSaveSub()">Enregistrer</button><button class="bg-slate-700 px-4 py-2 rounded text-sm" onclick="stResetSubForm()">Annuler</button></div></div>';
             }
             html += '<div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><h3 class="font-bold mb-2">Sous-traitants (' + ST.subs.length + ')</h3>';
@@ -10935,17 +11040,19 @@
             }
             html += '</div>'; el.innerHTML = html;
         }
-        function stResetSubForm() { ['subEditId', 'subName', 'subContact', 'subPhone', 'subEmail', 'subNote'].forEach(function (id) { var e = document.getElementById(id); if (e) e.value = ''; }); }
+        function stResetSubForm() { ['subEditId', 'subName', 'subContact', 'subPhone', 'subEmail', 'subNote'].forEach(function (id) { var e = document.getElementById(id); if (e) e.value = ''; }); var c = document.getElementById('subCurrency'); if (c) c.value = 'XOF'; }
         function stEditSub(id) {
             var s = ST.subs.filter(function (x) { return Number(x.id) === Number(id); })[0]; if (!s) return;
             document.getElementById('subEditId').value = s.id; document.getElementById('subName').value = s.name || '';
             document.getElementById('subContact').value = s.contact || ''; document.getElementById('subPhone').value = s.phone || '';
             document.getElementById('subEmail').value = s.email || ''; document.getElementById('subNote').value = s.note || '';
+            var c = document.getElementById('subCurrency'); if (c) c.value = s.currency || 'XOF';
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
         async function stSaveSub() {
             var id = document.getElementById('subEditId').value;
-            var data = { name: document.getElementById('subName').value.trim(), contact: document.getElementById('subContact').value.trim(), phone: document.getElementById('subPhone').value.trim(), email: document.getElementById('subEmail').value.trim(), note: document.getElementById('subNote').value.trim() };
+            var curEl = document.getElementById('subCurrency');
+            var data = { name: document.getElementById('subName').value.trim(), contact: document.getElementById('subContact').value.trim(), phone: document.getElementById('subPhone').value.trim(), email: document.getElementById('subEmail').value.trim(), note: document.getElementById('subNote').value.trim(), currency: curEl ? curEl.value : 'XOF' };
             if (!data.name) { alert('Nom requis.'); return; }
             try { await apiRequest('/soustraitants' + (id ? '/' + id : ''), id ? 'PUT' : 'POST', data); stResetSubForm(); renderSoustraitants(); }
             catch (e) { alert(e.message || 'Erreur.'); }
@@ -10969,30 +11076,41 @@
                     + '<input id="macModel" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm" placeholder="Modèle">'
                     + '<input id="macRate" type="number" step="any" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm" placeholder="Tarif (FCFA)">'
                     + '<select id="macUnit" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm"><option value="jour">par jour</option><option value="heure">par heure</option><option value="metre">par mètre foré</option><option value="forfait">forfait mensuel</option></select>'
-                    + '</div><div class="mt-2 flex gap-2"><button class="ged-btn-primary px-4 py-2 rounded text-sm" onclick="stSaveMachine()">Enregistrer</button><button class="bg-slate-700 px-4 py-2 rounded text-sm" onclick="stResetMacForm()">Annuler</button></div></div>';
+                    + '<select id="macDrill" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm sm:col-span-2"><option value="">— Foreuse liée (usage auto) : aucune, saisie manuelle —</option>' + stDrillOptions() + '</select>'
+                    + '</div><p class="text-xs text-slate-500 mt-1">Lier une foreuse remplit automatiquement l\'usage (mètres/heures/jours) depuis les saisies journalières du mois.</p>'
+                    + '<div class="mt-2 flex gap-2"><button class="ged-btn-primary px-4 py-2 rounded text-sm" onclick="stSaveMachine()">Enregistrer</button><button class="bg-slate-700 px-4 py-2 rounded text-sm" onclick="stResetMacForm()">Annuler</button></div></div>';
             }
             html += '<div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><h3 class="font-bold mb-2">Machines louées (' + ST.machines.length + ')</h3>';
             if (!ST.machines.length) html += '<p class="text-slate-500 text-sm">Aucune machine.</p>';
             else {
-                html += '<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-slate-400 text-left"><th class="py-1">Machine</th><th>Sous-traitant</th><th>Tarif</th>' + (w ? '<th></th>' : '') + '</tr></thead><tbody>';
+                html += '<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-slate-400 text-left"><th class="py-1">Machine</th><th>Sous-traitant</th><th>Foreuse liée</th><th>Tarif</th>' + (w ? '<th></th>' : '') + '</tr></thead><tbody>';
                 ST.machines.forEach(function (m) {
-                    html += '<tr class="border-t border-slate-700"><td class="py-1">' + escapeHtml(m.label) + (m.model ? ' <span class="text-slate-500">(' + escapeHtml(m.model) + ')</span>' : '') + '</td><td>' + escapeHtml(stSubName(m.subcontractorId)) + '</td><td>' + stFmt(m.rate) + ' ' + stUnitLabel(m.unit) + '</td>' + (w ? '<td class="text-right whitespace-nowrap"><button class="text-blue-400 mr-2" onclick="stEditMachine(' + m.id + ')">✎</button><button class="text-red-400" onclick="stDeleteMachine(' + m.id + ')">🗑</button></td>' : '') + '</tr>';
+                    var drillCell = m.drillId ? ('<span class="text-emerald-400">' + escapeHtml(String(m.drillId)) + '</span> <span class="text-slate-500 text-xs">(auto)</span>') : '<span class="text-slate-500 text-xs">manuel</span>';
+                    html += '<tr class="border-t border-slate-700"><td class="py-1">' + escapeHtml(m.label) + (m.model ? ' <span class="text-slate-500">(' + escapeHtml(m.model) + ')</span>' : '') + '</td><td>' + escapeHtml(stSubName(m.subcontractorId)) + '</td><td>' + drillCell + '</td><td>' + stFmt(m.rate) + ' ' + stUnitLabel(m.unit) + '</td>' + (w ? '<td class="text-right whitespace-nowrap"><button class="text-blue-400 mr-2" onclick="stEditMachine(' + m.id + ')">✎</button><button class="text-red-400" onclick="stDeleteMachine(' + m.id + ')">🗑</button></td>' : '') + '</tr>';
                 });
                 html += '</tbody></table></div>';
             }
             html += '</div>'; el.innerHTML = html;
         }
-        function stResetMacForm() { ['macEditId', 'macLabel', 'macModel', 'macRate'].forEach(function (id) { var e = document.getElementById(id); if (e) e.value = ''; }); }
+        function stDrillOptions(sel) {
+            var dList = (typeof getDrillsForSite === 'function') ? getDrillsForSite() : [];
+            return (dList || []).map(function (d) {
+                return '<option value="' + escapeHtmlForAttr(String(d.id)) + '"' + (String(sel) === String(d.id) ? ' selected' : '') + '>' + escapeHtml(String(d.id)) + (d.location ? ' — ' + escapeHtml(d.location) : '') + '</option>';
+            }).join('');
+        }
+        function stResetMacForm() { ['macEditId', 'macLabel', 'macModel', 'macRate'].forEach(function (id) { var e = document.getElementById(id); if (e) e.value = ''; }); var dr = document.getElementById('macDrill'); if (dr) dr.value = ''; }
         function stEditMachine(id) {
             var m = ST.machines.filter(function (x) { return Number(x.id) === Number(id); })[0]; if (!m) return;
             document.getElementById('macEditId').value = m.id; document.getElementById('macSub').value = m.subcontractorId;
             document.getElementById('macLabel').value = m.label || ''; document.getElementById('macModel').value = m.model || '';
             document.getElementById('macRate').value = m.rate || 0; document.getElementById('macUnit').value = m.unit || 'jour';
+            var dr = document.getElementById('macDrill'); if (dr) dr.value = m.drillId || '';
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
         async function stSaveMachine() {
             var id = document.getElementById('macEditId').value;
-            var data = { subcontractorId: document.getElementById('macSub').value, label: document.getElementById('macLabel').value.trim(), model: document.getElementById('macModel').value.trim(), rate: document.getElementById('macRate').value, unit: document.getElementById('macUnit').value };
+            var drEl = document.getElementById('macDrill');
+            var data = { subcontractorId: document.getElementById('macSub').value, label: document.getElementById('macLabel').value.trim(), model: document.getElementById('macModel').value.trim(), rate: document.getElementById('macRate').value, unit: document.getElementById('macUnit').value, drillId: drEl ? drEl.value : '' };
             if (!data.label) { alert('Nom de machine requis.'); return; }
             try { await apiRequest('/soustraitants/machines' + (id ? '/' + id : ''), id ? 'PUT' : 'POST', data); stResetMacForm(); renderSoustraitants(); }
             catch (e) { alert(e.message || 'Erreur.'); }
