@@ -15035,6 +15035,71 @@
             return !!contract && (contract.billRedrill === 1 || contract.billRedrill === true || contract.billRedrill === '1');
         }
 
+        // Déduit le diamètre (mm) du type de bit d'une saisie (ex: "carbure-115" → 115).
+        function bitTypeToDiameterMm(bitType) {
+            if (!bitType) return null;
+            var m = String(bitType).match(/(\d{2,4})/g);
+            if (!m || !m.length) return null;
+            var n = parseInt(m[m.length - 1], 10);
+            return isFinite(n) ? n : null;
+        }
+
+        // Mètres d'une machine sur un mois, ventilés par diamètre (clé = mm, '' si inconnu).
+        function metersByDiameterForDrillInMonth(drillId, monthYYYYMM, includeRedrill) {
+            var out = {};
+            (dailyDataRecords || []).forEach(function(r) {
+                if (isDailyRecordIncompleteDraft(r) || !r.date || r.date.slice(0, 7) !== monthYYYYMM) return;
+                if (!drillIdsMatch(r.machineId, drillId)) return;
+                var data = r.data || {};
+                if (typeof data === 'string') { try { data = JSON.parse(data); } catch (e) { data = {}; } }
+                var m = (parseFloat(data.metersDrilled) || 0) + (includeRedrill ? (parseFloat(data.redrillMeters) || 0) : 0);
+                if (m <= 0) return;
+                var d = bitTypeToDiameterMm(data.bitType);
+                var key = d == null ? '' : String(d);
+                out[key] = (out[key] || 0) + m;
+            });
+            return out;
+        }
+
+        // Lignes de tarif « au mètre » (forage) d'un contrat, tarif > 0.
+        function contractForageRateLines(contract) {
+            return (((contract && contract.rates) || [])).filter(function(r) {
+                if (!r || !(parseFloat(r.rate) > 0)) return false;
+                var info = (typeof getServiceTypeInfo === 'function') ? getServiceTypeInfo(r.serviceType || 'forage') : null;
+                return !info || info.unit === 'per_meter' || info.unit == null;
+            });
+        }
+
+        // Tarif applicable à un diamètre : match exact, sinon ligne sans diamètre (défaut).
+        function findContractRateForDiameter(lines, diameterKey) {
+            if (!lines || !lines.length) return null;
+            if (lines.length === 1) return lines[0];
+            var dk = parseInt(diameterKey, 10);
+            var exact = lines.find(function(r) {
+                var rd = parseInt(r.diameter, 10);
+                return isFinite(rd) && isFinite(dk) && rd === dk;
+            });
+            if (exact) return exact;
+            return lines.find(function(r) { return String(r.diameter == null ? '' : r.diameter).trim() === ''; }) || null;
+        }
+
+        // Revenu (en devise d'affichage) d'une machine selon ses mètres par diamètre.
+        function revenueFromContractByDiameter(contract, metersByDiameter, dispCur) {
+            var res = { amount: 0, unmatched: 0, totalMeters: 0 };
+            if (!contract) return res;
+            var lines = contractForageRateLines(contract);
+            var contractCur = normalizeMoneyCurrency(contract.currency || 'XOF');
+            Object.keys(metersByDiameter).forEach(function(key) {
+                var meters = metersByDiameter[key] || 0;
+                res.totalMeters += meters;
+                var line = findContractRateForDiameter(lines, key);
+                if (!line) { res.unmatched += meters; return; }
+                var lineCur = normalizeMoneyCurrency(line.currency || contractCur);
+                res.amount += convertMoneyAmountToCurrency(meters * (parseFloat(line.rate) || 0), lineCur, dispCur);
+            });
+            return res;
+        }
+
         function estimatedRevenueAmountFromContractMeters(contract, totalMeters) {
             if (!contract || totalMeters <= 0) return 0;
             var rates = (contract.rates || []).filter(function(r) { return r.machineType && parseFloat(r.rate) > 0; });
@@ -17319,16 +17384,15 @@
                         });
                     }
                 }
-                var metersM = sumMetersForDrillInMonth(drill.id, currentMonthKey);
-                if (contractBillsRedrill(contract)) {
-                    metersM += sumRedrillMetersForDrillInMonth(drill.id, currentMonthKey);
-                }
-                var monthRaw = contract ? estimatedRevenueAmountFromContractMeters(contract, metersM) : 0;
-                var ccy = contract ? normalizeMoneyCurrency(contract.currency || 'XOF') : normalizeMoneyCurrency(invCurCompany);
-                var monthDisplay = convertMoneyAmountToCurrency(monthRaw, ccy, dispCur);
+                // Revenu par diamètre : chaque saisie est facturée au tarif du diamètre
+                // de son type de bit. Tarif unique (une seule ligne) = appliqué à tout.
+                var mbd = metersByDiameterForDrillInMonth(drill.id, currentMonthKey, contractBillsRedrill(contract));
+                var rev = contract ? revenueFromContractByDiameter(contract, mbd, dispCur) : { amount: 0, unmatched: 0, totalMeters: 0 };
+                var metersM = Object.keys(mbd).reduce(function(s, k) { return s + (mbd[k] || 0); }, 0);
+                var monthDisplay = rev.amount;
                 var dayDisplay = daysInThisMonth > 0 ? monthDisplay / daysInThisMonth : 0;
                 var weekDisplay = dayDisplay * 7;
-                machineRevenues[drill.id] = { day: dayDisplay, week: weekDisplay, month: monthDisplay, meters: metersM };
+                machineRevenues[drill.id] = { day: dayDisplay, week: weekDisplay, month: monthDisplay, meters: metersM, unmatchedMeters: rev.unmatched };
             });
 
             var sumEstMachinesDisp = drillsToUse.reduce(function(acc, drill) {
