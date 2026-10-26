@@ -280,6 +280,7 @@ const migrations = [
         FOREIGN KEY (planId) REFERENCES drill_plans(id) ON DELETE CASCADE
     )` },
     { name: 'enterprises.claudeApiKey', sql: 'ALTER TABLE enterprises ADD COLUMN claudeApiKey TEXT DEFAULT NULL' },
+    { name: 'contracts.billRedrill', sql: 'ALTER TABLE contracts ADD COLUMN billRedrill INTEGER DEFAULT 0' },
     // Module paiements
     { name: 'payments.table', sql: `CREATE TABLE IF NOT EXISTS payments (
         id TEXT PRIMARY KEY,

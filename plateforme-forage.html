@@ -2337,6 +2337,10 @@
                         <label class="block text-slate-400 mb-3 font-semibold">Tarifs et prestations du contrat</label>
                         <div id="contractRatesContainer" class="space-y-3 mb-3"></div>
                         <button type="button" onclick="addContractRate()" class="ged-btn-primary px-4 py-2 rounded text-sm">+ Ajouter une prestation</button>
+                        <label class="flex items-start gap-2 mt-3 text-sm text-slate-300">
+                            <input type="checkbox" id="contractBillRedrill" class="rounded border-slate-500 mt-0.5">
+                            <span>Facturer les mètres <strong>reforés</strong> (au même tarif que les mètres nouveaux). Décoché : les reforés ne génèrent pas de revenu.</span>
+                        </label>
                     </div>
                     <datalist id="fgmRolesList">
                         <option value="Foreur"><option value="Foreur auxiliaire"><option value="Responsable de la sécurité"><option value="Superviseur"><option value="Chantier de mécanique"><option value="Chef d'équipe"><option value="Mécanicien"><option value="Électricien">
@@ -14121,6 +14125,8 @@
             document.getElementById('contractFuelPrice').value = '1.20';
             var fpcNew = document.getElementById('contractFuelPriceCurrency');
             if (fpcNew) fpcNew.value = 'USD';
+            var brNew = document.getElementById('contractBillRedrill');
+            if (brNew) brNew.checked = false;
 
             renderContractRates();
             renderContractFgm();
@@ -14164,6 +14170,8 @@
             document.getElementById('contractFuelPrice').value = (contract.fuelPrice || 1.20).toFixed(2);
             var fpcEl = document.getElementById('contractFuelPriceCurrency');
             if (fpcEl) fpcEl.value = resolveContractFuelCurrency(contract);
+            var brE = document.getElementById('contractBillRedrill');
+            if (brE) brE.checked = (contract.billRedrill === 1 || contract.billRedrill === true || contract.billRedrill === '1');
             
             contractRates = contract.rates && contract.rates.length > 0 ?
                 JSON.parse(JSON.stringify(contract.rates)) : [];
@@ -14438,7 +14446,8 @@
                 fuelPrice: fuelPrice,
                 fuelPriceCurrency: fuelPriceCurrency,
                 rates: validRates,
-                fgm: validFgm
+                fgm: validFgm,
+                billRedrill: (document.getElementById('contractBillRedrill') && document.getElementById('contractBillRedrill').checked) ? 1 : 0
             };
             
             var linkedDrillEl = document.getElementById('contractLinkedDrill');
@@ -15004,6 +15013,26 @@
                 total += parseFloat(data.metersDrilled) || 0;
             });
             return total;
+        }
+
+        // Mètres reforés d'une machine sur un mois (saisies validées).
+        function sumRedrillMetersForDrillInMonth(drillId, monthYYYYMM) {
+            var total = 0;
+            (dailyDataRecords || []).forEach(function(r) {
+                if (isDailyRecordIncompleteDraft(r) || !r.date || r.date.slice(0, 7) !== monthYYYYMM) return;
+                if (!drillIdsMatch(r.machineId, drillId)) return;
+                var data = r.data || {};
+                if (typeof data === 'string') {
+                    try { data = JSON.parse(data); } catch (e) { data = {}; }
+                }
+                total += parseFloat(data.redrillMeters) || 0;
+            });
+            return total;
+        }
+
+        // Un contrat facture-t-il les mètres reforés ?
+        function contractBillsRedrill(contract) {
+            return !!contract && (contract.billRedrill === 1 || contract.billRedrill === true || contract.billRedrill === '1');
         }
 
         function estimatedRevenueAmountFromContractMeters(contract, totalMeters) {
@@ -17291,6 +17320,9 @@
                     }
                 }
                 var metersM = sumMetersForDrillInMonth(drill.id, currentMonthKey);
+                if (contractBillsRedrill(contract)) {
+                    metersM += sumRedrillMetersForDrillInMonth(drill.id, currentMonthKey);
+                }
                 var monthRaw = contract ? estimatedRevenueAmountFromContractMeters(contract, metersM) : 0;
                 var ccy = contract ? normalizeMoneyCurrency(contract.currency || 'XOF') : normalizeMoneyCurrency(invCurCompany);
                 var monthDisplay = convertMoneyAmountToCurrency(monthRaw, ccy, dispCur);
