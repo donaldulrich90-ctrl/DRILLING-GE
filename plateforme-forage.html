@@ -26591,6 +26591,12 @@
          * Factures : ne pas passer useLocalIfApiEmpty (évite factures « fantômes » après suppression).
          * Si la requête échoue, apiArr est null — repli localStorage comme avant.
          */
+        // Vide uniquement le cache de DONNÉES tenant (pas l'auth ni les préférences UI).
+        function clearTenantLocalCache() {
+            var keys = ['forage_clients', 'forage_drills', 'forage_contracts', 'forage_sites', 'forage_employees', 'forage_assignments', 'forage_invoices', 'forage_inventory', 'forage_dailyDataRecords', 'forage_drillMonthBilling', 'forage_companyInfo', 'forage_companyLogo', 'forage_machineRevenue', 'forage_maintenanceSchedules', 'forage_maintenanceHistory'];
+            keys.forEach(function(k) { try { localStorage.removeItem(k); } catch (e) {} });
+        }
+
         function pickArrayFromApiOrLocalStorage(apiArr, storageKey, mapFn, useLocalIfApiEmpty) {
             useLocalIfApiEmpty = !!useLocalIfApiEmpty;
             if (!allowLocalCache && (!Array.isArray(apiArr) || apiArr.length === 0)) return [];
@@ -26732,6 +26738,23 @@
         async function loadData() {
             try {
                 if (useAPI && window.API) {
+                    // Cloisonnement tenant : si l'entreprise active a changé sur ce
+                    // navigateur, purger le cache local pour éviter qu'il « ressuscite »
+                    // des données (sites, etc.) d'une autre entreprise et les repousse
+                    // au serveur (sites créés sans approbation).
+                    try {
+                        var _entNow = (window.API && window.API.getEnterpriseId) ? window.API.getEnterpriseId() : null;
+                        if (_entNow == null && typeof currentUser !== 'undefined' && currentUser) {
+                            _entNow = currentUser.currentEnterpriseId || currentUser.enterpriseId;
+                        }
+                        var _entKey = String(_entNow == null ? '' : _entNow);
+                        var _cacheOwner = null;
+                        try { _cacheOwner = localStorage.getItem('forage_cache_owner_ent'); } catch (eCo) {}
+                        if (_cacheOwner !== _entKey) {
+                            clearTenantLocalCache();
+                            try { localStorage.setItem('forage_cache_owner_ent', _entKey); } catch (eCo2) {}
+                        }
+                    } catch (eTenant) { /* ignore */ }
                     // Charger depuis l'API
                     try {
                         try {
