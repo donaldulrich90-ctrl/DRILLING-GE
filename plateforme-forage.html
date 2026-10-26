@@ -1549,6 +1549,15 @@
                 <h2 class="text-2xl font-semibold mb-2" data-i18n="view.enterprises_title">Gestion des Entreprises</h2>
                 <p class="text-slate-400 text-sm" data-i18n="view.enterprises_sub">Administrateur général : créer et gérer les entreprises</p>
             </div>
+            <div class="mb-6 ged-content-panel p-4 rounded-xl border border-emerald-700/40">
+                <div class="flex items-center justify-between gap-4 flex-wrap">
+                    <div>
+                        <h3 class="font-semibold text-emerald-300">🛡️ Sécurité des données</h3>
+                        <p class="text-slate-400 text-sm">Téléchargez une sauvegarde complète de la base (toutes les entreprises). Conservez-la en lieu sûr, hors du serveur.</p>
+                    </div>
+                    <button type="button" onclick="downloadDbBackup(this)" class="bg-emerald-600 hover:bg-emerald-700 px-4 py-2 rounded-lg font-semibold whitespace-nowrap">⬇️ Télécharger une sauvegarde</button>
+                </div>
+            </div>
             <div id="enterprisesContent" class="ged-content-panel p-6 rounded-xl"></div>
         </div>
 
@@ -15944,6 +15953,32 @@
                 alert('Erreur : ' + (err.message || err));
             });
         }
+
+        async function downloadDbBackup(btn) {
+            var prev = null;
+            try {
+                if (btn) { prev = btn.textContent; btn.disabled = true; btn.textContent = '⏳ Préparation…'; }
+                var resp = await fetch('/api/admin/db-backup', { headers: { 'Authorization': 'Bearer ' + (window.API && window.API.getAuthToken ? window.API.getAuthToken() : '') } });
+                if (!resp.ok) {
+                    var msg = 'Erreur ' + resp.status;
+                    try { var j = await resp.json(); if (j && j.error) msg = j.error; } catch (e) {}
+                    alert('Sauvegarde impossible : ' + msg);
+                    return;
+                }
+                var blob = await resp.blob();
+                var url = URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                var ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+                a.href = url; a.download = 'sauvegarde_' + ts + '.db';
+                document.body.appendChild(a); a.click(); a.remove();
+                setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+            } catch (e) {
+                alert('Sauvegarde impossible : ' + (e && e.message ? e.message : e));
+            } finally {
+                if (btn) { btn.disabled = false; if (prev != null) btn.textContent = prev; }
+            }
+        }
+        window.downloadDbBackup = downloadDbBackup;
 
         function renderEnterprises() {
             var content = document.getElementById('enterprisesContent');
