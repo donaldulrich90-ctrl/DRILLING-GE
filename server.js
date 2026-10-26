@@ -1729,36 +1729,46 @@ app.post('/api/claude-ai/extract-report', (req, res) => {
                         role: 'user',
                         content: [
                             { type: 'image', source: { type: 'base64', media_type: mime, data: imageBase64 } },
-                            { type: 'text', text: `Analyse cette photo d'un rapport de forage journalier (daily drilling report).
-Extrais TOUTES les données visibles et retourne UNIQUEMENT un objet JSON (sans texte autour) avec les champs suivants (laisse null si non trouvé) :
+                            { type: 'text', text: `Analyse cette photo d'une « Fiche de foration — Opérateur » remplie à la main (daily drilling field sheet).
+
+STRUCTURE DE LA FICHE (repère-toi dessus) :
+- En-tête : « Machine », « Site », « Date » (souvent pré-imprimés en bleu), case « Poste : Jour / Nuit » à cocher, « Opérateur », « Foreur ».
+- Section 1 « Programme du jour & trous forés » : un tableau. Les colonnes « Zone (prévu) », « Trou (prévu) » et « Prof. prévue (m) » sont PRÉ-IMPRIMÉES (le programme) — NE PAS les confondre avec le réalisé. Les colonnes écrites à la main sont « Mètres forés », « Prof. finale (m) », « Début », « Fin », « Observations ».
+  → Pour chaque ligne où l'opérateur a écrit quelque chose : holeId = la valeur de « Trou », meters = « Mètres forés » (la valeur MANUSCRITE, PAS « Prof. prévue »). Ignore les lignes entièrement vides.
+- Section 2 « Compteurs & carburant » : Horamètre début/fin, Heures travaillées, Compteur marteau début/fin, Carburant ajouté (L).
+- Section 3 « Arrêts & pannes » : tableau Motif / Heure début / Heure fin / Durée (h) / Détail. Le motif indique la nature : panne, standby (manque de trous, météo…), service.
+- Section 4 « Changements / consommables » : cases Taillant / Tiges / Huile / Filtre + Détails.
+- Section 5 « Observations générales ».
+
+Extrais TOUTES les données MANUSCRITES visibles et retourne UNIQUEMENT un objet JSON (sans texte autour), null si non trouvé :
 {
   "date": "YYYY-MM-DD",
-  "machineName": "nom ou numéro de la machine",
+  "machineName": "valeur du champ Machine",
   "shift": "day" | "night" | null,
   "drillingType": "exploration" | "production" | "drainage" | "injection" | "geotechnique" | "eau" | "autre" | null,
   "materialType": "FrM" | "TrM" | "OxM" | null,
-  "location": "lieu de forage",
-  "meters": nombre de mètres forés (nouveaux),
-  "redrillMeters": mètres reforés,
-  "hours": heures machine (fonctionnement),
-  "fuelAdded": litres de carburant chargés,
-  "fuelPrice": prix du litre,
-  "counterStart": compteur carburant début,
-  "counterEnd": compteur carburant fin,
-  "hammerStart": compteur marteau début,
-  "hammerEnd": compteur marteau fin,
-  "hoursCounterStart": horamètre début,
-  "hoursCounterEnd": horamètre fin,
-  "bitChanged": true/false,
-  "rodChanged": true/false,
-  "oilChanged": true/false,
-  "filterChanged": true/false,
-  "changesDetails": "détails des changements",
-  "notes": "notes générales ou observations",
-  "holes": [{"holeId": "identifiant du trou", "meters": profondeur forée}],
-  "stoppages": [{"reason": "raison", "duration": heures, "startTime": "HH:MM", "endTime": "HH:MM"}]
+  "location": "Site / lieu de forage",
+  "meters": somme des « Mètres forés » manuscrits (mètres nouveaux),
+  "redrillMeters": mètres reforés si indiqués,
+  "hours": « Heures travaillées » (fonctionnement machine),
+  "fuelAdded": « Carburant ajouté (L) »,
+  "fuelPrice": prix du litre si présent,
+  "counterStart": null,
+  "counterEnd": null,
+  "hammerStart": « Compteur marteau début »,
+  "hammerEnd": « Compteur marteau fin »,
+  "hoursCounterStart": « Horamètre début »,
+  "hoursCounterEnd": « Horamètre fin »,
+  "bitChanged": case Taillant cochée (true/false),
+  "rodChanged": case Tiges cochée,
+  "oilChanged": case Huile cochée,
+  "filterChanged": case Filtre cochée,
+  "changesDetails": "Détails des changements",
+  "notes": "Observations générales",
+  "holes": [{"holeId": "valeur colonne Trou", "meters": valeur MANUSCRITE Mètres forés, "finalDepth": Prof. finale}],
+  "stoppages": [{"reason": "Motif", "duration": Durée en heures, "startTime": "HH:MM", "endTime": "HH:MM", "detail": "Détail"}]
 }
-Sois précis avec les nombres. Si le rapport est manuscrit, fais de ton mieux pour déchiffrer l'écriture. Retourne UNIQUEMENT le JSON.` }
+RÈGLES : n'utilise JAMAIS « Prof. prévue » comme mètres forés (c'est le plan, pas le réalisé). Si une ligne de trou n'a aucune valeur manuscrite, ne l'inclus pas. Sois précis avec les nombres ; déchiffre l'écriture manuscrite au mieux. Retourne UNIQUEMENT le JSON.` }
                         ]
                     }]
                 })

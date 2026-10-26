@@ -18337,6 +18337,16 @@
                 '<button type="button" onclick="exportProductionProgramXlsx()" class="mt-3 w-full bg-teal-600 hover:bg-teal-700 text-white px-4 py-2 rounded-lg font-semibold">⬇️ Exporter en Excel</button>' +
                 '<p class="text-slate-400 text-xs mt-2">Programme = trous encore à forer du plan du site. Production = saisies de la date choisie.</p>' +
                 '</div>' +
+                '<div class="border-t border-slate-600 mt-4 pt-4">' +
+                '<p class="text-cyan-300 text-sm font-semibold mb-2">🖨️ Fiche opérateur à remplir (par machine)</p>' +
+                '<label class="block text-slate-400 mb-1 text-sm">Machine</label>' +
+                '<select id="operatorSheetMachine" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white mb-3 text-sm">' +
+                '<option value="">Toutes les machines du site</option>' +
+                getDrillsForSite().map(function(d) { return '<option value="' + escapeHtml(String(d.id)) + '">' + escapeHtml(String(d.id)) + (d.location ? ' — ' + escapeHtml(d.location) : '') + '</option>'; }).join('') +
+                '</select>' +
+                '<button type="button" onclick="generateOperatorSheets(document.getElementById(\'operatorSheetMachine\').value||null)" class="w-full bg-cyan-700 hover:bg-cyan-600 text-white px-4 py-2 rounded-lg font-semibold">🖨️ Imprimer la fiche opérateur</button>' +
+                '<p class="text-slate-400 text-xs mt-2">Fiche vierge pré-remplie avec le programme du jour, à donner à l\'opérateur. Remplie à la main, elle alimente ensuite « Photo → Rapport ».</p>' +
+                '</div>' +
                 '</div>' +
                 '<div class="ged-content-panel p-6 rounded-xl">' +
                 '<h4 class="text-lg font-bold mb-4">📆 Rapport Hebdomadaire</h4>' +
@@ -18997,6 +19007,164 @@
                     }).catch(function() { alert('Impossible de charger la librairie Excel (connexion internet requise).'); });
                 }).catch(function(e) { alert('Export impossible : ' + (e && e.message ? e.message : e)); });
             }, function() { /* annulé (tenant/site changé) */ });
+        }
+
+        // ============================================================
+        // FICHE OPÉRATEUR À REMPLIR (impression)
+        //  - Une fiche par machine et par poste, pré-remplie avec le
+        //    programme du jour (trous planifiés assignés à la machine).
+        //  - Champs vides à remplir à la main pendant le poste ; sert
+        //    ensuite de support au remplissage auto via « Photo → Rapport ».
+        // ============================================================
+        var OPERATOR_SHEET_CSS = [
+            '*{box-sizing:border-box;}',
+            'html{background:#e9edf2;}body{margin:0;color:#111827;font:12px/1.4 Arial,Helvetica,sans-serif;}',
+            '.op-tools{width:210mm;margin:16px auto 0;display:flex;justify-content:flex-end;gap:8px;}',
+            '.op-tools button{border:1px solid #bac6d4;border-radius:4px;padding:9px 14px;background:#fff;color:#1a2b4b;cursor:pointer;font:600 12px Arial,sans-serif;}',
+            '.op-tools button:first-child{background:#1a2b4b;color:#fff;border-color:#1a2b4b;}',
+            '.op-sheet{width:210mm;min-height:292mm;margin:14px auto;background:#fff;box-shadow:0 4px 24px #1020351a;padding:14mm 13mm;}',
+            '.op-sheet:last-child{margin-bottom:28px;}',
+            '.op-head{display:flex;justify-content:space-between;align-items:center;gap:14px;border-bottom:2px solid #1a2b4b;padding-bottom:10px;}',
+            '.op-head img{max-height:56px;max-width:150px;width:auto;object-fit:contain;}',
+            '.op-head .mid{text-align:center;flex:1;}',
+            '.op-head h1{margin:0;font-size:17px;letter-spacing:.04em;color:#142c49;text-transform:uppercase;}',
+            '.op-head p{margin:3px 0 0;font-size:11px;color:#b45309;font-weight:700;letter-spacing:.06em;}',
+            '.op-fieldline{border-bottom:1px solid #94a3b8;min-height:15px;display:inline-block;flex:1;}',
+            '.op-pre{color:#1d4ed8;font-weight:700;}',
+            '.op-grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px 18px;margin:12px 0;}',
+            '.op-fld{display:flex;align-items:baseline;gap:6px;font-size:12px;}',
+            '.op-fld label{color:#374151;font-weight:700;white-space:nowrap;}',
+            '.op-chk{display:inline-block;width:12px;height:12px;border:1.3px solid #475569;border-radius:2px;vertical-align:-1px;margin-right:4px;}',
+            'h2.op-sec{margin:15px 0 6px;font-size:12px;font-weight:800;color:#fff;background:#1a2b4b;padding:5px 9px;letter-spacing:.03em;}',
+            'table.op-tbl{width:100%;border-collapse:collapse;font-size:11px;}',
+            'table.op-tbl th,table.op-tbl td{border:1px solid #9aa7b5;padding:0;}',
+            'table.op-tbl th{background:#eaf0f6;color:#18324f;font-size:10px;font-weight:700;padding:5px 4px;text-align:center;line-height:1.2;}',
+            'table.op-tbl td{height:25px;text-align:center;}',
+            'table.op-tbl td.pre{background:#f5f9ff;font-weight:700;color:#1d4ed8;}',
+            'table.op-tbl td.prez{background:#f5f9ff;font-weight:700;color:#1e3a5f;}',
+            'table.op-tbl td.prep{background:#f5f9ff;font-weight:700;color:#1d4ed8;text-align:right;padding-right:6px;}',
+            '.op-legend{font-size:10px;color:#64748b;margin:4px 0 0;}',
+            '.op-obs{border:1px solid #9aa7b5;min-height:58px;margin-top:4px;background:repeating-linear-gradient(transparent,transparent 22px,#e2e8f0 23px);}',
+            '.op-sign{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:12px;}',
+            '.op-sign div{border:1px solid #9aa7b5;min-height:66px;padding:6px 8px;font-size:11px;}',
+            '.op-sign .t{font-weight:700;color:#243e5c;margin-bottom:24px;}',
+            '.op-foot{margin-top:12px;display:flex;justify-content:space-between;font-size:9px;color:#94a3b8;border-top:1px solid #cbd5e1;padding-top:6px;}',
+            '@media print{html,body{background:#fff;}.op-tools{display:none!important;}.op-sheet{width:auto;min-height:auto;margin:0;padding:0;box-shadow:none;page-break-after:always;}.op-sheet:last-child{page-break-after:auto;}}',
+            '@page{size:A4 portrait;margin:10mm;}'
+        ].join('');
+
+        function buildOperatorSheetHtml(drill, date, holes) {
+            var site = (drill.siteId != null && typeof sites !== 'undefined') ? (sites || []).find(function(s) { return String(s.id) === String(drill.siteId); }) : null;
+            var siteName = site ? (site.name || site.code || '') : '';
+            var dec = function(v) { return Number(v || 0).toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }); };
+            var subSrc = getSubscriberLogoSrcForReport();
+            var partner = findPartnerClientForReport([]);
+            var partnerSrc = getPartnerClientLogoSrc(partner);
+            var logoStyle = 'max-height:56px;max-width:150px;width:auto;object-fit:contain;';
+            // Programme : trous assignés à cette machine (statut planifié)
+            var list = (holes || []).slice().sort(function(a, b) {
+                return String(a.zone).localeCompare(String(b.zone), 'fr') || String(a.holeId).localeCompare(String(b.holeId), 'fr', { numeric: true });
+            });
+            var MAXROWS = 18;
+            var shown = list.slice(0, MAXROWS);
+            var progRows = shown.map(function(p) {
+                return '<tr><td class="prez">' + escapeHtmlReportCell(p.zone) + '</td><td class="pre">' + escapeHtmlReportCell(p.holeId) + '</td><td class="prep">' + dec(p.plannedDepth) + '</td><td></td><td></td><td></td><td></td><td></td></tr>';
+            }).join('');
+            // Lignes vides pour trous non prévus / complément
+            var blanks = '';
+            var blankCount = Math.max(2, MAXROWS - shown.length > 6 ? 3 : (MAXROWS - shown.length));
+            if (blankCount > 6) blankCount = 6;
+            for (var i = 0; i < blankCount; i++) {
+                blanks += '<tr><td style="color:#94a3b8">(autre)</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>';
+            }
+            var extraNote = list.length > MAXROWS ? '<p class="op-legend">+ ' + (list.length - MAXROWS) + ' autre(s) trou(s) planifié(s) non listé(s) ici (voir la fiche de production).</p>' : '';
+            var progEmptyNote = (list.length === 0) ? '<p class="op-legend">Aucun trou du plan assigné à cette machine — l\'opérateur renseigne les trous forés dans les lignes ci-dessous.</p>' : '';
+
+            return '<div class="op-sheet">' +
+                '<div class="op-head">' +
+                '<img src="' + String(subSrc || '').replace(/"/g, '&quot;') + '" alt="' + escapeHtmlReportCell(getReportBrandSubscriberName()) + '" style="' + logoStyle + '">' +
+                '<div class="mid"><h1>Fiche de foration — Opérateur</h1><p>À REMPLIR PENDANT LE POSTE</p></div>' +
+                '<img src="' + String(partnerSrc || '').replace(/"/g, '&quot;') + '" alt="' + escapeHtmlReportCell(partner && partner.name ? partner.name : 'Client') + '" style="' + logoStyle + '">' +
+                '</div>' +
+                '<div class="op-grid3">' +
+                '<div class="op-fld"><label>Machine :</label><span class="op-fieldline op-pre" style="flex:0 0 auto;min-width:90px;">' + escapeHtmlReportCell(String(drill.id)) + '</span></div>' +
+                '<div class="op-fld"><label>Site :</label><span class="op-fieldline op-pre" style="flex:0 0 auto;min-width:90px;">' + escapeHtmlReportCell(siteName || '—') + '</span></div>' +
+                '<div class="op-fld"><label>Date :</label><span class="op-fieldline op-pre" style="flex:0 0 auto;min-width:90px;">' + escapeHtmlReportCell(formatDate(date)) + '</span></div>' +
+                '</div>' +
+                '<div class="op-grid3">' +
+                '<div class="op-fld"><label>Poste :</label><span><span class="op-chk"></span>Jour&nbsp;&nbsp;<span class="op-chk"></span>Nuit</span></div>' +
+                '<div class="op-fld"><label>Opérateur :</label><span class="op-fieldline"></span></div>' +
+                '<div class="op-fld"><label>Foreur / aide :</label><span class="op-fieldline"></span></div>' +
+                '</div>' +
+                '<h2 class="op-sec">1. Programme du jour &amp; trous forés</h2>' +
+                '<table class="op-tbl"><thead><tr>' +
+                '<th style="width:12%">Zone <span style="color:#1d4ed8">(prévu)</span></th>' +
+                '<th style="width:12%">Trou <span style="color:#1d4ed8">(prévu)</span></th>' +
+                '<th style="width:11%">Prof. prévue (m)</th>' +
+                '<th style="width:12%">Mètres forés</th>' +
+                '<th style="width:12%">Prof. finale (m)</th>' +
+                '<th style="width:10%">Début</th>' +
+                '<th style="width:10%">Fin</th>' +
+                '<th style="width:21%">Observations</th>' +
+                '</tr></thead><tbody>' + progRows + blanks + '</tbody></table>' +
+                progEmptyNote + extraNote +
+                '<p class="op-legend">Colonnes bleues = programme du plan (prévu). L\'opérateur complète les mètres forés, la profondeur finale et les heures.</p>' +
+                '<h2 class="op-sec">2. Compteurs &amp; carburant</h2>' +
+                '<div class="op-grid3">' +
+                '<div class="op-fld"><label>Horamètre début :</label><span class="op-fieldline"></span></div>' +
+                '<div class="op-fld"><label>Horamètre fin :</label><span class="op-fieldline"></span></div>' +
+                '<div class="op-fld"><label>Heures travaillées :</label><span class="op-fieldline"></span></div>' +
+                '<div class="op-fld"><label>Compteur marteau début :</label><span class="op-fieldline"></span></div>' +
+                '<div class="op-fld"><label>Compteur marteau fin :</label><span class="op-fieldline"></span></div>' +
+                '<div class="op-fld"><label>Carburant ajouté (L) :</label><span class="op-fieldline"></span></div>' +
+                '</div>' +
+                '<h2 class="op-sec">3. Arrêts &amp; pannes</h2>' +
+                '<table class="op-tbl"><thead><tr><th style="width:34%">Motif (panne / standby / service)</th><th style="width:13%">Heure début</th><th style="width:13%">Heure fin</th><th style="width:12%">Durée (h)</th><th style="width:28%">Détail / action</th></tr></thead><tbody>' +
+                '<tr><td></td><td></td><td></td><td></td><td></td></tr>'.repeat(3) +
+                '</tbody></table>' +
+                '<p class="op-legend">Précisez bien la nature : <b>panne</b> (machine en panne) vs <b>standby</b> (manque de trous, météo…) — cela change les indicateurs de disponibilité.</p>' +
+                '<h2 class="op-sec">4. Changements / consommables</h2>' +
+                '<div class="op-fld" style="gap:18px;flex-wrap:wrap"><span><span class="op-chk"></span>Taillant</span><span><span class="op-chk"></span>Tiges</span><span><span class="op-chk"></span>Huile</span><span><span class="op-chk"></span>Filtre</span><span style="flex:1"><label>Détails :</label> <span class="op-fieldline"></span></span></div>' +
+                '<h2 class="op-sec">5. Observations générales du poste</h2>' +
+                '<div class="op-obs"></div>' +
+                '<div class="op-sign"><div><div class="t">Opérateur</div>Nom / signature</div><div><div class="t">Chef de poste</div>Nom / signature</div><div><div class="t">Superviseur</div>Nom / signature</div></div>' +
+                '<div class="op-foot"><span>' + escapeHtmlReportCell(getReportBrandSubscriberName()) + (partner && partner.name ? ' — ' + escapeHtmlReportCell(partner.name) : '') + '</span><span>GOOD ENGINEERS · Fiche opérateur · ' + escapeHtmlReportCell(formatDate(date)) + '</span></div>' +
+                '</div>';
+        }
+
+        function buildOperatorSheetsDocument(date, sheetsHtml) {
+            return '<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fiche opérateur — ' + escapeHtmlReportCell(date) + '</title><style>' + OPERATOR_SHEET_CSS + '</style></head><body>' +
+                '<nav class="op-tools"><button type="button" onclick="window.print()">Imprimer / Enregistrer en PDF</button><button type="button" onclick="window.close()">Fermer</button></nav>' +
+                sheetsHtml.join('') +
+                '</body></html>';
+        }
+
+        function generateOperatorSheets(onlyMachineId) {
+            var date = document.getElementById('reportDailyDate').value;
+            if (!date) { alert('Veuillez sélectionner une date.'); return; }
+            var win = window.open('', '_blank');
+            if (!win) { alert('Autorisez l’ouverture de la fenêtre.'); return; }
+            win.document.write('<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Préparation…</title></head><body><p>Préparation de la fiche opérateur…</p></body></html>');
+            win.document.close();
+            collectProductionProgramData(date).then(function(data) {
+                var byMachine = {};
+                (data.program || []).forEach(function(p) { var k = p.machineId || ''; (byMachine[k] = byMachine[k] || []).push(p); });
+                var drills = getDrillsForSite();
+                if (onlyMachineId) drills = drills.filter(function(d) { return String(d.id) === String(onlyMachineId); });
+                if (!drills.length) {
+                    win.document.open();
+                    win.document.write('<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Fiche opérateur</title></head><body style="font-family:Arial;padding:24px"><p>Aucune machine pour ce site.</p></body></html>');
+                    win.document.close();
+                    return;
+                }
+                var sheets = drills.map(function(d) { return buildOperatorSheetHtml(d, date, byMachine[d.id] || []); });
+                win.document.open();
+                win.document.write(buildOperatorSheetsDocument(date, sheets));
+                win.document.close();
+            }).catch(function(e) {
+                if (!win.closed) win.close();
+                alert('Fiche opérateur non générée : ' + (e && e.message ? e.message : e));
+            });
         }
 
         // Le rapport utilise le plan enregistré, jamais un brouillon de Planification.
