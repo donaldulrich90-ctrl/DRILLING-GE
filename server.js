@@ -9,7 +9,7 @@ const https = require('https');
 const zlib = require('zlib');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
-const { getDb, backup, DB_PATH } = require('./db');
+const { getDb, backup, DB_PATH, BACKUP_DIR } = require('./db');
 const { verifyAuth, requirePlatformAdmin } = require('./middleware/saas-auth');
 const planRoles = require('./plan-roles');
 const { ensureDailyDataRecordsSchema } = require('./ensure-daily-data-schema');
@@ -116,6 +116,29 @@ if (!fs.existsSync(DB_PATH)) {
     console.log('⚠️ Base de données non trouvée. Exécutez: npm run init-db');
 }
 const db = getDb();
+
+// --- Filet de sécurité : sauvegarde automatique au démarrage + rotation ---
+// Désactivable avec AUTO_BACKUP=off. Conserve les BACKUP_KEEP dernières (def. 30).
+(function autoBackupOnStartup() {
+    if (String(process.env.AUTO_BACKUP || '').toLowerCase() === 'off') return;
+    try {
+        if (!fs.existsSync(DB_PATH)) return;
+        const keep = parseInt(process.env.BACKUP_KEEP, 10) > 0 ? parseInt(process.env.BACKUP_KEEP, 10) : 30;
+        setTimeout(function () {
+            backup().then(function () {
+                try {
+                    const files = fs.readdirSync(BACKUP_DIR)
+                        .filter(function (f) { return /^database_.*\.db$/.test(f); })
+                        .sort();
+                    const excess = files.length - keep;
+                    for (let i = 0; i < excess; i++) {
+                        try { fs.unlinkSync(path.join(BACKUP_DIR, files[i])); } catch (e) {}
+                    }
+                } catch (e) {}
+            }).catch(function (e) { console.warn('Sauvegarde au démarrage échouée:', e.message); });
+        }, 3000);
+    } catch (e) { console.warn('Auto-backup:', e.message); }
+})();
 
 /** siteIds en JSON dans la BDD → tableau d’identifiants numériques */
 function parseUserSiteIds(raw) {
@@ -1900,6 +1923,23 @@ app.put('/api/enterprises/:id/claude-key', (req, res) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json({ message: key ? 'Clé API sauvegardée' : 'Clé API supprimée' });
     });
+});
+
+// ============================================
+// SÉCURITÉ DES DONNÉES — sauvegarde téléchargeable (propriétaire plateforme)
+// Crée une sauvegarde fraîche de la base et la renvoie en téléchargement.
+// Réservé au super_admin / propriétaire plateforme (contient toutes les entreprises).
+// ============================================
+app.get('/api/admin/db-backup', (req, res) => {
+    if (!req.auth || !(req.auth.isSuperAdmin || req.auth.isPlatformOwner)) {
+        return res.status(403).json({ error: 'Réservé au propriétaire de la plateforme.' });
+    }
+    backup().then((backupPath) => {
+        const name = 'sauvegarde_' + new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19) + '.db';
+        res.download(backupPath, name, (err) => {
+            if (err && !res.headersSent) res.status(500).json({ error: 'Téléchargement impossible.' });
+        });
+    }).catch((e) => res.status(500).json({ error: 'Sauvegarde impossible : ' + e.message }));
 });
 
 // ============================================
