@@ -221,6 +221,7 @@ db.serialize(() => {
             fuelPriceCurrency TEXT DEFAULT NULL,
             rates TEXT DEFAULT '[]',
             fgm TEXT DEFAULT '[]',
+            billRedrill INTEGER DEFAULT 0,
             createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (enterpriseId) REFERENCES enterprises(id),
             FOREIGN KEY (clientId) REFERENCES clients(id),
