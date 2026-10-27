@@ -1943,6 +1943,70 @@ app.get('/api/admin/db-backup', (req, res) => {
 });
 
 // ============================================
+// PATTERNS (photo hachurée par fosse/zone et par jour)
+// ============================================
+db.run(`CREATE TABLE IF NOT EXISTS pattern_photos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    enterpriseId INTEGER NOT NULL DEFAULT 1,
+    siteId INTEGER,
+    date TEXT NOT NULL,
+    zone TEXT NOT NULL DEFAULT '',
+    image TEXT NOT NULL,
+    source TEXT DEFAULT 'photo',
+    createdAt TEXT DEFAULT CURRENT_TIMESTAMP
+)`, (e) => { if (e) console.warn('pattern_photos:', e.message); });
+
+app.get('/api/pattern-photos', (req, res) => {
+    const entId = getEnterpriseId(req);
+    const { date, siteId } = req.query;
+    let sql = 'SELECT id, enterpriseId, siteId, date, zone, image, source, createdAt FROM pattern_photos WHERE 1=1';
+    const params = [];
+    if (entId !== null) { sql += ' AND enterpriseId = ?'; params.push(entId); }
+    if (date) { sql += ' AND date = ?'; params.push(date); }
+    if (siteId !== undefined && siteId !== '' && siteId !== 'null') { sql += ' AND siteId = ?'; params.push(parseInt(siteId, 10)); }
+    sql += ' ORDER BY zone';
+    db.all(sql, params, (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(rows || []);
+    });
+});
+
+app.post('/api/pattern-photos', (req, res) => {
+    const entId = getEnterpriseId(req);
+    const b = req.body || {};
+    const date = (b.date || '').slice(0, 10);
+    const zone = (b.zone == null ? '' : String(b.zone)).trim().slice(0, 160);
+    const image = typeof b.image === 'string' ? b.image : '';
+    const source = b.source === 'auto' ? 'auto' : 'photo';
+    const siteId = (b.siteId === '' || b.siteId == null) ? null : parseInt(b.siteId, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'Date AAAA-MM-JJ requise' });
+    if (!zone) return res.status(400).json({ error: 'Zone / fosse requise' });
+    if (!image || !/^data:image\//.test(image)) return res.status(400).json({ error: 'Image requise (format data:image)' });
+    if (image.length > 5000000) return res.status(400).json({ error: 'Image trop lourde (réduisez-la).' });
+    const entVal = entId == null ? 1 : entId;
+    // Un seul pattern par (entreprise, site, date, zone) : on remplace l'existant.
+    db.run('DELETE FROM pattern_photos WHERE enterpriseId = ? AND date = ? AND zone = ? AND IFNULL(siteId,-1) = IFNULL(?,-1)',
+        [entVal, date, zone, siteId], () => {
+            db.run('INSERT INTO pattern_photos (enterpriseId, siteId, date, zone, image, source) VALUES (?,?,?,?,?,?)',
+                [entVal, siteId, date, zone, image, source], function (err) {
+                    if (err) return res.status(500).json({ error: err.message });
+                    res.json({ id: this.lastID, message: 'Pattern enregistré' });
+                });
+        });
+});
+
+app.delete('/api/pattern-photos/:id', (req, res) => {
+    const entId = getEnterpriseId(req);
+    let sql = 'DELETE FROM pattern_photos WHERE id = ?';
+    const params = [parseInt(req.params.id, 10)];
+    if (entId !== null) { sql += ' AND enterpriseId = ?'; params.push(entId); }
+    db.run(sql, params, function (err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ ok: true, changes: this.changes });
+    });
+});
+
+// ============================================
 // ROUTES API - SITES
 // ============================================
 app.get('/api/sites', (req, res) => {

@@ -18647,6 +18647,18 @@
                 '<button type="button" onclick="generateOperatorSheets(document.getElementById(\'operatorSheetMachine\').value||null)" class="w-full bg-cyan-700 hover:bg-cyan-600 text-white px-4 py-2 rounded-lg font-semibold">🖨️ Imprimer la fiche opérateur</button>' +
                 '<p class="text-slate-400 text-xs mt-2">Fiche vierge pré-remplie avec le programme du jour, à donner à l\'opérateur. Remplie à la main, elle alimente ensuite « Photo → Rapport ».</p>' +
                 '</div>' +
+                '<div class="border-t border-slate-600 mt-4 pt-4">' +
+                '<p class="text-yellow-300 text-sm font-semibold mb-2">🗺️ Plan hachuré des patterns (1 photo / fosse / jour)</p>' +
+                '<label class="block text-slate-400 mb-1 text-sm">Fosse / zone</label>' +
+                '<input type="text" id="patternZone" list="patternZoneList" placeholder="Ex. Fosse Nord — Zone A" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white mb-2 text-sm">' +
+                '<datalist id="patternZoneList">' + (typeof renderFossesDatalist === 'function' && typeof currentSiteId !== 'undefined' ? '' : '') + '</datalist>' +
+                '<div class="flex gap-2 mb-2">' +
+                '<label class="flex-1 bg-yellow-600 hover:bg-yellow-500 text-black text-center px-3 py-2 rounded-lg font-semibold text-sm cursor-pointer">📷 Importer une photo<input type="file" id="patternFile" accept="image/*" onchange="uploadPatternPhoto()" class="hidden"></label>' +
+                '<button type="button" onclick="generateAutoPattern()" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded-lg font-semibold text-sm">🎨 Générer auto</button>' +
+                '</div>' +
+                '<div id="patternListContainer" class="grid grid-cols-2 gap-2 mt-2"></div>' +
+                '<p class="text-slate-400 text-xs mt-2">Une photo par fosse et par jour, reprise dans le rapport détaillé et le PowerPoint. Le hachurage auto nécessite les coordonnées (x/y) des trous dans la planification.</p>' +
+                '</div>' +
                 '</div>' +
                 '<div class="ged-content-panel p-6 rounded-xl">' +
                 '<h4 class="text-lg font-bold mb-4">📆 Rapport Hebdomadaire</h4>' +
@@ -18776,6 +18788,7 @@
             
             content.innerHTML = html;
             try { renderDrillingReportCharts(); } catch (chartErr) { console.warn('Graphiques drilling:', chartErr); }
+            try { initPatternPanel(); } catch (patErr) { console.warn('Panneau patterns:', patErr); }
             } catch (err) {
                 console.error('Erreur renderReports:', err);
                 content.innerHTML = '<div class="p-6 text-center"><p class="text-red-400 mb-4">Une erreur s\'est produite lors du chargement des rapports.</p><p class="text-slate-400 text-sm">' + (err.message || '') + '</p><button onclick="renderReports()" class="mt-4 ged-btn-primary px-4 py-2 rounded-lg">Réessayer</button></div>';
@@ -19010,6 +19023,118 @@
             return totalMeters.toFixed(1) + ' m | ' + totalFuel.toFixed(1) + ' L | ' + totalHours.toFixed(1) + ' h' + (tail !== '—' ? ' · ' + tail : '');
         }
 
+        // ===== Patterns hachurés (photo par fosse/zone/jour + hachurage auto) =====
+        function patAuthH() { return { 'Authorization': 'Bearer ' + (window.API && window.API.getAuthToken ? window.API.getAuthToken() : '') }; }
+        var reportPatternsByZone = {};
+        function loadReportPatterns(date, cb) {
+            reportPatternsByZone = {};
+            var sid = (typeof currentSiteId !== 'undefined' && currentSiteId != null) ? currentSiteId : '';
+            try {
+                fetch('/api/pattern-photos?date=' + encodeURIComponent(date) + (sid !== '' ? '&siteId=' + encodeURIComponent(sid) : ''), { headers: patAuthH() })
+                    .then(function (r) { return r.ok ? r.json() : []; })
+                    .then(function (list) { (list || []).forEach(function (p) { reportPatternsByZone[String(p.zone || '').trim().toLowerCase()] = { image: p.image, source: p.source, zone: p.zone }; }); cb && cb(); })
+                    .catch(function () { cb && cb(); });
+            } catch (e) { cb && cb(); }
+        }
+        function downscaleImageFile(file, maxDim, quality) {
+            return new Promise(function (resolve, reject) {
+                var img = new Image();
+                img.onload = function () {
+                    var w = img.width, h = img.height, md = maxDim || 1400;
+                    if (w > md || h > md) { if (w >= h) { h = Math.round(h * md / w); w = md; } else { w = Math.round(w * md / h); h = md; } }
+                    var cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+                    var ctx = cv.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h); ctx.drawImage(img, 0, 0, w, h);
+                    try { resolve(cv.toDataURL('image/jpeg', quality || 0.82)); } catch (e) { reject(e); }
+                };
+                img.onerror = reject;
+                var fr = new FileReader(); fr.onload = function () { img.src = fr.result; }; fr.onerror = reject; fr.readAsDataURL(file);
+            });
+        }
+        function uploadPatternPhoto() {
+            var fileEl = document.getElementById('patternFile'); var file = fileEl && fileEl.files && fileEl.files[0];
+            if (!file) return;
+            var date = document.getElementById('reportDailyDate').value;
+            var zone = ((document.getElementById('patternZone') || {}).value || '').trim();
+            if (!date) { alert('Choisissez la date du rapport ci-dessus.'); return; }
+            if (!zone) { alert('Indiquez la fosse / zone.'); if (fileEl) fileEl.value = ''; return; }
+            downscaleImageFile(file, 1400, 0.82).then(function (dataUrl) {
+                return fetch('/api/pattern-photos', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, patAuthH()), body: JSON.stringify({ date: date, zone: zone, siteId: (currentSiteId != null ? currentSiteId : ''), image: dataUrl, source: 'photo' }) });
+            }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+                .then(function (res) { if (!res.ok) alert('Enregistrement impossible : ' + ((res.d && res.d.error) || '')); renderPatternList(); })
+                .catch(function (e) { alert('Erreur : ' + (e && e.message ? e.message : e)); })
+                .then(function () { if (fileEl) fileEl.value = ''; });
+        }
+        function renderPatternList() {
+            var c = document.getElementById('patternListContainer'); if (!c) return;
+            var date = document.getElementById('reportDailyDate').value;
+            if (!date) { c.innerHTML = '<p class="text-slate-500 text-xs col-span-2">Choisissez une date.</p>'; return; }
+            var sid = (currentSiteId != null ? currentSiteId : '');
+            c.innerHTML = '<p class="text-slate-500 text-xs col-span-2">Chargement…</p>';
+            fetch('/api/pattern-photos?date=' + encodeURIComponent(date) + (sid !== '' ? '&siteId=' + encodeURIComponent(sid) : ''), { headers: patAuthH() })
+                .then(function (r) { return r.ok ? r.json() : []; })
+                .then(function (list) {
+                    if (!list || !list.length) { c.innerHTML = '<p class="text-slate-500 text-xs col-span-2">Aucun pattern pour cette date.</p>'; return; }
+                    c.innerHTML = list.map(function (p) {
+                        return '<div class="bg-slate-800 border border-slate-700 rounded p-2 text-xs"><div class="flex justify-between items-center mb-1"><span class="font-semibold">' + escapeHtml(p.zone || '—') + ' <span class="text-slate-500">(' + (p.source === 'auto' ? 'auto' : 'photo') + ')</span></span><button onclick="deletePattern(' + p.id + ')" class="text-red-400" title="Supprimer">🗑</button></div><img src="' + p.image + '" style="width:100%;border-radius:3px"></div>';
+                    }).join('');
+                }).catch(function () { c.innerHTML = '<p class="text-red-400 text-xs col-span-2">Erreur de chargement.</p>'; });
+        }
+        function deletePattern(id) { if (!confirm('Supprimer ce pattern ?')) return; fetch('/api/pattern-photos/' + id, { method: 'DELETE', headers: patAuthH() }).then(function () { renderPatternList(); }).catch(function () { renderPatternList(); }); }
+        function drawPatternCanvas(holes) {
+            var xs = holes.map(function (h) { return parseFloat(h.x) || 0; }), ys = holes.map(function (h) { return parseFloat(h.y) || 0; });
+            var minX = Math.min.apply(null, xs), maxX = Math.max.apply(null, xs), minY = Math.min.apply(null, ys), maxY = Math.max.apply(null, ys);
+            var spanX = (maxX - minX) || 1, spanY = (maxY - minY) || 1;
+            var W = 900, H = Math.max(300, Math.min(900, Math.round(900 * spanY / spanX)));
+            var pad = 40, r = Math.max(5, Math.min(16, 320 / Math.sqrt(holes.length + 1)));
+            var cv = document.createElement('canvas'); cv.width = W; cv.height = H; var ctx = cv.getContext('2d');
+            ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
+            function sx(x) { return pad + (x - minX) / spanX * (W - 2 * pad); }
+            function sy(y) { return pad + (y - minY) / spanY * (H - 2 * pad); }
+            holes.forEach(function (h) {
+                var x = sx(parseFloat(h.x) || 0), y = sy(parseFloat(h.y) || 0), st = (h.status || 'planned');
+                ctx.beginPath(); ctx.arc(x, y, r, 0, 2 * Math.PI);
+                if (st === 'drilled') { ctx.fillStyle = '#1d4ed8'; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = '#0f2d7d'; ctx.stroke(); }
+                else if (st === 'redrilled') { ctx.fillStyle = '#ede9fe'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = '#7c3aed'; ctx.stroke(); }
+                else if (st === 'abandoned') { ctx.fillStyle = '#fee2e2'; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = '#dc2626'; ctx.stroke(); ctx.beginPath(); ctx.moveTo(x - r * 0.6, y - r * 0.6); ctx.lineTo(x + r * 0.6, y + r * 0.6); ctx.moveTo(x + r * 0.6, y - r * 0.6); ctx.lineTo(x - r * 0.6, y + r * 0.6); ctx.stroke(); }
+                else { ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = '#94a3b8'; ctx.stroke(); }
+            });
+            return cv.toDataURL('image/png');
+        }
+        function generateAutoPattern() {
+            var date = document.getElementById('reportDailyDate').value;
+            var zone = ((document.getElementById('patternZone') || {}).value || '').trim();
+            if (!date) { alert('Choisissez la date.'); return; }
+            if (!zone) { alert('Indiquez la fosse / zone à dessiner.'); return; }
+            fetch('/api/drill-plans', { headers: patAuthH() }).then(function (r) { return r.json(); }).then(function (plans) {
+                plans = Array.isArray(plans) ? plans : [];
+                if (currentSiteId != null) plans = plans.filter(function (p) { return String(p.siteId) === String(currentSiteId); });
+                if (!plans.length) { alert('Aucun plan pour ce site.'); return; }
+                var all = [], chain = Promise.resolve();
+                plans.forEach(function (pl) { chain = chain.then(function () { return fetch('/api/drill-plans/' + pl.id + '/full', { headers: patAuthH() }).then(function (r) { return r.ok ? r.json() : null; }).then(function (full) { if (full && full.holes) all = all.concat(full.holes); }); }); });
+                chain.then(function () {
+                    var holes = all.filter(function (h) { return String(h.zone || '').trim().toLowerCase() === zone.toLowerCase() || String(h.blockId || '').trim().toLowerCase() === zone.toLowerCase(); });
+                    if (!holes.length) holes = all;
+                    if (!holes.length) { alert('Aucun trou dans le plan.'); return; }
+                    var hasCoords = holes.some(function (h) { return (parseFloat(h.x) || 0) !== 0 || (parseFloat(h.y) || 0) !== 0; });
+                    if (!hasCoords) { alert('Les trous du plan n\'ont pas encore de coordonnées (x/y). Ajoutez-les dans Planification, ou importez une photo.'); return; }
+                    var dataUrl = drawPatternCanvas(holes);
+                    fetch('/api/pattern-photos', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, patAuthH()), body: JSON.stringify({ date: date, zone: zone, siteId: (currentSiteId != null ? currentSiteId : ''), image: dataUrl, source: 'auto' }) })
+                        .then(function () { renderPatternList(); alert('Pattern généré automatiquement.'); });
+                });
+            }).catch(function (e) { alert('Erreur : ' + (e && e.message ? e.message : e)); });
+        }
+        function initPatternPanel() {
+            var dl = document.getElementById('patternZoneList');
+            if (dl) {
+                var names = (typeof getFossesForSite === 'function') ? getFossesForSite(typeof currentSiteId !== 'undefined' ? currentSiteId : null) : [];
+                dl.innerHTML = (names || []).map(function (n) { return '<option value="' + (typeof escapeHtmlForAttr === 'function' ? escapeHtmlForAttr(n) : n) + '"></option>'; }).join('');
+            }
+            var dateEl = document.getElementById('reportDailyDate');
+            if (dateEl && !dateEl._patternHooked) { dateEl.addEventListener('change', function () { renderPatternList(); }); dateEl._patternHooked = true; }
+            renderPatternList();
+        }
+        window.uploadPatternPhoto = uploadPatternPhoto; window.renderPatternList = renderPatternList; window.deletePattern = deletePattern; window.generateAutoPattern = generateAutoPattern; window.initPatternPanel = initPatternPanel;
+
         function generateDailyReport(detailed) {
             var date = document.getElementById('reportDailyDate').value;
             if (!date) {
@@ -19037,8 +19162,10 @@
             }
             reportWindow.document.write('<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Préparation du rapport</title></head><body><p>Préparation du rapport journalier…</p></body></html>');
             reportWindow.document.close();
-            ensureReportPlanLoaded(function() { printDailyReport(date, records, reportWindow, buildDailyReportDocumentHtml(date, records, detailed === true)); }, function() {
-                if (!reportWindow.closed) reportWindow.close();
+            loadReportPatterns(date, function() {
+                ensureReportPlanLoaded(function() { printDailyReport(date, records, reportWindow, buildDailyReportDocumentHtml(date, records, detailed === true)); }, function() {
+                    if (!reportWindow.closed) reportWindow.close();
+                });
             });
         }
 
@@ -19318,10 +19445,12 @@
             var records = getDailyDataForSite().filter(function (r) { return r.date === date && !isDailyRecordIncompleteDraft(r); });
             if (!records.length) { alert('Aucune saisie terminée pour cette date.'); return; }
             ensureReportPlanLoaded(function () {
-                loadVendorScript('vendor/pptxgen.bundle.js', 'https://cdnjs.cloudflare.com/ajax/libs/pptxgenjs/3.12.0/pptxgen.bundle.js').then(function () {
-                    try { buildDailyReportPptx(date, records); }
-                    catch (e) { alert('Export PowerPoint impossible : ' + (e && e.message ? e.message : e)); }
-                }).catch(function () { alert('Impossible de charger la librairie PowerPoint (connexion internet requise).'); });
+                loadReportPatterns(date, function () {
+                    loadVendorScript('vendor/pptxgen.bundle.js', 'https://cdnjs.cloudflare.com/ajax/libs/pptxgenjs/3.12.0/pptxgen.bundle.js').then(function () {
+                        try { buildDailyReportPptx(date, records); }
+                        catch (e) { alert('Export PowerPoint impossible : ' + (e && e.message ? e.message : e)); }
+                    }).catch(function () { alert('Impossible de charger la librairie PowerPoint (connexion internet requise).'); });
+                });
             }, function () { /* annulé */ });
         }
 
@@ -19456,8 +19585,17 @@
                 var lrows = locKeys.map(function (k) { var L = locAgg[k]; var nh = Object.keys(L.holes).length; tM += L.meters; tR += L.redrill; tH += L.hours; tHoles += nh; var rend = L.hours > 0 ? L.meters / L.hours : null; return [k, String(nh), dec(L.meters), dec(L.redrill), rend != null ? dec(rend, 2) : '—', Object.keys(L.machines).join(', ')]; });
                 table(sL, ['Lieu / fosse', 'Trous', 'Nouveau (m)', 'Reforés (m)', 'Rend. (m/h)', 'Machine(s)'], lrows,
                     ['Total', String(tHoles), dec(tM), dec(tR), dec(tH > 0 ? tM / tH : null, 2), '']);
-                sL.addText('Note : un visuel du pattern hachuré (auto ou photo importée) sera ajouté par lieu une fois les coordonnées de trous / la photo disponibles.', { x: 0.5, y: 6.5, w: 12.3, h: 0.4, fontSize: 10, italic: true, color: '999999' });
             }
+            // 6c — Plans hachurés des patterns (une diapo par fosse/zone)
+            try {
+                var patMap = (typeof reportPatternsByZone === 'object' && reportPatternsByZone) ? reportPatternsByZone : {};
+                Object.keys(patMap).forEach(function (zk) {
+                    var p = patMap[zk]; if (!p || !p.image) return;
+                    var sp = pptx.addSlide(); slideTitle(sp, 'Plan hachuré — ' + (p.zone || ''));
+                    try { sp.addImage({ data: p.image, x: 0.6, y: 1.5, w: 12.1, h: 5.4, sizing: { type: 'contain', w: 12.1, h: 5.4 } }); } catch (ei) {}
+                    sp.addText((p.source === 'auto' ? 'Hachurage automatique (coordonnées du plan)' : 'Photo importée du pattern foré'), { x: 0.6, y: 7.0, w: 12.1, h: 0.35, fontSize: 10, italic: true, color: GRAY });
+                });
+            } catch (ep) {}
 
             // 7 — Pannes & observations
             var s7 = pptx.addSlide(); slideTitle(s7, 'Pannes, observations & changements');
@@ -20182,10 +20320,19 @@
                 var rend = L.hours > 0 ? L.meters / L.hours : null;
                 return '<tr><td class="machine-cell">' + escapeHtmlReportCell(k) + '</td><td class="r-num">' + nh + '</td><td class="r-num">' + dec(L.meters) + '</td><td class="r-num">' + dec(L.redrill) + '</td><td class="r-num">' + (rend != null ? dec(rend, 2) : '—') + '</td><td>' + escapeHtmlReportCell(Object.keys(L.machines).join(', ')) + '</td></tr>';
             }).join('');
+            var patternsHtml = '';
+            try {
+                var pats = (typeof reportPatternsByZone === 'object' && reportPatternsByZone) ? reportPatternsByZone : {};
+                var patCards = Object.keys(pats).map(function (zk) {
+                    var p = pats[zk]; if (!p || !p.image) return '';
+                    return '<figure class="pattern-fig"><img src="' + p.image + '" alt="Pattern ' + escapeHtmlReportCell(p.zone || '') + '"><figcaption>' + escapeHtmlReportCell(p.zone || '') + ' <span class="pattern-src">(' + (p.source === 'auto' ? 'hachurage auto' : 'photo') + ')</span></figcaption></figure>';
+                }).filter(Boolean).join('');
+                if (patCards) patternsHtml = '<h3 class="daily-subtitle">Plan hachuré des patterns forés</h3><div class="pattern-grid">' + patCards + '</div>';
+            } catch (e) {}
             return '<h3 class="daily-subtitle">Production &amp; performance par lieu foré</h3>' +
                 '<table class="daily-table"><thead><tr><th class="machine-cell">Lieu / fosse</th><th class="r-num">Trous</th><th class="r-num">Nouveau (m)</th><th class="r-num">Reforés (m)</th><th class="r-num">Rendement (m/h)</th><th>Machine(s)</th></tr></thead><tbody>' +
                 rows + '<tr class="total"><td>Total</td><td class="r-num">' + tHoles + '</td><td class="r-num">' + dec(tM) + '</td><td class="r-num">' + dec(tR) + '</td><td class="r-num">' + dec(tH > 0 ? tM / tH : null, 2) + '</td><td></td></tr>' +
-                '</tbody></table>';
+                '</tbody></table>' + patternsHtml;
         }
 
         var DAILY_REPORT_PRINT_CSS = [
@@ -20228,6 +20375,11 @@
             '.daily-section-04 table th:nth-child(1){width:14%;}.daily-section-04 table th:nth-child(2){width:22%;}.daily-section-04 table th:nth-child(3){width:22%;}.daily-section-04 table th:nth-child(4){width:42%;}',
             '.daily-section-05 table th:nth-child(1){width:24%;}.daily-section-05 table th:nth-child(2){width:20%;}.daily-section-05 table th:nth-child(3){width:22%;}.daily-section-05 table th:nth-child(4){width:34%;}',
             '.daily-table-note{margin:5px 0 0;font-size:9.5px;line-height:1.45;color:#5a6b7c;}',
+            '.pattern-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:4px 0 6px;}',
+            '.pattern-fig{margin:0;border:1px solid #c8d3df;background:#fff;padding:6px;break-inside:avoid;page-break-inside:avoid;}',
+            '.pattern-fig img{display:block;width:100%;height:auto;max-height:420px;object-fit:contain;}',
+            '.pattern-fig figcaption{margin-top:5px;font-size:10px;font-weight:700;color:#243e5c;text-align:center;}',
+            '.pattern-fig .pattern-src{font-weight:400;color:#5a6b7c;}',
             '.daily-section .summary{margin:0;padding:10px 12px;min-height:55px;background:#f7f9fb;border:1px solid #d8e1ea;border-left:3px solid #aabbd0;text-align:left;white-space:pre-line;overflow-wrap:anywhere;}',
             '.daily-signatures{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border:1px solid #c8d3df;break-inside:avoid;page-break-inside:avoid;}',
             '.daily-signature{padding:10px;min-height:108px;border-right:1px solid #c8d3df;}.daily-signature:last-child{border-right:0;}',
