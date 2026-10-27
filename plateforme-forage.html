@@ -19326,99 +19326,160 @@
         }
 
         function buildDailyReportPptx(date, records) {
-            var pptx = new PptxGenJS();
-            pptx.layout = 'LAYOUT_WIDE'; // 13.33 x 7.5 in
-            var NAVY = '1A2B4B', BLUE = '1D4ED8', GRAY = '475569', LIGHT = 'F3F6F9';
+            var pptx = new PptxGenJS(); pptx.layout = 'LAYOUT_WIDE';
+            // Charte Caterpillar — jaune & noir
+            var BLACK = '141414', CAT = 'FFCD11', LIGHT = 'F5F5F2', GRAY = '555555', LINE = 'E4E2DA';
             var company = getReportBrandSubscriberName();
             var projectLabel = getReportProjectLabel(records);
             var dec = function (v, d) { if (v == null || !isFinite(Number(v))) return 'N/A'; return Number(v).toLocaleString('fr-FR', { minimumFractionDigits: d == null ? 1 : d, maximumFractionDigits: d == null ? 1 : d }); };
 
-            var totals = { scheduled: 0, usedHours: 0, productiveHours: 0, production: 0, redrill: 0, bdn: 0, stb: 0, gsa: 0, prd: 0, other: 0, fuel: 0 };
-            var wAvail = { sum: 0, h: 0 }, machineRows = [], stopRows = [];
+            var totals = { scheduled: 0, usedHours: 0, productiveHours: 0, production: 0, redrill: 0, bdn: 0, stb: 0, gsa: 0, prd: 0, other: 0, fuel: 0, smu: 0 };
+            var wAvail = { sum: 0, h: 0 }, machineRows = [], counterRows = [], stopRows = [];
+            var holesAgg = {}, pannes = [], obsList = [], changes = [];
             records.forEach(function (r) {
                 var d = _rpData(r), m = computeOperationalReportMetrics(d);
+                var name = (_rpMachineName(r) || 'N.R.') + (getShiftLabelForReport(d.shift) ? ' / ' + getShiftLabelForReport(d.shift) : '');
                 totals.scheduled += m.scheduled || 0; totals.usedHours += m.usedHours || 0; totals.productiveHours += m.productiveHours || 0;
                 totals.production += m.production || 0; totals.redrill += (m.redrillM || 0);
-                totals.bdn += m.bdn || 0; totals.stb += m.stb || 0; totals.gsa += m.gsa || 0; totals.prd += m.prd || 0; totals.other += m.other || 0; totals.fuel += m.fuel || 0;
+                totals.bdn += m.bdn || 0; totals.stb += m.stb || 0; totals.gsa += m.gsa || 0; totals.prd += m.prd || 0; totals.other += m.other || 0;
+                totals.fuel += m.fuel || 0; totals.smu += m.smuHours || 0;
                 if (m.scheduled > 0 && m.mechAvail != null) { wAvail.sum += m.mechAvail * m.scheduled; wAvail.h += m.scheduled; }
-                var name = (_rpMachineName(r) || 'N.R.') + (getShiftLabelForReport(d.shift) ? ' / ' + getShiftLabelForReport(d.shift) : '');
                 machineRows.push([name, dec(m.scheduled), dec(m.usedHours), dec(m.productiveHours), dec(m.production), dec(m.productivity, 2), dec(m.mechAvail)]);
-                var st = m.bdn + m.stb + m.gsa + m.prd + m.other;
-                stopRows.push([name, dec(m.bdn), dec(m.stb), dec(m.gsa), dec(m.prd), dec(m.other), dec(st)]);
-            });
-            var planned = getReportPlannedProduction(date, records);
-            var goal = planned && planned.value;
-            var avail = wAvail.h > 0 ? wAvail.sum / wAvail.h : null;
-            var taux = (goal != null && goal > 0) ? (totals.production / goal * 100) : null;
-
-            function slideTitle(s, t) {
-                s.addText(t, { x: 0.5, y: 0.35, w: 12.3, h: 0.7, fontSize: 22, bold: true, color: NAVY });
-                s.addShape(pptx.ShapeType.line, { x: 0.5, y: 1.15, w: 12.3, h: 0, line: { color: BLUE, width: 2 } });
-            }
-            function colW(n) { var total = 12.3, first = 3.2, rest = (total - first) / (n - 1), a = [first]; for (var i = 1; i < n; i++) a.push(rest); return a; }
-            function table(s, head, rows, totalRow, headColor, altColor) {
-                var tr = [];
-                tr.push(head.map(function (h, ci) { return { text: h, options: { bold: true, color: 'FFFFFF', fill: { color: headColor }, align: ci ? 'right' : 'left', fontSize: 11 } }; }));
-                rows.forEach(function (r, ri) {
-                    tr.push(r.map(function (cell, ci) { return { text: String(cell), options: { align: ci ? 'right' : 'left', fontSize: 11, fill: { color: ri % 2 ? altColor : 'FFFFFF' } } }; }));
+                var lpm = (m.production > 0 && m.fuel > 0) ? m.fuel / m.production : null;
+                counterRows.push([name, dec(m.smuHours, 1), dec(m.fuel, 0), lpm != null ? dec(lpm, 2) : '—', dec(m.uoa), dec(m.effectiveUoa)]);
+                stopRows.push([name, dec(m.bdn), dec(m.stb), dec(m.gsa), dec(m.prd), dec(m.other), dec(m.bdn + m.stb + m.gsa + m.prd + m.other)]);
+                (d.holesWorked || []).forEach(function (h) {
+                    if (!h.holeId) return; var key = String(h.holeId);
+                    if (!holesAgg[key]) holesAgg[key] = { meters: 0, zone: h.blockId || '', machines: {}, finalDepth: h.finalDepth };
+                    holesAgg[key].meters += parseFloat(h.meters) || 0;
+                    holesAgg[key].machines[_rpMachineName(r) || '?'] = 1;
+                    if (h.finalDepth != null) holesAgg[key].finalDepth = h.finalDepth;
                 });
-                if (totalRow) tr.push(totalRow.map(function (cell, ci) { return { text: String(cell), options: { bold: true, align: ci ? 'right' : 'left', fontSize: 11, fill: { color: 'EDF2F7' } } }; }));
-                s.addTable(tr, { x: 0.5, y: 1.4, w: 12.3, colW: colW(head.length), border: { type: 'solid', color: 'CBD5E1', pt: 0.5 }, valign: 'middle' });
-            }
-
-            // 1 — Couverture (avec logos sur fond blanc pour ressortir sur le fond foncé)
-            var s1 = pptx.addSlide(); s1.background = { color: NAVY };
-            function coverLogo(src, x) {
-                if (!src) return;
-                s1.addShape(pptx.ShapeType.roundRect, { x: x - 0.12, y: 0.45, w: 3.44, h: 1.4, rectRadius: 0.06, fill: { color: 'FFFFFF' }, line: { color: 'FFFFFF', width: 1 } });
-                var img = String(src).slice(0, 5) === 'data:' ? { data: src } : { path: src };
-                try { s1.addImage(Object.assign({ x: x, y: 0.55, w: 3.2, h: 1.2, sizing: { type: 'contain', w: 3.2, h: 1.2 } }, img)); } catch (e) {}
-            }
-            try {
-                coverLogo(getSubscriberLogoSrcForReport(), 0.6);
-                coverLogo(getPartnerClientLogoSrc(findPartnerClientForReport(records)), 13.33 - 0.6 - 3.2);
-            } catch (eLg) {}
-            s1.addText('RAPPORT JOURNALIER DE FORAGE', { x: 0.6, y: 2.2, w: 12.1, h: 1, fontSize: 34, bold: true, color: 'FFFFFF', align: 'center' });
-            s1.addText(company, { x: 0.6, y: 3.3, w: 12.1, h: 0.6, fontSize: 20, color: 'C7D2FE', align: 'center' });
-            s1.addText('Projet / site : ' + projectLabel + '   •   ' + formatDate(date), { x: 0.6, y: 4.1, w: 12.1, h: 0.5, fontSize: 16, color: 'E2E8F0', align: 'center' });
-            s1.addText(getReportUsedMachineCount(records) + ' machine(s) en production', { x: 0.6, y: 4.7, w: 12.1, h: 0.4, fontSize: 14, color: '94A3B8', align: 'center' });
-
-            // 2 — KPIs
-            var s2 = pptx.addSlide(); slideTitle(s2, 'Indicateurs clés — ' + formatDate(date));
-            var kpis = [['Mètres nouveaux', dec(totals.production) + ' m'], ['Objectif du jour', goal != null ? dec(goal) + ' m' : 'N/A'], ['Taux de réalisation', taux != null ? dec(taux) + ' %' : 'N/A'], ['Reforés', dec(totals.redrill) + ' m'], ['Dispo. mécanique', avail != null ? dec(avail) + ' %' : 'N/A'], ['Carburant', dec(totals.fuel) + ' L']];
-            kpis.forEach(function (k, i) {
-                var col = i % 3, row = Math.floor(i / 3), x = 0.6 + col * 4.2, y = 1.6 + row * 2.4;
-                s2.addShape(pptx.ShapeType.rect, { x: x, y: y, w: 3.9, h: 2.0, fill: { color: LIGHT }, line: { color: 'D9E1EB', width: 1 } });
-                s2.addText(k[0], { x: x + 0.1, y: y + 0.18, w: 3.7, h: 0.5, fontSize: 13, color: GRAY, align: 'center' });
-                s2.addText(k[1], { x: x + 0.1, y: y + 0.72, w: 3.7, h: 1.0, fontSize: 28, bold: true, color: NAVY, align: 'center' });
+                (d.stoppages || []).forEach(function (s) {
+                    var bucket = classifyStoppageReasonToBucket(s.reason), hrs = parseFloat(s.hours) || 0;
+                    if (bucket === 'bdn' && (hrs > 0 || (s.detail || '').trim())) {
+                        pannes.push((_rpMachineName(r) || '?') + ' — ' + (hrs > 0 ? dec(hrs) + ' h : ' : '') + getDailyStoppageReasonLabel(s.reason) + ((s.detail || '').trim() ? ' — ' + s.detail.trim() : ''));
+                    }
+                });
+                var note = (r.notes || d.notes || '').trim();
+                if (note) obsList.push((_rpMachineName(r) || '?') + ' : ' + note);
+                var ch = []; if (d.bitChanged) ch.push('Taillant'); if (d.rodChanged) ch.push('Tiges'); if (d.oilChanged) ch.push('Huile'); if (d.filterChanged) ch.push('Filtre');
+                if (ch.length || (d.changesDetails || '').trim()) changes.push((_rpMachineName(r) || '?') + ' : ' + ch.join(', ') + ((d.changesDetails || '').trim() ? (ch.length ? ' — ' : '') + d.changesDetails.trim() : ''));
             });
+            var planned = getReportPlannedProduction(date, records); var goal = planned && planned.value;
+            var avail = wAvail.h > 0 ? wAvail.sum / wAvail.h : null; var taux = (goal != null && goal > 0) ? (totals.production / goal * 100) : null;
+            var rendement = totals.usedHours > 0 ? totals.production / totals.usedHours : null;
+            var parked = (drills || []).filter(function (dd) { return dd.status && dd.status !== 'EN FORAGE'; });
+
+            function slideTitle(s, t) { s.addText(t, { x: 0.5, y: 0.35, w: 12.3, h: 0.7, fontSize: 22, bold: true, color: BLACK }); s.addShape(pptx.ShapeType.line, { x: 0.5, y: 1.15, w: 12.3, h: 0, line: { color: CAT, width: 3 } }); s.addText('GOOD ENGINEERS', { x: 0.5, y: 7.0, w: 6, h: 0.3, fontSize: 9, color: '9A9A9A' }); }
+            function colW(n) { var total = 12.3, first = 3.2, rest = (total - first) / (n - 1), a = [first]; for (var i = 1; i < n; i++) a.push(rest); return a; }
+            function table(s, head, rows, totalRow) {
+                var tr = [];
+                tr.push(head.map(function (h, ci) { return { text: h, options: { bold: true, color: CAT, fill: { color: BLACK }, align: ci ? 'right' : 'left', fontSize: 11 } }; }));
+                rows.forEach(function (r, ri) { tr.push(r.map(function (cell, ci) { return { text: String(cell), options: { align: ci ? 'right' : 'left', fontSize: 11, color: '222222', fill: { color: ri % 2 ? LIGHT : 'FFFFFF' } } }; })); });
+                if (totalRow) tr.push(totalRow.map(function (cell, ci) { return { text: String(cell), options: { bold: true, align: ci ? 'right' : 'left', fontSize: 11, color: BLACK, fill: { color: 'F4EFDC' } } }; }));
+                s.addTable(tr, { x: 0.5, y: 1.45, w: 12.3, colW: colW(head.length), border: { type: 'solid', color: LINE, pt: 0.5 }, valign: 'middle' });
+            }
+            function coverLogo(s, src, x) { if (!src) return; s.addShape(pptx.ShapeType.roundRect, { x: x - 0.12, y: 0.45, w: 3.44, h: 1.4, rectRadius: 0.06, fill: { color: 'FFFFFF' }, line: { color: 'FFFFFF', width: 1 } }); var img = String(src).slice(0, 5) === 'data:' ? { data: src } : { path: src }; try { s.addImage(Object.assign({ x: x, y: 0.55, w: 3.2, h: 1.2, sizing: { type: 'contain', w: 3.2, h: 1.2 } }, img)); } catch (e) {} }
+
+            // 1 — Couverture
+            var s1 = pptx.addSlide(); s1.background = { color: BLACK };
+            try { coverLogo(s1, getSubscriberLogoSrcForReport(), 0.6); coverLogo(s1, getPartnerClientLogoSrc(findPartnerClientForReport(records)), 13.33 - 0.6 - 3.2); } catch (e) {}
+            s1.addText('RAPPORT JOURNALIER DE FORAGE', { x: 0.6, y: 2.4, w: 12.1, h: 1, fontSize: 34, bold: true, color: 'FFFFFF', align: 'center' });
+            s1.addShape(pptx.ShapeType.rect, { x: (13.33 - 2.2) / 2, y: 3.5, w: 2.2, h: 0.08, fill: { color: CAT } });
+            s1.addText(company, { x: 0.6, y: 3.7, w: 12.1, h: 0.6, fontSize: 20, color: 'DDDDDD', align: 'center' });
+            s1.addText('Projet / site : ' + projectLabel + '   •   ' + formatDate(date) + '   •   ' + getReportUsedMachineCount(records) + ' machine(s)', { x: 0.6, y: 4.4, w: 12.1, h: 0.5, fontSize: 15, color: 'BBBBBB', align: 'center' });
+            s1.addText(dec(totals.production) + ' m', { x: 0.6, y: 5.6, w: 12.1, h: 0.9, fontSize: 44, bold: true, color: CAT, align: 'center' });
+            s1.addText('PRODUCTION RÉALISÉE DU JOUR', { x: 0.6, y: 6.5, w: 12.1, h: 0.4, fontSize: 12, color: '999999', align: 'center', charSpacing: 2 });
+
+            // 2 — Tableau de bord
+            var s2 = pptx.addSlide(); slideTitle(s2, 'Tableau de bord — ' + formatDate(date));
+            var kpis = [['Mètres nouveaux', dec(totals.production) + ' m'], ['Objectif du jour', goal != null ? dec(goal) + ' m' : 'N/A'], ['Taux de réalisation', taux != null ? dec(taux) + ' %' : 'N/A'], ['Reforés', dec(totals.redrill) + ' m'], ['Dispo. mécanique', avail != null ? dec(avail) + ' %' : 'N/A'], ['Rendement', rendement != null ? dec(rendement, 2) + ' m/h' : 'N/A'], ['Carburant', dec(totals.fuel, 0) + ' L'], ['Heures utilisées', dec(totals.usedHours) + ' h']];
+            kpis.forEach(function (k, i) {
+                var col = i % 4, row = Math.floor(i / 4), x = 0.5 + col * 3.15, y = 1.55 + row * 2.15;
+                s2.addShape(pptx.ShapeType.rect, { x: x, y: y, w: 2.95, h: 1.9, fill: { color: LIGHT }, line: { color: LINE, width: 1 } });
+                s2.addShape(pptx.ShapeType.rect, { x: x, y: y, w: 2.95, h: 0.09, fill: { color: CAT } });
+                s2.addText(k[0], { x: x + 0.08, y: y + 0.22, w: 2.79, h: 0.5, fontSize: 12, color: GRAY, align: 'center' });
+                s2.addText(k[1], { x: x + 0.08, y: y + 0.72, w: 2.79, h: 0.9, fontSize: 24, bold: true, color: BLACK, align: 'center' });
+            });
+            var by = 6.1;
+            s2.addText('Réalisé', { x: 0.6, y: by, w: 1.6, h: 0.3, fontSize: 12, bold: true, color: BLACK });
+            s2.addShape(pptx.ShapeType.rect, { x: 2.3, y: by + 0.02, w: 8.5, h: 0.28, fill: { color: 'E6E6E0' } });
+            var rp = (goal != null && goal > 0) ? Math.min(1, totals.production / goal) : 1;
+            s2.addShape(pptx.ShapeType.rect, { x: 2.3, y: by + 0.02, w: 8.5 * rp, h: 0.28, fill: { color: BLACK } });
+            s2.addText(dec(totals.production) + ' m', { x: 10.9, y: by, w: 1.8, h: 0.3, fontSize: 12, bold: true, color: BLACK });
+            if (goal != null) {
+                s2.addText('Objectif', { x: 0.6, y: by + 0.45, w: 1.6, h: 0.3, fontSize: 12, bold: true, color: BLACK });
+                s2.addShape(pptx.ShapeType.rect, { x: 2.3, y: by + 0.47, w: 8.5, h: 0.28, fill: { color: 'E6E6E0' } });
+                s2.addShape(pptx.ShapeType.rect, { x: 2.3, y: by + 0.47, w: 8.5, h: 0.28, fill: { color: CAT } });
+                s2.addText(dec(goal) + ' m', { x: 10.9, y: by + 0.45, w: 1.8, h: 0.3, fontSize: 12, bold: true, color: BLACK });
+            }
 
             // 3 — Production par machine
-            var s3 = pptx.addSlide(); slideTitle(s3, 'Production et rendement par machine');
+            var s3 = pptx.addSlide(); slideTitle(s3, 'Production & rendement par machine');
             table(s3, ['Machine / poste', 'Prog. (h)', 'Util. (h)', 'Prod. (h)', 'Nouveau (m)', 'Rend. (m/h)', 'Dispo. (%)'], machineRows,
-                ['Total / ensemble', dec(totals.scheduled), dec(totals.usedHours), dec(totals.productiveHours), dec(totals.production), dec(totals.usedHours > 0 ? totals.production / totals.usedHours : null, 2), avail != null ? dec(avail) : '—'], NAVY, LIGHT);
+                ['Total / ensemble', dec(totals.scheduled), dec(totals.usedHours), dec(totals.productiveHours), dec(totals.production), dec(totals.usedHours > 0 ? totals.production / totals.usedHours : null, 2), avail != null ? dec(avail) : '—']);
 
-            // 4 — Arrêts
-            var s4 = pptx.addSlide(); slideTitle(s4, 'Répartition des arrêts (heures)');
-            table(s4, ['Machine / poste', 'Pannes', 'Standby', 'Services', 'Production', 'Autres', 'Total'], stopRows,
-                ['Total', dec(totals.bdn), dec(totals.stb), dec(totals.gsa), dec(totals.prd), dec(totals.other), dec(totals.bdn + totals.stb + totals.gsa + totals.prd + totals.other)], NAVY, LIGHT);
+            // 4 — Compteurs & carburant
+            var s4 = pptx.addSlide(); slideTitle(s4, 'Compteurs, carburant & utilisation');
+            var lpmTot = (totals.production > 0 && totals.fuel > 0) ? totals.fuel / totals.production : null;
+            table(s4, ['Machine / poste', 'Compteur SMU (h)', 'Carburant (L)', 'L / m', 'UoA (%)', 'UoA eff. (%)'], counterRows,
+                ['Total / moyenne', dec(totals.smu, 1), dec(totals.fuel, 0), lpmTot != null ? dec(lpmTot, 2) : '—', '—', '—']);
 
-            // 5 — Machines garées
-            var parked = (drills || []).filter(function (dd) { return dd.status && dd.status !== 'EN FORAGE'; });
-            var s5 = pptx.addSlide(); slideTitle(s5, 'Machines garées — état du parc');
-            if (!parked.length) {
-                s5.addText('Toutes les machines sont en forage — aucune machine garée.', { x: 0.6, y: 2, w: 12, h: 0.6, fontSize: 16, color: GRAY });
-            } else {
-                var prows = parked.map(function (dd) {
-                    var site = (dd.siteId && typeof sites !== 'undefined') ? sites.find(function (s) { return s.id == dd.siteId; }) : null;
-                    return [String(dd.id), dd.parkLocation || dd.location || '—', site ? (site.name || '—') : '—', dd.status || '—', dd.parkReason || '—', dd.expectedReturnDate ? formatDate(dd.expectedReturnDate) : 'Non définie'];
-                });
-                table(s5, ['Machine', 'Lieu de stationnement', 'Site', 'Statut', 'Motif', 'Sortie probable'], prows, null, '991B1B', 'FEF2F2');
+            // 5 — Arrêts
+            var s5 = pptx.addSlide(); slideTitle(s5, 'Répartition des arrêts (heures)');
+            table(s5, ['Machine / poste', 'Pannes', 'Standby', 'Services', 'Production', 'Autres', 'Total'], stopRows,
+                ['Total', dec(totals.bdn), dec(totals.stb), dec(totals.gsa), dec(totals.prd), dec(totals.other), dec(totals.bdn + totals.stb + totals.gsa + totals.prd + totals.other)]);
+
+            // 6 — Zones / trous
+            var s6 = pptx.addSlide(); slideTitle(s6, 'Zones forées & traçabilité des trous');
+            var holeKeys = Object.keys(holesAgg);
+            if (!holeKeys.length) { s6.addText('Aucun trou renseigné pour cette journée.', { x: 0.6, y: 2, w: 12, h: 0.6, fontSize: 16, color: GRAY }); }
+            else {
+                var totM = 0; var hrows = holeKeys.slice(0, 15).map(function (k) { var h = holesAgg[k]; totM += h.meters; return [k, h.zone || '—', Object.keys(h.machines).join(', '), dec(h.meters), h.finalDepth != null ? dec(h.finalDepth) : '—']; });
+                holeKeys.slice(15).forEach(function (k) { totM += holesAgg[k].meters; });
+                var extra = holeKeys.length > 15 ? '  (+' + (holeKeys.length - 15) + ' autres trous)' : '';
+                table(s6, ['Trou', 'Zone / bloc', 'Machine(s)', 'Mètres forés', 'Prof. finale (m)'], hrows, ['Total (' + holeKeys.length + ' trous)' + extra, '', '', dec(totM), '—']);
             }
+
+            // 7 — Pannes & observations
+            var s7 = pptx.addSlide(); slideTitle(s7, 'Pannes, observations & changements');
+            function block(s, title, items, x, y, w, empty) {
+                s.addText(title, { x: x, y: y, w: w, h: 0.4, fontSize: 14, bold: true, color: BLACK });
+                if (!items.length) { s.addText(empty, { x: x, y: y + 0.45, w: w, h: 0.5, fontSize: 12, italic: true, color: '999999' }); return; }
+                s.addText(items.map(function (t) { return { text: t, options: { bullet: { indent: 12 }, fontSize: 12, color: '222222', paraSpaceAfter: 6 } }; }), { x: x, y: y + 0.45, w: w, h: 4.4 });
+            }
+            block(s7, '🔧 Pannes mécaniques', pannes, 0.6, 1.5, 6.0, 'Aucune panne enregistrée.');
+            block(s7, '📝 Observations', obsList, 6.9, 1.5, 5.8, 'Aucune observation.');
+            block(s7, '🔁 Changements / consommables', changes, 0.6, 4.6, 12.1, 'Aucun changement signalé.');
+
+            // 8 — Machines garées
+            var s8 = pptx.addSlide(); slideTitle(s8, 'Machines garées — état du parc');
+            if (!parked.length) { s8.addText('Toutes les machines sont en forage — aucune machine garée.', { x: 0.6, y: 2, w: 12, h: 0.6, fontSize: 16, color: GRAY }); }
+            else {
+                var prows = parked.map(function (dd) { var site = (dd.siteId && typeof sites !== 'undefined') ? sites.find(function (s) { return s.id == dd.siteId; }) : null; return [String(dd.id), dd.parkLocation || dd.location || '—', site ? (site.name || '—') : '—', dd.status || '—', dd.parkReason || '—', dd.expectedReturnDate ? formatDate(dd.expectedReturnDate) : 'Non définie']; });
+                table(s8, ['Machine', 'Lieu de stationnement', 'Site', 'Statut', 'Motif', 'Sortie probable'], prows, null);
+            }
+
+            // 9 — Synthèse & signatures
+            var s9 = pptx.addSlide(); slideTitle(s9, 'Synthèse des indicateurs & visa');
+            var bullets = [];
+            if (taux != null) bullets.push((taux >= 100 ? '✅ ' : '⚠️ ') + 'Objectif de production : ' + dec(taux) + ' % du planifié' + (taux >= 100 ? ' (atteint).' : '.'));
+            if (avail != null) bullets.push((avail >= 85 ? '✅ ' : '⚠️ ') + 'Disponibilité mécanique : ' + dec(avail) + ' %' + (avail >= 85 ? ' (satisfaisante).' : ' (seuil 85 %).'));
+            if (totals.bdn > 0) bullets.push('🔧 ' + dec(totals.bdn) + ' h de pannes mécaniques enregistrées.');
+            if (totals.stb > 2) bullets.push('⏸️ Standby élevé : ' + dec(totals.stb) + ' h. À investiguer.');
+            if (parked.length > 0) bullets.push('🅿️ ' + parked.length + ' machine(s) garée(s) actuellement.');
+            if (!bullets.length) bullets.push('Données insuffisantes pour l\'analyse.');
+            s9.addText(bullets.map(function (b) { return { text: b, options: { bullet: { indent: 14 }, fontSize: 15, color: BLACK, paraSpaceAfter: 9 } }; }), { x: 0.7, y: 1.5, w: 12, h: 3.2 });
+            ['Établi par', 'Contrôlé par', 'Visé par'].forEach(function (lab, i) {
+                var x = 0.6 + i * 4.1, y = 5.2;
+                s9.addShape(pptx.ShapeType.rect, { x: x, y: y, w: 3.8, h: 1.5, fill: { color: 'FFFFFF' }, line: { color: LINE, width: 1 } });
+                s9.addText(lab, { x: x + 0.15, y: y + 0.12, w: 3.5, h: 0.4, fontSize: 12, bold: true, color: BLACK });
+                s9.addText('Nom / signature', { x: x + 0.15, y: y + 1.05, w: 3.5, h: 0.3, fontSize: 10, color: '999999' });
+            });
 
             pptx.writeFile({ fileName: 'rapport-journalier-' + date + '.pptx' });
         }
-
         // Export PowerPoint — synthèse exécutive (sans détail machine)
         function generateSyntheticReportPptx() {
             var date = document.getElementById('reportDailyDate').value;
@@ -19435,7 +19496,7 @@
 
         function buildSyntheticReportPptx(date, records) {
             var pptx = new PptxGenJS(); pptx.layout = 'LAYOUT_WIDE';
-            var NAVY = '1A2B4B', BLUE = '1D4ED8', GRAY = '475569', LIGHT = 'F3F6F9';
+            var NAVY = '141414', BLUE = 'FFCD11', GRAY = '555555', LIGHT = 'F5F5F2', CAT = 'FFCD11';
             var company = getReportBrandSubscriberName();
             var projectLabel = getReportProjectLabel(records);
             var dec = function (v, d) { if (v == null || !isFinite(Number(v))) return 'N/A'; return Number(v).toLocaleString('fr-FR', { minimumFractionDigits: d == null ? 1 : d, maximumFractionDigits: d == null ? 1 : d }); };
@@ -19471,7 +19532,8 @@
             var s1 = pptx.addSlide(); s1.background = { color: NAVY };
             try { coverLogo(s1, getSubscriberLogoSrcForReport(), 0.6); coverLogo(s1, getPartnerClientLogoSrc(findPartnerClientForReport(records)), 13.33 - 0.6 - 3.2); } catch (e) {}
             s1.addText('SYNTHÈSE EXÉCUTIVE — FORAGE', { x: 0.6, y: 2.2, w: 12.1, h: 1, fontSize: 32, bold: true, color: 'FFFFFF', align: 'center' });
-            s1.addText(company, { x: 0.6, y: 3.3, w: 12.1, h: 0.6, fontSize: 20, color: 'C7D2FE', align: 'center' });
+            s1.addShape(pptx.ShapeType.rect, { x: (13.33 - 2.2) / 2, y: 3.15, w: 2.2, h: 0.08, fill: { color: CAT } });
+            s1.addText(company, { x: 0.6, y: 3.4, w: 12.1, h: 0.6, fontSize: 20, color: 'DDDDDD', align: 'center' });
             s1.addText('Projet / site : ' + projectLabel + '   •   ' + formatDate(date), { x: 0.6, y: 4.1, w: 12.1, h: 0.5, fontSize: 16, color: 'E2E8F0', align: 'center' });
             s1.addText(Object.keys(machinesActive).length + ' machine(s) active(s)', { x: 0.6, y: 4.7, w: 12.1, h: 0.4, fontSize: 14, color: '94A3B8', align: 'center' });
 
@@ -19489,7 +19551,7 @@
             var s3 = pptx.addSlide(); slideTitle(s3, 'Disponibilité et répartition des arrêts');
             var pct = function (v) { return totalStops > 0 ? dec(v / totalStops * 100) + ' %' : '—'; };
             var rows = [['Pannes mécaniques (BDN)', dec(agg.bdn) + ' h', pct(agg.bdn)], ['Standby (STB)', dec(agg.stb) + ' h', pct(agg.stb)], ['Services généraux (GSA)', dec(agg.gsa) + ' h', pct(agg.gsa)], ['Production / autres', dec(agg.prd + agg.other) + ' h', pct(agg.prd + agg.other)]];
-            var tr = [[{ text: 'Type d\'arrêt', options: { bold: true, color: 'FFFFFF', fill: { color: NAVY }, fontSize: 12 } }, { text: 'Heures', options: { bold: true, color: 'FFFFFF', fill: { color: NAVY }, align: 'right', fontSize: 12 } }, { text: '% du total', options: { bold: true, color: 'FFFFFF', fill: { color: NAVY }, align: 'right', fontSize: 12 } }]];
+            var tr = [[{ text: 'Type d\'arrêt', options: { bold: true, color: CAT, fill: { color: NAVY }, fontSize: 12 } }, { text: 'Heures', options: { bold: true, color: CAT, fill: { color: NAVY }, align: 'right', fontSize: 12 } }, { text: '% du total', options: { bold: true, color: CAT, fill: { color: NAVY }, align: 'right', fontSize: 12 } }]];
             rows.forEach(function (r, ri) { tr.push([{ text: r[0], options: { fontSize: 12, fill: { color: ri % 2 ? LIGHT : 'FFFFFF' } } }, { text: r[1], options: { align: 'right', fontSize: 12, fill: { color: ri % 2 ? LIGHT : 'FFFFFF' } } }, { text: r[2], options: { align: 'right', fontSize: 12, fill: { color: ri % 2 ? LIGHT : 'FFFFFF' } } }]); });
             tr.push([{ text: 'Total arrêts', options: { bold: true, fill: { color: 'EDF2F7' }, fontSize: 12 } }, { text: dec(totalStops) + ' h', options: { bold: true, align: 'right', fill: { color: 'EDF2F7' }, fontSize: 12 } }, { text: '100 %', options: { bold: true, align: 'right', fill: { color: 'EDF2F7' }, fontSize: 12 } }]);
             s3.addTable(tr, { x: 0.5, y: 1.5, w: 8.0, colW: [4.0, 2.0, 2.0], border: { type: 'solid', color: 'CBD5E1', pt: 0.5 }, valign: 'middle' });
