@@ -25795,34 +25795,60 @@
             updateDailyEntryModalSummary();
         }
 
-        // ---- Fosses (lieux de foration) : liste gérable, partagée dans l'entreprise ----
-        function getFosses() {
+        // ---- Fosses (lieux de foration) : liste gérable, liée à un site, partagée dans l'entreprise ----
+        // Stockage : companyInfo.fosses = [{name, siteId}]. (Compat : anciennes entrées en chaîne = siteId null.)
+        function getFossesRaw() {
             var f = companyInfo && companyInfo.fosses;
             if (typeof f === 'string') { try { f = JSON.parse(f); } catch (e) { f = []; } }
             if (!Array.isArray(f)) f = [];
-            var seen = {}, out = [];
-            f.forEach(function (x) {
-                var name = (x && x.name != null) ? String(x.name) : String(x == null ? '' : x);
-                name = name.trim();
-                if (name && !seen[name.toLowerCase()]) { seen[name.toLowerCase()] = 1; out.push(name); }
+            return f.map(function (x) {
+                if (x && typeof x === 'object') return { name: String(x.name == null ? '' : x.name).trim(), siteId: (x.siteId != null && x.siteId !== '') ? x.siteId : null };
+                return { name: String(x == null ? '' : x).trim(), siteId: null };
+            }).filter(function (x) { return x.name; });
+        }
+        function fossesSiteName(siteId) {
+            if (siteId == null || siteId === '') return 'Tous les sites';
+            var s = (typeof sites !== 'undefined' ? sites : []).find(function (x) { return String(x.id) === String(siteId); });
+            return s ? (s.name || s.code || ('Site ' + siteId)) : ('Site ' + siteId);
+        }
+        // Noms des fosses visibles pour un site : celles du site + les fosses globales (siteId null).
+        function getFossesForSite(siteId) {
+            var out = [], seen = {};
+            getFossesRaw().forEach(function (f) {
+                if (f.siteId == null || String(f.siteId) === String(siteId)) {
+                    if (!seen[f.name.toLowerCase()]) { seen[f.name.toLowerCase()] = 1; out.push(f.name); }
+                }
             });
             return out;
         }
-        function renderFossesDatalist() {
+        function renderFossesDatalist(siteId) {
             var dl = document.getElementById('fossesDatalist');
             if (!dl) return;
-            dl.innerHTML = getFosses().map(function (n) { return '<option value="' + escapeHtmlForAttr(n) + '"></option>'; }).join('');
+            var names;
+            if (siteId != null && siteId !== '') names = getFossesForSite(siteId);
+            else { var seen = {}; names = []; getFossesRaw().forEach(function (f) { if (!seen[f.name.toLowerCase()]) { seen[f.name.toLowerCase()] = 1; names.push(f.name); } }); }
+            dl.innerHTML = names.map(function (n) { return '<option value="' + escapeHtmlForAttr(n) + '"></option>'; }).join('');
+        }
+        function fosseSiteOptions(sel) {
+            var opts = '<option value="">Tous les sites</option>';
+            (typeof sites !== 'undefined' ? sites : []).forEach(function (s) {
+                opts += '<option value="' + escapeHtmlForAttr(String(s.id)) + '"' + (String(sel) === String(s.id) ? ' selected' : '') + '>' + escapeHtml(s.name || s.code || ('Site ' + s.id)) + '</option>';
+            });
+            return opts;
         }
         function openFosseManager() {
             var ex = document.getElementById('fosseManagerModal'); if (ex) ex.remove();
+            var defSite = (typeof currentSiteId !== 'undefined' && currentSiteId != null) ? currentSiteId : '';
             var modal = document.createElement('div');
             modal.id = 'fosseManagerModal';
             modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[120] p-4';
-            modal.innerHTML = '<div class="ged-modal-panel p-6 rounded-xl w-full max-w-md max-h-[85vh] overflow-y-auto">'
+            modal.innerHTML = '<div class="ged-modal-panel p-6 rounded-xl w-full max-w-lg max-h-[85vh] overflow-y-auto">'
                 + '<div class="flex justify-between items-center mb-4"><h2 class="text-xl font-bold">Gérer les fosses</h2>'
                 + '<button type="button" onclick="document.getElementById(\'fosseManagerModal\').remove()" class="text-slate-400 hover:text-white text-2xl">&times;</button></div>'
-                + '<p class="text-slate-400 text-sm mb-3">Les fosses apparaissent dans la liste « Lieu de forage » de la saisie journalière. Partagées dans toute l\'entreprise.</p>'
-                + '<div class="flex gap-2 mb-4"><input type="text" id="fosseNewName" class="flex-1 bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white" placeholder="Nom de la fosse (ex: P17)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();addFosse();}">'
+                + '<p class="text-slate-400 text-sm mb-3">Chaque fosse est rattachée à un site. Dans la saisie, seules les fosses du site de la machine (plus celles « Tous les sites ») sont proposées.</p>'
+                + '<div class="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2 mb-4">'
+                + '<input type="text" id="fosseNewName" class="bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white" placeholder="Nom de la fosse (ex: P17)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();addFosse();}">'
+                + '<select id="fosseNewSite" class="bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white">' + fosseSiteOptions(defSite) + '</select>'
                 + '<button type="button" onclick="addFosse()" class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg font-semibold">Ajouter</button></div>'
                 + '<div id="fosseListContainer"></div></div>';
             document.body.appendChild(modal);
@@ -25831,35 +25857,40 @@
         }
         function renderFosseManagerList() {
             var c = document.getElementById('fosseListContainer'); if (!c) return;
-            var list = getFosses();
+            var list = getFossesRaw();
             if (!list.length) { c.innerHTML = '<p class="text-slate-500 text-sm">Aucune fosse. Ajoutez-en ci-dessus.</p>'; return; }
-            c.innerHTML = list.map(function (n) {
-                return '<div class="flex justify-between items-center border-b border-slate-700 py-2"><span>' + escapeHtml(n) + '</span>'
-                    + '<button type="button" onclick="removeFosse(' + JSON.stringify(n).replace(/"/g, '&quot;') + ')" class="text-red-400 hover:text-red-300" title="Supprimer">🗑</button></div>';
+            c.innerHTML = list.map(function (f, idx) {
+                return '<div class="flex justify-between items-center border-b border-slate-700 py-2"><span>' + escapeHtml(f.name) + ' <span class="text-slate-500 text-xs">(' + escapeHtml(fossesSiteName(f.siteId)) + ')</span></span>'
+                    + '<button type="button" onclick="removeFosseAt(' + idx + ')" class="text-red-400 hover:text-red-300" title="Supprimer">🗑</button></div>';
             }).join('');
         }
         function addFosse() {
             var el = document.getElementById('fosseNewName');
+            var siteEl = document.getElementById('fosseNewSite');
             var name = el ? el.value.trim() : '';
             if (!name) return;
-            var list = getFosses();
-            if (list.some(function (x) { return x.toLowerCase() === name.toLowerCase(); })) { if (el) el.value = ''; return; }
-            list.push(name);
-            companyInfo.fosses = list;
+            var siteId = (siteEl && siteEl.value !== '') ? siteEl.value : null;
+            var raw = getFossesRaw();
+            if (raw.some(function (f) { return f.name.toLowerCase() === name.toLowerCase() && String(f.siteId) === String(siteId); })) { if (el) el.value = ''; return; }
+            raw.push({ name: name, siteId: siteId });
+            companyInfo.fosses = raw;
             if (el) el.value = '';
             renderFosseManagerList();
-            renderFossesDatalist();
+            renderFossesDatalist(currentSiteId);
             try { saveData(); } catch (e) {}
         }
-        function removeFosse(name) {
-            companyInfo.fosses = getFosses().filter(function (x) { return x !== name; });
+        function removeFosseAt(idx) {
+            var raw = getFossesRaw();
+            if (idx < 0 || idx >= raw.length) return;
+            raw.splice(idx, 1);
+            companyInfo.fosses = raw;
             renderFosseManagerList();
-            renderFossesDatalist();
+            renderFossesDatalist(currentSiteId);
             try { saveData(); } catch (e) {}
         }
         window.openFosseManager = openFosseManager;
         window.addFosse = addFosse;
-        window.removeFosse = removeFosse;
+        window.removeFosseAt = removeFosseAt;
 
         function showDailyEntryModal(machineId) {
             if (!canEnterDailyData()) {
@@ -25946,7 +25977,8 @@
             }
             updateDailyEntryModalSummary();
             markDailyEntryFormClean(metaOpen.record);
-            renderFossesDatalist();
+            var _fdrill = findDrillByMachineId(machineId);
+            renderFossesDatalist(_fdrill && _fdrill.siteId != null ? _fdrill.siteId : currentSiteId);
             document.getElementById('dailyEntryModal').classList.remove('hidden');
         }
 
