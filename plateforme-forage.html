@@ -9747,6 +9747,12 @@
             });
             return plan2Libs[src];
         }
+        // Charge une librairie hébergée dans l'app (hors-ligne) ; repli sur le CDN si absente.
+        function loadVendorScript(localPath, cdnUrl) {
+            return plan2LoadScript(resolveStaticAssetUrl(localPath)).catch(function () {
+                return plan2LoadScript(cdnUrl);
+            });
+        }
         function plan2ImportStatus(msg, kind) {
             var el = document.getElementById('plan2ImportStatus'); if (!el) return;
             el.textContent = msg || '';
@@ -9832,7 +9838,7 @@
             var metric = (document.getElementById('plan2Metric') || {}).value || 'metres';
             plan2ImportStatus('Lecture du fichier…', '');
             if (kind === 'excel') {
-                plan2LoadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js').then(function () {
+                loadVendorScript('vendor/xlsx.full.min.js', 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js').then(function () {
                     var fr = new FileReader();
                     fr.onload = function (e) {
                         try {
@@ -19295,7 +19301,7 @@
             if (!date) { alert('Veuillez sélectionner une date.'); return; }
             ensureReportPlanLoaded(function() {
                 collectProductionProgramData(date).then(function(data) {
-                    plan2LoadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js').then(function() {
+                    loadVendorScript('vendor/xlsx.full.min.js', 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js').then(function() {
                         try { buildProductionProgramXlsx(data); }
                         catch (e) { alert('Export Excel impossible : ' + (e && e.message ? e.message : e)); }
                     }).catch(function() { alert('Impossible de charger la librairie Excel (connexion internet requise).'); });
@@ -19312,7 +19318,7 @@
             var records = getDailyDataForSite().filter(function (r) { return r.date === date && !isDailyRecordIncompleteDraft(r); });
             if (!records.length) { alert('Aucune saisie terminée pour cette date.'); return; }
             ensureReportPlanLoaded(function () {
-                plan2LoadScript('https://cdnjs.cloudflare.com/ajax/libs/pptxgenjs/3.12.0/pptxgen.bundle.js').then(function () {
+                loadVendorScript('vendor/pptxgen.bundle.js', 'https://cdnjs.cloudflare.com/ajax/libs/pptxgenjs/3.12.0/pptxgen.bundle.js').then(function () {
                     try { buildDailyReportPptx(date, records); }
                     catch (e) { alert('Export PowerPoint impossible : ' + (e && e.message ? e.message : e)); }
                 }).catch(function () { alert('Impossible de charger la librairie PowerPoint (connexion internet requise).'); });
@@ -19420,7 +19426,7 @@
             var records = getDailyDataForSite().filter(function (r) { return r.date === date && !isDailyRecordIncompleteDraft(r); });
             if (!records.length) { alert('Aucune saisie terminée pour cette date.'); return; }
             ensureReportPlanLoaded(function () {
-                plan2LoadScript('https://cdnjs.cloudflare.com/ajax/libs/pptxgenjs/3.12.0/pptxgen.bundle.js').then(function () {
+                loadVendorScript('vendor/pptxgen.bundle.js', 'https://cdnjs.cloudflare.com/ajax/libs/pptxgenjs/3.12.0/pptxgen.bundle.js').then(function () {
                     try { buildSyntheticReportPptx(date, records); }
                     catch (e) { alert('Export PowerPoint impossible : ' + (e && e.message ? e.message : e)); }
                 }).catch(function () { alert('Impossible de charger la librairie PowerPoint (connexion internet requise).'); });
