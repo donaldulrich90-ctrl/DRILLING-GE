@@ -3478,7 +3478,7 @@ app.post('/api/company', (req, res) => {
                 `UPDATE companyInfo SET name = ?, legalName = ?, address = ?, city = ?, country = ?,
                  postalCode = ?, taxId = ?, siret = ?, ifu = ?, rccm = ?, phone = ?, email = ?, website = ?,
                  bankName = ?, iban = ?, bic = ?, vatNumber = ?, tvaRate = ?, retenueSourceRate = ?, currency = ?,
-                 signatoryFirstName = ?, signatoryLastName = ?, signatoryTitle = ? WHERE enterpriseId = ?`,
+                 signatoryFirstName = ?, signatoryLastName = ?, signatoryTitle = ?, fosses = ? WHERE enterpriseId = ?`,
                 [
                     company.name, company.legalName, company.address, company.city, company.country,
                     company.postalCode, company.taxId, company.siret, company.ifu || '', company.rccm || '',
@@ -3488,6 +3488,7 @@ app.post('/api/company', (req, res) => {
                     company.signatoryFirstName || '',
                     company.signatoryLastName || '',
                     company.signatoryTitle || '',
+                    JSON.stringify(Array.isArray(company.fosses) ? company.fosses : []),
                     entId
                 ],
                 function(updateErr) {
@@ -3499,8 +3500,8 @@ app.post('/api/company', (req, res) => {
             db.run(
                 `INSERT INTO companyInfo (enterpriseId, name, legalName, address, city, country, postalCode, taxId,
                  siret, ifu, rccm, phone, email, website, bankName, iban, bic, vatNumber, tvaRate, retenueSourceRate, currency,
-                 signatoryFirstName, signatoryLastName, signatoryTitle)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                 signatoryFirstName, signatoryLastName, signatoryTitle, fosses)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
                     entId, company.name, company.legalName, company.address, company.city, company.country,
                     company.postalCode, company.taxId, company.siret, company.ifu || '', company.rccm || '',
@@ -3509,7 +3510,8 @@ app.post('/api/company', (req, res) => {
                     company.currency || 'XOF',
                     company.signatoryFirstName || '',
                     company.signatoryLastName || '',
-                    company.signatoryTitle || ''
+                    company.signatoryTitle || '',
+                    JSON.stringify(Array.isArray(company.fosses) ? company.fosses : [])
                 ],
                 function(insertErr) {
                     if (insertErr) return res.status(500).json({ error: insertErr.message });
