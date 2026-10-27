@@ -4339,8 +4339,12 @@
                     </div>
 
                     <div class="mb-4">
-                        <label class="block text-slate-400 mb-2">Lieu de forage *</label>
-                        <input type="text" id="dailyEntryLocation" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white" required placeholder="Ex: Site A - Zone 1, Site B - Zone 2, etc.">
+                        <label class="block text-slate-400 mb-2">Lieu de forage — fosse *</label>
+                        <div class="flex gap-2">
+                            <input type="text" id="dailyEntryLocation" list="fossesDatalist" autocomplete="off" class="flex-1 bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white" required placeholder="Sélectionnez une fosse ou saisissez…">
+                            <datalist id="fossesDatalist"></datalist>
+                            <button type="button" onclick="openFosseManager()" title="Gérer les fosses" class="bg-slate-600 hover:bg-slate-500 px-3 py-2 rounded-lg text-white whitespace-nowrap">⚙ Fosses</button>
+                        </div>
                     </div>
 
                     <div class="mb-4 rounded-lg border border-slate-600 bg-slate-900/40 p-3">
@@ -25791,6 +25795,72 @@
             updateDailyEntryModalSummary();
         }
 
+        // ---- Fosses (lieux de foration) : liste gérable, partagée dans l'entreprise ----
+        function getFosses() {
+            var f = companyInfo && companyInfo.fosses;
+            if (typeof f === 'string') { try { f = JSON.parse(f); } catch (e) { f = []; } }
+            if (!Array.isArray(f)) f = [];
+            var seen = {}, out = [];
+            f.forEach(function (x) {
+                var name = (x && x.name != null) ? String(x.name) : String(x == null ? '' : x);
+                name = name.trim();
+                if (name && !seen[name.toLowerCase()]) { seen[name.toLowerCase()] = 1; out.push(name); }
+            });
+            return out;
+        }
+        function renderFossesDatalist() {
+            var dl = document.getElementById('fossesDatalist');
+            if (!dl) return;
+            dl.innerHTML = getFosses().map(function (n) { return '<option value="' + escapeHtmlForAttr(n) + '"></option>'; }).join('');
+        }
+        function openFosseManager() {
+            var ex = document.getElementById('fosseManagerModal'); if (ex) ex.remove();
+            var modal = document.createElement('div');
+            modal.id = 'fosseManagerModal';
+            modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[120] p-4';
+            modal.innerHTML = '<div class="ged-modal-panel p-6 rounded-xl w-full max-w-md max-h-[85vh] overflow-y-auto">'
+                + '<div class="flex justify-between items-center mb-4"><h2 class="text-xl font-bold">Gérer les fosses</h2>'
+                + '<button type="button" onclick="document.getElementById(\'fosseManagerModal\').remove()" class="text-slate-400 hover:text-white text-2xl">&times;</button></div>'
+                + '<p class="text-slate-400 text-sm mb-3">Les fosses apparaissent dans la liste « Lieu de forage » de la saisie journalière. Partagées dans toute l\'entreprise.</p>'
+                + '<div class="flex gap-2 mb-4"><input type="text" id="fosseNewName" class="flex-1 bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white" placeholder="Nom de la fosse (ex: P17)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();addFosse();}">'
+                + '<button type="button" onclick="addFosse()" class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg font-semibold">Ajouter</button></div>'
+                + '<div id="fosseListContainer"></div></div>';
+            document.body.appendChild(modal);
+            renderFosseManagerList();
+            var inp = document.getElementById('fosseNewName'); if (inp) inp.focus();
+        }
+        function renderFosseManagerList() {
+            var c = document.getElementById('fosseListContainer'); if (!c) return;
+            var list = getFosses();
+            if (!list.length) { c.innerHTML = '<p class="text-slate-500 text-sm">Aucune fosse. Ajoutez-en ci-dessus.</p>'; return; }
+            c.innerHTML = list.map(function (n) {
+                return '<div class="flex justify-between items-center border-b border-slate-700 py-2"><span>' + escapeHtml(n) + '</span>'
+                    + '<button type="button" onclick="removeFosse(' + JSON.stringify(n).replace(/"/g, '&quot;') + ')" class="text-red-400 hover:text-red-300" title="Supprimer">🗑</button></div>';
+            }).join('');
+        }
+        function addFosse() {
+            var el = document.getElementById('fosseNewName');
+            var name = el ? el.value.trim() : '';
+            if (!name) return;
+            var list = getFosses();
+            if (list.some(function (x) { return x.toLowerCase() === name.toLowerCase(); })) { if (el) el.value = ''; return; }
+            list.push(name);
+            companyInfo.fosses = list;
+            if (el) el.value = '';
+            renderFosseManagerList();
+            renderFossesDatalist();
+            try { saveData(); } catch (e) {}
+        }
+        function removeFosse(name) {
+            companyInfo.fosses = getFosses().filter(function (x) { return x !== name; });
+            renderFosseManagerList();
+            renderFossesDatalist();
+            try { saveData(); } catch (e) {}
+        }
+        window.openFosseManager = openFosseManager;
+        window.addFosse = addFosse;
+        window.removeFosse = removeFosse;
+
         function showDailyEntryModal(machineId) {
             if (!canEnterDailyData()) {
                 alert('Saisie réservée aux ingénieurs (et à la direction). Le tableau de bord reste consultable par tous.');
@@ -25876,6 +25946,7 @@
             }
             updateDailyEntryModalSummary();
             markDailyEntryFormClean(metaOpen.record);
+            renderFossesDatalist();
             document.getElementById('dailyEntryModal').classList.remove('hidden');
         }
 

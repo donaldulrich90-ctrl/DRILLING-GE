@@ -596,6 +596,7 @@ db.serialize(() => {
             retenueSourceRate REAL DEFAULT 5,
             currency TEXT DEFAULT 'XOF',
             logo TEXT DEFAULT '',
+            fosses TEXT DEFAULT '[]',
             updatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (enterpriseId) REFERENCES enterprises(id)
         )
