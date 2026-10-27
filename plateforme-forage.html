@@ -18621,6 +18621,7 @@
                 '<button onclick="generateDailyReport()" class="w-full ged-btn-primary px-4 py-2 rounded-lg font-semibold">📄 Rapport de synthèse management</button>' +
                 '<button type="button" onclick="generateSyntheticReport()" class="mt-3 w-full bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-semibold">📊 Synthèse exécutive (sans détail machine)</button>' +
                 '<button type="button" onclick="generateDailyReport(true)" class="mt-3 w-full ged-btn-secondary px-4 py-2 rounded-lg font-semibold">Rapport opérationnel détaillé</button>' +
+                '<button type="button" onclick="generateDailyReportPptx()" class="mt-3 w-full bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg font-semibold">📊 Export PowerPoint</button>' +
                 '<button type="button" onclick="generateMidshiftReport()" class="mt-3 w-full bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-lg font-semibold">Rapport de mi-poste</button>' +
                 '<p class="text-slate-400 text-xs mt-2">Situation provisoire à partir des saisies enregistrées, y compris les brouillons.</p>' +
                 '<div class="border-t border-slate-600 mt-4 pt-4">' +
@@ -19299,6 +19300,106 @@
                     }).catch(function() { alert('Impossible de charger la librairie Excel (connexion internet requise).'); });
                 }).catch(function(e) { alert('Export impossible : ' + (e && e.message ? e.message : e)); });
             }, function() { /* annulé (tenant/site changé) */ });
+        }
+
+        // ============================================================
+        // EXPORT POWERPOINT — rapport journalier (PptxGenJS, chargé à la demande)
+        // ============================================================
+        function generateDailyReportPptx() {
+            var date = document.getElementById('reportDailyDate').value;
+            if (!date) { alert('Veuillez sélectionner une date.'); return; }
+            var records = getDailyDataForSite().filter(function (r) { return r.date === date && !isDailyRecordIncompleteDraft(r); });
+            if (!records.length) { alert('Aucune saisie terminée pour cette date.'); return; }
+            ensureReportPlanLoaded(function () {
+                plan2LoadScript('https://cdnjs.cloudflare.com/ajax/libs/pptxgenjs/3.12.0/pptxgen.bundle.js').then(function () {
+                    try { buildDailyReportPptx(date, records); }
+                    catch (e) { alert('Export PowerPoint impossible : ' + (e && e.message ? e.message : e)); }
+                }).catch(function () { alert('Impossible de charger la librairie PowerPoint (connexion internet requise).'); });
+            }, function () { /* annulé */ });
+        }
+
+        function buildDailyReportPptx(date, records) {
+            var pptx = new PptxGenJS();
+            pptx.layout = 'LAYOUT_WIDE'; // 13.33 x 7.5 in
+            var NAVY = '1A2B4B', BLUE = '1D4ED8', GRAY = '475569', LIGHT = 'F3F6F9';
+            var company = getReportBrandSubscriberName();
+            var projectLabel = getReportProjectLabel(records);
+            var dec = function (v, d) { if (v == null || !isFinite(Number(v))) return 'N/A'; return Number(v).toLocaleString('fr-FR', { minimumFractionDigits: d == null ? 1 : d, maximumFractionDigits: d == null ? 1 : d }); };
+
+            var totals = { scheduled: 0, usedHours: 0, productiveHours: 0, production: 0, redrill: 0, bdn: 0, stb: 0, gsa: 0, prd: 0, other: 0, fuel: 0 };
+            var wAvail = { sum: 0, h: 0 }, machineRows = [], stopRows = [];
+            records.forEach(function (r) {
+                var d = _rpData(r), m = computeOperationalReportMetrics(d);
+                totals.scheduled += m.scheduled || 0; totals.usedHours += m.usedHours || 0; totals.productiveHours += m.productiveHours || 0;
+                totals.production += m.production || 0; totals.redrill += (m.redrillM || 0);
+                totals.bdn += m.bdn || 0; totals.stb += m.stb || 0; totals.gsa += m.gsa || 0; totals.prd += m.prd || 0; totals.other += m.other || 0; totals.fuel += m.fuel || 0;
+                if (m.scheduled > 0 && m.mechAvail != null) { wAvail.sum += m.mechAvail * m.scheduled; wAvail.h += m.scheduled; }
+                var name = (_rpMachineName(r) || 'N.R.') + (getShiftLabelForReport(d.shift) ? ' / ' + getShiftLabelForReport(d.shift) : '');
+                machineRows.push([name, dec(m.scheduled), dec(m.usedHours), dec(m.productiveHours), dec(m.production), dec(m.productivity, 2), dec(m.mechAvail)]);
+                var st = m.bdn + m.stb + m.gsa + m.prd + m.other;
+                stopRows.push([name, dec(m.bdn), dec(m.stb), dec(m.gsa), dec(m.prd), dec(m.other), dec(st)]);
+            });
+            var planned = getReportPlannedProduction(date, records);
+            var goal = planned && planned.value;
+            var avail = wAvail.h > 0 ? wAvail.sum / wAvail.h : null;
+            var taux = (goal != null && goal > 0) ? (totals.production / goal * 100) : null;
+
+            function slideTitle(s, t) {
+                s.addText(t, { x: 0.5, y: 0.35, w: 12.3, h: 0.7, fontSize: 22, bold: true, color: NAVY });
+                s.addShape(pptx.ShapeType.line, { x: 0.5, y: 1.15, w: 12.3, h: 0, line: { color: BLUE, width: 2 } });
+            }
+            function colW(n) { var total = 12.3, first = 3.2, rest = (total - first) / (n - 1), a = [first]; for (var i = 1; i < n; i++) a.push(rest); return a; }
+            function table(s, head, rows, totalRow, headColor, altColor) {
+                var tr = [];
+                tr.push(head.map(function (h, ci) { return { text: h, options: { bold: true, color: 'FFFFFF', fill: { color: headColor }, align: ci ? 'right' : 'left', fontSize: 11 } }; }));
+                rows.forEach(function (r, ri) {
+                    tr.push(r.map(function (cell, ci) { return { text: String(cell), options: { align: ci ? 'right' : 'left', fontSize: 11, fill: { color: ri % 2 ? altColor : 'FFFFFF' } } }; }));
+                });
+                if (totalRow) tr.push(totalRow.map(function (cell, ci) { return { text: String(cell), options: { bold: true, align: ci ? 'right' : 'left', fontSize: 11, fill: { color: 'EDF2F7' } } }; }));
+                s.addTable(tr, { x: 0.5, y: 1.4, w: 12.3, colW: colW(head.length), border: { type: 'solid', color: 'CBD5E1', pt: 0.5 }, valign: 'middle' });
+            }
+
+            // 1 — Couverture
+            var s1 = pptx.addSlide(); s1.background = { color: NAVY };
+            s1.addText('RAPPORT JOURNALIER DE FORAGE', { x: 0.6, y: 2.2, w: 12.1, h: 1, fontSize: 34, bold: true, color: 'FFFFFF', align: 'center' });
+            s1.addText(company, { x: 0.6, y: 3.3, w: 12.1, h: 0.6, fontSize: 20, color: 'C7D2FE', align: 'center' });
+            s1.addText('Projet / site : ' + projectLabel + '   •   ' + formatDate(date), { x: 0.6, y: 4.1, w: 12.1, h: 0.5, fontSize: 16, color: 'E2E8F0', align: 'center' });
+            s1.addText(getReportUsedMachineCount(records) + ' machine(s) en production', { x: 0.6, y: 4.7, w: 12.1, h: 0.4, fontSize: 14, color: '94A3B8', align: 'center' });
+
+            // 2 — KPIs
+            var s2 = pptx.addSlide(); slideTitle(s2, 'Indicateurs clés — ' + formatDate(date));
+            var kpis = [['Mètres nouveaux', dec(totals.production) + ' m'], ['Objectif du jour', goal != null ? dec(goal) + ' m' : 'N/A'], ['Taux de réalisation', taux != null ? dec(taux) + ' %' : 'N/A'], ['Reforés', dec(totals.redrill) + ' m'], ['Dispo. mécanique', avail != null ? dec(avail) + ' %' : 'N/A'], ['Carburant', dec(totals.fuel) + ' L']];
+            kpis.forEach(function (k, i) {
+                var col = i % 3, row = Math.floor(i / 3), x = 0.6 + col * 4.2, y = 1.6 + row * 2.4;
+                s2.addShape(pptx.ShapeType.rect, { x: x, y: y, w: 3.9, h: 2.0, fill: { color: LIGHT }, line: { color: 'D9E1EB', width: 1 } });
+                s2.addText(k[0], { x: x + 0.1, y: y + 0.18, w: 3.7, h: 0.5, fontSize: 13, color: GRAY, align: 'center' });
+                s2.addText(k[1], { x: x + 0.1, y: y + 0.72, w: 3.7, h: 1.0, fontSize: 28, bold: true, color: NAVY, align: 'center' });
+            });
+
+            // 3 — Production par machine
+            var s3 = pptx.addSlide(); slideTitle(s3, 'Production et rendement par machine');
+            table(s3, ['Machine / poste', 'Prog. (h)', 'Util. (h)', 'Prod. (h)', 'Nouveau (m)', 'Rend. (m/h)', 'Dispo. (%)'], machineRows,
+                ['Total / ensemble', dec(totals.scheduled), dec(totals.usedHours), dec(totals.productiveHours), dec(totals.production), dec(totals.usedHours > 0 ? totals.production / totals.usedHours : null, 2), avail != null ? dec(avail) : '—'], NAVY, LIGHT);
+
+            // 4 — Arrêts
+            var s4 = pptx.addSlide(); slideTitle(s4, 'Répartition des arrêts (heures)');
+            table(s4, ['Machine / poste', 'Pannes', 'Standby', 'Services', 'Production', 'Autres', 'Total'], stopRows,
+                ['Total', dec(totals.bdn), dec(totals.stb), dec(totals.gsa), dec(totals.prd), dec(totals.other), dec(totals.bdn + totals.stb + totals.gsa + totals.prd + totals.other)], NAVY, LIGHT);
+
+            // 5 — Machines garées
+            var parked = (drills || []).filter(function (dd) { return dd.status && dd.status !== 'EN FORAGE'; });
+            var s5 = pptx.addSlide(); slideTitle(s5, 'Machines garées — état du parc');
+            if (!parked.length) {
+                s5.addText('Toutes les machines sont en forage — aucune machine garée.', { x: 0.6, y: 2, w: 12, h: 0.6, fontSize: 16, color: GRAY });
+            } else {
+                var prows = parked.map(function (dd) {
+                    var site = (dd.siteId && typeof sites !== 'undefined') ? sites.find(function (s) { return s.id == dd.siteId; }) : null;
+                    return [String(dd.id), dd.parkLocation || dd.location || '—', site ? (site.name || '—') : '—', dd.status || '—', dd.parkReason || '—', dd.expectedReturnDate ? formatDate(dd.expectedReturnDate) : 'Non définie'];
+                });
+                table(s5, ['Machine', 'Lieu de stationnement', 'Site', 'Statut', 'Motif', 'Sortie probable'], prows, null, '991B1B', 'FEF2F2');
+            }
+
+            pptx.writeFile({ fileName: 'rapport-journalier-' + date + '.pptx' });
         }
 
         // ============================================================
