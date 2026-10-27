@@ -19359,8 +19359,18 @@
                 s.addTable(tr, { x: 0.5, y: 1.4, w: 12.3, colW: colW(head.length), border: { type: 'solid', color: 'CBD5E1', pt: 0.5 }, valign: 'middle' });
             }
 
-            // 1 — Couverture
+            // 1 — Couverture (avec logos sur fond blanc pour ressortir sur le fond foncé)
             var s1 = pptx.addSlide(); s1.background = { color: NAVY };
+            function coverLogo(src, x) {
+                if (!src) return;
+                s1.addShape(pptx.ShapeType.roundRect, { x: x - 0.12, y: 0.45, w: 3.44, h: 1.4, rectRadius: 0.06, fill: { color: 'FFFFFF' }, line: { color: 'FFFFFF', width: 1 } });
+                var img = String(src).slice(0, 5) === 'data:' ? { data: src } : { path: src };
+                try { s1.addImage(Object.assign({ x: x, y: 0.55, w: 3.2, h: 1.2, sizing: { type: 'contain', w: 3.2, h: 1.2 } }, img)); } catch (e) {}
+            }
+            try {
+                coverLogo(getSubscriberLogoSrcForReport(), 0.6);
+                coverLogo(getPartnerClientLogoSrc(findPartnerClientForReport(records)), 13.33 - 0.6 - 3.2);
+            } catch (eLg) {}
             s1.addText('RAPPORT JOURNALIER DE FORAGE', { x: 0.6, y: 2.2, w: 12.1, h: 1, fontSize: 34, bold: true, color: 'FFFFFF', align: 'center' });
             s1.addText(company, { x: 0.6, y: 3.3, w: 12.1, h: 0.6, fontSize: 20, color: 'C7D2FE', align: 'center' });
             s1.addText('Projet / site : ' + projectLabel + '   •   ' + formatDate(date), { x: 0.6, y: 4.1, w: 12.1, h: 0.5, fontSize: 16, color: 'E2E8F0', align: 'center' });
