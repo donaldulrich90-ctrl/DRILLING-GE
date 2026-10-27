@@ -19335,7 +19335,7 @@
 
             var totals = { scheduled: 0, usedHours: 0, productiveHours: 0, production: 0, redrill: 0, bdn: 0, stb: 0, gsa: 0, prd: 0, other: 0, fuel: 0, smu: 0 };
             var wAvail = { sum: 0, h: 0 }, machineRows = [], counterRows = [], stopRows = [];
-            var holesAgg = {}, pannes = [], obsList = [], changes = [];
+            var holesAgg = {}, locAgg = {}, pannes = [], obsList = [], changes = [];
             records.forEach(function (r) {
                 var d = _rpData(r), m = computeOperationalReportMetrics(d);
                 var name = (_rpMachineName(r) || 'N.R.') + (getShiftLabelForReport(d.shift) ? ' / ' + getShiftLabelForReport(d.shift) : '');
@@ -19348,6 +19348,11 @@
                 var lpm = (m.production > 0 && m.fuel > 0) ? m.fuel / m.production : null;
                 counterRows.push([name, dec(m.smuHours, 1), dec(m.fuel, 0), lpm != null ? dec(lpm, 2) : '—', dec(m.uoa), dec(m.effectiveUoa)]);
                 stopRows.push([name, dec(m.bdn), dec(m.stb), dec(m.gsa), dec(m.prd), dec(m.other), dec(m.bdn + m.stb + m.gsa + m.prd + m.other)]);
+                var loc = (d.location || '—');
+                if (!locAgg[loc]) locAgg[loc] = { meters: 0, redrill: 0, hours: 0, holes: {}, machines: {} };
+                locAgg[loc].meters += m.production || 0; locAgg[loc].redrill += (m.redrillM || 0); locAgg[loc].hours += m.usedHours || 0;
+                locAgg[loc].machines[_rpMachineName(r) || '?'] = 1;
+                (d.holesWorked || []).forEach(function (h) { if (h.holeId) locAgg[loc].holes[String(h.holeId)] = 1; });
                 (d.holesWorked || []).forEach(function (h) {
                     if (!h.holeId) return; var key = String(h.holeId);
                     if (!holesAgg[key]) holesAgg[key] = { meters: 0, zone: h.blockId || '', machines: {}, finalDepth: h.finalDepth };
@@ -19440,6 +19445,18 @@
                 holeKeys.slice(15).forEach(function (k) { totM += holesAgg[k].meters; });
                 var extra = holeKeys.length > 15 ? '  (+' + (holeKeys.length - 15) + ' autres trous)' : '';
                 table(s6, ['Trou', 'Zone / bloc', 'Machine(s)', 'Mètres forés', 'Prof. finale (m)'], hrows, ['Total (' + holeKeys.length + ' trous)' + extra, '', '', dec(totM), '—']);
+            }
+
+            // 6b — Production par lieu foré
+            var sL = pptx.addSlide(); slideTitle(sL, 'Production & performance par lieu foré');
+            var locKeys = Object.keys(locAgg);
+            if (!locKeys.length) { sL.addText('Aucun lieu renseigné.', { x: 0.6, y: 2, w: 12, h: 0.6, fontSize: 16, color: GRAY }); }
+            else {
+                var tM = 0, tR = 0, tH = 0, tHoles = 0;
+                var lrows = locKeys.map(function (k) { var L = locAgg[k]; var nh = Object.keys(L.holes).length; tM += L.meters; tR += L.redrill; tH += L.hours; tHoles += nh; var rend = L.hours > 0 ? L.meters / L.hours : null; return [k, String(nh), dec(L.meters), dec(L.redrill), rend != null ? dec(rend, 2) : '—', Object.keys(L.machines).join(', ')]; });
+                table(sL, ['Lieu / fosse', 'Trous', 'Nouveau (m)', 'Reforés (m)', 'Rend. (m/h)', 'Machine(s)'], lrows,
+                    ['Total', String(tHoles), dec(tM), dec(tR), dec(tH > 0 ? tM / tH : null, 2), '']);
+                sL.addText('Note : un visuel du pattern hachuré (auto ou photo importée) sera ajouté par lieu une fois les coordonnées de trous / la photo disponibles.', { x: 0.5, y: 6.5, w: 12.3, h: 0.4, fontSize: 10, italic: true, color: '999999' });
             }
 
             // 7 — Pannes & observations
@@ -20144,6 +20161,33 @@
                 (rows || '<tr><td colspan="6">Aucun trou renseigné.</td></tr>') + '</tbody></table>';
         }
 
+        // Production & performance des machines par lieu foré (fosse).
+        function buildProductionByLocationSection(records) {
+            var loc = {};
+            (records || []).forEach(function (record) {
+                var d = _rpData(record);
+                var m = computeOperationalReportMetrics(d);
+                var key = (d.location || '—');
+                if (!loc[key]) loc[key] = { meters: 0, redrill: 0, hours: 0, holes: {}, machines: {} };
+                loc[key].meters += m.production || 0; loc[key].redrill += (m.redrillM || 0); loc[key].hours += m.usedHours || 0;
+                loc[key].machines[_rpMachineName(record) || '?'] = 1;
+                (d.holesWorked || []).forEach(function (h) { if (h.holeId) loc[key].holes[String(h.holeId)] = 1; });
+            });
+            var keys = Object.keys(loc);
+            var dec = function (v, dd) { if (v == null || !isFinite(Number(v))) return 'N/A'; return Number(v).toLocaleString('fr-FR', { minimumFractionDigits: dd == null ? 1 : dd, maximumFractionDigits: dd == null ? 1 : dd }); };
+            if (!keys.length) return '';
+            var tM = 0, tR = 0, tH = 0, tHoles = 0;
+            var rows = keys.map(function (k) {
+                var L = loc[k]; var nh = Object.keys(L.holes).length; tM += L.meters; tR += L.redrill; tH += L.hours; tHoles += nh;
+                var rend = L.hours > 0 ? L.meters / L.hours : null;
+                return '<tr><td class="machine-cell">' + escapeHtmlReportCell(k) + '</td><td class="r-num">' + nh + '</td><td class="r-num">' + dec(L.meters) + '</td><td class="r-num">' + dec(L.redrill) + '</td><td class="r-num">' + (rend != null ? dec(rend, 2) : '—') + '</td><td>' + escapeHtmlReportCell(Object.keys(L.machines).join(', ')) + '</td></tr>';
+            }).join('');
+            return '<h3 class="daily-subtitle">Production &amp; performance par lieu foré</h3>' +
+                '<table class="daily-table"><thead><tr><th class="machine-cell">Lieu / fosse</th><th class="r-num">Trous</th><th class="r-num">Nouveau (m)</th><th class="r-num">Reforés (m)</th><th class="r-num">Rendement (m/h)</th><th>Machine(s)</th></tr></thead><tbody>' +
+                rows + '<tr class="total"><td>Total</td><td class="r-num">' + tHoles + '</td><td class="r-num">' + dec(tM) + '</td><td class="r-num">' + dec(tR) + '</td><td class="r-num">' + dec(tH > 0 ? tM / tH : null, 2) + '</td><td></td></tr>' +
+                '</tbody></table>';
+        }
+
         var DAILY_REPORT_PRINT_CSS = [
             '@page{size:A4 landscape;margin:8mm 10mm;}',
             '*{box-sizing:border-box;}',
@@ -20335,7 +20379,7 @@
                 (detailed ? (
                 section('01', 'INDICATEURS CLÉS — KPI ET PRODUCTION', buildReportKpiBandeau(records, date) + '<h3 class="daily-subtitle">Tableau KPI détaillé par machine et poste</h3>' + renderOperationalKpiTableHtml(records) + buildDailyProductionChart(records, date, false) + buildForecastVsActualChart(records, date), 'daily-kpi-section') +
                 section('02', 'Exploitation par machine et poste', operatingTables) +
-                existingSection('03', 'Production par zone / pattern et trous travaillés', buildProductionZoneSection(records) + buildDailyHoleTraceability(records)) +
+                existingSection('03', 'Production par zone / pattern et trous travaillés', buildProductionZoneSection(records) + buildProductionByLocationSection(records) + buildDailyHoleTraceability(records)) +
                 existingSection('04', 'Pannes mécaniques et observations', buildPannesSection(records)) +
                 existingSection('05', 'Standby et services — motifs et suivi', buildStandbySection(records)) +
                 existingSection('06', 'Observations générales du poste', buildCommentGeneralSection(records)) +
