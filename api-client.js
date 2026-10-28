@@ -495,17 +495,23 @@ async function saveAllData(data) {
             }
         }
         
+        // Sites : ne jamais enchaîner create si update échoue — cela dupliquait des sites
+        // (ex. plusieurs « BOMBORE ») et faisait « réapparaître » un site supprimé.
         if (data.sites) {
             for (const site of data.sites) {
-                if (site.id) {
+                const sid = site && site.id;
+                const hasServerId = sid != null && sid !== '' && !Number.isNaN(Number(sid));
+                if (hasServerId) {
                     promises.push(
-                        SitesAPI.update(site.id, site).catch(() =>
-                            SitesAPI.create(site).catch(console.error)
-                        )
+                        SitesAPI.update(sid, site).catch((err) => {
+                            console.warn('Sync site : mise à jour ignorée id=', sid, err && err.message);
+                        })
                     );
                 } else {
                     promises.push(
-                        SitesAPI.create(site).catch(console.error)
+                        SitesAPI.create(site).catch((err) => {
+                            console.warn('Sync site : création ignorée', err && err.message);
+                        })
                     );
                 }
             }

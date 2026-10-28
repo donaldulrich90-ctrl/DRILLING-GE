@@ -18729,9 +18729,9 @@
                 '</div>' +
                 '<div class="border-t border-slate-600 mt-4 pt-4">' +
                 '<p class="text-yellow-300 text-sm font-semibold mb-2">🗺️ Plan hachuré des patterns (1 photo / fosse / jour)</p>' +
-                '<label class="block text-slate-400 mb-1 text-sm">Fosse / zone</label>' +
-                '<input type="text" id="patternZone" list="patternZoneList" placeholder="Ex. Fosse Nord — Zone A" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white mb-2 text-sm">' +
-                '<datalist id="patternZoneList">' + (typeof renderFossesDatalist === 'function' && typeof currentSiteId !== 'undefined' ? '' : '') + '</datalist>' +
+                '<label class="block text-slate-400 mb-1 text-sm">Fosse (parmi celles créées pour ce site)</label>' +
+                '<select id="patternZone" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white mb-1 text-sm"><option value="">— Choisir une fosse —</option></select>' +
+                '<p id="patternNoFosseHint" class="text-amber-300 text-xs mb-2 hidden">Aucune fosse pour ce site. Créez-les d\'abord via « Gérer les fosses » (saisie journalière).</p>' +
                 '<div class="flex gap-2 mb-2">' +
                 '<label class="flex-1 bg-yellow-600 hover:bg-yellow-500 text-black text-center px-3 py-2 rounded-lg font-semibold text-sm cursor-pointer">📷 Importer une photo<input type="file" id="patternFile" accept="image/*" onchange="uploadPatternPhoto()" class="hidden"></label>' +
                 '<button type="button" onclick="generateAutoPattern()" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded-lg font-semibold text-sm">🎨 Générer auto</button>' +
@@ -19204,10 +19204,14 @@
             }).catch(function (e) { alert('Erreur : ' + (e && e.message ? e.message : e)); });
         }
         function initPatternPanel() {
-            var dl = document.getElementById('patternZoneList');
-            if (dl) {
+            var sel = document.getElementById('patternZone');
+            var hint = document.getElementById('patternNoFosseHint');
+            if (sel) {
                 var names = (typeof getFossesForSite === 'function') ? getFossesForSite(typeof currentSiteId !== 'undefined' ? currentSiteId : null) : [];
-                dl.innerHTML = (names || []).map(function (n) { return '<option value="' + (typeof escapeHtmlForAttr === 'function' ? escapeHtmlForAttr(n) : n) + '"></option>'; }).join('');
+                names = names || [];
+                var esc = (typeof escapeHtmlForAttr === 'function') ? escapeHtmlForAttr : function (s) { return s; };
+                sel.innerHTML = '<option value="">— Choisir une fosse —</option>' + names.map(function (n) { return '<option value="' + esc(n) + '">' + (typeof escapeHtml === 'function' ? escapeHtml(n) : n) + '</option>'; }).join('');
+                if (hint) hint.classList.toggle('hidden', names.length > 0);
             }
             var dateEl = document.getElementById('reportDailyDate');
             if (dateEl && !dateEl._patternHooked) { dateEl.addEventListener('change', function () { renderPatternList(); }); dateEl._patternHooked = true; }
