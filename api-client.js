@@ -321,6 +321,23 @@ const DrillingPlanAPI = {
     save: (plan) => apiRequest('/drilling-plan', 'PUT', plan)
 };
 
+// Plans de forage (patterns) + photos de patterns — passent par apiRequest
+// (cookie de session + en-tête entreprise gérés automatiquement).
+const DrillPlansAPI = {
+    list: () => apiRequest('/drill-plans'),
+    full: (id) => apiRequest(`/drill-plans/${encodeURIComponent(id)}/full`)
+};
+
+const PatternPhotosAPI = {
+    list: (date, siteId) => {
+        let q = `/pattern-photos?date=${encodeURIComponent(date)}`;
+        if (siteId !== undefined && siteId !== null && siteId !== '') q += `&siteId=${encodeURIComponent(siteId)}`;
+        return apiRequest(q, 'GET');
+    },
+    save: (payload) => apiRequest('/pattern-photos', 'POST', payload),
+    remove: (id) => apiRequest(`/pattern-photos/${encodeURIComponent(id)}`, 'DELETE')
+};
+
 // ============================================
 // API - COMPANY
 // ============================================
@@ -618,6 +635,8 @@ if (typeof window !== 'undefined') {
         DailyData: DailyDataAPI,
         DrillingPlan: DrillingPlanAPI,
         Company: CompanyAPI,
+        DrillPlans: DrillPlansAPI,
+        PatternPhotos: PatternPhotosAPI,
         Translate: TranslateAPI,
         WorkerChat: WorkerChatAPI,
         CompanyInfo: CompanyInfoAPI,
