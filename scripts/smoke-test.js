@@ -133,6 +133,8 @@ async function main() {
 
     try {
         await runNode(path.join(projectDir, 'init-db.js'), env);
+        // Même séquence qu'en production (Dockerfile) : init-db puis migrate-db.
+        await runNode(path.join(projectDir, 'migrate-db.js'), env);
 
         server = spawn(process.execPath, [path.join(projectDir, 'server.js')], {
             cwd: projectDir,

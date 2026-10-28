@@ -18732,12 +18732,13 @@
                 '<label class="block text-slate-400 mb-1 text-sm">Fosse (parmi celles créées pour ce site)</label>' +
                 '<select id="patternZone" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white mb-1 text-sm"><option value="">— Choisir une fosse —</option></select>' +
                 '<p id="patternNoFosseHint" class="text-amber-300 text-xs mb-2 hidden">Aucune fosse pour ce site. Créez-les d\'abord via « Gérer les fosses » (saisie journalière).</p>' +
-                '<div class="flex gap-2 mb-2">' +
-                '<label class="flex-1 bg-yellow-600 hover:bg-yellow-500 text-black text-center px-3 py-2 rounded-lg font-semibold text-sm cursor-pointer">📷 Importer une photo<input type="file" id="patternFile" accept="image/*" onchange="uploadPatternPhoto()" class="hidden"></label>' +
-                '<button type="button" onclick="generateAutoPattern()" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded-lg font-semibold text-sm">🎨 Générer auto</button>' +
+                '<div class="grid grid-cols-2 gap-2 mb-2">' +
+                '<label class="col-span-2 bg-yellow-600 hover:bg-yellow-500 text-black text-center px-3 py-2 rounded-lg font-semibold text-sm cursor-pointer">📷 Importer la photo du pattern<input type="file" id="patternFile" accept="image/*" onchange="uploadPatternPhoto()" class="hidden"></label>' +
+                '<button type="button" onclick="resumePreviousPattern()" class="bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded-lg font-semibold text-sm" title="Reprendre la photo et les trous déjà placés du dernier plan de cette fosse">♻️ Reprendre la veille</button>' +
+                '<button type="button" onclick="generateAutoPattern()" class="bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded-lg font-semibold text-sm" title="Dessiner le pattern depuis les coordonnées x/y des trous du plan">🎨 Générer auto</button>' +
                 '</div>' +
                 '<div id="patternListContainer" class="grid grid-cols-2 gap-2 mt-2"></div>' +
-                '<p class="text-slate-400 text-xs mt-2">Une photo par fosse et par jour, reprise dans le rapport détaillé et le PowerPoint. Le hachurage auto nécessite les coordonnées (x/y) des trous dans la planification.</p>' +
+                '<p class="text-slate-400 text-xs mt-2">Importez la photo du pattern (une par fosse et par jour), puis touchez les trous forés pour les hachurer (✏️ pour reprendre). « Reprendre la veille » réutilise la photo et les trous déjà placés : les trous saisis ce jour sont hachurés automatiquement. Le plan hachuré apparaît dans tous les rapports journaliers, PDF et PowerPoint.</p>' +
                 '</div>' +
                 '</div>' +
                 '<div class="ged-content-panel p-6 rounded-xl">' +
@@ -19103,17 +19104,212 @@
             return totalMeters.toFixed(1) + ' m | ' + totalFuel.toFixed(1) + ' L | ' + totalHours.toFixed(1) + ' h' + (tail !== '—' ? ' · ' + tail : '');
         }
 
-        // ===== Patterns hachurés (photo par fosse/zone/jour + hachurage auto) =====
+        // ===== Patterns hachurés (photo par fosse/zone/jour + hachurage sur la photo + plan auto) =====
         var reportPatternsByZone = {};
+        var PATTERN_MARK_TYPES = {
+            drilled: { label: 'Foré ce jour', color: '#1d4ed8', hatch: 1 },
+            previous: { label: 'Foré antérieurement', color: '#475569', hatch: 1 },
+            redrilled: { label: 'Reforé', color: '#7c3aed', hatch: 2 },
+            abandoned: { label: 'Abandonné', color: '#dc2626', cross: true },
+            planned: { label: 'À forer', color: '#0f172a', hollow: true }
+        };
+        var PATTERN_MARK_ORDER = ['drilled', 'previous', 'redrilled', 'abandoned', 'planned'];
+        var PATTERN_LEGEND_POSITIONS = ['bl', 'br', 'tl', 'tr'];
+        var PATTERN_DEFAULT_RADIUS = 0.012; // rayon relatif à la largeur de l'image
+
+        // Une image de pattern n'est intégrée dans un rapport que si c'est une vraie image base64.
+        function isSafePatternImage(src) {
+            return typeof src === 'string' && src.length < 8000000 && /^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=]+$/.test(src);
+        }
+        // Accepte l'ancien format (tableau de points) ou l'objet {v, marks, labels, legend}.
+        function normalizePatternState(raw) {
+            var st = raw;
+            if (typeof st === 'string') { try { st = JSON.parse(st); } catch (e) { st = null; } }
+            if (Array.isArray(st)) st = { marks: st };
+            if (!st || typeof st !== 'object') st = {};
+            var marks = [];
+            (Array.isArray(st.marks) ? st.marks : []).slice(0, 2000).forEach(function (m) {
+                if (!m || typeof m !== 'object') return;
+                var x = Number(m.x), y = Number(m.y), r = Number(m.r);
+                if (!isFinite(x) || !isFinite(y) || x < 0 || x > 1 || y < 0 || y > 1) return;
+                if (!isFinite(r) || r <= 0) r = PATTERN_DEFAULT_RADIUS;
+                r = Math.min(0.08, Math.max(0.002, r));
+                marks.push({ x: +x.toFixed(5), y: +y.toFixed(5), t: PATTERN_MARK_TYPES[m.t] ? m.t : 'drilled', r: +r.toFixed(5), id: m.id == null ? '' : String(m.id).trim().slice(0, 40) });
+            });
+            var lg = st.legend && typeof st.legend === 'object' ? st.legend : {};
+            return { v: 1, marks: marks, labels: st.labels !== false, legend: { show: lg.show !== false, pos: PATTERN_LEGEND_POSITIONS.indexOf(lg.pos) >= 0 ? lg.pos : 'bl' } };
+        }
+        function summarizePatternMarks(state) {
+            var st = normalizePatternState(state);
+            var counts = { total: st.marks.length };
+            PATTERN_MARK_ORDER.forEach(function (k) { counts[k] = 0; });
+            st.marks.forEach(function (m) { counts[m.t] += 1; });
+            return counts;
+        }
+        function patternMarkCountsText(counts, sep) {
+            return PATTERN_MARK_ORDER.filter(function (k) { return counts && counts[k] > 0; })
+                .map(function (k) { return PATTERN_MARK_TYPES[k].label + ' : ' + counts[k]; }).join(sep || ' · ');
+        }
+        function _patDateFr(dateStr) {
+            var p = String(dateStr || '').split('-');
+            return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : String(dateStr || '');
+        }
+        // Trous travaillés le jour du rapport dans la fosse (d'après les saisies terminées).
+        function summarizePatternDayHoles(records, zone) {
+            var z = String(zone || '').trim().toLowerCase();
+            var out = { holes: [], meters: 0, redrill: 0, machines: [], records: 0 };
+            var seen = {}, mach = {};
+            (records || []).forEach(function (r) {
+                if (!r || isDailyRecordIncompleteDraft(r)) return;
+                var d = _rpData(r);
+                if (String(d.location || '').trim().toLowerCase() !== z) return;
+                out.records += 1;
+                out.meters += Math.max(0, parseFloat(d.metersDrilled) || 0);
+                out.redrill += Math.max(0, parseFloat(d.redrillMeters) || 0);
+                mach[String(_rpMachineName(r) || r.machineId || '?')] = 1;
+                (d.holesWorked || []).forEach(function (h) {
+                    var id = String(h && h.holeId || '').trim();
+                    if (!id || seen[id.toUpperCase()]) return;
+                    seen[id.toUpperCase()] = 1; out.holes.push(id);
+                });
+            });
+            out.machines = Object.keys(mach);
+            return out;
+        }
+
+        function _patHexA(hex, a) {
+            var h = String(hex || '#000').replace('#', '');
+            if (h.length === 3) h = h.split('').map(function (c) { return c + c; }).join('');
+            var n = parseInt(h, 16) || 0;
+            return 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',' + a + ')';
+        }
+        // Symbole d'un trou : cercle hachuré (foré), hachures croisées (reforé), X (abandonné), cercle vide (à forer).
+        function drawPatternMarkSymbol(ctx, type, cx, cy, r) {
+            var def = PATTERN_MARK_TYPES[type] || PATTERN_MARK_TYPES.drilled;
+            var lw = Math.max(1.2, r / 6);
+            ctx.save();
+            ctx.beginPath(); ctx.arc(cx, cy, r + lw * 1.4, 0, 2 * Math.PI);
+            ctx.fillStyle = 'rgba(255,255,255,0.62)'; ctx.fill(); // halo : lisible sur une photo
+            ctx.beginPath(); ctx.arc(cx, cy, r, 0, 2 * Math.PI);
+            if (def.hatch) {
+                ctx.save(); ctx.clip();
+                ctx.fillStyle = _patHexA(def.color, 0.22); ctx.fillRect(cx - r, cy - r, 2 * r, 2 * r);
+                ctx.strokeStyle = def.color; ctx.lineWidth = Math.max(1, r / 7);
+                var step = Math.max(2.5, r / 2.4);
+                for (var k = -2 * r; k <= 2 * r; k += step) {
+                    ctx.beginPath(); ctx.moveTo(cx + k - r, cy + r); ctx.lineTo(cx + k + r, cy - r); ctx.stroke();
+                    if (def.hatch === 2) { ctx.beginPath(); ctx.moveTo(cx + k - r, cy - r); ctx.lineTo(cx + k + r, cy + r); ctx.stroke(); }
+                }
+                ctx.restore();
+            } else {
+                ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.fill();
+            }
+            ctx.beginPath(); ctx.arc(cx, cy, r, 0, 2 * Math.PI);
+            ctx.lineWidth = lw; ctx.strokeStyle = def.color; ctx.stroke();
+            if (def.cross) {
+                var c = r * 0.62;
+                ctx.beginPath(); ctx.moveTo(cx - c, cy - c); ctx.lineTo(cx + c, cy + c); ctx.moveTo(cx + c, cy - c); ctx.lineTo(cx - c, cy + c);
+                ctx.lineWidth = lw * 1.2; ctx.stroke();
+            }
+            ctx.restore();
+        }
+        function drawPatternMarkLabel(ctx, text, cx, cy, r, W) {
+            var fs = Math.max(10, Math.min(30, r * 1.05));
+            ctx.save();
+            ctx.font = 'bold ' + Math.round(fs) + 'px Arial, Helvetica, sans-serif';
+            ctx.textBaseline = 'bottom'; ctx.textAlign = 'left';
+            var tw = ctx.measureText(text).width;
+            var tx = cx + r * 0.8, ty = cy - r * 0.7;
+            if (tx + tw > W - 2) tx = cx - r * 0.8 - tw;
+            if (ty - fs < 2) ty = cy + r + fs;
+            ctx.lineJoin = 'round'; ctx.lineWidth = Math.max(2, fs / 4); ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+            ctx.strokeText(text, tx, ty);
+            ctx.fillStyle = '#0f172a'; ctx.fillText(text, tx, ty);
+            ctx.restore();
+        }
+        function _patRoundRect(ctx, x, y, w, h, rad) {
+            ctx.beginPath(); ctx.moveTo(x + rad, y); ctx.lineTo(x + w - rad, y); ctx.quadraticCurveTo(x + w, y, x + w, y + rad);
+            ctx.lineTo(x + w, y + h - rad); ctx.quadraticCurveTo(x + w, y + h, x + w - rad, y + h); ctx.lineTo(x + rad, y + h);
+            ctx.quadraticCurveTo(x, y + h, x, y + h - rad); ctx.lineTo(x, y + rad); ctx.quadraticCurveTo(x, y, x + rad, y); ctx.closePath();
+        }
+        function drawPatternLegend(ctx, W, H, counts, title, pos) {
+            var types = PATTERN_MARK_ORDER.filter(function (k) { return counts[k] > 0; });
+            if (!types.length && !title) return;
+            var fs = Math.round(Math.max(12, Math.min(30, W / 60)));
+            var pad = fs * 0.7, rowH = fs * 1.6, sym = fs * 0.55;
+            var lines = types.map(function (k) { return PATTERN_MARK_TYPES[k].label + ' : ' + counts[k]; });
+            ctx.save();
+            ctx.font = 'bold ' + fs + 'px Arial, Helvetica, sans-serif';
+            var tw = title ? ctx.measureText(title).width : 0;
+            ctx.font = '600 ' + fs + 'px Arial, Helvetica, sans-serif';
+            lines.forEach(function (l) { tw = Math.max(tw, ctx.measureText(l).width + sym * 2 + fs * 0.6); });
+            var bw = tw + pad * 2, bh = pad * 2 + (title ? rowH : 0) + lines.length * rowH, mg = fs * 0.6;
+            var x = (pos === 'br' || pos === 'tr') ? W - bw - mg : mg;
+            var y = (pos === 'tl' || pos === 'tr') ? mg : H - bh - mg;
+            _patRoundRect(ctx, x, y, bw, bh, fs * 0.4);
+            ctx.fillStyle = 'rgba(255,255,255,0.93)'; ctx.fill();
+            ctx.lineWidth = Math.max(1, fs / 12); ctx.strokeStyle = 'rgba(15,23,42,0.35)'; ctx.stroke();
+            var cy = y + pad + rowH / 2;
+            ctx.textBaseline = 'middle'; ctx.textAlign = 'left'; ctx.fillStyle = '#0f172a';
+            if (title) { ctx.font = 'bold ' + fs + 'px Arial, Helvetica, sans-serif'; ctx.fillText(title, x + pad, cy); cy += rowH; }
+            ctx.font = '600 ' + fs + 'px Arial, Helvetica, sans-serif';
+            types.forEach(function (k, i) {
+                drawPatternMarkSymbol(ctx, k, x + pad + sym, cy, sym);
+                ctx.fillStyle = '#0f172a'; ctx.fillText(lines[i], x + pad + sym * 2 + fs * 0.6, cy);
+                cy += rowH;
+            });
+            ctx.restore();
+        }
+        // Dessine photo (ou fond blanc) + trous + numéros + légende, à la taille W×H.
+        function drawPatternScene(ctx, W, H, baseImg, state, meta) {
+            var st = normalizePatternState(state);
+            if (baseImg) ctx.drawImage(baseImg, 0, 0, W, H);
+            else { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, W, H); }
+            st.marks.forEach(function (m) { drawPatternMarkSymbol(ctx, m.t, m.x * W, m.y * H, m.r * W); });
+            if (st.labels) st.marks.forEach(function (m) { if (m.id) drawPatternMarkLabel(ctx, m.id, m.x * W, m.y * H, m.r * W, W); });
+            if (st.legend.show) drawPatternLegend(ctx, W, H, summarizePatternMarks(st), (meta && meta.title) || '', st.legend.pos);
+        }
+
         function loadReportPatterns(date, cb) {
             reportPatternsByZone = {};
             var sid = (typeof currentSiteId !== 'undefined' && currentSiteId != null) ? currentSiteId : '';
             try {
                 window.API.PatternPhotos.list(date, sid)
-                    .then(function (list) { (list || []).forEach(function (p) { reportPatternsByZone[String(p.zone || '').trim().toLowerCase()] = { image: p.image, source: p.source, zone: p.zone }; }); cb && cb(); })
+                    .then(function (list) {
+                        (list || []).forEach(function (p) {
+                            if (!isSafePatternImage(p.image)) return;
+                            reportPatternsByZone[String(p.zone || '').trim().toLowerCase()] = { image: p.image, source: p.source, zone: p.zone, date: p.date, marks: p.marks || null };
+                        });
+                        cb && cb();
+                    })
                     .catch(function () { cb && cb(); });
             } catch (e) { cb && cb(); }
         }
+        // Légende texte d'un plan hachuré (rapports PDF et PowerPoint).
+        function describePatternForReport(p, records) {
+            var counts = summarizePatternMarks(p && p.marks);
+            var day = summarizePatternDayHoles(records, p && p.zone);
+            var source = p && p.source === 'auto' ? 'Plan généré automatiquement (coordonnées des trous)' :
+                (counts.total ? 'Photo importée, trous hachurés dans la plateforme' : 'Photo importée du pattern');
+            var dayTxt = day.records ? ('Saisies du jour dans cette fosse : ' + day.holes.length + ' trou(s) · ' + _rptFmt(day.meters) + ' m nouveaux' +
+                (day.redrill > 0 ? ' + ' + _rptFmt(day.redrill) + ' m reforés' : '') + (day.machines.length ? ' · ' + day.machines.join(', ') : '')) : '';
+            return { counts: counts, day: day, source: source, countsText: patternMarkCountsText(counts), dayText: dayTxt };
+        }
+        // Section « Plan hachuré des patterns forés » : une grande image par fosse.
+        function buildPatternPlansSection(records, date) {
+            var pats = (typeof reportPatternsByZone === 'object' && reportPatternsByZone) ? reportPatternsByZone : {};
+            var keys = Object.keys(pats).filter(function (k) { return pats[k] && isSafePatternImage(pats[k].image); })
+                .sort(function (a, b) { return a.localeCompare(b, 'fr', { numeric: true }); });
+            if (!keys.length) return '';
+            return keys.map(function (k) {
+                var p = pats[k], info = describePatternForReport(p, records);
+                var chips = info.countsText ? '<span class="pattern-meta">' + _rptEsc(info.countsText) + '</span>' : '';
+                return '<figure class="pattern-plan"><img src="' + p.image + '" alt="Plan hachuré ' + _rptEsc(p.zone || '') + '">' +
+                    '<figcaption>Fosse ' + _rptEsc(p.zone || '—') + ' — ' + _rptEsc(formatDate(date)) + ' · <span class="pattern-src">' + _rptEsc(info.source) + '</span>' +
+                    chips + (info.dayText ? '<span class="pattern-meta">' + _rptEsc(info.dayText) + '</span>' : '') + '</figcaption></figure>';
+            }).join('') + '<p class="daily-table-note">Légende : cercle hachuré = trou foré ce jour · hachures grises = foré les jours précédents · hachures croisées = reforé · ✕ = abandonné · cercle vide = à forer.</p>';
+        }
+
         function downscaleImageFile(file, maxDim, quality) {
             return new Promise(function (resolve, reject) {
                 var img = new Image();
@@ -19133,12 +19329,15 @@
             if (!file) return;
             var date = document.getElementById('reportDailyDate').value;
             var zone = ((document.getElementById('patternZone') || {}).value || '').trim();
-            if (!date) { alert('Choisissez la date du rapport ci-dessus.'); return; }
+            if (!date) { alert('Choisissez la date du rapport ci-dessus.'); if (fileEl) fileEl.value = ''; return; }
             if (!zone) { alert('Indiquez la fosse / zone.'); if (fileEl) fileEl.value = ''; return; }
-            downscaleImageFile(file, 1400, 0.82).then(function (dataUrl) {
-                return window.API.PatternPhotos.save({ date: date, zone: zone, siteId: (currentSiteId != null ? currentSiteId : ''), image: dataUrl, source: 'photo' });
+            var siteId = (currentSiteId != null ? currentSiteId : '');
+            downscaleImageFile(file, 1800, 0.84).then(function (dataUrl) {
+                return window.API.PatternPhotos.save({ date: date, zone: zone, siteId: siteId, image: dataUrl, source: 'photo' }).then(function (res) {
+                    renderPatternList();
+                    openPatternEditor({ id: res && res.id, banner: 'Photo enregistrée ✔ — touchez les trous forés pour les hachurer, puis « Enregistrer ». Si la photo est déjà hachurée à la main, fermez simplement cette fenêtre.' });
+                });
             })
-                .then(function () { renderPatternList(); })
                 .catch(function (e) { alert('Enregistrement impossible : ' + (e && e.message ? e.message : e)); })
                 .then(function () { if (fileEl) fileEl.value = ''; });
         }
@@ -19150,32 +19349,52 @@
             c.innerHTML = '<p class="text-slate-500 text-xs col-span-2">Chargement…</p>';
             window.API.PatternPhotos.list(date, sid)
                 .then(function (list) {
-                    if (!list || !list.length) { c.innerHTML = '<p class="text-slate-500 text-xs col-span-2">Aucun pattern pour cette date.</p>'; return; }
+                    list = (list || []).filter(function (p) { return isSafePatternImage(p.image); });
+                    if (!list.length) { c.innerHTML = '<p class="text-slate-500 text-xs col-span-2">Aucun pattern pour cette date.</p>'; return; }
                     c.innerHTML = list.map(function (p) {
-                        return '<div class="bg-slate-800 border border-slate-700 rounded p-2 text-xs"><div class="flex justify-between items-center mb-1"><span class="font-semibold">' + escapeHtml(p.zone || '—') + ' <span class="text-slate-500">(' + (p.source === 'auto' ? 'auto' : 'photo') + ')</span></span><button onclick="deletePattern(' + p.id + ')" class="text-red-400" title="Supprimer">🗑</button></div><img src="' + p.image + '" style="width:100%;border-radius:3px"></div>';
+                        var counts = summarizePatternMarks(p.marks);
+                        var pid = parseInt(p.id, 10) || 0;
+                        var badge = counts.total ? '<div class="text-[11px] text-emerald-300 mt-1">▨ ' + (counts.drilled || 0) + ' foré(s) ce jour' + (counts.previous ? ' · ' + counts.previous + ' antérieur(s)' : '') + '</div>' :
+                            (p.source === 'auto' ? '' : '<div class="text-[11px] text-amber-300 mt-1">Pas encore hachurée dans la plateforme</div>');
+                        return '<div class="bg-slate-800 border border-slate-700 rounded p-2 text-xs"><div class="flex justify-between items-center mb-1 gap-1"><span class="font-semibold truncate">' + escapeHtml(p.zone || '—') + ' <span class="text-slate-500">(' + (p.source === 'auto' ? 'auto' : 'photo') + ')</span></span>' +
+                            '<span class="flex gap-1 shrink-0">' + (p.source === 'auto' ? '' : '<button type="button" onclick="openPatternEditor({id:' + pid + '})" class="text-yellow-300 hover:text-yellow-200" title="Hachurer les trous sur la photo">✏️</button>') +
+                            '<button type="button" onclick="deletePattern(' + pid + ')" class="text-red-400" title="Supprimer">🗑</button></span></div>' +
+                            '<img src="' + p.image + '" style="width:100%;border-radius:3px;cursor:' + (p.source === 'auto' ? 'default' : 'pointer') + '"' + (p.source === 'auto' ? '' : ' onclick="openPatternEditor({id:' + pid + '})"') + ' alt="">' + badge + '</div>';
                     }).join('');
                 }).catch(function () { c.innerHTML = '<p class="text-red-400 text-xs col-span-2">Erreur de chargement.</p>'; });
         }
         function deletePattern(id) { if (!confirm('Supprimer ce pattern ?')) return; window.API.PatternPhotos.remove(id).then(function () { renderPatternList(); }).catch(function () { renderPatternList(); }); }
-        function drawPatternCanvas(holes) {
-            var xs = holes.map(function (h) { return parseFloat(h.x) || 0; }), ys = holes.map(function (h) { return parseFloat(h.y) || 0; });
+
+        // Plan auto : trous positionnés par leurs coordonnées (nord en haut), hachurés selon leur état.
+        function drawPatternCanvas(holes, opts) {
+            opts = opts || {};
+            var dayIds = opts.dayIds || {};
+            var pts = holes.map(function (h) { return { h: h, x: parseFloat(h.x) || 0, y: parseFloat(h.y) || 0 }; });
+            var xs = pts.map(function (p) { return p.x; }), ys = pts.map(function (p) { return p.y; });
             var minX = Math.min.apply(null, xs), maxX = Math.max.apply(null, xs), minY = Math.min.apply(null, ys), maxY = Math.max.apply(null, ys);
             var spanX = (maxX - minX) || 1, spanY = (maxY - minY) || 1;
-            var W = 900, H = Math.max(300, Math.min(900, Math.round(900 * spanY / spanX)));
-            var pad = 40, r = Math.max(5, Math.min(16, 320 / Math.sqrt(holes.length + 1)));
-            var cv = document.createElement('canvas'); cv.width = W; cv.height = H; var ctx = cv.getContext('2d');
-            ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, W, H);
-            function sx(x) { return pad + (x - minX) / spanX * (W - 2 * pad); }
-            function sy(y) { return pad + (y - minY) / spanY * (H - 2 * pad); }
-            holes.forEach(function (h) {
-                var x = sx(parseFloat(h.x) || 0), y = sy(parseFloat(h.y) || 0), st = (h.status || 'planned');
-                ctx.beginPath(); ctx.arc(x, y, r, 0, 2 * Math.PI);
-                if (st === 'drilled') { ctx.fillStyle = '#1d4ed8'; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = '#0f2d7d'; ctx.stroke(); }
-                else if (st === 'redrilled') { ctx.fillStyle = '#ede9fe'; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = '#7c3aed'; ctx.stroke(); }
-                else if (st === 'abandoned') { ctx.fillStyle = '#fee2e2'; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = '#dc2626'; ctx.stroke(); ctx.beginPath(); ctx.moveTo(x - r * 0.6, y - r * 0.6); ctx.lineTo(x + r * 0.6, y + r * 0.6); ctx.moveTo(x + r * 0.6, y - r * 0.6); ctx.lineTo(x - r * 0.6, y + r * 0.6); ctx.stroke(); }
-                else { ctx.fillStyle = '#fff'; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = '#94a3b8'; ctx.stroke(); }
+            var W = 1400, PH = Math.max(600, Math.min(1400, Math.round(W * spanY / spanX)));
+            var pad = 80;
+            var rPx = Math.max(7, Math.min(22, 380 / Math.sqrt(pts.length + 1)));
+            var types = pts.map(function (p) {
+                var h = p.h, st = String(h.status || 'planned'), key = String(h.holeId || '').trim().toUpperCase();
+                var today = !!dayIds[key] || (opts.date && h.drilledDate === opts.date);
+                return st === 'abandoned' ? 'abandoned' : st === 'redrilled' ? 'redrilled' : st === 'drilled' ? (today ? 'drilled' : 'previous') : (today ? 'drilled' : 'planned');
             });
-            return cv.toDataURL('image/png');
+            // La légende est placée sous le pattern : elle ne masque aucun trou.
+            var nTypes = PATTERN_MARK_ORDER.filter(function (k) { return types.indexOf(k) >= 0; }).length;
+            var lfs = Math.round(Math.max(12, Math.min(30, W / 60)));
+            var H = PH + Math.round(lfs * (1.4 + 1.6 * (nTypes + 1)) + lfs * 0.6);
+            var cv = document.createElement('canvas'); cv.width = W; cv.height = H; var ctx = cv.getContext('2d');
+            var marks = pts.map(function (p, i) {
+                return { x: (pad + (p.x - minX) / spanX * (W - 2 * pad)) / W, y: (PH - pad - (p.y - minY) / spanY * (PH - 2 * pad)) / H, t: types[i], r: rPx / W, id: pts.length <= 250 ? String(p.h.holeId || '') : '' };
+            });
+            var state = normalizePatternState({ marks: marks, labels: true, legend: { show: true, pos: 'bl' } });
+            drawPatternScene(ctx, W, H, null, state, { title: opts.title || '' });
+            ctx.save(); ctx.strokeStyle = 'rgba(15,23,42,0.18)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(24, PH); ctx.lineTo(W - 24, PH); ctx.stroke(); ctx.restore();
+            ctx.save(); ctx.fillStyle = '#0f172a'; ctx.font = 'bold 26px Arial, sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText('N', W - 40, 44); ctx.beginPath(); ctx.moveTo(W - 40, 52); ctx.lineTo(W - 50, 78); ctx.lineTo(W - 40, 70); ctx.lineTo(W - 30, 78); ctx.closePath(); ctx.fill(); ctx.restore();
+            return { dataUrl: cv.toDataURL('image/png'), state: state };
         }
         function generateAutoPattern() {
             var date = document.getElementById('reportDailyDate').value;
@@ -19191,15 +19410,281 @@
                 chain.then(function () {
                     var holes = all.filter(function (h) { return String(h.zone || '').trim().toLowerCase() === zone.toLowerCase() || String(h.blockId || '').trim().toLowerCase() === zone.toLowerCase(); });
                     if (!holes.length) holes = all;
+                    // Un même trou présent dans plusieurs plans n'est dessiné qu'une fois (le dernier plan l'emporte).
+                    var byId = {}, unique = [];
+                    holes.forEach(function (h) { var k = String(h.holeId || '').trim().toUpperCase(); if (!k) { unique.push(h); return; } if (byId[k] != null) unique[byId[k]] = h; else { byId[k] = unique.length; unique.push(h); } });
+                    holes = unique;
                     if (!holes.length) { alert('Aucun trou dans le plan.'); return; }
                     var hasCoords = holes.some(function (h) { return (parseFloat(h.x) || 0) !== 0 || (parseFloat(h.y) || 0) !== 0; });
-                    if (!hasCoords) { alert('Les trous du plan n\'ont pas encore de coordonnées (x/y). Ajoutez-les dans Planification, ou importez une photo.'); return; }
-                    var dataUrl = drawPatternCanvas(holes);
-                    window.API.PatternPhotos.save({ date: date, zone: zone, siteId: (currentSiteId != null ? currentSiteId : ''), image: dataUrl, source: 'auto' })
+                    if (!hasCoords) { alert('Les trous du plan n\'ont pas encore de coordonnées (x/y). Ajoutez-les dans Planification, ou importez une photo du pattern et hachurez-la.'); return; }
+                    var dayIds = {};
+                    summarizePatternDayHoles(getDailyDataForSite().filter(function (r) { return r.date === date; }), zone).holes.forEach(function (id) { dayIds[id.toUpperCase()] = 1; });
+                    var out = drawPatternCanvas(holes, { dayIds: dayIds, date: date, title: 'Fosse ' + zone + ' — ' + _patDateFr(date) });
+                    window.API.PatternPhotos.save({ date: date, zone: zone, siteId: (currentSiteId != null ? currentSiteId : ''), image: out.dataUrl, source: 'auto', marks: out.state })
                         .then(function () { renderPatternList(); alert('Pattern généré automatiquement.'); })
                         .catch(function (e) { alert('Enregistrement impossible : ' + (e && e.message ? e.message : e)); });
                 });
             }).catch(function (e) { alert('Erreur : ' + (e && e.message ? e.message : e)); });
+        }
+
+        // Reprend la photo + les positions du dernier plan de la fosse : les trous déjà forés
+        // passent en « antérieur » (gris) et les trous saisis ce jour sont hachurés automatiquement.
+        function resumePreviousPattern() {
+            var date = document.getElementById('reportDailyDate').value;
+            var zone = ((document.getElementById('patternZone') || {}).value || '').trim();
+            if (!date) { alert('Choisissez la date du rapport.'); return; }
+            if (!zone) { alert('Choisissez la fosse.'); return; }
+            var sid = (currentSiteId != null ? currentSiteId : '');
+            var CANCELLED = {};
+            window.API.PatternPhotos.list(date, sid).then(function (list) {
+                var exists = (list || []).some(function (p) { return String(p.zone || '').trim().toLowerCase() === zone.toLowerCase(); });
+                if (exists && !confirm('Un plan hachuré existe déjà pour la fosse « ' + zone + ' » le ' + _patDateFr(date) + '.\nLe remplacer par la reprise du plan précédent ?\n(Pour le modifier, utilisez plutôt le bouton ✏️ du plan.)')) return CANCELLED;
+                return window.API.PatternPhotos.previous(zone, date, sid);
+            }).then(function (prev) {
+                if (prev === CANCELLED) return;
+                if (!prev || !(prev.baseImage || prev.image)) { alert('Aucun plan photo antérieur pour la fosse « ' + zone + ' ». Importez d\'abord une photo.'); return; }
+                var st = normalizePatternState(prev.marks);
+                st.marks.forEach(function (m) { if (m.t === 'drilled' || m.t === 'redrilled') m.t = 'previous'; });
+                var dayIds = {};
+                summarizePatternDayHoles(getDailyDataForSite().filter(function (r) { return r.date === date; }), zone).holes.forEach(function (id) { dayIds[id.toUpperCase()] = 1; });
+                var auto = 0;
+                st.marks.forEach(function (m) { if (m.id && dayIds[m.id.toUpperCase()] && m.t !== 'drilled') { m.t = 'drilled'; auto++; } });
+                var prevCount = st.marks.filter(function (m) { return m.t === 'previous'; }).length;
+                openPatternEditor({
+                    draft: { date: date, zone: zone, siteId: sid, baseImage: prev.baseImage || prev.image, state: st },
+                    banner: 'Plan repris du ' + _patDateFr(prev.date) + ' : ' + prevCount + ' trou(s) foré(s) avant en gris' + (auto ? ', ' + auto + ' trou(s) du jour hachuré(s) automatiquement d\'après les saisies' : '') + '. Touchez la photo pour hachurer les autres trous du jour, puis « Enregistrer ».'
+                });
+            }).catch(function (e) { alert('Plan précédent indisponible : ' + (e && e.message ? e.message : e)); });
+        }
+
+        // ===== Éditeur : hachurer les trous directement sur la photo importée =====
+        var _patEd = null;
+        function _patEdEl(id) { return document.getElementById(id); }
+        function openPatternEditor(src) {
+            src = src || {};
+            var load;
+            if (src.draft) load = Promise.resolve({ id: null, date: src.draft.date, zone: src.draft.zone, siteId: src.draft.siteId, baseImage: src.draft.baseImage, image: src.draft.baseImage, marks: src.draft.state, source: 'photo', draft: true });
+            else if (src.id) load = window.API.PatternPhotos.get(src.id);
+            else { alert('Pattern introuvable.'); return; }
+            load.then(function (p) {
+                if (!p) throw new Error('Pattern introuvable');
+                var base = isSafePatternImage(p.baseImage) ? p.baseImage : p.image;
+                if (!isSafePatternImage(base)) throw new Error('Image du pattern illisible');
+                var img = new Image();
+                img.onload = function () { _patEdBuild(p, base, img, src); };
+                img.onerror = function () { alert('Impossible d\'ouvrir la photo du pattern.'); };
+                img.src = base;
+            }).catch(function (e) { alert('Ouverture impossible : ' + (e && e.message ? e.message : e)); });
+        }
+        function _patEdDayHoles(date, zone) {
+            var recs = getDailyDataForSite().filter(function (r) { return r.date === date; });
+            var info = summarizePatternDayHoles(recs, zone);
+            if (info.records) return { list: info.holes, scoped: true };
+            var all = [], seen = {};
+            recs.forEach(function (r) { (_rpData(r).holesWorked || []).forEach(function (h) { var id = String(h && h.holeId || '').trim(); if (id && !seen[id.toUpperCase()]) { seen[id.toUpperCase()] = 1; all.push(id); } }); });
+            return { list: all, scoped: false };
+        }
+        function _patEdBuild(p, baseDataUrl, img, src) {
+            var ex = _patEdEl('patternEditorModal'); if (ex) ex.remove();
+            var st = normalizePatternState(p.marks);
+            var day = _patEdDayHoles(p.date, p.zone);
+            _patEd = {
+                id: p.id || null, date: p.date, zone: p.zone, siteId: (p.siteId == null ? '' : p.siteId),
+                base: baseDataUrl, img: img, natW: img.naturalWidth || img.width, natH: img.naturalHeight || img.height,
+                marks: st.marks, labels: st.labels, legend: st.legend, type: 'drilled', r: PATTERN_DEFAULT_RADIUS, zoom: 1,
+                history: [], dirty: !!p.draft, dayHoles: day.list, dayScoped: day.scoped, down: null
+            };
+            var typeBtns = PATTERN_MARK_ORDER.map(function (k) {
+                return '<button type="button" data-pat-type="' + k + '" class="pat-type-btn px-2 py-1 rounded border border-slate-600 text-xs font-semibold">' + escapeHtml(PATTERN_MARK_TYPES[k].label) + '</button>';
+            }).join('');
+            var modal = document.createElement('div');
+            modal.id = 'patternEditorModal';
+            modal.className = 'fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-[130] p-2 sm:p-4';
+            modal.innerHTML = '<div class="ged-modal-panel rounded-xl w-full max-w-6xl flex flex-col overflow-hidden" style="max-height:96vh">' +
+                '<div class="flex items-start justify-between gap-3 px-4 py-3 border-b border-slate-700">' +
+                '<div class="min-w-0"><h2 class="text-lg font-bold">✏️ Hachurer le plan — Fosse ' + escapeHtml(p.zone || '') + '</h2>' +
+                '<p class="text-xs text-slate-400">' + escapeHtml(formatDate(p.date)) + ' · touchez un trou pour le hachurer, touchez-le à nouveau pour l\'effacer.</p></div>' +
+                '<button type="button" id="patEdX" class="text-slate-400 hover:text-white text-2xl leading-none" title="Fermer">&times;</button></div>' +
+                '<div id="patEdBanner" class="' + (src.banner ? '' : 'hidden ') + 'px-4 py-2 text-sm bg-amber-500/15 text-amber-200 border-b border-amber-500/30">' + escapeHtml(src.banner || '') + '</div>' +
+                '<div class="flex flex-wrap items-center gap-2 px-4 py-2 border-b border-slate-700 text-sm">' + typeBtns +
+                '<label class="flex items-center gap-1 ml-1 text-xs text-slate-300">Taille <input type="range" id="patEdSize" min="4" max="40" value="' + Math.round(PATTERN_DEFAULT_RADIUS * 1000) + '"></label>' +
+                '<label class="flex items-center gap-1 text-xs text-slate-300">Zoom <input type="range" id="patEdZoom" min="100" max="400" step="25" value="100"></label>' +
+                '<button type="button" id="patEdUndo" class="ged-btn-secondary px-2 py-1 rounded text-xs font-semibold">↶ Annuler</button>' +
+                '<button type="button" id="patEdClear" class="ged-btn-secondary px-2 py-1 rounded text-xs font-semibold">🗑 Tout effacer</button></div>' +
+                '<div class="flex flex-wrap items-center gap-2 px-4 py-2 border-b border-slate-700 text-xs text-slate-300">' +
+                '<label class="flex items-center gap-1">N° du trou <select id="patEdHole" class="bg-slate-800 border border-slate-600 rounded px-2 py-1 text-white text-xs max-w-[11rem]"></select></label>' +
+                '<button type="button" id="patEdAuto" class="px-2 py-1 rounded bg-emerald-700 hover:bg-emerald-600 text-white font-semibold">⚡ Hachurer les trous du jour</button>' +
+                '<label class="flex items-center gap-1"><input type="checkbox" id="patEdLabels"' + (st.labels ? ' checked' : '') + '> Numéros</label>' +
+                '<label class="flex items-center gap-1"><input type="checkbox" id="patEdLegend"' + (st.legend.show ? ' checked' : '') + '> Légende</label>' +
+                '<select id="patEdLegendPos" class="bg-slate-800 border border-slate-600 rounded px-2 py-1 text-white text-xs">' +
+                [['bl', 'en bas à gauche'], ['br', 'en bas à droite'], ['tl', 'en haut à gauche'], ['tr', 'en haut à droite']].map(function (o) { return '<option value="' + o[0] + '"' + (st.legend.pos === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') +
+                '</select><span id="patEdHoleInfo" class="text-slate-400"></span></div>' +
+                '<div id="patEdWrap" class="overflow-auto bg-slate-950" style="min-height:200px;touch-action:pan-x pan-y"><canvas id="patEdCanvas" style="display:block;margin:0 auto;cursor:crosshair"></canvas></div>' +
+                '<div class="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-t border-slate-700">' +
+                '<span id="patEdCounts" class="text-sm text-slate-300"></span>' +
+                '<div class="flex gap-2"><button type="button" id="patEdCancel" class="ged-btn-secondary px-4 py-2 rounded-lg font-semibold">Fermer</button>' +
+                '<button type="button" id="patEdSave" class="ged-btn-primary px-4 py-2 rounded-lg font-semibold">💾 Enregistrer le plan hachuré</button></div></div></div>';
+            document.body.appendChild(modal);
+            modal.querySelectorAll('[data-pat-type]').forEach(function (b) { b.addEventListener('click', function () { _patEd.type = b.getAttribute('data-pat-type'); _patEdToolbar(); }); });
+            _patEdEl('patEdSize').addEventListener('input', function (e) { _patEd.r = Math.max(4, Math.min(40, parseInt(e.target.value, 10) || 12)) / 1000; });
+            _patEdEl('patEdZoom').addEventListener('input', function (e) { _patEd.zoom = (parseInt(e.target.value, 10) || 100) / 100; _patEdRender(); });
+            _patEdEl('patEdUndo').addEventListener('click', _patEdUndo);
+            _patEdEl('patEdClear').addEventListener('click', function () {
+                if (!_patEd.marks.length || !confirm('Effacer toutes les hachures de ce plan ?')) return;
+                _patEd.history.push({ op: 'clear', marks: _patEd.marks.slice() }); _patEd.marks = []; _patEd.dirty = true; _patEdRender();
+            });
+            _patEdEl('patEdAuto').addEventListener('click', _patEdAutoHatch);
+            _patEdEl('patEdLabels').addEventListener('change', function (e) { _patEd.labels = !!e.target.checked; _patEd.dirty = true; _patEdRender(); });
+            _patEdEl('patEdLegend').addEventListener('change', function (e) { _patEd.legend.show = !!e.target.checked; _patEd.dirty = true; _patEdRender(); });
+            _patEdEl('patEdLegendPos').addEventListener('change', function (e) { _patEd.legend.pos = e.target.value; _patEd.dirty = true; _patEdRender(); });
+            _patEdEl('patEdSave').addEventListener('click', _patEdSave);
+            _patEdEl('patEdCancel').addEventListener('click', _patEdClose);
+            _patEdEl('patEdX').addEventListener('click', _patEdClose);
+            var cv = _patEdEl('patEdCanvas');
+            cv.addEventListener('pointerdown', function (e) { _patEd.down = { x: e.clientX, y: e.clientY, t: Date.now() }; });
+            cv.addEventListener('pointercancel', function () { _patEd.down = null; });
+            cv.addEventListener('pointerup', function (e) {
+                var d = _patEd.down; _patEd.down = null;
+                if (!d || Math.abs(e.clientX - d.x) > 8 || Math.abs(e.clientY - d.y) > 8 || Date.now() - d.t > 900) return;
+                _patEdTap(e.clientX, e.clientY);
+            });
+            _patEd.onResize = function () { _patEdRender(); };
+            window.addEventListener('resize', _patEd.onResize);
+            _patEdFillHoleSelect();
+            _patEdToolbar();
+            _patEdRender();
+        }
+        function _patEdPlacedIds() {
+            var placed = {};
+            _patEd.marks.forEach(function (m) { if (m.id) placed[m.id.toUpperCase()] = 1; });
+            return placed;
+        }
+        function _patEdFillHoleSelect(preferred) {
+            var sel = _patEdEl('patEdHole'); if (!sel) return;
+            var placed = _patEdPlacedIds();
+            var remaining = _patEd.dayHoles.filter(function (id) { return !placed[id.toUpperCase()]; });
+            var opts = '<option value="__none">Sans numéro</option>' + remaining.map(function (id) { return '<option value="' + escapeHtmlForAttr(id) + '">' + escapeHtml(id) + '</option>'; }).join('') + '<option value="__other">Autre numéro…</option>';
+            sel.innerHTML = opts;
+            var want = preferred != null ? preferred : (remaining[0] || '__none');
+            sel.value = remaining.indexOf(want) >= 0 ? want : (remaining[0] || '__none');
+            var info = _patEdEl('patEdHoleInfo');
+            if (info) info.textContent = _patEd.dayHoles.length ? ('Trous du jour ' + (_patEd.dayScoped ? 'dans cette fosse' : '(toutes fosses)') + ' : ' + (_patEd.dayHoles.length - remaining.length) + '/' + _patEd.dayHoles.length + ' placés') : 'Aucun trou saisi ce jour pour cette fosse';
+        }
+        function _patEdToolbar() {
+            document.querySelectorAll('#patternEditorModal [data-pat-type]').forEach(function (b) {
+                var on = b.getAttribute('data-pat-type') === _patEd.type;
+                var col = _patEd.type === 'planned' ? '#475569' : PATTERN_MARK_TYPES[_patEd.type].color;
+                b.style.background = on ? col : 'transparent';
+                b.style.color = on ? '#fff' : '';
+                b.style.borderColor = on ? '#F5B800' : '';
+                b.style.boxShadow = on ? '0 0 0 2px #F5B800' : 'none';
+                b.setAttribute('aria-pressed', on ? 'true' : 'false');
+            });
+        }
+        function _patEdState() { return normalizePatternState({ marks: _patEd.marks, labels: _patEd.labels, legend: _patEd.legend }); }
+        function _patEdTitle() { return 'Fosse ' + (_patEd.zone || '') + ' — ' + _patDateFr(_patEd.date); }
+        function _patEdRender() {
+            if (!_patEd) return;
+            var cv = _patEdEl('patEdCanvas'), wrap = _patEdEl('patEdWrap'); if (!cv || !wrap) return;
+            // Place disponible : largeur du panneau, hauteur de l'écran moins les barres d'outils.
+            var used = 0;
+            Array.prototype.forEach.call(wrap.parentElement.children, function (c) { if (c !== wrap) used += c.offsetHeight || 0; });
+            var availW = Math.max(200, wrap.clientWidth - 16);
+            var availH = Math.max(200, window.innerHeight * 0.96 - used - 40);
+            wrap.style.maxHeight = Math.round(availH + 8) + 'px';
+            var fit = Math.min(availW / _patEd.natW, availH / _patEd.natH, 1.5);
+            var cssW = Math.round(_patEd.natW * fit * _patEd.zoom), cssH = Math.round(_patEd.natH * fit * _patEd.zoom);
+            var dpr = Math.min(2, window.devicePixelRatio || 1);
+            cv.style.width = cssW + 'px'; cv.style.height = cssH + 'px';
+            cv.width = Math.round(cssW * dpr); cv.height = Math.round(cssH * dpr);
+            drawPatternScene(cv.getContext('2d'), cv.width, cv.height, _patEd.img, _patEdState(), { title: _patEdTitle() });
+            var counts = summarizePatternMarks(_patEdState());
+            var ce = _patEdEl('patEdCounts');
+            if (ce) ce.textContent = counts.total ? ('Hachures : ' + patternMarkCountsText(counts)) : 'Aucun trou hachuré pour l\'instant.';
+        }
+        function _patEdTap(clientX, clientY) {
+            var cv = _patEdEl('patEdCanvas'); var rect = cv.getBoundingClientRect();
+            if (!rect.width || !rect.height) return;
+            var nx = (clientX - rect.left) / rect.width, ny = (clientY - rect.top) / rect.height;
+            if (nx < 0 || nx > 1 || ny < 0 || ny > 1) return;
+            var hit = -1, best = Infinity;
+            _patEd.marks.forEach(function (m, i) {
+                var dx = (m.x - nx) * rect.width, dy = (m.y - ny) * rect.height, dist = Math.sqrt(dx * dx + dy * dy);
+                var tol = Math.max(m.r * rect.width * 1.25, 9);
+                if (dist <= tol && dist < best) { best = dist; hit = i; }
+            });
+            if (hit >= 0) {
+                var removed = _patEd.marks.splice(hit, 1)[0];
+                _patEd.history.push({ op: 'remove', mark: removed, index: hit });
+                _patEd.dirty = true; _patEdFillHoleSelect(removed.id || undefined); _patEdRender();
+                return;
+            }
+            var sel = _patEdEl('patEdHole'), id = '';
+            if (sel && sel.value === '__other') { id = String(prompt('Numéro du trou :', '') || '').trim().slice(0, 40); }
+            else if (sel && sel.value && sel.value !== '__none') id = sel.value;
+            var mark = { x: +nx.toFixed(5), y: +ny.toFixed(5), t: _patEd.type, r: _patEd.r, id: id };
+            _patEd.marks.push(mark);
+            _patEd.history.push({ op: 'add', mark: mark });
+            _patEd.dirty = true;
+            _patEdFillHoleSelect();
+            _patEdRender();
+        }
+        function _patEdUndo() {
+            var h = _patEd && _patEd.history.pop(); if (!h) return;
+            if (h.op === 'add') { var i = _patEd.marks.indexOf(h.mark); if (i >= 0) _patEd.marks.splice(i, 1); }
+            else if (h.op === 'remove') _patEd.marks.splice(Math.min(h.index, _patEd.marks.length), 0, h.mark);
+            else if (h.op === 'clear') _patEd.marks = h.marks;
+            else if (h.op === 'auto') h.changes.forEach(function (c) { c.mark.t = c.from; });
+            _patEd.dirty = true; _patEdFillHoleSelect(); _patEdRender();
+        }
+        function _patEdAutoHatch() {
+            var ids = {}; _patEd.dayHoles.forEach(function (id) { ids[id.toUpperCase()] = 1; });
+            var changes = [];
+            _patEd.marks.forEach(function (m) { if (m.id && ids[m.id.toUpperCase()] && m.t !== 'drilled') { changes.push({ mark: m, from: m.t }); m.t = 'drilled'; } });
+            var placed = _patEdPlacedIds();
+            var missing = _patEd.dayHoles.filter(function (id) { return !placed[id.toUpperCase()]; });
+            if (changes.length) { _patEd.history.push({ op: 'auto', changes: changes }); _patEd.dirty = true; }
+            var b = _patEdEl('patEdBanner');
+            if (b) {
+                b.classList.remove('hidden');
+                if (!_patEd.dayHoles.length) b.textContent = 'Aucun trou saisi ce jour pour cette fosse : hachurez les trous en touchant la photo.';
+                else if (!changes.length && !missing.length) b.textContent = 'Tous les trous saisis ce jour sont déjà hachurés sur la photo.';
+                else b.textContent = (changes.length ? changes.length + ' trou(s) du jour hachuré(s) automatiquement d\'après leur position. ' : '') +
+                    (missing.length ? missing.length + ' trou(s) du jour pas encore placé(s) (' + missing.slice(0, 8).join(', ') + (missing.length > 8 ? '…' : '') + ') : choisissez le numéro puis touchez le trou sur la photo.' : 'Tous les trous du jour sont hachurés.');
+            }
+            _patEdRender();
+        }
+        function _patEdClose() {
+            if (_patEd && _patEd.dirty && !confirm('Fermer sans enregistrer les hachures ?')) return;
+            if (_patEd && _patEd.onResize) window.removeEventListener('resize', _patEd.onResize);
+            var m = _patEdEl('patternEditorModal'); if (m) m.remove();
+            _patEd = null;
+        }
+        function _patEdSave() {
+            if (!_patEd) return;
+            var btn = _patEdEl('patEdSave'); if (btn) { btn.disabled = true; btn.textContent = 'Enregistrement…'; }
+            var state = _patEdState();
+            var out;
+            try {
+                var cv = document.createElement('canvas'); cv.width = _patEd.natW; cv.height = _patEd.natH;
+                drawPatternScene(cv.getContext('2d'), cv.width, cv.height, _patEd.img, state, { title: _patEdTitle() });
+                out = cv.toDataURL('image/jpeg', 0.87);
+            } catch (e) {
+                alert('Rendu impossible : ' + (e && e.message ? e.message : e));
+                if (btn) { btn.disabled = false; btn.textContent = '💾 Enregistrer le plan hachuré'; }
+                return;
+            }
+            var payload = { date: _patEd.date, zone: _patEd.zone, siteId: _patEd.siteId, image: out, baseImage: _patEd.base, marks: state, source: 'photo' };
+            window.API.PatternPhotos.save(payload).then(function (res) {
+                _patEd.dirty = false; _patEd.id = res && res.id;
+                _patEdClose();
+                renderPatternList();
+                var counts = summarizePatternMarks(state);
+                alert('Plan hachuré enregistré (' + (counts.total ? patternMarkCountsText(counts) : 'aucune hachure') + '). Il apparaît dans les rapports journaliers du ' + _patDateFr(payload.date) + ' (PDF et PowerPoint).');
+            }).catch(function (e) {
+                alert('Enregistrement impossible : ' + (e && e.message ? e.message : e));
+                if (btn) { btn.disabled = false; btn.textContent = '💾 Enregistrer le plan hachuré'; }
+            });
         }
         function initPatternPanel() {
             var sel = document.getElementById('patternZone');
@@ -19228,6 +19713,7 @@
             renderPatternList();
         }
         window.uploadPatternPhoto = uploadPatternPhoto; window.renderPatternList = renderPatternList; window.deletePattern = deletePattern; window.generateAutoPattern = generateAutoPattern; window.initPatternPanel = initPatternPanel;
+        window.openPatternEditor = openPatternEditor; window.resumePreviousPattern = resumePreviousPattern;
 
         function generateDailyReport(detailed) {
             var date = document.getElementById('reportDailyDate').value;
@@ -19645,6 +20131,9 @@
                 s2.addText(dec(goal) + ' m', { x: 10.9, y: by + 0.45, w: 1.8, h: 0.3, fontSize: 12, bold: true, color: BLACK });
             }
 
+            // 2b — Graphiques de la journée (mêmes graphiques que le rapport PDF)
+            try { addDailyReportChartSlides(pptx, slideTitle, date, records, 'management'); } catch (eChart) { console.warn('Graphiques PowerPoint :', eChart); }
+
             // 3 — Production par machine
             var s3 = pptx.addSlide(); slideTitle(s3, 'Production & rendement par machine');
             table(s3, ['Machine / poste', 'Prog. (h)', 'Util. (h)', 'Prod. (h)', 'Nouveau (m)', 'Rend. (m/h)', 'Dispo. (%)'], machineRows,
@@ -19685,24 +20174,28 @@
             // 6c — Plans hachurés des patterns (une diapo par fosse/zone)
             try {
                 var patMap = (typeof reportPatternsByZone === 'object' && reportPatternsByZone) ? reportPatternsByZone : {};
-                Object.keys(patMap).forEach(function (zk) {
-                    var p = patMap[zk]; if (!p || !p.image) return;
-                    var sp = pptx.addSlide(); slideTitle(sp, 'Plan hachuré — ' + (p.zone || ''));
-                    try { sp.addImage({ data: p.image, x: 0.6, y: 1.5, w: 12.1, h: 5.4, sizing: { type: 'contain', w: 12.1, h: 5.4 } }); } catch (ei) {}
-                    sp.addText((p.source === 'auto' ? 'Hachurage automatique (coordonnées du plan)' : 'Photo importée du pattern foré'), { x: 0.6, y: 7.0, w: 12.1, h: 0.35, fontSize: 10, italic: true, color: GRAY });
+                Object.keys(patMap).sort(function (a, b) { return a.localeCompare(b, 'fr', { numeric: true }); }).forEach(function (zk) {
+                    var p = patMap[zk]; if (!p || !isSafePatternImage(p.image)) return;
+                    var info = describePatternForReport(p, records);
+                    var sp = pptx.addSlide(); slideTitle(sp, 'Plan hachuré — Fosse ' + (p.zone || ''));
+                    try { sp.addImage({ data: p.image, x: 0.6, y: 1.35, w: 12.1, h: 5.15, sizing: { type: 'contain', w: 12.1, h: 5.15 } }); } catch (ei) {}
+                    sp.addText([info.source, info.countsText, info.dayText].filter(Boolean).join('   •   '), { x: 0.6, y: 6.55, w: 12.1, h: 0.42, fontSize: 10, italic: true, color: GRAY });
                 });
             } catch (ep) {}
 
             // 7 — Pannes & observations
             var s7 = pptx.addSlide(); slideTitle(s7, 'Pannes, observations & changements');
-            function block(s, title, items, x, y, w, empty) {
+            function block(s, title, items, x, y, w, h, empty, maxItems) {
                 s.addText(title, { x: x, y: y, w: w, h: 0.4, fontSize: 14, bold: true, color: BLACK });
-                if (!items.length) { s.addText(empty, { x: x, y: y + 0.45, w: w, h: 0.5, fontSize: 12, italic: true, color: '999999' }); return; }
-                s.addText(items.map(function (t) { return { text: t, options: { bullet: { indent: 12 }, fontSize: 12, color: '222222', paraSpaceAfter: 6 } }; }), { x: x, y: y + 0.45, w: w, h: 4.4 });
+                if (!items.length) { s.addText(empty, { x: x, y: y + 0.45, w: w, h: 0.5, fontSize: 12, italic: true, color: '999999', valign: 'top' }); return; }
+                var shown = items.slice(0, maxItems);
+                if (items.length > maxItems) shown.push('… et ' + (items.length - maxItems) + ' autre(s)');
+                var fs = shown.length > 7 ? 10 : shown.length > 4 ? 11 : 12;
+                s.addText(shown.map(function (t) { return { text: t, options: { bullet: { indent: 12 }, fontSize: fs, color: '222222', paraSpaceAfter: 4 } }; }), { x: x, y: y + 0.45, w: w, h: h, valign: 'top' });
             }
-            block(s7, '🔧 Pannes mécaniques', pannes, 0.6, 1.5, 6.0, 'Aucune panne enregistrée.');
-            block(s7, '📝 Observations', obsList, 6.9, 1.5, 5.8, 'Aucune observation.');
-            block(s7, '🔁 Changements / consommables', changes, 0.6, 4.6, 12.1, 'Aucun changement signalé.');
+            block(s7, '🔧 Pannes mécaniques', pannes, 0.6, 1.4, 6.0, 2.75, 'Aucune panne enregistrée.', 9);
+            block(s7, '📝 Observations', obsList, 6.9, 1.4, 5.8, 2.75, 'Aucune observation.', 9);
+            block(s7, '🔁 Changements / consommables', changes, 0.6, 4.75, 12.1, 1.95, 'Aucun changement signalé.', 6);
 
             // 8 — Machines garées
             var s8 = pptx.addSlide(); slideTitle(s8, 'Machines garées — état du parc');
@@ -19856,6 +20349,9 @@
                 [{ label: 'Réalisé', value: agg.production, color: '1D4ED8' }, { label: 'Planifié', value: goal != null ? goal : null, color: 'C27803' }],
                 'Objectif journalier issu de la planification enregistrée.');
 
+            // 2a — Graphiques de tendance (mêmes graphiques que la synthèse PDF)
+            try { addDailyReportChartSlides(pptx, slideTitle, date, records, 'executive'); } catch (eChart) { console.warn('Graphiques PowerPoint :', eChart); }
+
             // 2b — Zones forées et trous travaillés
             var sZ = pptx.addSlide(); slideTitle(sZ, 'Zones forées et trous travaillés');
             if (nbZones > 0) sZ.addText([{ text: 'Zones : ', options: { bold: true } }, { text: Object.keys(zones).join(', ') }], { x: 0.5, y: 1.35, w: 12.3, h: 0.5, fontSize: 13, color: NAVY });
@@ -19875,11 +20371,12 @@
             // 2c — Plans hachurés des patterns (une diapo par fosse/zone)
             try {
                 var patMapS = (typeof reportPatternsByZone === 'object' && reportPatternsByZone) ? reportPatternsByZone : {};
-                Object.keys(patMapS).forEach(function (zk) {
-                    var pp = patMapS[zk]; if (!pp || !pp.image) return;
-                    var sp = pptx.addSlide(); slideTitle(sp, 'Plan hachuré — ' + (pp.zone || ''));
-                    try { sp.addImage({ data: pp.image, x: 0.6, y: 1.5, w: 12.1, h: 5.4, sizing: { type: 'contain', w: 12.1, h: 5.4 } }); } catch (ei) {}
-                    sp.addText((pp.source === 'auto' ? 'Hachurage automatique (coordonnées du plan)' : 'Photo importée du pattern foré'), { x: 0.6, y: 7.0, w: 12.1, h: 0.35, fontSize: 10, italic: true, color: GRAY });
+                Object.keys(patMapS).sort(function (a, b) { return a.localeCompare(b, 'fr', { numeric: true }); }).forEach(function (zk) {
+                    var pp = patMapS[zk]; if (!pp || !isSafePatternImage(pp.image)) return;
+                    var infoS = describePatternForReport(pp, records);
+                    var sp = pptx.addSlide(); slideTitle(sp, 'Plan hachuré — Fosse ' + (pp.zone || ''));
+                    try { sp.addImage({ data: pp.image, x: 0.6, y: 1.35, w: 12.1, h: 5.15, sizing: { type: 'contain', w: 12.1, h: 5.15 } }); } catch (ei) {}
+                    sp.addText([infoS.source, infoS.countsText, infoS.dayText].filter(Boolean).join('   •   '), { x: 0.6, y: 6.6, w: 12.1, h: 0.42, fontSize: 10, italic: true, color: GRAY });
                 });
             } catch (ep) {}
 
@@ -20198,6 +20695,479 @@
                 ch.destroy(); document.body.removeChild(cv);
                 return url;
             } catch (e) { return ''; }
+        }
+
+        // ============================================================
+        // GRAPHIQUES DES RAPPORTS JOURNALIERS (PDF + PowerPoint)
+        //  - Données : uniquement les saisies terminées du site (même source
+        //    que les tableaux du rapport) ; aucune valeur n'est inventée.
+        //  - Rendu : Chart.js hors écran → images PNG, fiables à l'impression
+        //    et réutilisables telles quelles dans le PowerPoint.
+        // ============================================================
+        var RPT_CHART_AVAIL_THRESHOLD = 85;
+        var RPT_CHART_TREND_DAYS = 14;
+        // Taille de police de base des graphiques (px du canevas) : 12 pour le PDF
+        // (≈ 7,5 pt imprimé), relevée pour les diapositives PowerPoint.
+        var _rptFontBase = 12;
+        var RPT_C = {
+            ink: '#1e293b', tick: '#334155', grid: 'rgba(15,23,42,0.08)',
+            blue: '#1d4ed8', blueLight: '#93c5fd', violet: '#7c3aed', amber: '#c27803',
+            orange: '#ea580c', sky: '#0284c7', green: '#16a34a', red: '#dc2626',
+            teal: '#0f766e', slate: '#64748b', yellow: '#d97706', gray: '#a3a3a3'
+        };
+        var RPT_CHART_LAYOUTS = {
+            management: ['meters', 'trend', 'fuel', 'avail', 'shift', 'stops', 'month'],
+            detailed: ['trend', 'shift', 'fuel', 'avail', 'stops', 'month'],
+            executive: ['trend', 'shift', 'availTrend', 'stopsDonut', 'month']
+        };
+        var RPT_PPTX_CHART_GROUPS = {
+            management: [
+                ['Graphiques — production du jour', ['meters', 'trend']],
+                ['Graphiques — carburant & disponibilité', ['fuel', 'avail']],
+                ['Graphiques — équipes & arrêts', ['shift', 'stops']],
+                ['Graphiques — cumul du mois minier', ['month']]
+            ],
+            executive: [
+                ['Tendances — 14 derniers jours', ['trend', 'shift']],
+                ['Disponibilité & arrêts', ['availTrend', 'stopsDonut']],
+                ['Cumul du mois minier', ['month']]
+            ]
+        };
+
+        function _rptAddDays(dateStr, delta) {
+            var t = Date.parse(String(dateStr || '') + 'T00:00:00Z');
+            if (!isFinite(t)) return null;
+            return new Date(t + delta * 86400000).toISOString().slice(0, 10);
+        }
+        function _rptShortDate(dateStr) {
+            var p = String(dateStr || '').split('-');
+            return p.length === 3 ? p[2] + '/' + p[1] : String(dateStr || '');
+        }
+        function _rptFmt(v, digits) {
+            if (v == null || !isFinite(Number(v))) return 'N/A';
+            var d = digits == null ? 1 : digits;
+            return Number(v).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: d });
+        }
+        function _rptNum(v) { var n = Number(v); return isFinite(n) && n > 0 ? n : 0; }
+        function _rptEsc(s) {
+            return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        // Agrège les saisies du jour (par machine) et l'historique (tendances).
+        function computeDailyReportChartData(date, records, history) {
+            records = (records || []).filter(function (r) { return r && !isDailyRecordIncompleteDraft(r); });
+            history = (history || []).filter(function (r) { return r && !isDailyRecordIncompleteDraft(r); });
+            var STOP_KEYS = ['bdn', 'stb', 'gsa', 'prd', 'other'];
+            var mm = {}, order = [];
+            var totals = { production: 0, redrill: 0, fuel: 0, usedHours: 0, scheduled: 0, bdn: 0, stb: 0, gsa: 0, prd: 0, other: 0 };
+            var wAvail = { sum: 0, h: 0 }, wUoa = { sum: 0, h: 0 };
+            records.forEach(function (r) {
+                var m = computeOperationalReportMetrics(_rpData(r));
+                var id = String(_rpMachineName(r) || r.machineId || '—');
+                if (!mm[id]) {
+                    mm[id] = { id: id, production: 0, redrill: 0, fuel: 0, usedHours: 0, scheduled: 0, availSum: 0, availH: 0, bdn: 0, stb: 0, gsa: 0, prd: 0, other: 0 };
+                    order.push(id);
+                }
+                var M = mm[id];
+                M.production += _rptNum(m.production); totals.production += _rptNum(m.production);
+                M.redrill += _rptNum(m.redrillM); totals.redrill += _rptNum(m.redrillM);
+                M.fuel += _rptNum(m.fuel); totals.fuel += _rptNum(m.fuel);
+                M.usedHours += _rptNum(m.usedHours); totals.usedHours += _rptNum(m.usedHours);
+                M.scheduled += _rptNum(m.scheduled); totals.scheduled += _rptNum(m.scheduled);
+                STOP_KEYS.forEach(function (k) { M[k] += _rptNum(m[k]); totals[k] += _rptNum(m[k]); });
+                if (m.scheduled > 0 && m.mechAvail != null && isFinite(Number(m.mechAvail))) {
+                    M.availSum += Number(m.mechAvail) * m.scheduled; M.availH += m.scheduled;
+                    wAvail.sum += Number(m.mechAvail) * m.scheduled; wAvail.h += m.scheduled;
+                }
+                if (m.scheduled > 0 && m.uoa != null && isFinite(Number(m.uoa))) { wUoa.sum += Number(m.uoa) * m.scheduled; wUoa.h += m.scheduled; }
+            });
+            var machines = order.map(function (id) {
+                var M = mm[id];
+                var stops = { bdn: M.bdn, stb: M.stb, gsa: M.gsa, prd: M.prd, other: M.other };
+                return {
+                    id: id, production: M.production, redrill: M.redrill, fuel: M.fuel,
+                    lpm: (M.production > 0 && M.fuel > 0) ? M.fuel / M.production : null,
+                    usedHours: M.usedHours, scheduled: M.scheduled,
+                    mechAvail: M.availH > 0 ? M.availSum / M.availH : null,
+                    stops: stops, totalStops: M.bdn + M.stb + M.gsa + M.prd + M.other
+                };
+            }).sort(function (a, b) { return (b.production - a.production) || String(a.id).localeCompare(String(b.id), 'fr', { numeric: true }); });
+            totals.mechAvail = wAvail.h > 0 ? wAvail.sum / wAvail.h : null;
+            totals.uoa = wUoa.h > 0 ? wUoa.sum / wUoa.h : null;
+            totals.lpm = (totals.production > 0 && totals.fuel > 0) ? totals.fuel / totals.production : null;
+            totals.totalStops = totals.bdn + totals.stb + totals.gsa + totals.prd + totals.other;
+
+            // Regroupement par date : le jour du rapport provient exactement des
+            // saisies du rapport ; les autres jours de l'historique du site.
+            var byDate = {};
+            function bucket(dt) {
+                if (!byDate[dt]) byDate[dt] = { has: false, production: 0, day: null, night: null, full: null, availSum: 0, availH: 0, uoaSum: 0, uoaH: 0, recs: [] };
+                return byDate[dt];
+            }
+            function addRec(b, r) {
+                var d = _rpData(r), m = computeOperationalReportMetrics(d);
+                var p = _rptNum(m.production);
+                b.has = true; b.production += p; b.recs.push(r);
+                var sk = (typeof dailyRecordShiftKey === 'function' ? dailyRecordShiftKey(r) : (d.shift || '')) || 'full';
+                if (sk !== 'day' && sk !== 'night') sk = 'full';
+                b[sk] = (b[sk] || 0) + p;
+                if (m.scheduled > 0 && m.mechAvail != null && isFinite(Number(m.mechAvail))) { b.availSum += Number(m.mechAvail) * m.scheduled; b.availH += m.scheduled; }
+                if (m.scheduled > 0 && m.uoa != null && isFinite(Number(m.uoa))) { b.uoaSum += Number(m.uoa) * m.scheduled; b.uoaH += m.scheduled; }
+            }
+            history.forEach(function (r) { if (!r.date || r.date === date) return; addRec(bucket(r.date), r); });
+            records.forEach(function (r) { addRec(bucket(date), r); });
+            function goalFor(dt) {
+                try {
+                    var g = getReportPlannedProduction(dt, (byDate[dt] && byDate[dt].recs) || []);
+                    return g && g.value != null && isFinite(Number(g.value)) ? Number(g.value) : null;
+                } catch (e) { return null; }
+            }
+
+            var days = [];
+            for (var i = RPT_CHART_TREND_DAYS - 1; i >= 0; i--) { var dd = _rptAddDays(date, -i); if (dd) days.push(dd); }
+            var trend = { days: days, labels: days.map(_rptShortDate), production: [], goals: [], day: [], night: [], full: [], mechAvail: [], uoa: [], has: [] };
+            days.forEach(function (dt) {
+                var b = byDate[dt];
+                var has = !!(b && b.has);
+                trend.has.push(has);
+                trend.production.push(has ? b.production : null);
+                trend.day.push(has ? (b.day || 0) : null);
+                trend.night.push(has ? (b.night || 0) : null);
+                trend.full.push(has && b.full != null ? b.full : null);
+                trend.mechAvail.push(has && b.availH > 0 ? b.availSum / b.availH : null);
+                trend.uoa.push(has && b.uoaH > 0 ? b.uoaSum / b.uoaH : null);
+                trend.goals.push(goalFor(dt));
+            });
+            var prevVals = trend.production.slice(0, -1).filter(function (v) { return v != null; });
+            trend.prevAverage = prevVals.length ? prevVals.reduce(function (s, v) { return s + v; }, 0) / prevVals.length : null;
+            trend.hasFull = trend.full.some(function (v) { return v != null && v > 0; });
+            trend.goalToday = trend.goals[trend.goals.length - 1];
+
+            // Cumul du mois minier (jour de coupure du site, sinon mois calendaire).
+            var siteId = (typeof currentSiteId !== 'undefined' && currentSiteId != null && currentSiteId !== '') ? currentSiteId : null;
+            if (siteId == null) {
+                var rs = {};
+                records.forEach(function (r) { var dr = findDrillByMachineId(r.machineId); if (dr && dr.siteId != null) rs[String(dr.siteId)] = 1; });
+                if (Object.keys(rs).length === 1) siteId = Object.keys(rs)[0];
+            }
+            var month = { key: String(date).slice(0, 7), label: '', start: String(date).slice(0, 8) + '01', days: [], labels: [], daily: [], cumActual: [], cumGoal: [] };
+            try {
+                if (typeof miningMonthKey === 'function' && typeof miningMonthRange === 'function') {
+                    month.key = miningMonthKey(date, siteId);
+                    month.start = miningMonthRange(month.key, siteId).start;
+                    if (typeof miningMonthLabelFr === 'function') month.label = miningMonthLabelFr(month.key, siteId);
+                }
+            } catch (eMonth) { /* mois calendaire */ }
+            if (!month.label) {
+                try { month.label = new Date(String(date).slice(0, 7) + '-01T00:00:00').toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }); } catch (eL) { month.label = month.key; }
+            }
+            var cum = 0, cumG = 0, goalOk = true, cur = month.start, guard = 0;
+            while (cur && cur <= date && guard < 40) {
+                var bm = byDate[cur];
+                var dv = bm && bm.has ? bm.production : 0;
+                cum += dv;
+                var g = goalFor(cur);
+                if (g == null) goalOk = false; else cumG += g;
+                month.days.push(cur); month.labels.push(_rptShortDate(cur)); month.daily.push(bm && bm.has ? bm.production : null);
+                month.cumActual.push(cum); month.cumGoal.push(goalOk ? cumG : null);
+                cur = _rptAddDays(cur, 1); guard++;
+            }
+            month.total = cum;
+            month.goalTotal = goalOk && month.days.length ? cumG : null;
+            month.hasGoal = month.cumGoal.some(function (v) { return v != null; });
+
+            return { date: date, machines: machines, totals: totals, trend: trend, month: month };
+        }
+
+        // Plugins Chart.js du rendu imprimable : fond blanc + valeurs affichées.
+        function _rptChartPlugins() {
+            return [{
+                id: 'rptWhiteBg',
+                beforeDraw: function (chart) {
+                    var c = chart.ctx; c.save(); c.globalCompositeOperation = 'destination-over';
+                    c.fillStyle = '#ffffff'; c.fillRect(0, 0, chart.width, chart.height); c.restore();
+                }
+            }, {
+                id: 'rptValueLabels',
+                afterDatasetsDraw: function (chart, args, o) {
+                    if (!o || !o.mode) return;
+                    var ctx = chart.ctx; ctx.save();
+                    ctx.font = '700 ' + Math.round((o.fontSize || 0) + _rptFontBase) + 'px Arial, Helvetica, sans-serif';
+                    ctx.fillStyle = o.color || RPT_C.ink;
+                    var horizontal = chart.options.indexAxis === 'y';
+                    var fmt = function (v) { return _rptFmt(v, o.digits == null ? 1 : o.digits) + (o.suffix || ''); };
+                    var draw = function (txt, el) {
+                        if (horizontal) { ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(txt, el.x + 4, el.y); }
+                        else { ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.fillText(txt, el.x, el.y - 3); }
+                    };
+                    if (o.mode === 'stackTotal') {
+                        var metas = chart.getSortedVisibleDatasetMetas().filter(function (m) { return m.type === 'bar'; });
+                        var n = (chart.data.labels || []).length;
+                        for (var i = 0; i < n; i++) {
+                            var tot = 0, top = null, best = null;
+                            metas.forEach(function (meta) {
+                                var v = Number(chart.data.datasets[meta.index].data[i]);
+                                if (isFinite(v) && v > 0) {
+                                    tot += v;
+                                    var el = meta.data[i]; if (!el) return;
+                                    var pos = horizontal ? el.x : el.y;
+                                    if (best == null || (horizontal ? pos > best : pos < best)) { best = pos; top = el; }
+                                }
+                            });
+                            if (top && tot > 0) draw(fmt(tot), top);
+                        }
+                    } else {
+                        (o.datasets || [0]).forEach(function (di) {
+                            var meta = chart.getDatasetMeta(di);
+                            if (!meta || meta.hidden) return;
+                            meta.data.forEach(function (el, i) {
+                                var v = chart.data.datasets[di].data[i];
+                                if (v == null || !isFinite(Number(v)) || (o.skipZero && Number(v) === 0)) return;
+                                draw(fmt(v), el);
+                            });
+                        });
+                    }
+                    ctx.restore();
+                }
+            }];
+        }
+        function _rptScales(o) {
+            o = o || {};
+            var tick = { color: RPT_C.tick, font: { size: _rptFontBase, family: 'Arial' } };
+            var y = { stacked: !!o.stacked, beginAtZero: true, grace: o.grace || '12%', ticks: Object.assign({}, tick, { callback: function (v) { return _rptFmt(v, 1) + (o.ySuffix || ''); } }), grid: { color: RPT_C.grid } };
+            if (o.yMax != null) { y.max = o.yMax; delete y.grace; }
+            if (o.yTitle) y.title = { display: true, text: o.yTitle, color: '#475569', font: { size: _rptFontBase, family: 'Arial' } };
+            var xt = o.catAll ? { autoSkip: false, maxRotation: 50, minRotation: 0 } : { maxRotation: 0, autoSkip: true };
+            return { x: { stacked: !!o.stacked, ticks: Object.assign({}, tick, xt), grid: { display: false } }, y: y };
+        }
+        function _rptLegend(show) {
+            return { display: !!show, position: 'bottom', labels: { color: RPT_C.tick, font: { size: _rptFontBase, family: 'Arial' }, boxWidth: Math.round(_rptFontBase), padding: Math.round(_rptFontBase * 0.8) } };
+        }
+        function rptRenderChart(spec, w, h) {
+            if (!spec || !spec.cfg) return '';
+            spec.cfg.plugins = (spec.cfg.plugins || []).concat(_rptChartPlugins());
+            try { return reportChartToImg(spec.cfg, w || spec.w || 600, h || spec.h || 300); } catch (e) { return ''; }
+        }
+
+        // Spécification d'un graphique (titre, lecture, configuration Chart.js).
+        function buildDailyReportChartSpec(key, data, variant) {
+            if (!data) return null;
+            var T = data.totals, tr = data.trend, ms = data.machines;
+            var ids = ms.map(function (m) { return m.id; });
+            var spec = null;
+            if (key === 'meters') {
+                if (!ms.length) return null;
+                var hasRedrill = ms.some(function (m) { return m.redrill > 0; });
+                var dsM = [{ label: 'Nouveau (m)', data: ms.map(function (m) { return +m.production.toFixed(1); }), backgroundColor: RPT_C.blue, borderRadius: 3, stack: 'm' }];
+                if (hasRedrill) dsM.push({ label: 'Reforé (m)', data: ms.map(function (m) { return +m.redrill.toFixed(1); }), backgroundColor: RPT_C.violet, borderRadius: 3, stack: 'm' });
+                var best = ms[0];
+                spec = {
+                    title: 'Mètres forés par machine — journée',
+                    note: best && best.production > 0 ? 'Meilleure machine : ' + best.id + ' — ' + _rptFmt(best.production) + ' m' + (T.production > 0 ? ' (' + _rptFmt(best.production / T.production * 100, 0) + ' % du total de ' + _rptFmt(T.production) + ' m)' : '') : 'Aucun mètre nouveau enregistré.',
+                    cfg: { type: 'bar', data: { labels: ids, datasets: dsM }, options: { plugins: { legend: _rptLegend(hasRedrill), rptValueLabels: { mode: 'stackTotal', digits: 1 } }, scales: _rptScales({ stacked: true, yTitle: 'Mètres', catAll: true }) } }
+                };
+            } else if (key === 'trend') {
+                if (!tr.has.some(Boolean)) return null;
+                var hasGoal = tr.goals.some(function (v) { return v != null; });
+                var lastIdx = tr.days.length - 1;
+                var dsT = [{ label: 'Mètres nouveaux', data: tr.production.map(function (v) { return v == null ? null : +v.toFixed(1); }), backgroundColor: tr.production.map(function (_, i) { return i === lastIdx ? RPT_C.blue : RPT_C.blueLight; }), borderRadius: 3, order: 2 }];
+                if (hasGoal) dsT.push({ type: 'line', label: 'Objectif journalier', data: tr.goals.map(function (v) { return v == null ? null : +v.toFixed(1); }), borderColor: RPT_C.amber, backgroundColor: RPT_C.amber, borderDash: [6, 4], borderWidth: 2, pointRadius: 0, spanGaps: false, order: 1 });
+                var today = tr.production[lastIdx];
+                var noteT = 'Jour du rapport : ' + _rptFmt(today || 0) + ' m';
+                if (tr.prevAverage != null && tr.prevAverage > 0) {
+                    var pct = ((today || 0) - tr.prevAverage) / tr.prevAverage * 100;
+                    noteT += ' · moyenne des jours précédents : ' + _rptFmt(tr.prevAverage) + ' m/j (' + (pct >= 0 ? '▲ +' : '▼ ') + _rptFmt(pct, 0) + ' %)';
+                }
+                if (tr.goalToday != null) noteT += ' · objectif du jour : ' + _rptFmt(tr.goalToday) + ' m';
+                spec = {
+                    title: 'Production journalière — ' + RPT_CHART_TREND_DAYS + ' derniers jours',
+                    note: noteT + '. Les jours sans saisie ne sont pas tracés.',
+                    cfg: { type: 'bar', data: { labels: tr.labels, datasets: dsT }, options: { plugins: { legend: _rptLegend(hasGoal), rptValueLabels: { mode: 'each', datasets: [0], digits: 0, fontSize: -2 } }, scales: _rptScales({ yTitle: 'Mètres' }) } }
+                };
+            } else if (key === 'fuel') {
+                var fm = ms.filter(function (m) { return m.fuel > 0; });
+                if (!fm.length) return null;
+                var worst = fm.filter(function (m) { return m.lpm != null; }).sort(function (a, b) { return b.lpm - a.lpm; })[0];
+                spec = {
+                    title: 'Carburant (L) & efficacité (L/m) par machine',
+                    note: 'Total : ' + _rptFmt(T.fuel, 0) + ' L' + (T.lpm != null ? ' · efficacité moyenne : ' + _rptFmt(T.lpm, 2) + ' L/m' : '') + (worst ? ' · la plus élevée : ' + worst.id + ' (' + _rptFmt(worst.lpm, 2) + ' L/m)' : ''),
+                    cfg: {
+                        type: 'bar',
+                        data: { labels: ids, datasets: [
+                            { label: 'Carburant (L)', data: ms.map(function (m) { return +m.fuel.toFixed(0); }), backgroundColor: RPT_C.orange, borderRadius: 3, yAxisID: 'y', order: 2 },
+                            { type: 'line', label: 'L/m', data: ms.map(function (m) { return m.lpm == null ? null : +m.lpm.toFixed(2); }), borderColor: RPT_C.sky, backgroundColor: RPT_C.sky, yAxisID: 'y1', tension: 0.25, pointRadius: 3, borderWidth: 2, order: 1 }
+                        ] },
+                        options: { plugins: { legend: _rptLegend(true), rptValueLabels: { mode: 'each', datasets: [0], digits: 0, fontSize: -1 } }, scales: Object.assign(_rptScales({ yTitle: 'Litres', catAll: true }), { y1: { position: 'right', beginAtZero: true, grace: '15%', grid: { display: false }, ticks: { color: RPT_C.sky, font: { size: _rptFontBase, family: 'Arial' }, callback: function (v) { return _rptFmt(v, 2); } }, title: { display: true, text: 'L/m', color: RPT_C.sky, font: { size: _rptFontBase, family: 'Arial' } } } }) }
+                    }
+                };
+            } else if (key === 'avail') {
+                var am = ms.filter(function (m) { return m.mechAvail != null; });
+                if (!am.length) return null;
+                var thr = RPT_CHART_AVAIL_THRESHOLD;
+                var below = am.filter(function (m) { return m.mechAvail < thr; });
+                spec = {
+                    title: 'Disponibilité mécanique par machine (%)',
+                    note: (T.mechAvail != null ? 'Moyenne pondérée : ' + _rptFmt(T.mechAvail, 0) + ' %' : 'Moyenne non disponible') + ' · ' + (below.length ? below.length + ' machine(s) sous le seuil de ' + thr + ' % : ' + below.map(function (m) { return m.id; }).join(', ') : 'toutes les machines au-dessus du seuil de ' + thr + ' %'),
+                    cfg: {
+                        type: 'bar',
+                        data: { labels: am.map(function (m) { return m.id; }), datasets: [
+                            { label: 'Disponibilité (%)', data: am.map(function (m) { return +m.mechAvail.toFixed(1); }), backgroundColor: am.map(function (m) { return m.mechAvail >= thr ? RPT_C.green : m.mechAvail >= 60 ? RPT_C.yellow : RPT_C.red; }), borderRadius: 3, order: 2 },
+                            { type: 'line', label: 'Seuil ' + thr + ' %', data: am.map(function () { return thr; }), borderColor: RPT_C.ink, borderDash: [5, 4], borderWidth: 1.5, pointRadius: 0, order: 1 }
+                        ] },
+                        options: { plugins: { legend: _rptLegend(true), rptValueLabels: { mode: 'each', datasets: [0], digits: 0, suffix: ' %', fontSize: -1 } }, scales: _rptScales({ yMax: 100, ySuffix: ' %', catAll: true }) }
+                    }
+                };
+            } else if (key === 'shift') {
+                if (!tr.has.some(Boolean)) return null;
+                var li = tr.days.length - 1;
+                var dsS = [
+                    { label: 'Équipe Jour', data: tr.day.map(function (v) { return v == null ? null : +v.toFixed(1); }), borderColor: RPT_C.blue, backgroundColor: RPT_C.blue, tension: 0.3, pointRadius: 3, borderWidth: 2.5, spanGaps: false },
+                    { label: 'Équipe Nuit', data: tr.night.map(function (v) { return v == null ? null : +v.toFixed(1); }), borderColor: RPT_C.teal, backgroundColor: RPT_C.teal, tension: 0.3, pointRadius: 3, borderWidth: 2.5, spanGaps: false }
+                ];
+                if (tr.hasFull) dsS.push({ label: 'Journée complète', data: tr.full.map(function (v) { return v == null ? null : +v.toFixed(1); }), borderColor: RPT_C.slate, backgroundColor: RPT_C.slate, tension: 0.3, pointRadius: 3, borderWidth: 2, spanGaps: false });
+                var noteS = 'Jour du rapport — Jour : ' + _rptFmt(tr.day[li] || 0) + ' m · Nuit : ' + _rptFmt(tr.night[li] || 0) + ' m';
+                if (tr.full[li]) noteS += ' · Journée complète : ' + _rptFmt(tr.full[li]) + ' m';
+                spec = {
+                    title: 'Production par équipe — jour vs nuit (' + RPT_CHART_TREND_DAYS + ' jours)',
+                    note: noteS,
+                    cfg: { type: 'line', data: { labels: tr.labels, datasets: dsS }, options: { plugins: { legend: _rptLegend(true) }, scales: _rptScales({ yTitle: 'Mètres' }) } }
+                };
+            } else if (key === 'stops') {
+                var sm = ms.filter(function (m) { return m.totalStops > 0; });
+                if (!sm.length) return null;
+                var cats = [['bdn', 'Pannes (BDN)', RPT_C.red], ['stb', 'Standby (STB)', '#f59e0b'], ['gsa', 'Services (GSA)', '#3b82f6'], ['prd', 'Production (PRD)', RPT_C.slate], ['other', 'Autres', RPT_C.gray]]
+                    .filter(function (c) { return T[c[0]] > 0; });
+                var worstB = sm.slice().sort(function (a, b) { return b.stops.bdn - a.stops.bdn; })[0];
+                spec = {
+                    title: 'Arrêts par machine (heures)',
+                    note: 'Total arrêts : ' + _rptFmt(T.totalStops) + ' h' + (T.bdn > 0 ? ' · pannes : ' + _rptFmt(T.bdn) + ' h' + (worstB && worstB.stops.bdn > 0 ? ' (dont ' + worstB.id + ' : ' + _rptFmt(worstB.stops.bdn) + ' h)' : '') : ' · aucune panne') + (T.stb > 0 ? ' · standby : ' + _rptFmt(T.stb) + ' h' : ''),
+                    cfg: { type: 'bar', data: { labels: sm.map(function (m) { return m.id; }), datasets: cats.map(function (c) { return { label: c[1], data: sm.map(function (m) { return +m.stops[c[0]].toFixed(2); }), backgroundColor: c[2], stack: 's' }; }) }, options: { plugins: { legend: _rptLegend(true), rptValueLabels: { mode: 'stackTotal', digits: 1, suffix: ' h', fontSize: -1 } }, scales: _rptScales({ stacked: true, yTitle: 'Heures', catAll: true }) } }
+                };
+            } else if (key === 'stopsDonut') {
+                var dc = [['bdn', 'Pannes (BDN)', RPT_C.red], ['stb', 'Standby (STB)', '#f59e0b'], ['gsa', 'Services (GSA)', '#3b82f6'], ['prd', 'Production (PRD)', RPT_C.slate], ['other', 'Autres', RPT_C.gray]]
+                    .filter(function (c) { return T[c[0]] > 0; });
+                if (!dc.length) return null;
+                spec = {
+                    title: 'Répartition des arrêts — journée',
+                    note: 'Total : ' + _rptFmt(T.totalStops) + ' h · ' + dc.map(function (c) { return c[1].replace(/ \(.*\)/, '') + ' ' + _rptFmt(T[c[0]] / T.totalStops * 100, 0) + ' %'; }).join(' · '),
+                    cfg: { type: 'doughnut', data: { labels: dc.map(function (c) { return c[1] + ' — ' + _rptFmt(T[c[0]]) + ' h (' + _rptFmt(T[c[0]] / T.totalStops * 100, 0) + ' %)'; }), datasets: [{ data: dc.map(function (c) { return +T[c[0]].toFixed(2); }), backgroundColor: dc.map(function (c) { return c[2]; }), borderColor: '#ffffff', borderWidth: 2 }] }, options: { cutout: '55%', plugins: { legend: { display: true, position: 'right', labels: { color: RPT_C.tick, font: { size: _rptFontBase, family: 'Arial' }, boxWidth: Math.round(_rptFontBase * 1.1), padding: Math.round(_rptFontBase * 0.8) } } } } }
+                };
+            } else if (key === 'availTrend') {
+                if (!tr.mechAvail.some(function (v) { return v != null; })) return null;
+                var avs = tr.mechAvail.filter(function (v) { return v != null; });
+                var avgAv = avs.reduce(function (s, v) { return s + v; }, 0) / avs.length;
+                var lastAv = tr.mechAvail[tr.mechAvail.length - 1];
+                var dsA = [
+                    { label: 'Disponibilité mécanique (%)', data: tr.mechAvail.map(function (v) { return v == null ? null : +v.toFixed(1); }), borderColor: RPT_C.green, backgroundColor: RPT_C.green, tension: 0.3, pointRadius: 3, borderWidth: 2.5, spanGaps: false },
+                    { label: 'Seuil ' + RPT_CHART_AVAIL_THRESHOLD + ' %', data: tr.days.map(function () { return RPT_CHART_AVAIL_THRESHOLD; }), borderColor: RPT_C.ink, borderDash: [5, 4], borderWidth: 1.5, pointRadius: 0 }
+                ];
+                if (tr.uoa.some(function (v) { return v != null; })) dsA.splice(1, 0, { label: 'Utilisation de la dispo — UoA (%)', data: tr.uoa.map(function (v) { return v == null ? null : +v.toFixed(1); }), borderColor: RPT_C.sky, backgroundColor: RPT_C.sky, tension: 0.3, pointRadius: 3, borderWidth: 2, spanGaps: false });
+                spec = {
+                    title: 'Disponibilité de la flotte — ' + RPT_CHART_TREND_DAYS + ' derniers jours',
+                    note: 'Jour du rapport : ' + (lastAv != null ? _rptFmt(lastAv, 0) + ' %' : 'N/A') + ' · moyenne sur la période : ' + _rptFmt(avgAv, 0) + ' %',
+                    cfg: { type: 'line', data: { labels: tr.labels, datasets: dsA }, options: { plugins: { legend: _rptLegend(true) }, scales: _rptScales({ yMax: 100, ySuffix: ' %' }) } }
+                };
+            } else if (key === 'month') {
+                var mo = data.month;
+                if (!mo || !mo.days.length || !(mo.total > 0)) return null;
+                var dsMo = [{ label: 'Cumul réalisé (m)', data: mo.cumActual.map(function (v) { return +v.toFixed(1); }), borderColor: RPT_C.blue, backgroundColor: 'rgba(29,78,216,0.10)', fill: true, tension: 0.2, pointRadius: 2, borderWidth: 2.5 }];
+                if (mo.hasGoal) dsMo.push({ label: 'Cumul objectif (m)', data: mo.cumGoal.map(function (v) { return v == null ? null : +v.toFixed(1); }), borderColor: RPT_C.amber, backgroundColor: RPT_C.amber, borderDash: [6, 4], borderWidth: 2, pointRadius: 0, fill: false });
+                var noteMo = 'Cumul au ' + _rptShortDate(data.date) + ' : ' + _rptFmt(mo.total) + ' m';
+                if (mo.goalTotal != null && mo.goalTotal > 0) noteMo += ' · objectif cumulé : ' + _rptFmt(mo.goalTotal) + ' m (' + _rptFmt(mo.total / mo.goalTotal * 100, 0) + ' % réalisé)';
+                spec = {
+                    title: 'Cumul du mois minier — ' + mo.label,
+                    note: noteMo,
+                    wide: variant !== 'detailed',
+                    cfg: { type: 'line', data: { labels: mo.labels, datasets: dsMo }, options: { plugins: { legend: _rptLegend(true) }, scales: _rptScales({ yTitle: 'Mètres cumulés' }) } }
+                };
+            }
+            if (!spec) return null;
+            // Marge haute : les valeurs affichées au-dessus des barres (ex. 100 %) restent visibles.
+            var lbl = spec.cfg.options && spec.cfg.options.plugins && spec.cfg.options.plugins.rptValueLabels;
+            spec.cfg.options.layout = { padding: { top: (lbl && lbl.mode) ? _rptFontBase + 8 : 6, right: 8, left: 2, bottom: 2 } };
+            spec.key = key;
+            spec.w = spec.wide ? 1200 : 600;
+            spec.h = 300;
+            return spec;
+        }
+
+        function _rptChartHistory() {
+            try { if (typeof getDailyDataForSite === 'function') return getDailyDataForSite(); } catch (e) {}
+            return (typeof dailyDataRecords !== 'undefined' && dailyDataRecords) ? dailyDataRecords : [];
+        }
+
+        function buildDailyReportChartsInsight(data) {
+            var T = data.totals, parts = [];
+            parts.push('Total ' + _rptFmt(T.production) + ' m nouveaux' + (T.redrill > 0 ? ' + ' + _rptFmt(T.redrill) + ' m reforés' : ''));
+            parts.push(data.machines.length + ' machine(s)');
+            if (data.machines[0] && data.machines[0].production > 0) parts.push('meilleure : ' + data.machines[0].id + ' (' + _rptFmt(data.machines[0].production) + ' m)');
+            if (T.mechAvail != null) parts.push('dispo. méca. ' + _rptFmt(T.mechAvail, 0) + ' %');
+            if (T.lpm != null) parts.push(_rptFmt(T.lpm, 2) + ' L/m');
+            var tr = data.trend, today = tr.production[tr.production.length - 1];
+            if (tr.prevAverage != null && tr.prevAverage > 0 && today != null) {
+                var pct = (today - tr.prevAverage) / tr.prevAverage * 100;
+                parts.push('vs moyenne ' + RPT_CHART_TREND_DAYS + ' j : ' + (pct >= 0 ? '▲ +' : '▼ ') + _rptFmt(pct, 0) + ' %');
+            }
+            return parts.join(' · ');
+        }
+
+        // Section HTML « Graphiques de la journée » (variant : management | detailed | executive).
+        function buildDailyReportChartsSection(date, records, variant) {
+            var data = computeDailyReportChartData(date, records, _rptChartHistory());
+            if (!data.machines.length) return '';
+            var keys = RPT_CHART_LAYOUTS[variant] || RPT_CHART_LAYOUTS.management;
+            var cards = [];
+            keys.forEach(function (k) {
+                var spec = buildDailyReportChartSpec(k, data, variant);
+                if (!spec) return;
+                var img = rptRenderChart(spec);
+                if (!img) return;
+                cards.push({ wide: !!spec.wide, html: '<div class="rpt-chart-card' + (spec.wide ? ' wide' : '') + '"><div class="rpt-chart-title">' + _rptEsc(spec.title) + '</div>' +
+                    '<img src="' + img + '" alt="' + _rptEsc(spec.title) + '">' +
+                    (spec.note ? '<p class="rpt-chart-note">' + _rptEsc(spec.note) + '</p>' : '') + '</div>' });
+            });
+            var insight = '<p class="rpt-chart-insight">' + _rptEsc(buildDailyReportChartsInsight(data)) + '</p>';
+            if (!cards.length) return insight + '<p class="daily-table-note">Graphiques indisponibles : la bibliothèque de graphiques n’a pas pu être chargée (connexion internet requise).</p>';
+            // Le titre, la lecture et la première rangée restent sur la même page à l'impression.
+            var firstRow = (cards[0].wide || !cards[1] || cards[1].wide) ? 1 : 2;
+            var join = function (list) { return list.map(function (c) { return c.html; }).join(''); };
+            var rest = cards.slice(firstRow);
+            return '<div class="rpt-chart-keep">' + insight + '<div class="rpt-chart-grid">' + join(cards.slice(0, firstRow)) + '</div></div>' +
+                (rest.length ? '<div class="rpt-chart-grid rpt-chart-more">' + join(rest) + '</div>' : '');
+        }
+
+        // Diapositives graphiques pour les exports PowerPoint (images identiques au PDF).
+        function addDailyReportChartSlides(pptx, titleFn, date, records, variant, footFn) {
+            var data = computeDailyReportChartData(date, records, _rptChartHistory());
+            if (!data.machines.length) return 0;
+            var groups = RPT_PPTX_CHART_GROUPS[variant] || RPT_PPTX_CHART_GROUPS.management;
+            var added = 0;
+            groups.forEach(function (g) {
+                var rendered = [];
+                g[1].forEach(function (k) {
+                    var single = g[1].length === 1;
+                    var prevFont = _rptFontBase;
+                    _rptFontBase = 15; // lisible une fois projeté (≈ 10 pt)
+                    try {
+                        var spec = buildDailyReportChartSpec(k, data, variant);
+                        if (!spec) return;
+                        var img = rptRenderChart(spec, single ? 1240 : 640, single ? 464 : 440);
+                        if (img) rendered.push({ spec: spec, img: img });
+                    } finally { _rptFontBase = prevFont; }
+                });
+                if (!rendered.length) return;
+                var s = pptx.addSlide(); titleFn(s, g[0]);
+                var slots = rendered.length === 1 ? [{ x: 0.5, w: 12.3, h: 4.6 }] : [{ x: 0.5, w: 6.0, h: 4.13 }, { x: 6.83, w: 6.0, h: 4.13 }];
+                rendered.forEach(function (it, i) {
+                    var sl = slots[i]; if (!sl) return;
+                    s.addText(it.spec.title, { x: sl.x, y: 1.3, w: sl.w, h: 0.4, fontSize: 13, bold: true, color: '141414' });
+                    try { s.addImage({ data: it.img, x: sl.x, y: 1.75, w: sl.w, h: sl.h }); } catch (e) {}
+                    if (it.spec.note) s.addText(it.spec.note, { x: sl.x, y: 1.8 + sl.h, w: sl.w, h: 0.75, fontSize: 10, color: '555555', valign: 'top' });
+                });
+                if (typeof footFn === 'function') footFn(s);
+                added++;
+            });
+            return added;
         }
 
         function reportCalendarDayNumber(value) {
@@ -20575,19 +21545,10 @@
                 var rend = L.hours > 0 ? L.meters / L.hours : null;
                 return '<tr><td class="machine-cell">' + escapeHtmlReportCell(k) + '</td><td class="r-num">' + nh + '</td><td class="r-num">' + dec(L.meters) + '</td><td class="r-num">' + dec(L.redrill) + '</td><td class="r-num">' + (rend != null ? dec(rend, 2) : '—') + '</td><td>' + escapeHtmlReportCell(Object.keys(L.machines).join(', ')) + '</td></tr>';
             }).join('');
-            var patternsHtml = '';
-            try {
-                var pats = (typeof reportPatternsByZone === 'object' && reportPatternsByZone) ? reportPatternsByZone : {};
-                var patCards = Object.keys(pats).map(function (zk) {
-                    var p = pats[zk]; if (!p || !p.image) return '';
-                    return '<figure class="pattern-fig"><img src="' + p.image + '" alt="Pattern ' + escapeHtmlReportCell(p.zone || '') + '"><figcaption>' + escapeHtmlReportCell(p.zone || '') + ' <span class="pattern-src">(' + (p.source === 'auto' ? 'hachurage auto' : 'photo') + ')</span></figcaption></figure>';
-                }).filter(Boolean).join('');
-                if (patCards) patternsHtml = '<h3 class="daily-subtitle">Plan hachuré des patterns forés</h3><div class="pattern-grid">' + patCards + '</div>';
-            } catch (e) {}
             return '<h3 class="daily-subtitle">Production &amp; performance par lieu foré</h3>' +
                 '<table class="daily-table"><thead><tr><th class="machine-cell">Lieu / fosse</th><th class="r-num">Trous</th><th class="r-num">Nouveau (m)</th><th class="r-num">Reforés (m)</th><th class="r-num">Rendement (m/h)</th><th>Machine(s)</th></tr></thead><tbody>' +
                 rows + '<tr class="total"><td>Total</td><td class="r-num">' + tHoles + '</td><td class="r-num">' + dec(tM) + '</td><td class="r-num">' + dec(tR) + '</td><td class="r-num">' + dec(tH > 0 ? tM / tH : null, 2) + '</td><td></td></tr>' +
-                '</tbody></table>' + patternsHtml;
+                '</tbody></table>';
         }
 
         var DAILY_REPORT_PRINT_CSS = [
@@ -20630,11 +21591,20 @@
             '.daily-section-04 table th:nth-child(1){width:14%;}.daily-section-04 table th:nth-child(2){width:22%;}.daily-section-04 table th:nth-child(3){width:22%;}.daily-section-04 table th:nth-child(4){width:42%;}',
             '.daily-section-05 table th:nth-child(1){width:24%;}.daily-section-05 table th:nth-child(2){width:20%;}.daily-section-05 table th:nth-child(3){width:22%;}.daily-section-05 table th:nth-child(4){width:34%;}',
             '.daily-table-note{margin:5px 0 0;font-size:9.5px;line-height:1.45;color:#5a6b7c;}',
-            '.pattern-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:4px 0 6px;}',
-            '.pattern-fig{margin:0;border:1px solid #c8d3df;background:#fff;padding:6px;break-inside:avoid;page-break-inside:avoid;}',
-            '.pattern-fig img{display:block;width:100%;height:auto;max-height:420px;object-fit:contain;}',
-            '.pattern-fig figcaption{margin-top:5px;font-size:10px;font-weight:700;color:#243e5c;text-align:center;}',
-            '.pattern-fig .pattern-src{font-weight:400;color:#5a6b7c;}',
+            '.rpt-chart-insight{margin:0 0 8px;padding:7px 10px;background:#fff8e1;border:1px solid #f3d98b;border-left:4px solid #F5B800;font-size:11px;font-weight:700;color:#3b2f0b;text-align:left;line-height:1.4;}',
+            '.rpt-chart-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:4px 0;}',
+            '.rpt-chart-keep{break-inside:avoid;page-break-inside:avoid;}.rpt-chart-more{margin-top:10px;}',
+            '.rpt-chart-card{border:1px solid #c8d3df;background:#fff;padding:8px 10px 7px;break-inside:avoid;page-break-inside:avoid;min-width:0;}',
+            '.rpt-chart-card.wide{grid-column:1 / -1;}',
+            '.rpt-chart-title{font-size:10px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#243e5c;margin:0 0 6px;text-align:left;}',
+            '.rpt-chart-card img{display:block;width:100%;height:auto;}',
+            '.rpt-chart-note{margin:5px 0 0;font-size:10px;line-height:1.4;color:#475569;font-weight:600;text-align:left;}',
+            '.pattern-plan{margin:6px 0 10px;border:1px solid #c8d3df;background:#fff;padding:8px;break-inside:avoid;page-break-inside:avoid;}',
+            '.pattern-plan img{display:block;margin:0 auto;max-width:100%;max-height:150mm;width:auto;height:auto;}',
+            '.pattern-plan figcaption{margin-top:6px;font-size:11px;color:#18324f;text-align:center;font-weight:700;line-height:1.45;}',
+            '.pattern-plan .pattern-src{font-weight:600;color:#475569;}',
+            '.pattern-plan .pattern-meta{display:block;font-weight:600;color:#475569;font-size:10px;}',
+            '@media screen and (max-width:760px){.rpt-chart-grid{grid-template-columns:1fr;}.rpt-chart-card.wide{grid-column:auto;}}',
             '.daily-section .summary{margin:0;padding:10px 12px;min-height:55px;background:#f7f9fb;border:1px solid #d8e1ea;border-left:3px solid #aabbd0;text-align:left;white-space:pre-line;overflow-wrap:anywhere;}',
             '.daily-signatures{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border:1px solid #c8d3df;break-inside:avoid;page-break-inside:avoid;}',
             '.daily-signature{padding:10px;min-height:108px;border-right:1px solid #c8d3df;}.daily-signature:last-child{border-right:0;}',
@@ -20723,11 +21693,19 @@
                     { label: 'Saisi par :', value: getReportResponsableLabel(records) }
                 ]
             ];
+            // Numérotation continue : la section « plan hachuré » n'apparaît que si un plan existe.
+            var sectionCount = 0;
             function section(number, title, body, extraClass) {
-                return '<section class="daily-section ' + (extraClass || '') + '"><h2><span class="daily-section-number">' + number + '</span>' + title + '</h2>' + body + '</section>';
+                sectionCount += 1;
+                var shown = (sectionCount < 10 ? '0' : '') + sectionCount;
+                return '<section class="daily-section ' + (extraClass || '') + '"><h2><span class="daily-section-number">' + shown + '</span>' + title + '</h2>' + body + '</section>';
             }
-            function existingSection(number, title, body) {
-                return section(number, title, body.replace(/^<h2>[\s\S]*?<\/h2>/, ''), 'daily-section-' + number);
+            // cssKey conserve les largeurs de colonnes propres à chaque tableau (daily-section-03/04/05).
+            function existingSection(cssKey, title, body) {
+                return section(cssKey, title, body.replace(/^<h2>[\s\S]*?<\/h2>/, ''), 'daily-section-' + cssKey);
+            }
+            function optionalSection(title, body, extraClass) {
+                return body ? section('', title, body, extraClass) : '';
             }
             function decimal(value, digits) {
                 if (value == null || value === '' || !isFinite(Number(value))) return 'N/A';
@@ -20785,19 +21763,23 @@
                 '<header>' + buildReportStandardEnteteHtml('RAPPORT JOURNALIER DE FORAGE', records, metaRowsDaily) + '<p class="daily-report-audience">' + (detailed ? 'RAPPORT OPÉRATIONNEL DÉTAILLÉ' : 'SYNTHÈSE MANAGEMENT') + '</p></header>' +
                 (detailed ? (
                 section('01', 'INDICATEURS CLÉS — KPI ET PRODUCTION', buildReportKpiBandeau(records, date) + '<h3 class="daily-subtitle">Tableau KPI détaillé par machine et poste</h3>' + renderOperationalKpiTableHtml(records) + buildDailyProductionChart(records, date, false) + buildForecastVsActualChart(records, date), 'daily-kpi-section') +
-                section('02', 'Exploitation par machine et poste', operatingTables) +
+                optionalSection('Graphiques de la journée', buildDailyReportChartsSection(date, records, 'detailed'), 'daily-charts-section') +
+                section('', 'Exploitation par machine et poste', operatingTables) +
                 existingSection('03', 'Production par zone / pattern et trous travaillés', buildProductionZoneSection(records) + buildProductionByLocationSection(records) + buildDailyHoleTraceability(records)) +
+                optionalSection('Plan hachuré des patterns forés', buildPatternPlansSection(records, date), 'daily-pattern-section') +
                 existingSection('04', 'Pannes mécaniques et observations', buildPannesSection(records)) +
                 existingSection('05', 'Standby et services — motifs et suivi', buildStandbySection(records)) +
                 existingSection('06', 'Observations générales du poste', buildCommentGeneralSection(records)) +
-                section('07', 'Machines garées — état du parc', renderParkedMachinesTableHtml()) +
-                section('08', 'Visa et signatures', '<div class="daily-signatures">' + signatures + '</div>', 'daily-approval-section') ) : (
+                section('', 'Machines garées — état du parc', renderParkedMachinesTableHtml()) +
+                section('', 'Visa et signatures', '<div class="daily-signatures">' + signatures + '</div>', 'daily-approval-section') ) : (
                 section('01', 'INDICATEURS CLÉS — KPI ET PRODUCTION', buildReportKpiBandeau(records, date) + '<h3 class="daily-subtitle">Tableau KPI par machine et poste</h3>' + renderOperationalKpiTableHtml(records), 'daily-management-kpis') +
-                section('02', 'Production de la journée', buildDailyProductionChart(records, date, false), 'daily-management-charts') +
+                section('', 'Production de la journée', buildDailyProductionChart(records, date, false), 'daily-management-charts') +
+                optionalSection('Graphiques de la journée', buildDailyReportChartsSection(date, records, 'management'), 'daily-charts-section') +
                 existingSection('03', 'Zones forées et trous travaillés', buildProductionZoneSection(records) + buildDailyHoleTraceability(records)) +
+                optionalSection('Plan hachuré des patterns forés', buildPatternPlansSection(records, date), 'daily-pattern-section') +
                 existingSection('04', 'Faits marquants et observations', buildCommentGeneralSection(records)) +
-                section('05', 'Machines garées — état du parc', renderParkedMachinesTableHtml()) +
-                section('06', 'Visa et signatures', '<div class="daily-signatures">' + signatures + '</div>', 'daily-approval-section')
+                section('', 'Machines garées — état du parc', renderParkedMachinesTableHtml()) +
+                section('', 'Visa et signatures', '<div class="daily-signatures">' + signatures + '</div>', 'daily-approval-section')
                 )) +
                 '<footer class="daily-footer"><span>' + escapeHtmlReportCell(companyName) + '<br>Rapport journalier de forage · ' + escapeHtmlReportCell(formatDate(date)) + '</span><span>Document généré le ' + escapeHtmlReportCell(generatedAt) + '</span></footer>' +
                 '</main></body></html>';
@@ -20826,8 +21808,12 @@
                     { label: 'Saisi par :', value: getReportResponsableLabel(records) }
                 ]
             ];
+            var sectionCount = 0;
             function section(number, title, body, extraClass) {
-                return '<section class="daily-section ' + (extraClass || '') + '"><h2><span class="daily-section-number">' + number + '</span>' + title + '</h2>' + body + '</section>';
+                if (!body) return '';
+                sectionCount += 1;
+                var shown = (sectionCount < 10 ? '0' : '') + sectionCount;
+                return '<section class="daily-section ' + (extraClass || '') + '"><h2><span class="daily-section-number">' + shown + '</span>' + title + '</h2>' + body + '</section>';
             }
             var fmtM = function(v) { return v.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' m'; };
             var fmtH = function(v) { return v.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' h'; };
@@ -20909,14 +21895,6 @@
             if (nbZones > 0) {
                 zonesBody = '<p style="margin:0 0 8px;font-size:11px;"><strong>Zones :</strong> ' + escapeHtmlReportCell(Object.keys(zones).join(', ')) + '</p>' + zonesBody;
             }
-            try {
-                var patsS = (typeof reportPatternsByZone === 'object' && reportPatternsByZone) ? reportPatternsByZone : {};
-                var patCardsS = Object.keys(patsS).map(function (zk) {
-                    var pS = patsS[zk]; if (!pS || !pS.image) return '';
-                    return '<figure class="pattern-fig"><img src="' + pS.image + '" alt="Pattern ' + escapeHtmlReportCell(pS.zone || '') + '"><figcaption>' + escapeHtmlReportCell(pS.zone || '') + ' <span class="pattern-src">(' + (pS.source === 'auto' ? 'hachurage auto' : 'photo') + ')</span></figcaption></figure>';
-                }).filter(Boolean).join('');
-                if (patCardsS) zonesBody += '<h3 class="daily-subtitle">Plan hachuré des patterns forés</h3><div class="pattern-grid">' + patCardsS + '</div>';
-            } catch (ePdf) {}
 
             // ── Section 03 : Analyse disponibilité et arrêts ──
             var analyseBody = '<table class="daily-table"><thead><tr><th style="width:50%;">Indicateur</th><th style="width:50%;">Valeur</th></tr></thead><tbody>' +
@@ -20972,11 +21950,13 @@
                 '<main class="daily-sheet daily-management">' +
                 '<header>' + buildReportStandardEnteteHtml('RAPPORT JOURNALIER DE FORAGE', records, metaRows) + '<p class="daily-report-audience">SYNTHÈSE EXÉCUTIVE</p></header>' +
                 section('01', 'Résumé de production', prodBody + buildDailyProductionChart(records, date, false), 'daily-management-kpis') +
-                section('02', 'Zones forées et trous travaillés', zonesBody) +
-                section('03', 'Disponibilité, arrêts et analyse', analyseBody) +
-                section('04', 'Faits marquants et observations', commentBody) +
-                section('05', 'Machines garées — état du parc', renderParkedMachinesTableHtml()) +
-                section('06', 'Visa et signatures', '<div class="daily-signatures">' + signatures + '</div>', 'daily-approval-section') +
+                section('', 'Graphiques de la journée', buildDailyReportChartsSection(date, records, 'executive'), 'daily-charts-section') +
+                section('', 'Zones forées et trous travaillés', zonesBody) +
+                section('', 'Plan hachuré des patterns forés', buildPatternPlansSection(records, date), 'daily-pattern-section') +
+                section('', 'Disponibilité, arrêts et analyse', analyseBody) +
+                section('', 'Faits marquants et observations', commentBody || '<p class="daily-empty">Non renseigné.</p>') +
+                section('', 'Machines garées — état du parc', renderParkedMachinesTableHtml()) +
+                section('', 'Visa et signatures', '<div class="daily-signatures">' + signatures + '</div>', 'daily-approval-section') +
                 '<footer class="daily-footer"><span>' + escapeHtmlReportCell(companyName) + '<br>Rapport journalier de forage — Synthèse exécutive · ' + escapeHtmlReportCell(formatDate(date)) + '</span><span>Document généré le ' + escapeHtmlReportCell(generatedAt) + '</span></footer>' +
                 '</main></body></html>';
         }

@@ -41,10 +41,20 @@ const helperNames = [
     'buildReportLogoImgHtml', 'buildReportLogosRowHtml', 'getReportProjectLabel', 'getReportMachinesLabel',
     'getReportShiftsLabel', 'getReportResponsableLabel', 'buildReportMetaRowsHtml',
     'buildReportStandardEnteteHtml', 'formatDate', 'buildDailyReportDocumentHtml',
-    'generateDailyReport', 'printDailyReport'
+    'generateDailyReport', 'printDailyReport', 'loadReportPatterns',
+    'renderOperationalKpiTableHtml', 'renderParkedMachinesTableHtml', 'buildProductionByLocationSection',
+    'formatReportDecimal', 'formatReportPctCell', 'buildDailyReportSyntheticHtml',
+    'miningCutoffDayForSite', 'miningMonthKey', 'miningMonthRange', 'miningMonthLabelFr',
+    'reportChartToImg', '_rptAddDays', '_rptShortDate', '_rptFmt', '_rptNum', '_rptEsc',
+    'computeDailyReportChartData', '_rptChartPlugins', '_rptScales', '_rptLegend', 'rptRenderChart',
+    'buildDailyReportChartSpec', '_rptChartHistory', 'buildDailyReportChartsInsight', 'buildDailyReportChartsSection',
+    'isSafePatternImage', 'normalizePatternState', 'summarizePatternMarks', 'patternMarkCountsText',
+    '_patDateFr', 'summarizePatternDayHoles', 'describePatternForReport', 'buildPatternPlansSection'
 ];
 const helpers = helperNames.map((name) => declaration('function', name, '}')).join('\n');
-const reportVariables = ['REPORT_PRINT_ENTETE_CSS', 'DAILY_REPORT_PRINT_CSS', 'DAILY_STOPPAGE_REASONS']
+const reportVariables = ['REPORT_PRINT_ENTETE_CSS', 'DAILY_REPORT_PRINT_CSS', 'DAILY_STOPPAGE_REASONS',
+    'RPT_CHART_AVAIL_THRESHOLD', 'RPT_CHART_TREND_DAYS', '_rptFontBase', 'RPT_C', 'RPT_CHART_LAYOUTS', 'RPT_PPTX_CHART_GROUPS',
+    'reportPatternsByZone', 'PATTERN_MARK_TYPES', 'PATTERN_MARK_ORDER', 'PATTERN_LEGEND_POSITIONS', 'PATTERN_DEFAULT_RADIUS']
     .map((name) => declaration('var', name, ';')).join('\n');
 
 function fixture(overrides = {}) {
@@ -529,12 +539,14 @@ check('the management report omits technical tables and the detailed report pres
         assert.ok(!management.includes(title), title);
         assert.ok(detailed.includes(title), title);
     }
-    assert.doesNotMatch(management, /Forecast vs Actuel|<table|1234|RC-001/);
+    // The management report keeps the KPI table (fuel included) and the hole traceability, never the technical forecast chart.
+    assert.doesNotMatch(management, /Forecast vs Actuel/);
+    assert.match(management, /Tableau KPI par machine et poste/);
+    assert.match(management, /RC-001/);
     assert.match(management, /Consigne de sécurité &amp; observation/);
     assert.match(detailed, /RAPPORT OPÉRATIONNEL DÉTAILLÉ/);
+    assert.match(detailed, /RC-001/);
     assert.equal(kpiValue(management,'Production réalisée'),kpiValue(detailed,'Production réalisée'));
-    // Keep the latest published choice: hole identities remain in the entry, outside both reports.
-    assert.doesNotMatch(detailed, /RC-001/);
 });
 
 check('both report buttons route to their matching document after the plan loads', async () => {
@@ -573,6 +585,174 @@ check('day and night redrill adds separately without increasing production or th
     assert.match(partial,/<th>Reforés \(m\)<\/th>/);
     assert.match(app.buildDailyProductionChart(rows,'2026-10-22',false),/>180 m</);
     assert.equal(app.getReportUsedMachineCount([record('B','day',0,'2026-10-22',{hours:0,redrillMeters:3})]),1);
+});
+
+// ── Graphiques des rapports journaliers ─────────────────────────────────────
+const FAKE_PNG = 'data:image/png;base64,QUJDRA==';
+function chartApp(overrides = {}) {
+    const app = fixture(overrides);
+    const rendered = [];
+    app.reportChartToImg = (cfg, w, h) => { rendered.push({ type: cfg.type, w, h, cfg }); return FAKE_PNG; };
+    app.__rendered = rendered;
+    return app;
+}
+function richDay(date = '2026-10-16') {
+    return [
+        record('A', 'day', 80, date, { redrillMeters: 5, fuelAdded: 100, location: 'P17', holesWorked: [{ holeId: 'T1', meters: 40 }, { holeId: 'T2', meters: 40 }],
+            stoppages: [{ reason: 'hydraulic-bdn', hours: 2 }] }),
+        record('A', 'night', 40, date, { fuelAdded: 60, location: 'P17', holesWorked: [{ holeId: 'T3', meters: 40 }] }),
+        record('B', 'day', 60, date, { fuelAdded: 90, location: 'P18', stoppages: [{ reason: 'blast-stb', hours: 1.5 }] })
+    ];
+}
+
+check('chart data aggregates machines, a 14-day calendar window and shifts from completed entries only', () => {
+    const app = chartApp();
+    const draft = record('A', 'day', 999, '2026-10-15', { entryStage: 'draft' });
+    const history = [record('A', 'day', 50, '2026-10-14'), draft, record('B', 'day', 70, '2026-10-01'), ...richDay()];
+    const data = app.computeDailyReportChartData('2026-10-16', richDay(), history);
+    assert.deepEqual([...data.machines.map((m) => m.id)], ['A', 'B']);
+    assert.equal(data.machines[0].production, 120);
+    assert.equal(data.machines[0].redrill, 5);
+    assert.equal(data.machines[0].fuel, 160);
+    assert.equal(data.totals.production, 180);
+    assert.equal(data.trend.days.length, 14);
+    assert.equal(data.trend.days[0], '2026-10-03');
+    assert.equal(data.trend.days[13], '2026-10-16');
+    assert.equal(data.trend.production[13], 180);
+    assert.equal(data.trend.production[11], 50);
+    assert.equal(data.trend.production[12], null, 'a draft must not appear in the trend');
+    assert.equal(data.trend.day[13], 140);
+    assert.equal(data.trend.night[13], 40);
+    assert.equal(data.trend.prevAverage, 50);
+    assert.ok(data.totals.bdn >= 2 && data.totals.stb >= 1.5);
+});
+
+check('the monthly cumulative chart follows the site mining cut-off day and the saved objective', () => {
+    const app = chartApp({ sites: [{ id: 1, name: 'Mine Ouest', code: 'MO', miningCutoffDay: 29 }] });
+    usePlan(app, savedPlan({ startDate: '2026-09-01', weeks: [], months: [{ start: '2026-09-29', end: '2026-10-28', target: 3000 }] }));
+    const history = [record('A', 'day', 100, '2026-09-28'), record('A', 'day', 100, '2026-09-29'), record('A', 'night', 50, '2026-10-02')];
+    const data = app.computeDailyReportChartData('2026-10-16', [record('A', 'day', 80)], history);
+    assert.equal(data.month.days[0], '2026-09-29');
+    assert.equal(data.month.days[data.month.days.length - 1], '2026-10-16');
+    assert.equal(data.month.total, 230, 'the 28/09 belongs to the previous mining month');
+    assert.equal(data.month.days.length, 18);
+    assert.equal(Math.round(data.month.goalTotal), 1800);
+    assert.match(data.month.label, /29\/09\/2026/);
+});
+
+check('the management report embeds its daily charts as printable images with a reading for each', () => {
+    const app = chartApp();
+    usePlan(app, savedPlan());
+    app.getDailyDataForSite = () => [record('A', 'day', 50, '2026-10-14'), ...richDay()];
+    const html = app.buildDailyReportDocumentHtml('2026-10-16', richDay());
+    assert.match(html, /Graphiques de la journée/);
+    for (const title of ['Mètres forés par machine', 'Production journalière', 'Carburant (L) &amp; efficacité', 'Disponibilité mécanique par machine', 'jour vs nuit', 'Arrêts par machine', 'Cumul du mois minier']) {
+        assert.ok(html.includes(title), `Missing chart: ${title}`);
+    }
+    assert.equal((html.match(/class="rpt-chart-card/g) || []).length, 7);
+    assert.ok(html.includes(FAKE_PNG));
+    assert.match(html, /Meilleure machine : A/);
+    assert.match(html, /rpt-chart-insight/);
+    assert.doesNotMatch(html, /<canvas\b|<script\b|\bNaN\b|Infinity|undefined/);
+    // Printed charts stay legible: 600 px wide at 2× for a half A4 landscape column.
+    assert.ok(app.__rendered.every((r) => r.w === 600 || r.w === 1200));
+});
+
+check('the detailed and executive reports carry their own chart sets', () => {
+    const app = chartApp();
+    usePlan(app, savedPlan());
+    app.getDailyDataForSite = () => richDay();
+    const detailed = app.buildDailyReportDocumentHtml('2026-10-16', richDay(), true);
+    assert.match(detailed, /Graphiques de la journée/);
+    assert.match(detailed, /Forecast vs Actuel/);
+    assert.ok(!detailed.includes('Mètres forés par machine — journée'), 'the forecast chart already shows metres per machine');
+    assert.match(detailed, /Arrêts par machine/);
+    const executive = app.buildDailyReportSyntheticHtml('2026-10-16', richDay());
+    assert.match(executive, /SYNTHÈSE EXÉCUTIVE/);
+    assert.match(executive, /Graphiques de la journée/);
+    assert.match(executive, /Répartition des arrêts — journée/);
+    assert.match(executive, /Disponibilité de la flotte/);
+    assert.doesNotMatch(executive, /Mètres forés par machine|Arrêts par machine|par machine \(%\)/, 'the executive summary has no machine detail');
+});
+
+check('without the chart library the report still prints and says why charts are missing', () => {
+    const app = fixture();
+    app.getDailyDataForSite = () => richDay();
+    const html = app.buildDailyReportDocumentHtml('2026-10-16', richDay());
+    assert.match(html, /Graphiques indisponibles/);
+    assert.match(html, /Visa et signatures/);
+    assert.doesNotMatch(html, /\bNaN\b|Infinity/);
+});
+
+check('sections are numbered continuously whether or not a hatched plan exists', () => {
+    const app = chartApp();
+    app.getDailyDataForSite = () => richDay();
+    const numbers = (html) => [...html.matchAll(/daily-section-number">(\d+)</g)].map((m) => m[1]);
+    const without = numbers(app.buildDailyReportDocumentHtml('2026-10-16', richDay()));
+    assert.deepEqual(without, without.map((_, i) => String(i + 1).padStart(2, '0')));
+    app.reportPatternsByZone = { p17: { image: 'data:image/jpeg;base64,QUJD', source: 'photo', zone: 'P17', marks: null } };
+    const withPlan = numbers(app.buildDailyReportDocumentHtml('2026-10-16', richDay()));
+    assert.equal(withPlan.length, without.length + 1);
+    assert.deepEqual(withPlan, withPlan.map((_, i) => String(i + 1).padStart(2, '0')));
+});
+
+// ── Plan hachuré (photo importée) ──────────────────────────────────────────
+check('the hatched pattern photo appears in every daily report with its counts and the pit holes of the day', () => {
+    const app = chartApp();
+    app.getDailyDataForSite = () => richDay();
+    app.reportPatternsByZone = {
+        p17: { image: 'data:image/jpeg;base64,UEFUVEVSTg==', source: 'photo', zone: 'P17',
+            marks: { marks: [{ x: 0.5, y: 0.5, t: 'drilled', id: 'T1' }, { x: 0.6, y: 0.5, t: 'drilled', id: 'T2' }, { x: 0.7, y: 0.5, t: 'previous' }] } }
+    };
+    const docs = [
+        app.buildDailyReportDocumentHtml('2026-10-16', richDay()),
+        app.buildDailyReportDocumentHtml('2026-10-16', richDay(), true),
+        app.buildDailyReportSyntheticHtml('2026-10-16', richDay())
+    ];
+    for (const html of docs) {
+        assert.match(html, /Plan hachuré des patterns forés/);
+        assert.ok(html.includes('data:image/jpeg;base64,UEFUVEVSTg=='));
+        assert.match(html, /Fosse P17/);
+        assert.match(html, /Foré ce jour : 2/);
+        assert.match(html, /Foré antérieurement : 1/);
+        assert.match(html, /3 trou\(s\) · 120 m nouveaux \+ 5 m reforés · A/);
+        assert.equal((html.match(/UEFUVEVSTg==/g) || []).length, 1, 'one large image per pit, not a duplicated gallery');
+    }
+});
+
+check('unsafe pattern images and pit names are never injected into a report', () => {
+    const app = chartApp();
+    app.getDailyDataForSite = () => richDay();
+    app.reportPatternsByZone = {
+        a: { image: 'data:image/png;base64,AAA" onerror="alert(1)', source: 'photo', zone: 'P17' },
+        b: { image: 'javascript:alert(1)', source: 'photo', zone: 'P18' },
+        c: { image: 'data:image/png;base64,QUJD', source: 'photo', zone: '<img src=x onerror=alert(2)>"' }
+    };
+    const html = app.buildDailyReportDocumentHtml('2026-10-16', richDay());
+    assert.doesNotMatch(html, /onerror="alert\(1\)|javascript:alert|<img src=x/);
+    assert.match(html, /&lt;img src=x onerror=alert\(2\)&gt;&quot;/);
+    assert.equal(app.isSafePatternImage('data:image/jpeg;base64,QUJD'), true);
+    assert.equal(app.isSafePatternImage('data:image/svg+xml;base64,QUJD'), false);
+});
+
+check('hatching states are normalised from legacy arrays and hostile input', () => {
+    const app = fixture();
+    const st = app.normalizePatternState(JSON.stringify([
+        { x: 0.25, y: 0.75, t: 'redrilled', r: 0.5, id: '  T-12  ' },
+        { x: 1.5, y: 0.2 }, { x: 'a', y: 0.1 }, null,
+        { x: 0.1, y: 0.1, t: '<script>', id: 'X'.repeat(80) }
+    ]));
+    assert.equal(st.marks.length, 2);
+    assert.deepEqual({ ...st.marks[0] }, { x: 0.25, y: 0.75, t: 'redrilled', r: 0.08, id: 'T-12' });
+    assert.equal(st.marks[1].t, 'drilled');
+    assert.equal(st.marks[1].id.length, 40);
+    assert.equal(st.legend.pos, 'bl');
+    assert.equal(app.normalizePatternState({ legend: { pos: 'tr', show: false }, labels: false }).legend.pos, 'tr');
+    const counts = app.summarizePatternMarks(st);
+    assert.equal(counts.total, 2);
+    assert.equal(counts.redrilled, 1);
+    assert.equal(app.patternMarkCountsText(counts), 'Foré ce jour : 1 · Reforé : 1');
+    assert.equal(app.normalizePatternState('not json').marks.length, 0);
 });
 
 async function main() {

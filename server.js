@@ -1954,12 +1954,51 @@ db.run(`CREATE TABLE IF NOT EXISTS pattern_photos (
     image TEXT NOT NULL,
     source TEXT DEFAULT 'photo',
     createdAt TEXT DEFAULT CURRENT_TIMESTAMP
-)`, (e) => { if (e) console.warn('pattern_photos:', e.message); });
+)`, (e) => {
+    if (e) console.warn('pattern_photos:', e.message);
+    // Hachurage sur photo : photo d'origine (sans hachures) + positions des trous hachurés.
+    ['baseImage TEXT', 'marks TEXT', 'updatedAt TEXT'].forEach((col) => {
+        db.run('ALTER TABLE pattern_photos ADD COLUMN ' + col, (err) => {
+            if (err && !/duplicate column/i.test(err.message)) console.warn('pattern_photos.' + col + ':', err.message);
+        });
+    });
+});
+
+const PATTERN_IMAGE_RE = /^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=]+$/;
+const PATTERN_MARK_TYPES = new Set(['drilled', 'previous', 'redrilled', 'abandoned', 'planned']);
+const PATTERN_LEGEND_POSITIONS = ['bl', 'br', 'tl', 'tr'];
+// Normalise l'état du hachurage (points en coordonnées relatives 0..1) avant stockage.
+function sanitizePatternMarks(raw) {
+    let st = raw;
+    if (typeof st === 'string') { try { st = JSON.parse(st); } catch (e) { return null; } }
+    if (Array.isArray(st)) st = { marks: st };
+    if (!st || typeof st !== 'object') return null;
+    const marks = (Array.isArray(st.marks) ? st.marks : []).slice(0, 2000).map((m) => {
+        if (!m || typeof m !== 'object') return null;
+        const x = Number(m.x), y = Number(m.y);
+        let r = Number(m.r);
+        if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || x > 1 || y < 0 || y > 1) return null;
+        if (!Number.isFinite(r) || r <= 0) r = 0.012;
+        r = Math.min(0.08, Math.max(0.002, r));
+        return {
+            x: +x.toFixed(5), y: +y.toFixed(5), r: +r.toFixed(5),
+            t: PATTERN_MARK_TYPES.has(m.t) ? m.t : 'drilled',
+            id: m.id == null ? '' : String(m.id).trim().slice(0, 40)
+        };
+    }).filter(Boolean);
+    const lg = st.legend && typeof st.legend === 'object' ? st.legend : {};
+    return { v: 1, marks, labels: st.labels !== false, legend: { show: lg.show !== false, pos: PATTERN_LEGEND_POSITIONS.includes(lg.pos) ? lg.pos : 'bl' } };
+}
+function parsePatternMarks(text) {
+    if (!text) return null;
+    try { return JSON.parse(text); } catch (e) { return null; }
+}
 
 app.get('/api/pattern-photos', (req, res) => {
     const entId = getEnterpriseId(req);
     const { date, siteId } = req.query;
-    let sql = 'SELECT id, enterpriseId, siteId, date, zone, image, source, createdAt FROM pattern_photos WHERE 1=1';
+    // La photo d'origine (baseImage) n'est pas renvoyée en liste : elle ne sert qu'à l'éditeur.
+    let sql = 'SELECT id, enterpriseId, siteId, date, zone, image, source, marks, createdAt, updatedAt FROM pattern_photos WHERE 1=1';
     const params = [];
     if (entId !== null) { sql += ' AND enterpriseId = ?'; params.push(entId); }
     if (date) { sql += ' AND date = ?'; params.push(date); }
@@ -1967,7 +2006,40 @@ app.get('/api/pattern-photos', (req, res) => {
     sql += ' ORDER BY zone';
     db.all(sql, params, (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
-        res.json(rows || []);
+        res.json((rows || []).map((r) => ({ ...r, marks: parsePatternMarks(r.marks) })));
+    });
+});
+
+// Dernier plan photo d'une fosse avant une date (pour « Reprendre la veille »).
+app.get('/api/pattern-photos/previous', (req, res) => {
+    const entId = getEnterpriseId(req);
+    const zone = String(req.query.zone || '').trim().slice(0, 160);
+    const before = String(req.query.before || '').slice(0, 10);
+    const { siteId } = req.query;
+    if (!zone || !/^\d{4}-\d{2}-\d{2}$/.test(before)) return res.status(400).json({ error: 'Fosse et date (AAAA-MM-JJ) requises' });
+    let sql = "SELECT id, siteId, date, zone, image, baseImage, source, marks FROM pattern_photos WHERE TRIM(zone) = ? COLLATE NOCASE AND date < ? AND IFNULL(source, 'photo') = 'photo'";
+    const params = [zone, before];
+    if (entId !== null) { sql += ' AND enterpriseId = ?'; params.push(entId); }
+    if (siteId !== undefined && siteId !== '' && siteId !== 'null') { sql += ' AND siteId = ?'; params.push(parseInt(siteId, 10)); }
+    sql += ' ORDER BY date DESC, id DESC LIMIT 1';
+    db.get(sql, params, (err, row) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!row) return res.json(null);
+        res.json({ ...row, marks: parsePatternMarks(row.marks) });
+    });
+});
+
+app.get('/api/pattern-photos/:id', (req, res) => {
+    const entId = getEnterpriseId(req);
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: 'Identifiant invalide' });
+    let sql = 'SELECT id, siteId, date, zone, image, baseImage, source, marks, createdAt, updatedAt FROM pattern_photos WHERE id = ?';
+    const params = [id];
+    if (entId !== null) { sql += ' AND enterpriseId = ?'; params.push(entId); }
+    db.get(sql, params, (err, row) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!row) return res.status(404).json({ error: 'Pattern introuvable' });
+        res.json({ ...row, marks: parsePatternMarks(row.marks) });
     });
 });
 
@@ -1981,16 +2053,25 @@ app.post('/api/pattern-photos', (req, res) => {
     const siteId = (b.siteId === '' || b.siteId == null) ? null : parseInt(b.siteId, 10);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ error: 'Date AAAA-MM-JJ requise' });
     if (!zone) return res.status(400).json({ error: 'Zone / fosse requise' });
-    if (!image || !/^data:image\//.test(image)) return res.status(400).json({ error: 'Image requise (format data:image)' });
+    if (!image || !PATTERN_IMAGE_RE.test(image)) return res.status(400).json({ error: 'Image requise (format data:image en base64)' });
     if (image.length > 5000000) return res.status(400).json({ error: 'Image trop lourde (réduisez-la).' });
+    let baseImage = null;
+    if (b.baseImage != null && b.baseImage !== '') {
+        if (typeof b.baseImage !== 'string' || !PATTERN_IMAGE_RE.test(b.baseImage)) return res.status(400).json({ error: 'Photo d\'origine invalide (format data:image en base64)' });
+        if (b.baseImage.length > 5000000) return res.status(400).json({ error: 'Photo d\'origine trop lourde (réduisez-la).' });
+        baseImage = b.baseImage;
+    }
+    const marksState = b.marks == null ? null : sanitizePatternMarks(b.marks);
+    const marksText = marksState ? JSON.stringify(marksState) : null;
     const entVal = entId == null ? 1 : entId;
     // Un seul pattern par (entreprise, site, date, zone) : on remplace l'existant.
     db.run('DELETE FROM pattern_photos WHERE enterpriseId = ? AND date = ? AND zone = ? AND IFNULL(siteId,-1) = IFNULL(?,-1)',
-        [entVal, date, zone, siteId], () => {
-            db.run('INSERT INTO pattern_photos (enterpriseId, siteId, date, zone, image, source) VALUES (?,?,?,?,?,?)',
-                [entVal, siteId, date, zone, image, source], function (err) {
+        [entVal, date, zone, siteId], (delErr) => {
+            if (delErr) return res.status(500).json({ error: delErr.message });
+            db.run('INSERT INTO pattern_photos (enterpriseId, siteId, date, zone, image, source, baseImage, marks, updatedAt) VALUES (?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)',
+                [entVal, siteId, date, zone, image, source, baseImage, marksText], function (err) {
                     if (err) return res.status(500).json({ error: err.message });
-                    res.json({ id: this.lastID, message: 'Pattern enregistré' });
+                    res.json({ id: this.lastID, message: 'Pattern enregistré', marks: marksState ? marksState.marks.length : 0 });
                 });
         });
 });

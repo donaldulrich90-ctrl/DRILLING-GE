@@ -334,6 +334,13 @@ const PatternPhotosAPI = {
         if (siteId !== undefined && siteId !== null && siteId !== '') q += `&siteId=${encodeURIComponent(siteId)}`;
         return apiRequest(q, 'GET');
     },
+    get: (id) => apiRequest(`/pattern-photos/${encodeURIComponent(id)}`, 'GET'),
+    // Dernier plan photo de la fosse avant la date donnée (ou null).
+    previous: (zone, before, siteId) => {
+        let q = `/pattern-photos/previous?zone=${encodeURIComponent(zone)}&before=${encodeURIComponent(before)}`;
+        if (siteId !== undefined && siteId !== null && siteId !== '') q += `&siteId=${encodeURIComponent(siteId)}`;
+        return apiRequest(q, 'GET');
+    },
     save: (payload) => apiRequest('/pattern-photos', 'POST', payload),
     remove: (id) => apiRequest(`/pattern-photos/${encodeURIComponent(id)}`, 'DELETE')
 };
