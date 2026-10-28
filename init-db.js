@@ -192,6 +192,7 @@ db.serialize(() => {
             clientId INTEGER NOT NULL,
             coordinates TEXT DEFAULT '',
             notes TEXT DEFAULT '',
+            miningCutoffDay INTEGER DEFAULT 1,
             createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (enterpriseId) REFERENCES enterprises(id),
             FOREIGN KEY (clientId) REFERENCES clients(id)

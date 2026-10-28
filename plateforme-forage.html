@@ -2266,6 +2266,14 @@
                         <label class="block text-slate-400 mb-2">Notes</label>
                         <textarea id="siteNotes" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white" rows="2" placeholder="Notes..."></textarea>
                     </div>
+                    <div class="mb-4 border-t border-slate-600 pt-4">
+                        <label class="block text-slate-400 mb-2">Jour de coupure du mois minier</label>
+                        <div class="flex items-center gap-3">
+                            <input type="number" id="siteMiningCutoffDay" min="1" max="28" value="1" class="w-24 bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white" oninput="updateCutoffHint()">
+                            <span id="siteCutoffHint" class="text-xs text-slate-400"></span>
+                        </div>
+                        <p class="text-xs text-slate-500 mt-2">1 = mois calendaire (1er → fin du mois). Sinon, le mois minier va du jour choisi du mois précédent à la veille du jour choisi (ex. 26 → du 26 au 25). S'applique aux rapports mensuels, au revenu et à la facturation de ce site.</p>
+                    </div>
                     <div class="flex gap-2">
                         <button type="submit" class="flex-1 bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg font-semibold">Enregistrer</button>
                         <button type="button" onclick="closeSiteModal()" class="bg-gray-600 hover:bg-gray-700 px-4 py-2 rounded-lg">Annuler</button>
@@ -10871,8 +10879,9 @@
         function stAutoUsageForDrill(drillId, unit, periodYM) {
             if (!drillId || unit === 'forfait') return null;
             var days = {}, total = 0;
+            var _sid = (typeof _siteIdForDrill === 'function') ? _siteIdForDrill(drillId) : null;
             (dailyDataRecords || []).forEach(function (r) {
-                if (isDailyRecordIncompleteDraft(r) || !r.date || r.date.slice(0, 7) !== periodYM) return;
+                if (isDailyRecordIncompleteDraft(r) || !r.date || miningMonthKey(r.date, _sid) !== periodYM) return;
                 if (!drillIdsMatch(r.machineId, drillId)) return;
                 var data = r.data || {}; if (typeof data === 'string') { try { data = JSON.parse(data); } catch (e) { data = {}; } }
                 var meters = parseFloat(data.metersDrilled) || 0, hours = parseFloat(data.hours) || 0;
@@ -13276,7 +13285,7 @@
                 var c = contracts.find(function(x) { return x.id === d.contractId; });
                 if (!c || c.clientId !== clientId) return;
                 (dailyDataRecords || []).forEach(function(r) {
-                    if (isDailyRecordIncompleteDraft(r) || !drillIdsMatch(r.machineId, d.id) || !r.date || r.date.slice(0, 7) !== month) return;
+                    if (isDailyRecordIncompleteDraft(r) || !drillIdsMatch(r.machineId, d.id) || !r.date || miningMonthKey(r.date, d.siteId) !== month) return;
                     var data = r.data || {};
                     if (typeof data === 'string') {
                         try { data = JSON.parse(data); } catch (e) { data = {}; }
@@ -13318,7 +13327,7 @@
                 var contract = contracts.find(function(c) { return c.id === drill.contractId; });
                 if (!contract || contract.clientId !== clientId) return;
                 var records = (dailyDataRecords || []).filter(function(r) {
-                    return !isDailyRecordIncompleteDraft(r) && drillIdsMatch(r.machineId, drill.id) && r.date && r.date.slice(0, 7) === month;
+                    return !isDailyRecordIncompleteDraft(r) && drillIdsMatch(r.machineId, drill.id) && r.date && miningMonthKey(r.date, drill.siteId) === month;
                 });
                 var totalMeters = 0;
                 records.forEach(function(r) {
@@ -13504,7 +13513,8 @@
             var bm = ((document.getElementById('invoiceBillingMonth') || {}).value || '');
             if (!(bm && bm.length >= 7)) bm = ((document.getElementById('invoiceDate') || {}).value || '').slice(0, 7);
             bm = bm ? bm.slice(0, 7) : '';
-            var holeMonth = function(h) { return String(h.endDate || h.startDate || '').slice(0, 7); };
+            var _invSid = (ct.siteId != null && ct.siteId !== '') ? ct.siteId : (typeof currentSiteId !== 'undefined' ? currentSiteId : null);
+            var holeMonth = function(h) { var d = String(h.endDate || h.startDate || ''); return d ? miningMonthKey(d, _invSid) : ''; };
 
             // Agrège les trous forés (actDepth > 0) de la période par (diamètre, terrain).
             var groups = {};
@@ -15170,8 +15180,9 @@
 
         function sumMetersForDrillInMonth(drillId, monthYYYYMM) {
             var total = 0;
+            var _sid = _siteIdForDrill(drillId);
             (dailyDataRecords || []).forEach(function(r) {
-                if (isDailyRecordIncompleteDraft(r) || !r.date || r.date.slice(0, 7) !== monthYYYYMM) return;
+                if (isDailyRecordIncompleteDraft(r) || !r.date || miningMonthKey(r.date, _sid) !== monthYYYYMM) return;
                 if (!drillIdsMatch(r.machineId, drillId)) return;
                 var data = r.data || {};
                 if (typeof data === 'string') {
@@ -15185,8 +15196,9 @@
         // Mètres reforés d'une machine sur un mois (saisies validées).
         function sumRedrillMetersForDrillInMonth(drillId, monthYYYYMM) {
             var total = 0;
+            var _sid = _siteIdForDrill(drillId);
             (dailyDataRecords || []).forEach(function(r) {
-                if (isDailyRecordIncompleteDraft(r) || !r.date || r.date.slice(0, 7) !== monthYYYYMM) return;
+                if (isDailyRecordIncompleteDraft(r) || !r.date || miningMonthKey(r.date, _sid) !== monthYYYYMM) return;
                 if (!drillIdsMatch(r.machineId, drillId)) return;
                 var data = r.data || {};
                 if (typeof data === 'string') {
@@ -15214,8 +15226,9 @@
         // Mètres d'une machine sur un mois, ventilés par diamètre (clé = mm, '' si inconnu).
         function metersByDiameterForDrillInMonth(drillId, monthYYYYMM, includeRedrill) {
             var out = {};
+            var _sid = _siteIdForDrill(drillId);
             (dailyDataRecords || []).forEach(function(r) {
-                if (isDailyRecordIncompleteDraft(r) || !r.date || r.date.slice(0, 7) !== monthYYYYMM) return;
+                if (isDailyRecordIncompleteDraft(r) || !r.date || miningMonthKey(r.date, _sid) !== monthYYYYMM) return;
                 if (!drillIdsMatch(r.machineId, drillId)) return;
                 var data = r.data || {};
                 if (typeof data === 'string') { try { data = JSON.parse(data); } catch (e) { data = {}; } }
@@ -17165,6 +17178,8 @@
                 document.getElementById('siteRegion').value = '';
                 document.getElementById('siteCountry').value = '';
                 document.getElementById('siteNotes').value = '';
+                var cutoffEl0 = document.getElementById('siteMiningCutoffDay'); if (cutoffEl0) cutoffEl0.value = 1;
+                updateCutoffHint();
                 var clientSelect = document.getElementById('siteClient');
                 clientSelect.innerHTML = '<option value="">' + tUi('sites.select_client') + '</option>';
                 (clients || []).forEach(function(c) {
@@ -17199,6 +17214,8 @@
             document.getElementById('siteRegion').value = site.region || '';
             document.getElementById('siteCountry').value = site.country || '';
             document.getElementById('siteNotes').value = site.notes || '';
+            var cutoffElE = document.getElementById('siteMiningCutoffDay'); if (cutoffElE) cutoffElE.value = (site.miningCutoffDay != null && site.miningCutoffDay !== '') ? site.miningCutoffDay : 1;
+            updateCutoffHint();
             var clientSelect = document.getElementById('siteClient');
             clientSelect.innerHTML = '<option value="">' + tUi('sites.select_client') + '</option>';
             (clients || []).forEach(function(c) {
@@ -17217,6 +17234,68 @@
             currentEditingSiteId = null;
         }
 
+        // ===== Mois minier configurable (jour de coupure par site) =====
+        function miningCutoffDayForSite(siteId) {
+            try {
+                var sid = (siteId != null && siteId !== '') ? siteId : (typeof currentSiteId !== 'undefined' ? currentSiteId : null);
+                var s = (typeof sites !== 'undefined' && sites) ? sites.find(function (x) { return String(x.id) === String(sid); }) : null;
+                var n = s ? parseInt(s.miningCutoffDay, 10) : 1;
+                if (isNaN(n) || n < 1) n = 1; if (n > 28) n = 28;
+                return n;
+            } catch (e) { return 1; }
+        }
+        // Clé 'YYYY-MM' du mois minier auquel appartient dateStr pour un site donné.
+        // Avec coupure D (>1), le mois libellé M va du jour D de M-1 à la veille (D-1) de M.
+        function miningMonthKey(dateStr, siteId) {
+            var s = String(dateStr || '').slice(0, 10);
+            if (s.length < 7) return s.slice(0, 7);
+            var cut = miningCutoffDayForSite(siteId);
+            if (cut <= 1) return s.slice(0, 7);
+            var y = parseInt(s.slice(0, 4), 10), m = parseInt(s.slice(5, 7), 10) - 1, day = parseInt(s.slice(8, 10), 10);
+            if (isNaN(day)) return s.slice(0, 7);
+            if (day >= cut) { m += 1; if (m > 11) { m = 0; y += 1; } }
+            return y + '-' + String(m + 1).padStart(2, '0');
+        }
+        // Renvoie {start:'YYYY-MM-DD', end:'YYYY-MM-DD'} (inclus) du mois minier libellé ym pour un site.
+        function miningMonthRange(ym, siteId) {
+            var parts = String(ym || '').slice(0, 7).split('-');
+            var y = parseInt(parts[0], 10), m = parseInt(parts[1], 10) - 1;
+            var cut = miningCutoffDayForSite(siteId);
+            var pad = function (n) { return String(n).padStart(2, '0'); };
+            if (cut <= 1) {
+                var last = new Date(y, m + 1, 0).getDate();
+                return { start: y + '-' + pad(m + 1) + '-01', end: y + '-' + pad(m + 1) + '-' + pad(last) };
+            }
+            // début = jour cut du mois M-1 ; fin = (cut-1) du mois M
+            var sy = y, sm = m - 1; if (sm < 0) { sm = 11; sy -= 1; }
+            var startDay = Math.min(cut, new Date(sy, sm + 1, 0).getDate());
+            var endDay = Math.min(cut - 1, new Date(y, m + 1, 0).getDate());
+            return { start: sy + '-' + pad(sm + 1) + '-' + pad(startDay), end: y + '-' + pad(m + 1) + '-' + pad(endDay) };
+        }
+        function miningMonthLabelFr(ym, siteId) {
+            var parts = String(ym || '').slice(0, 7).split('-');
+            var d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, 1);
+            var base = d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+            if (miningCutoffDayForSite(siteId) <= 1) return base;
+            var r = miningMonthRange(ym, siteId);
+            var f = function (s) { var p = s.split('-'); return p[2] + '/' + p[1] + '/' + p[0]; };
+            return base + ' (' + f(r.start) + ' → ' + f(r.end) + ')';
+        }
+        function _siteIdForDrill(drillId) {
+            try {
+                var d = (typeof drills !== 'undefined' && drills) ? drills.find(function (x) { return String(x.id) === String(drillId); }) : null;
+                if (!d && typeof findDrillByMachineId === 'function') d = findDrillByMachineId(drillId);
+                return (d && d.siteId != null) ? d.siteId : (typeof currentSiteId !== 'undefined' ? currentSiteId : null);
+            } catch (e) { return (typeof currentSiteId !== 'undefined' ? currentSiteId : null); }
+        }
+        function updateCutoffHint() {
+            var el = document.getElementById('siteCutoffHint'); if (!el) return;
+            var n = parseInt((document.getElementById('siteMiningCutoffDay') || {}).value, 10);
+            if (isNaN(n) || n <= 1) { el.textContent = 'Mois calendaire (1er → fin du mois).'; return; }
+            n = Math.min(28, Math.max(1, n));
+            el.textContent = 'Ex. mois en cours : du ' + n + ' du mois précédent au ' + (n - 1) + ' de ce mois.';
+        }
+
         async function saveSite(event) {
             event.preventDefault();
             var name = document.getElementById('siteName').value.trim();
@@ -17232,7 +17311,8 @@
                 region: document.getElementById('siteRegion').value.trim(),
                 country: document.getElementById('siteCountry').value.trim(),
                 clientId: clientId,
-                notes: document.getElementById('siteNotes').value.trim()
+                notes: document.getElementById('siteNotes').value.trim(),
+                miningCutoffDay: (function(){ var n = parseInt((document.getElementById('siteMiningCutoffDay') || {}).value, 10); if (isNaN(n)) return 1; return Math.min(28, Math.max(1, n)); })()
             };
             if (currentEditingSiteId) {
                 var idx = sites.findIndex(function(s) { return s.id == currentEditingSiteId; });
@@ -17511,7 +17591,7 @@
             var mo = rm;
             var daysInThisMonth = monthEnd.getDate();
             var currentMonthKey = reportMonthKey;
-            var monthLabelFr = monthStart.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+            var monthLabelFr = (typeof miningMonthLabelFr === 'function') ? miningMonthLabelFr(reportMonthKey, currentSiteId) : monthStart.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
             var calendarMonthKeyNow = today.toISOString().slice(0, 7);
             var isHistoricalRevenueMonth = reportMonthKey !== calendarMonthKeyNow;
             var invCurCompany = companyInfo.currency || 'XOF';
@@ -17611,7 +17691,7 @@
             }, 0);
             var monthExpenses = miscellaneousExpenses.filter(function(exp) {
                 if (!exp.date) return false;
-                return String(exp.date).slice(0, 7) === reportMonthKey;
+                return miningMonthKey(exp.date, currentSiteId) === reportMonthKey;
             }).reduce(function(sum, exp) {
                 return sum + convertMoneyAmountToCurrency(exp.amount || 0, exp.currency || expCurDefault, dispCur);
             }, 0);
@@ -17621,7 +17701,7 @@
             }, 0);
             var monthSiteMealsDisp = getSiteMealExpensesForSite().filter(function(exp) {
                 if (!exp.date) return false;
-                return String(exp.date).slice(0, 7) === reportMonthKey;
+                return miningMonthKey(exp.date, currentSiteId) === reportMonthKey;
             }).reduce(function(sum, exp) {
                 return sum + convertMoneyAmountToCurrency(exp.amount || 0, exp.currency || expCurDefault, dispCur);
             }, 0);
@@ -17815,7 +17895,7 @@
             
             var recentExpenses = miscellaneousExpenses.filter(function(exp) {
                 if (!exp.date) return false;
-                return String(exp.date).slice(0, 7) === reportMonthKey;
+                return miningMonthKey(exp.date, currentSiteId) === reportMonthKey;
             }).sort(function(a, b) { return new Date(b.date) - new Date(a.date); });
             
             if (recentExpenses.length === 0) {
@@ -18164,7 +18244,7 @@
                 return new Date(b.date) - new Date(a.date);
             });
             var monthTotal = list.filter(function(r) {
-                return r.date && String(r.date).slice(0, 7) === reportMonthKey;
+                return r.date && miningMonthKey(r.date, currentSiteId) === reportMonthKey;
             }).reduce(function(s, r) {
                 return s + convertMoneyAmountToCurrency(r.amount || 0, r.currency || expCurDefault, dispCur);
             }, 0);
