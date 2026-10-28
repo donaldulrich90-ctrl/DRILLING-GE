@@ -19782,17 +19782,61 @@
             s1.addText('Projet / site : ' + projectLabel + '   •   ' + formatDate(date), { x: 0.6, y: 4.1, w: 12.1, h: 0.5, fontSize: 16, color: 'E2E8F0', align: 'center' });
             s1.addText(Object.keys(machinesActive).length + ' machine(s) active(s)', { x: 0.6, y: 4.7, w: 12.1, h: 0.4, fontSize: 14, color: '94A3B8', align: 'center' });
 
-            // 2 — Indicateurs clés
-            var s2 = pptx.addSlide(); slideTitle(s2, 'Indicateurs clés — ' + formatDate(date));
-            var kpis = [['Production réalisée', dec(agg.production) + ' m'], ['Production planifiée', goal != null ? dec(goal) + ' m' : 'N/A'], ['Taux de réalisation', rate != null ? dec(rate) + ' %' : 'N/A'], ['Rendement moyen', rendement != null ? dec(rendement, 2) + ' m/h' : 'N/A'], ['Reforage', dec(agg.reforage) + ' m'], ['Flushing', dec(agg.flushing) + ' m'], ['Dispo. mécanique', dispo != null ? dec(dispo) + ' %' : 'N/A'], ['Carburant', dec(agg.fuel) + ' L']];
-            kpis.forEach(function (k, i) {
-                var col = i % 4, row = Math.floor(i / 4), x = 0.6 + col * 3.04, y = 1.6 + row * 2.35;
-                s2.addShape(pptx.ShapeType.rect, { x: x, y: y, w: 2.86, h: 2.1, fill: { color: LIGHT }, line: { color: 'D9E1EB', width: 1 } });
-                s2.addShape(pptx.ShapeType.rect, { x: x, y: y, w: 2.86, h: 0.06, fill: { color: CAT } });
-                s2.addText(k[0], { x: x + 0.08, y: y + 0.22, w: 2.7, h: 0.6, fontSize: 12, color: GRAY, align: 'center' });
-                s2.addText(k[1], { x: x + 0.08, y: y + 0.82, w: 2.7, h: 1.0, fontSize: 22, bold: true, color: NAVY, align: 'center' });
+            // Production par poste (Jour / Nuit / Journée complète)
+            var shiftTot = { day: null, night: null, full: null };
+            records.forEach(function (r) {
+                var data = _rpData(r);
+                if (data.metersDrilled == null || data.metersDrilled === '' || !Number.isFinite(Number(data.metersDrilled))) return;
+                var sk = dailyRecordShiftKey(r) || 'full';
+                var mv = Math.max(0, Number(computeOperationalReportMetrics(data).production) || 0);
+                shiftTot[sk] = (shiftTot[sk] || 0) + mv;
             });
-            s2.addText(Object.keys(machinesActive).length + ' machine(s) active(s) · ' + nbZones + ' zone(s) · ' + nbHoles + ' trou(s) travaillé(s)', { x: 0.6, y: 6.5, w: 12.1, h: 0.4, fontSize: 13, italic: true, color: GRAY, align: 'center' });
+
+            // 2 — Résumé de production (tableau + graphiques, conforme au PDF)
+            var s2 = pptx.addSlide(); slideTitle(s2, 'Résumé de production — ' + formatDate(date));
+            function kvRow(lbl, val, strong, valColor) {
+                return [
+                    { text: lbl, options: { fontSize: 12, bold: !!strong, color: NAVY, fill: { color: 'FFFFFF' }, align: 'left' } },
+                    { text: val, options: { fontSize: strong ? 15 : 12, bold: !!strong, color: valColor || NAVY, fill: { color: 'FFFFFF' }, align: 'center' } }
+                ];
+            }
+            var rateColor = rate != null ? (rate >= 100 ? '16A34A' : 'DC2626') : NAVY;
+            var kvt = [
+                [{ text: 'Indicateur', options: { bold: true, color: NAVY, fill: { color: 'EAF0F6' }, align: 'center', fontSize: 12 } }, { text: 'Valeur', options: { bold: true, color: NAVY, fill: { color: 'EAF0F6' }, align: 'center', fontSize: 12 } }],
+                kvRow('Production réalisée (mètres nouveaux)', dec(agg.production) + ' m', true, '1E40AF'),
+                kvRow('Production planifiée', goal != null ? dec(goal) + ' m' : 'Non renseigné'),
+                kvRow('Taux de réalisation', rate != null ? dec(rate) + ' %' : 'N/A', true, rateColor),
+                kvRow('Reforage', dec(agg.reforage) + ' m'),
+                kvRow('Flushing', dec(agg.flushing) + ' m'),
+                kvRow('Rendement moyen (m/h utilisée)', rendement != null ? dec(rendement, 2) + ' m/h' : 'N/A'),
+                kvRow('Machines actives', String(Object.keys(machinesActive).length))
+            ];
+            s2.addTable(kvt, { x: 0.5, y: 1.35, w: 12.3, colW: [6.15, 6.15], rowH: 0.34, border: { type: 'solid', color: 'D9E1E9', pt: 0.5 }, valign: 'middle' });
+
+            // Deux panneaux de barres horizontales (comme le PDF)
+            var chartMax = Math.max(1, shiftTot.day || 0, shiftTot.night || 0, shiftTot.full || 0, agg.production || 0, goal || 0);
+            function hbars(s, x, y, w, title, items, foot) {
+                s.addShape(pptx.ShapeType.rect, { x: x, y: y, w: w, h: 0.02, fill: { color: 'E4E2DA' } });
+                s.addText(title, { x: x, y: y + 0.05, w: w, h: 0.32, fontSize: 12, bold: true, color: NAVY });
+                var ry = y + 0.48, labelW = 1.25, valW = 1.35, trackX = x + labelW, trackW = w - labelW - valW;
+                items.forEach(function (it) {
+                    s.addText(it.label, { x: x, y: ry - 0.02, w: labelW - 0.05, h: 0.3, fontSize: 11, color: GRAY, valign: 'middle' });
+                    s.addShape(pptx.ShapeType.roundRect, { x: trackX, y: ry + 0.02, w: trackW, h: 0.22, rectRadius: 0.03, fill: { color: 'E6EDF4' }, line: { color: 'E6EDF4', width: 0.5 } });
+                    if (it.value != null && chartMax > 0) {
+                        var bw = Math.max(0.04, trackW * Math.min(1, it.value / chartMax));
+                        s.addShape(pptx.ShapeType.roundRect, { x: trackX, y: ry + 0.02, w: bw, h: 0.22, rectRadius: 0.03, fill: { color: it.color }, line: { color: it.color, width: 0.5 } });
+                    }
+                    s.addText(it.value == null ? 'Non renseigné' : dec(it.value) + ' m', { x: x + w - valW, y: ry - 0.02, w: valW, h: 0.3, fontSize: 11, bold: true, color: NAVY, align: 'right', valign: 'middle' });
+                    ry += 0.42;
+                });
+                if (foot) s.addText(foot, { x: x, y: ry + 0.02, w: w, h: 0.3, fontSize: 9, italic: true, color: GRAY });
+            }
+            var posteItems = [{ label: 'Jour', value: shiftTot.day, color: '1D4ED8' }, { label: 'Nuit', value: shiftTot.night, color: '0F766E' }];
+            if (shiftTot.full != null) posteItems.push({ label: 'Journée compl.', value: shiftTot.full, color: '64748B' });
+            hbars(s2, 0.5, 4.9, 6.0, 'Production par poste', posteItems);
+            hbars(s2, 6.9, 4.9, 5.9, 'Réalisé et objectif de la journée',
+                [{ label: 'Réalisé', value: agg.production, color: '1D4ED8' }, { label: 'Planifié', value: goal != null ? goal : null, color: 'C27803' }],
+                'Objectif journalier issu de la planification enregistrée.');
 
             // 2b — Zones forées et trous travaillés
             var sZ = pptx.addSlide(); slideTitle(sZ, 'Zones forées et trous travaillés');
