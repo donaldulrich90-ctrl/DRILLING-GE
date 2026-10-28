@@ -19207,11 +19207,23 @@
             var sel = document.getElementById('patternZone');
             var hint = document.getElementById('patternNoFosseHint');
             if (sel) {
-                var names = (typeof getFossesForSite === 'function') ? getFossesForSite(typeof currentSiteId !== 'undefined' ? currentSiteId : null) : [];
-                names = names || [];
                 var esc = (typeof escapeHtmlForAttr === 'function') ? escapeHtmlForAttr : function (s) { return s; };
-                sel.innerHTML = '<option value="">— Choisir une fosse —</option>' + names.map(function (n) { return '<option value="' + esc(n) + '">' + (typeof escapeHtml === 'function' ? escapeHtml(n) : n) + '</option>'; }).join('');
-                if (hint) hint.classList.toggle('hidden', names.length > 0);
+                var escT = (typeof escapeHtml === 'function') ? escapeHtml : function (s) { return s; };
+                var sid = (typeof currentSiteId !== 'undefined' && currentSiteId != null && currentSiteId !== '') ? String(currentSiteId) : '';
+                var raw = (typeof getFossesRaw === 'function') ? getFossesRaw() : [];
+                // Fosses du site sélectionné + globales d'abord ; sinon toutes (avec le site en libellé)
+                // pour que les fosses créées restent toujours visibles, même sans site actif.
+                var scoped = sid ? raw.filter(function (f) { return f.siteId == null || String(f.siteId) === sid; }) : [];
+                var useList = scoped.length ? scoped : raw;
+                var seen = {}, opts = '';
+                useList.forEach(function (f) {
+                    var k = f.name.toLowerCase();
+                    if (seen[k]) return; seen[k] = 1;
+                    var label = f.name + (!sid && f.siteId != null && typeof fossesSiteName === 'function' ? ' — ' + fossesSiteName(f.siteId) : '');
+                    opts += '<option value="' + esc(f.name) + '">' + escT(label) + '</option>';
+                });
+                sel.innerHTML = '<option value="">— Choisir une fosse —</option>' + opts;
+                if (hint) hint.classList.toggle('hidden', !!opts);
             }
             var dateEl = document.getElementById('reportDailyDate');
             if (dateEl && !dateEl._patternHooked) { dateEl.addEventListener('change', function () { renderPatternList(); }); dateEl._patternHooked = true; }
