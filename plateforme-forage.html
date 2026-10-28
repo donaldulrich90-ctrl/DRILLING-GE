@@ -19282,8 +19282,10 @@
             if (!reportWindow) { alert('Autorisez l\'ouverture de la fenêtre du rapport.'); return; }
             reportWindow.document.write('<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Préparation du rapport</title></head><body><p>Préparation du rapport synthétique…</p></body></html>');
             reportWindow.document.close();
-            ensureReportPlanLoaded(function() { printDailyReport(date, records, reportWindow, buildDailyReportSyntheticHtml(date, records)); }, function() {
-                if (!reportWindow.closed) reportWindow.close();
+            loadReportPatterns(date, function() {
+                ensureReportPlanLoaded(function() { printDailyReport(date, records, reportWindow, buildDailyReportSyntheticHtml(date, records)); }, function() {
+                    if (!reportWindow.closed) reportWindow.close();
+                });
             });
         }
 
@@ -19736,10 +19738,12 @@
             var records = getDailyDataForSite().filter(function (r) { return r.date === date && !isDailyRecordIncompleteDraft(r); });
             if (!records.length) { alert('Aucune saisie terminée pour cette date.'); return; }
             ensureReportPlanLoaded(function () {
-                loadVendorScript('vendor/pptxgen.bundle.js', 'https://cdnjs.cloudflare.com/ajax/libs/pptxgenjs/3.12.0/pptxgen.bundle.js').then(function () {
-                    try { buildSyntheticReportPptx(date, records); }
-                    catch (e) { alert('Export PowerPoint impossible : ' + (e && e.message ? e.message : e)); }
-                }).catch(function () { alert('Impossible de charger la librairie PowerPoint (connexion internet requise).'); });
+                loadReportPatterns(date, function () {
+                    loadVendorScript('vendor/pptxgen.bundle.js', 'https://cdnjs.cloudflare.com/ajax/libs/pptxgenjs/3.12.0/pptxgen.bundle.js').then(function () {
+                        try { buildSyntheticReportPptx(date, records); }
+                        catch (e) { alert('Export PowerPoint impossible : ' + (e && e.message ? e.message : e)); }
+                    }).catch(function () { alert('Impossible de charger la librairie PowerPoint (connexion internet requise).'); });
+                });
             }, function () { /* annulé */ });
         }
 
@@ -19867,6 +19871,17 @@
             } else {
                 sZ.addText('Aucun trou renseigné pour cette journée.', { x: 0.5, y: 2.0, w: 12.3, h: 0.6, fontSize: 15, italic: true, color: GRAY });
             }
+
+            // 2c — Plans hachurés des patterns (une diapo par fosse/zone)
+            try {
+                var patMapS = (typeof reportPatternsByZone === 'object' && reportPatternsByZone) ? reportPatternsByZone : {};
+                Object.keys(patMapS).forEach(function (zk) {
+                    var pp = patMapS[zk]; if (!pp || !pp.image) return;
+                    var sp = pptx.addSlide(); slideTitle(sp, 'Plan hachuré — ' + (pp.zone || ''));
+                    try { sp.addImage({ data: pp.image, x: 0.6, y: 1.5, w: 12.1, h: 5.4, sizing: { type: 'contain', w: 12.1, h: 5.4 } }); } catch (ei) {}
+                    sp.addText((pp.source === 'auto' ? 'Hachurage automatique (coordonnées du plan)' : 'Photo importée du pattern foré'), { x: 0.6, y: 7.0, w: 12.1, h: 0.35, fontSize: 10, italic: true, color: GRAY });
+                });
+            } catch (ep) {}
 
             // 3 — Disponibilité et arrêts
             var s3 = pptx.addSlide(); slideTitle(s3, 'Disponibilité et répartition des arrêts');
@@ -20894,6 +20909,14 @@
             if (nbZones > 0) {
                 zonesBody = '<p style="margin:0 0 8px;font-size:11px;"><strong>Zones :</strong> ' + escapeHtmlReportCell(Object.keys(zones).join(', ')) + '</p>' + zonesBody;
             }
+            try {
+                var patsS = (typeof reportPatternsByZone === 'object' && reportPatternsByZone) ? reportPatternsByZone : {};
+                var patCardsS = Object.keys(patsS).map(function (zk) {
+                    var pS = patsS[zk]; if (!pS || !pS.image) return '';
+                    return '<figure class="pattern-fig"><img src="' + pS.image + '" alt="Pattern ' + escapeHtmlReportCell(pS.zone || '') + '"><figcaption>' + escapeHtmlReportCell(pS.zone || '') + ' <span class="pattern-src">(' + (pS.source === 'auto' ? 'hachurage auto' : 'photo') + ')</span></figcaption></figure>';
+                }).filter(Boolean).join('');
+                if (patCardsS) zonesBody += '<h3 class="daily-subtitle">Plan hachuré des patterns forés</h3><div class="pattern-grid">' + patCardsS + '</div>';
+            } catch (ePdf) {}
 
             // ── Section 03 : Analyse disponibilité et arrêts ──
             var analyseBody = '<table class="daily-table"><thead><tr><th style="width:50%;">Indicateur</th><th style="width:50%;">Valeur</th></tr></thead><tbody>' +
