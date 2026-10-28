@@ -20236,6 +20236,15 @@
             } else if (siteList.length === 1) {
                 cutoffSiteId = String(siteList[0].id);
             }
+            // Repli : déduire le site (pour le jour de coupure) des machines du rapport,
+            // utile quand plusieurs sites existent (ex. doublons) mais que le rapport ne
+            // couvre qu'un seul site réel.
+            if (cutoffSiteId == null && Array.isArray(records) && records.length) {
+                var recSites = {};
+                records.forEach(function(r) { var dr = findDrillByMachineId(r.machineId); if (dr && dr.siteId != null) recSites[String(dr.siteId)] = 1; });
+                var rsKeys = Object.keys(recSites);
+                if (rsKeys.length === 1) cutoffSiteId = rsKeys[0];
+            }
 
             var weeks = Array.isArray(p.weeks) ? p.weeks : [];
             var months = Array.isArray(p.months) ? p.months : [];
