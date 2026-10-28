@@ -4373,11 +4373,6 @@
                             <input type="number" id="dailyEntryMeters" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white" step="0.1" min="0" required placeholder="0.0" oninput="updateDailyEntryKpiPreview()" onchange="updateDailyEntryKpiPreview()">
                         </div>
                         <div>
-                            <label class="block text-slate-400 mb-2" for="dailyEntryRedrillMeters">Mètres reforés (m)</label>
-                            <input type="number" id="dailyEntryRedrillMeters" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white" step="0.1" min="0" placeholder="Ex. 8.5">
-                            <p class="text-slate-500 text-xs mt-1">Reforage du poste, à part des mètres nouveaux. Saisissez 0 si aucun reforage.</p>
-                        </div>
-                        <div>
                             <label class="block text-slate-400 mb-2">Heures machine (fonctionnement) *</label>
                             <input type="number" id="dailyEntryHours" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white" step="0.1" min="0" max="24" required placeholder="0.0" oninput="updateDailyEntryKpiPreview()" onchange="updateDailyEntryKpiPreview()">
                             <p class="text-slate-500 text-xs mt-1">Pour L/h, L/m et taux d’utilisation de la disponibilité.</p>
@@ -26235,26 +26230,16 @@
                 tN += nouveau; tRH += reforeH; tR += refore; tF += flush; if (zone) patterns[zone] = true;
                 rows += '<tr><td class="r-txt">' + escapeHtmlReportCell(_rpMachineName(r)) + '</td>' +
                     '<td class="r-txt">' + _rpNa(zone) + '</td>' +
-<<<<<<< Updated upstream
                     '<td class="r-num">' + nouveau.toFixed(1).replace('.', ',') + ' m</td>' +
+                    '<td class="r-num">' + reforeH.toFixed(1).replace('.', ',') + ' h</td>' +
                     '<td class="r-num">' + refore.toFixed(1).replace('.', ',') + ' m</td>' +
                     '<td class="r-num">' + flush.toFixed(1).replace('.', ',') + ' m</td></tr>';
-=======
-                    '<td class="r-num">' + nouveau.toFixed(1) + ' m</td>' +
-                    '<td class="r-num">' + reforeH.toFixed(1) + ' h</td>' +
-                    '<td class="r-num">' + refore.toFixed(1) + ' m</td>' +
-                    '<td class="r-num">' + flush.toFixed(1) + ' m</td></tr>';
->>>>>>> Stashed changes
             });
             return '<h2>Production par zone / pattern</h2>' +
                 '<table class="pro2"><thead><tr><th>Machine</th><th>Zone / pattern</th><th class="num">Nouveau</th><th class="num">Reforage (h)</th><th class="num">Reforé (m)</th><th class="num">Flushing</th></tr></thead><tbody>' +
                 rows +
                 '<tr class="total"><td class="r-txt"><strong>Total</strong></td><td class="r-txt">' + Object.keys(patterns).length + ' zone(s)</td>' +
-<<<<<<< Updated upstream
-                '<td class="r-num"><strong>' + tN.toFixed(1).replace('.', ',') + ' m</strong></td><td class="r-num"><strong>' + tR.toFixed(1).replace('.', ',') + ' m</strong></td><td class="r-num"><strong>' + tF.toFixed(1).replace('.', ',') + ' m</strong></td></tr>' +
-=======
-                '<td class="r-num"><strong>' + tN.toFixed(1) + ' m</strong></td><td class="r-num"><strong>' + tRH.toFixed(1) + ' h</strong></td><td class="r-num"><strong>' + tR.toFixed(1) + ' m</strong></td><td class="r-num"><strong>' + tF.toFixed(1) + ' m</strong></td></tr>' +
->>>>>>> Stashed changes
+                '<td class="r-num"><strong>' + tN.toFixed(1).replace('.', ',') + ' m</strong></td><td class="r-num"><strong>' + tRH.toFixed(1).replace('.', ',') + ' h</strong></td><td class="r-num"><strong>' + tR.toFixed(1).replace('.', ',') + ' m</strong></td><td class="r-num"><strong>' + tF.toFixed(1).replace('.', ',') + ' m</strong></td></tr>' +
                 '</tbody></table>' +
                 '<p style="font-size:10px;color:#475569;margin:5px 0 0;">Objectif = <b>mètres nouveaux uniquement</b>. Le <b>reforage est facturé à l\'heure</b> (colonne « Reforage (h) ») ; flushing suivi séparément.</p>';
         }
@@ -26391,13 +26376,9 @@
                 card('Reforage', agg.redrillKnown ? fmtM(agg.reforage) : 'Non renseigné', '#7c3aed', agg.redrillKnown && agg.redrillKnown < records.length ? 'mètres renseignés · ' + agg.redrillKnown + '/' + records.length + ' fiches' : 'mètres reforés') +
                 card('Flushing', agg.flushKnown ? fmtM(agg.flushing) : 'Non renseigné', '#0891b2', agg.flushKnown && agg.flushKnown < records.length ? 'mètres renseignés · ' + agg.flushKnown + '/' + records.length + ' fiches' : 'mètres de flushing') +
                 '</div>' +
-<<<<<<< Updated upstream
                 '<div class="report-kpi-notes"><p>' + escapeHtmlReportCell(planned.note) + '</p>' +
+                '<p>Production réalisée = <b>mètres nouveaux</b> (' + agg.prod.toFixed(1).replace('.', ',') + ' m). Reforage (facturé à l\'heure) : <b>' + (agg.reforageH || 0).toFixed(1).replace('.', ',') + ' h</b>' + (agg.reforage > 0 ? ' (' + agg.reforage.toFixed(1).replace('.', ',') + ' m)' : '') + ' · Flushing : <b>' + agg.flushing.toFixed(1).replace('.', ',') + ' m</b> — présentés séparément, non additionnés.</p>' +
                 '<p>Comparatif précédent : mêmes machines et postes, sur une journée complète enregistrée.</p></div>';
-=======
-                '<div style="font-size:10px;color:#475569;margin:0 0 16px;">Production réalisée = <b>mètres nouveaux</b> (' + agg.prod.toFixed(1) + ' m). ' +
-                'Reforage (facturé à l\'heure) : <b>' + (agg.reforageH || 0).toFixed(1) + ' h</b>' + (agg.reforage > 0 ? ' (' + agg.reforage.toFixed(1) + ' m)' : '') + ' · Flushing : <b>' + agg.flushing.toFixed(1) + ' m</b> — présentés séparément, non additionnés.</div>';
->>>>>>> Stashed changes
         }
 
         function renderOperationalKpiTableHtml(records) {
@@ -27308,13 +27289,9 @@
             setStr('dailyEntryLocation', d.location || '');
             loadDailyEntryHoles(d.holesWorked || []);
             setNum('dailyEntryMeters', d.metersDrilled);
-<<<<<<< Updated upstream
-            setNum('dailyEntryRedrillMeters', d.redrillMeters);
-=======
             setNum('dailyEntryRedrillHours', d.redrillHours != null ? d.redrillHours : '');
             setNum('dailyEntryRedrillMeters', d.redrillMeters != null ? d.redrillMeters : '');
             setNum('dailyEntryFlushingMeters', d.flushingMeters != null ? d.flushingMeters : '');
->>>>>>> Stashed changes
             setNum('dailyEntryHours', d.hours);
             var faLoad = parseFloat(d.fuelAdded) || 0;
             if (d.entryStage !== 'draft' && faLoad <= 0 && !d.fuelInitialFillOnly) {
@@ -28269,55 +28246,7 @@
                 showDailyEntryError('Choisissez une date et une machine pour pré-enregistrer ce poste.');
                 return null;
             }
-<<<<<<< Updated upstream
-=======
 
-            var date = document.getElementById('dailyEntryDate').value;
-            var machineIdRaw = document.getElementById('dailyEntryMachineId').value;
-            var location = document.getElementById('dailyEntryLocation').value.trim();
-            var drillingType = document.getElementById('dailyEntryDrillingType').value;
-            var materialType = (document.getElementById('dailyEntryMaterialType') && document.getElementById('dailyEntryMaterialType').value) || '';
-            var bitType = document.getElementById('dailyEntryBitType').value;
-            var meters = parseFloat(document.getElementById('dailyEntryMeters').value) || 0;
-            var hours = parseFloat(document.getElementById('dailyEntryHours').value) || 0;
-            var redrillHoursEl = document.getElementById('dailyEntryRedrillHours');
-            var redrillMetersEl = document.getElementById('dailyEntryRedrillMeters');
-            var flushingMetersEl = document.getElementById('dailyEntryFlushingMeters');
-            var redrillHours = redrillHoursEl && redrillHoursEl.value !== '' ? (parseFloat(redrillHoursEl.value) || 0) : 0;
-            var redrillMeters = redrillMetersEl && redrillMetersEl.value !== '' ? (parseFloat(redrillMetersEl.value) || 0) : 0;
-            var flushingMeters = flushingMetersEl && flushingMetersEl.value !== '' ? (parseFloat(flushingMetersEl.value) || 0) : 0;
-            var fuelAdded = parseFloat(document.getElementById('dailyEntryFuelAdded').value) || 0;
-            var counterStartRaw = document.getElementById('dailyEntryCounterStart');
-            var counterEndRaw = document.getElementById('dailyEntryCounterEnd');
-            var counterStart = counterStartRaw && counterStartRaw.value !== '' ? parseFloat(counterStartRaw.value) : null;
-            var counterEnd = counterEndRaw && counterEndRaw.value !== '' ? parseFloat(counterEndRaw.value) : null;
-            if (counterStart != null && isNaN(counterStart)) counterStart = null;
-            if (counterEnd != null && isNaN(counterEnd)) counterEnd = null;
-            var hammerStartRaw = document.getElementById('dailyEntryHammerStart');
-            var hammerEndRaw = document.getElementById('dailyEntryHammerEnd');
-            var hammerStart = hammerStartRaw && hammerStartRaw.value !== '' ? parseFloat(hammerStartRaw.value) : null;
-            var hammerEnd = hammerEndRaw && hammerEndRaw.value !== '' ? parseFloat(hammerEndRaw.value) : null;
-            if (hammerStart != null && isNaN(hammerStart)) hammerStart = null;
-            if (hammerEnd != null && isNaN(hammerEnd)) hammerEnd = null;
-            var hoursCtStartRaw = document.getElementById('dailyEntryHoursCounterStart');
-            var hoursCtEndRaw = document.getElementById('dailyEntryHoursCounterEnd');
-            var hoursCounterStart = hoursCtStartRaw && hoursCtStartRaw.value !== '' ? parseFloat(hoursCtStartRaw.value) : null;
-            var hoursCounterEnd = hoursCtEndRaw && hoursCtEndRaw.value !== '' ? parseFloat(hoursCtEndRaw.value) : null;
-            if (hoursCounterStart != null && isNaN(hoursCounterStart)) hoursCounterStart = null;
-            if (hoursCounterEnd != null && isNaN(hoursCounterEnd)) hoursCounterEnd = null;
-            var hammerCounterDelta = computeDailyEntryCounterDelta(hammerStart, hammerEnd);
-            var hoursCounterDelta = computeDailyEntryCounterDelta(hoursCounterStart, hoursCounterEnd);
-            var fuelPrice = parseFloat(document.getElementById('dailyEntryFuelPrice').value) || 0;
-            var fuelPriceCurrencyDaily = normalizeFuelPriceCurrency((document.getElementById('dailyEntryFuelPriceCurrency') || {}).value || 'USD');
-            var bitChanged = document.getElementById('dailyEntryBitChanged').checked;
-            var rodChanged = document.getElementById('dailyEntryRodChanged').checked;
-            var oilChanged = document.getElementById('dailyEntryOilChanged').checked;
-            var filterChanged = document.getElementById('dailyEntryFilterChanged').checked;
-            var changesDetails = document.getElementById('dailyEntryChangesDetails').value.trim();
-            var notes = document.getElementById('dailyEntryNotes').value.trim();
-            var holesWorked = collectDailyEntryHoles();
-            
->>>>>>> Stashed changes
             var drill = findDrillByMachineId(machineIdRaw);
             if (!drill) {
                 showDailyEntryError('Machine introuvable.');
@@ -28359,6 +28288,16 @@
                 showDailyEntryError('Les mètres reforés doivent être positifs ou nuls.');
                 return null;
             }
+            var redrillHours = dailyEntryNumberOrNull('dailyEntryRedrillHours');
+            if (redrillHours != null && redrillHours < 0) {
+                showDailyEntryError('Les heures de reforage doivent être positives ou nulles.');
+                return null;
+            }
+            var flushingMeters = dailyEntryNumberOrNull('dailyEntryFlushingMeters');
+            if (flushingMeters != null && flushingMeters < 0) {
+                showDailyEntryError('Les mètres de flushing doivent être positifs ou nuls.');
+                return null;
+            }
             var hours = dailyEntryNumberOrNull('dailyEntryHours');
             var fuelAdded = dailyEntryNumberOrNull('dailyEntryFuelAdded');
             var counterStart = dailyEntryNumberOrNull('dailyEntryCounterStart');
@@ -28371,7 +28310,6 @@
             var fuelPriceCurrency = normalizeFuelPriceCurrency(dailyEntryText('dailyEntryFuelPriceCurrency') || 'USD');
             var holesWorked = collectDailyEntryHoles();
             var stoppages = collectDailyEntryStoppages();
-<<<<<<< Updated upstream
             var downtimeHoursTotal = stoppages.reduce(function(total, stop) { return total + (Number(stop.hours) || 0); }, 0);
             var hasIncompleteStops = stoppages.some(function(stop) { return stop.hours == null || !Number.isFinite(Number(stop.hours)) || Number(stop.hours) < 0; });
             var location = dailyEntryText('dailyEntryLocation');
@@ -28432,54 +28370,6 @@
                 date: date, machineId: machineId, shift: shift, data: {},
                 enteredByUsername: getDailyDataActorUsername(), enteredByName: getDailyDataActorDisplayName(), enteredAt: now,
                 workflowStatus: 'draft', workflowVersion: 0
-=======
-            var downtimeHoursTotal = stoppages.reduce(function(a, s) { return a + (parseFloat(s.hours) || 0); }, 0);
-            var kpi = computeShiftAvailabilityKpis(shift, downtimeHoursTotal, hours);
-            var dailyData = {
-                depth: drill.telemetry.depth,
-                fuelLevel: counterEnd != null ? counterEnd : drill.fuel.level,
-                fuelConsumption: fuelConsumptionEffective,
-                fuelConsumptionDerived: fuelConsumptionDerived,
-                fuelConsumptionEffective: fuelConsumptionEffective,
-                fuelInitialFillOnly: fuelInitialFillOnly,
-                counterStart: counterStart,
-                counterEnd: counterEnd,
-                hammerCounterStart: hammerStart,
-                hammerCounterEnd: hammerEnd,
-                hammerCounterDelta: hammerCounterDelta,
-                hoursCounterStart: hoursCounterStart,
-                hoursCounterEnd: hoursCounterEnd,
-                hoursCounterDelta: hoursCounterDelta,
-                fuelTankReading: counterEnd,
-                fuelAdded: fuelAdded,
-                fuelPrice: fuelPrice,
-                fuelPriceCurrency: fuelPriceCurrencyDaily,
-                oilLevel: drill.consumables ? drill.consumables.oil : 0,
-                filters: drill.consumables ? drill.consumables.filters : 0,
-                hours: hours,
-                metersDrilled: meters,
-                redrillHours: redrillHours,
-                redrillMeters: redrillMeters,
-                flushingMeters: flushingMeters,
-                holesWorked: holesWorked,
-                location: location,
-                drillingType: drillingType,
-                materialType: materialType || null,
-                bitType: bitType,
-                bitChanged: bitChanged,
-                rodChanged: rodChanged,
-                oilChanged: oilChanged,
-                filterChanged: filterChanged,
-                changesDetails: changesDetails,
-                shift: shift,
-                stoppages: stoppages,
-                downtimeHoursTotal: downtimeHoursTotal,
-                shiftNominalHours: kpi ? kpi.shiftNominalHours : null,
-                availableHours: kpi ? kpi.availableHours : null,
-                availabilityPct: kpi ? kpi.availabilityPct : null,
-                useOfAvailabilityPct: kpi ? kpi.useOfAvailabilityPct : null,
-                effectiveAvailabilityPct: kpi ? kpi.effectiveAvailabilityPct : null
->>>>>>> Stashed changes
             };
             record.date = date;
             record.machineId = machineId;
@@ -28499,7 +28389,8 @@
                 fuelAdded: fuelAdded, fuelPrice: fuelPrice, fuelPriceCurrency: fuelPriceCurrency,
                 oilLevel: isDraft ? null : ((drill.consumables || {}).oil == null ? null : drill.consumables.oil),
                 filters: isDraft ? null : ((drill.consumables || {}).filters == null ? null : drill.consumables.filters),
-                hours: hours, metersDrilled: meters, redrillMeters: redrillMeters, holesWorked: holesWorked,
+                hours: hours, metersDrilled: meters, redrillMeters: redrillMeters,
+                redrillHours: redrillHours, flushingMeters: flushingMeters, holesWorked: holesWorked,
                 location: location, drillingType: drillingType, materialType: materialType || null, bitType: bitType,
                 bitChanged: dailyEntryChecked('dailyEntryBitChanged'), rodChanged: dailyEntryChecked('dailyEntryRodChanged'),
                 oilChanged: dailyEntryChecked('dailyEntryOilChanged'), filterChanged: dailyEntryChecked('dailyEntryFilterChanged'),
