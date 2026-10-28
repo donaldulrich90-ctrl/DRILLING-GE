@@ -3533,12 +3533,17 @@ app.post('/api/company', (req, res) => {
     const company = req.body;
     const entId = resolveCreateEnterpriseId(req, company);
     
-    db.get('SELECT id FROM companyInfo WHERE enterpriseId = ? LIMIT 1', [entId], (err, existing) => {
+    db.get('SELECT id, fosses FROM companyInfo WHERE enterpriseId = ? LIMIT 1', [entId], (err, existing) => {
         if (err) {
             res.status(500).json({ error: err.message });
             return;
         }
-        
+        // Préserver les fosses existantes si la sauvegarde ne les fournit pas
+        // (évite qu'un enregistrement partiel de la fiche entreprise efface les fosses).
+        const fossesToStore = Array.isArray(company.fosses)
+            ? JSON.stringify(company.fosses)
+            : (existing && existing.fosses != null ? existing.fosses : '[]');
+
         if (existing) {
             db.run(
                 `UPDATE companyInfo SET name = ?, legalName = ?, address = ?, city = ?, country = ?,
@@ -3554,7 +3559,7 @@ app.post('/api/company', (req, res) => {
                     company.signatoryFirstName || '',
                     company.signatoryLastName || '',
                     company.signatoryTitle || '',
-                    JSON.stringify(Array.isArray(company.fosses) ? company.fosses : []),
+                    fossesToStore,
                     entId
                 ],
                 function(updateErr) {
@@ -3577,7 +3582,7 @@ app.post('/api/company', (req, res) => {
                     company.signatoryFirstName || '',
                     company.signatoryLastName || '',
                     company.signatoryTitle || '',
-                    JSON.stringify(Array.isArray(company.fosses) ? company.fosses : [])
+                    fossesToStore
                 ],
                 function(insertErr) {
                     if (insertErr) return res.status(500).json({ error: insertErr.message });
