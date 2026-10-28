@@ -282,6 +282,7 @@ const migrations = [
     { name: 'enterprises.claudeApiKey', sql: 'ALTER TABLE enterprises ADD COLUMN claudeApiKey TEXT DEFAULT NULL' },
     { name: 'contracts.billRedrill', sql: 'ALTER TABLE contracts ADD COLUMN billRedrill INTEGER DEFAULT 0' },
     { name: 'companyInfo.fosses', sql: "ALTER TABLE companyInfo ADD COLUMN fosses TEXT DEFAULT '[]'" },
+    { name: 'sites.miningCutoffDay', sql: 'ALTER TABLE sites ADD COLUMN miningCutoffDay INTEGER DEFAULT 1' },
     // Module paiements
     { name: 'payments.table', sql: `CREATE TABLE IF NOT EXISTS payments (
         id TEXT PRIMARY KEY,
