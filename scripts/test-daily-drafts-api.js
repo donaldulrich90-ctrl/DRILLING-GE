@@ -63,6 +63,8 @@ async function main() {
 
     try {
         await runNode(path.join(projectDir, 'init-db.js'), env);
+        // Même séquence qu'en production (Dockerfile) : init-db puis migrate-db.
+        await runNode(path.join(projectDir, 'migrate-db.js'), env);
         server = spawn(process.execPath, [path.join(projectDir, 'server.js')], { cwd: projectDir, env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe'] });
         server.stdout.on('data', (chunk) => { logs += chunk; });
         server.stderr.on('data', (chunk) => { logs += chunk; });
