@@ -2037,7 +2037,7 @@ app.post('/api/sites', (req, res) => {
         return res.status(403).json({ error: 'Seuls l’administrateur de l’entreprise, le rôle « gestionnaire de site » ou la plateforme peuvent créer un site.' });
     }
     const { name, address, city, region, country, clientId, coordinates, notes } = req.body;
-    const cutoffDay = (function(v){ var n = parseInt(v, 10); if (Number.isNaN(n)) return 1; return Math.min(28, Math.max(1, n)); })(req.body.miningCutoffDay);
+    const cutoffDay = (function(v){ var n = parseInt(v, 10); if (Number.isNaN(n)) return 1; return Math.min(31, Math.max(1, n)); })(req.body.miningCutoffDay);
     const entId = resolveCreateEnterpriseId(req, req.body);
     if (entId == null || entId === '') {
         return res.status(400).json({ error: 'Contexte entreprise requis pour créer un site' });
@@ -2076,7 +2076,7 @@ app.put('/api/sites/:id', (req, res) => {
     const { id } = req.params;
     const entId = getEnterpriseId(req);
     const { name, address, city, region, country, clientId, coordinates, notes } = req.body;
-    const cutoffDay = (function(v){ var n = parseInt(v, 10); if (Number.isNaN(n)) return 1; return Math.min(28, Math.max(1, n)); })(req.body.miningCutoffDay);
+    const cutoffDay = (function(v){ var n = parseInt(v, 10); if (Number.isNaN(n)) return 1; return Math.min(31, Math.max(1, n)); })(req.body.miningCutoffDay);
     let sql = `UPDATE sites SET name = ?, address = ?, city = ?, region = ?, country = ?, clientId = ?, coordinates = ?, notes = ?, miningCutoffDay = ? WHERE id = ?`;
     const vals = [name || '', address || '', city || '', region || '', country || '', clientId, coordinates || '', notes || '', cutoffDay, id];
     if (entId !== null) {

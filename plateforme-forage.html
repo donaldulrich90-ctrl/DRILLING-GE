@@ -2269,7 +2269,7 @@
                     <div class="mb-4 border-t border-slate-600 pt-4">
                         <label class="block text-slate-400 mb-2">Jour de coupure du mois minier</label>
                         <div class="flex items-center gap-3">
-                            <input type="number" id="siteMiningCutoffDay" min="1" max="28" value="1" class="w-24 bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white" oninput="updateCutoffHint()">
+                            <input type="number" id="siteMiningCutoffDay" min="1" max="31" value="1" class="w-24 bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white" oninput="updateCutoffHint()">
                             <span id="siteCutoffHint" class="text-xs text-slate-400"></span>
                         </div>
                         <p class="text-xs text-slate-500 mt-2">1 = mois calendaire (1er → fin du mois). Sinon, le mois minier va du jour choisi du mois précédent à la veille du jour choisi (ex. 26 → du 26 au 25). S'applique aux rapports mensuels, au revenu et à la facturation de ce site.</p>
@@ -17240,7 +17240,7 @@
                 var sid = (siteId != null && siteId !== '') ? siteId : (typeof currentSiteId !== 'undefined' ? currentSiteId : null);
                 var s = (typeof sites !== 'undefined' && sites) ? sites.find(function (x) { return String(x.id) === String(sid); }) : null;
                 var n = s ? parseInt(s.miningCutoffDay, 10) : 1;
-                if (isNaN(n) || n < 1) n = 1; if (n > 28) n = 28;
+                if (isNaN(n) || n < 1) n = 1; if (n > 31) n = 31;
                 return n;
             } catch (e) { return 1; }
         }
@@ -17292,8 +17292,8 @@
             var el = document.getElementById('siteCutoffHint'); if (!el) return;
             var n = parseInt((document.getElementById('siteMiningCutoffDay') || {}).value, 10);
             if (isNaN(n) || n <= 1) { el.textContent = 'Mois calendaire (1er → fin du mois).'; return; }
-            n = Math.min(28, Math.max(1, n));
-            el.textContent = 'Ex. mois en cours : du ' + n + ' du mois précédent au ' + (n - 1) + ' de ce mois.';
+            n = Math.min(31, Math.max(1, n));
+            el.textContent = 'Ex. mois en cours : du ' + n + ' du mois précédent au ' + (n - 1) + ' de ce mois (les mois plus courts sont clôturés à leur dernier jour).';
         }
 
         async function saveSite(event) {
@@ -17312,7 +17312,7 @@
                 country: document.getElementById('siteCountry').value.trim(),
                 clientId: clientId,
                 notes: document.getElementById('siteNotes').value.trim(),
-                miningCutoffDay: (function(){ var n = parseInt((document.getElementById('siteMiningCutoffDay') || {}).value, 10); if (isNaN(n)) return 1; return Math.min(28, Math.max(1, n)); })()
+                miningCutoffDay: (function(){ var n = parseInt((document.getElementById('siteMiningCutoffDay') || {}).value, 10); if (isNaN(n)) return 1; return Math.min(31, Math.max(1, n)); })()
             };
             if (currentEditingSiteId) {
                 var idx = sites.findIndex(function(s) { return s.id == currentEditingSiteId; });
