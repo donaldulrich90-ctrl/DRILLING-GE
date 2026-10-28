@@ -20213,6 +20213,7 @@
             var selected = typeof currentSiteId !== 'undefined' && currentSiteId != null && currentSiteId !== '' ? String(currentSiteId) : '';
             var planSite = String(p.site || '').trim().toLocaleLowerCase('fr-FR');
             var scope = 'entreprise, tous sites et postes';
+            var cutoffSiteId = null;
             if (planSite) {
                 var matches = siteList.filter(function(s) {
                     return [s.id, s.name, s.code].some(function(v) {
@@ -20227,11 +20228,15 @@
                     return drill && String(drill.siteId) === planSiteId;
                 })) return unavailable('Le rapport couvre des sites différents de celui du plan.');
                 scope = 'site ' + (matches[0].name || matches[0].code || planSiteId) + ', tous postes';
+                cutoffSiteId = planSiteId;
             } else if (selected) {
                 if (siteList.length !== 1 || String(siteList[0].id) !== selected) {
                     return unavailable('Objectif global non ventilé par site : comparaison indisponible pour ce site.');
                 }
                 scope = 'site ' + (siteList[0].name || siteList[0].code || selected) + ', tous postes';
+                cutoffSiteId = selected;
+            } else if (siteList.length === 1) {
+                cutoffSiteId = String(siteList[0].id);
             }
 
             var weeks = Array.isArray(p.weeks) ? p.weeks : [];
@@ -20254,12 +20259,24 @@
                 return unavailable('Objectif de la période non renseigné ou non valide.');
             }
             var days = reportCalendarDayNumber(per.end) - reportCalendarDayNumber(per.start) + 1;
+            var daysLabel = days + ' jour(s) calendaire(s), du ' + per.start + ' au ' + per.end;
+            // Mois minier : si le site a un jour de coupure (>1), l'objectif journalier
+            // d'un plan mensuel/total est réparti sur les jours du mois minier (ex. 29→28).
+            if ((horizon === 'mensuel' || horizon === 'total') && cutoffSiteId != null &&
+                typeof miningCutoffDayForSite === 'function' && miningCutoffDayForSite(cutoffSiteId) > 1 &&
+                typeof miningMonthRange === 'function' && typeof miningMonthKey === 'function') {
+                try {
+                    var mr = miningMonthRange(miningMonthKey(dateStr, cutoffSiteId), cutoffSiteId);
+                    var md = reportCalendarDayNumber(mr.end) - reportCalendarDayNumber(mr.start) + 1;
+                    if (md > 0) { days = md; daysLabel = md + ' jour(s) du mois minier (' + mr.start + ' → ' + mr.end + ')'; }
+                } catch (eMM) {}
+            }
             var goal = Number(target) / days;
             return {
                 value: goal,
                 note: 'Objectif journalier calculé au prorata : objectif ' + horizon + ' de ' +
-                    Number(target).toLocaleString('fr-FR', { maximumFractionDigits: 2 }) + ' m ÷ ' + days +
-                    ' jour(s) calendaire(s), du ' + per.start + ' au ' + per.end + '. Périmètre : ' + scope +
+                    Number(target).toLocaleString('fr-FR', { maximumFractionDigits: 2 }) + ' m ÷ ' + daysLabel +
+                    '. Périmètre : ' + scope +
                     '. Plan enregistré' + (reportPlanSnapshot.version ? ' v' + reportPlanSnapshot.version : '') + '.'
             };
         }
