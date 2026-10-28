@@ -19104,14 +19104,12 @@
         }
 
         // ===== Patterns hachurés (photo par fosse/zone/jour + hachurage auto) =====
-        function patAuthH() { return { 'Authorization': 'Bearer ' + (window.API && window.API.getAuthToken ? window.API.getAuthToken() : '') }; }
         var reportPatternsByZone = {};
         function loadReportPatterns(date, cb) {
             reportPatternsByZone = {};
             var sid = (typeof currentSiteId !== 'undefined' && currentSiteId != null) ? currentSiteId : '';
             try {
-                fetch('/api/pattern-photos?date=' + encodeURIComponent(date) + (sid !== '' ? '&siteId=' + encodeURIComponent(sid) : ''), { headers: patAuthH() })
-                    .then(function (r) { return r.ok ? r.json() : []; })
+                window.API.PatternPhotos.list(date, sid)
                     .then(function (list) { (list || []).forEach(function (p) { reportPatternsByZone[String(p.zone || '').trim().toLowerCase()] = { image: p.image, source: p.source, zone: p.zone }; }); cb && cb(); })
                     .catch(function () { cb && cb(); });
             } catch (e) { cb && cb(); }
@@ -19138,10 +19136,10 @@
             if (!date) { alert('Choisissez la date du rapport ci-dessus.'); return; }
             if (!zone) { alert('Indiquez la fosse / zone.'); if (fileEl) fileEl.value = ''; return; }
             downscaleImageFile(file, 1400, 0.82).then(function (dataUrl) {
-                return fetch('/api/pattern-photos', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, patAuthH()), body: JSON.stringify({ date: date, zone: zone, siteId: (currentSiteId != null ? currentSiteId : ''), image: dataUrl, source: 'photo' }) });
-            }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
-                .then(function (res) { if (!res.ok) alert('Enregistrement impossible : ' + ((res.d && res.d.error) || '')); renderPatternList(); })
-                .catch(function (e) { alert('Erreur : ' + (e && e.message ? e.message : e)); })
+                return window.API.PatternPhotos.save({ date: date, zone: zone, siteId: (currentSiteId != null ? currentSiteId : ''), image: dataUrl, source: 'photo' });
+            })
+                .then(function () { renderPatternList(); })
+                .catch(function (e) { alert('Enregistrement impossible : ' + (e && e.message ? e.message : e)); })
                 .then(function () { if (fileEl) fileEl.value = ''; });
         }
         function renderPatternList() {
@@ -19150,8 +19148,7 @@
             if (!date) { c.innerHTML = '<p class="text-slate-500 text-xs col-span-2">Choisissez une date.</p>'; return; }
             var sid = (currentSiteId != null ? currentSiteId : '');
             c.innerHTML = '<p class="text-slate-500 text-xs col-span-2">Chargement…</p>';
-            fetch('/api/pattern-photos?date=' + encodeURIComponent(date) + (sid !== '' ? '&siteId=' + encodeURIComponent(sid) : ''), { headers: patAuthH() })
-                .then(function (r) { return r.ok ? r.json() : []; })
+            window.API.PatternPhotos.list(date, sid)
                 .then(function (list) {
                     if (!list || !list.length) { c.innerHTML = '<p class="text-slate-500 text-xs col-span-2">Aucun pattern pour cette date.</p>'; return; }
                     c.innerHTML = list.map(function (p) {
@@ -19159,7 +19156,7 @@
                     }).join('');
                 }).catch(function () { c.innerHTML = '<p class="text-red-400 text-xs col-span-2">Erreur de chargement.</p>'; });
         }
-        function deletePattern(id) { if (!confirm('Supprimer ce pattern ?')) return; fetch('/api/pattern-photos/' + id, { method: 'DELETE', headers: patAuthH() }).then(function () { renderPatternList(); }).catch(function () { renderPatternList(); }); }
+        function deletePattern(id) { if (!confirm('Supprimer ce pattern ?')) return; window.API.PatternPhotos.remove(id).then(function () { renderPatternList(); }).catch(function () { renderPatternList(); }); }
         function drawPatternCanvas(holes) {
             var xs = holes.map(function (h) { return parseFloat(h.x) || 0; }), ys = holes.map(function (h) { return parseFloat(h.y) || 0; });
             var minX = Math.min.apply(null, xs), maxX = Math.max.apply(null, xs), minY = Math.min.apply(null, ys), maxY = Math.max.apply(null, ys);
@@ -19185,12 +19182,12 @@
             var zone = ((document.getElementById('patternZone') || {}).value || '').trim();
             if (!date) { alert('Choisissez la date.'); return; }
             if (!zone) { alert('Indiquez la fosse / zone à dessiner.'); return; }
-            fetch('/api/drill-plans', { headers: patAuthH() }).then(function (r) { return r.json(); }).then(function (plans) {
+            window.API.DrillPlans.list().then(function (plans) {
                 plans = Array.isArray(plans) ? plans : [];
                 if (currentSiteId != null) plans = plans.filter(function (p) { return String(p.siteId) === String(currentSiteId); });
                 if (!plans.length) { alert('Aucun plan pour ce site.'); return; }
                 var all = [], chain = Promise.resolve();
-                plans.forEach(function (pl) { chain = chain.then(function () { return fetch('/api/drill-plans/' + pl.id + '/full', { headers: patAuthH() }).then(function (r) { return r.ok ? r.json() : null; }).then(function (full) { if (full && full.holes) all = all.concat(full.holes); }); }); });
+                plans.forEach(function (pl) { chain = chain.then(function () { return window.API.DrillPlans.full(pl.id).then(function (full) { if (full && full.holes) all = all.concat(full.holes); }).catch(function () {}); }); });
                 chain.then(function () {
                     var holes = all.filter(function (h) { return String(h.zone || '').trim().toLowerCase() === zone.toLowerCase() || String(h.blockId || '').trim().toLowerCase() === zone.toLowerCase(); });
                     if (!holes.length) holes = all;
@@ -19198,8 +19195,9 @@
                     var hasCoords = holes.some(function (h) { return (parseFloat(h.x) || 0) !== 0 || (parseFloat(h.y) || 0) !== 0; });
                     if (!hasCoords) { alert('Les trous du plan n\'ont pas encore de coordonnées (x/y). Ajoutez-les dans Planification, ou importez une photo.'); return; }
                     var dataUrl = drawPatternCanvas(holes);
-                    fetch('/api/pattern-photos', { method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, patAuthH()), body: JSON.stringify({ date: date, zone: zone, siteId: (currentSiteId != null ? currentSiteId : ''), image: dataUrl, source: 'auto' }) })
-                        .then(function () { renderPatternList(); alert('Pattern généré automatiquement.'); });
+                    window.API.PatternPhotos.save({ date: date, zone: zone, siteId: (currentSiteId != null ? currentSiteId : ''), image: dataUrl, source: 'auto' })
+                        .then(function () { renderPatternList(); alert('Pattern généré automatiquement.'); })
+                        .catch(function (e) { alert('Enregistrement impossible : ' + (e && e.message ? e.message : e)); });
                 });
             }).catch(function (e) { alert('Erreur : ' + (e && e.message ? e.message : e)); });
         }
