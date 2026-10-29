@@ -140,6 +140,39 @@ module.exports = function registerBesoinsRoutes(app, options) {
         });
     });
 
+    // Suppression d'une expression de besoin
+    // Autorisé : admin / gestionnaire / gestionnaire_site / platform_owner / super_admin,
+    // ou l'auteur de la demande (createdBy).
+    const DELETE_ROLES = new Set(['admin', 'gestionnaire', 'gestionnaire_site', 'platform_owner']);
+    function canDelete(req, row) {
+        if (!req.auth) return false;
+        if (req.auth.isSuperAdmin || req.auth.isPlatformOwner) return true;
+        if (DELETE_ROLES.has(req.auth.role)) return true;
+        return !!(row && row.createdBy && String(row.createdBy) === String(req.auth.username));
+    }
+    app.delete('/api/besoins/:id', (req, res) => {
+        const eid = tenantOr400(req, res); if (eid == null) return;
+        const id = Number(req.params.id);
+        db.get('SELECT * FROM besoins WHERE id = ? AND enterpriseId = ?', [id, eid], (err, row) => {
+            if (err) return res.status(500).json({ error: err.message });
+            if (!row) return res.status(404).json({ error: 'Demande introuvable' });
+            if (!canDelete(req, row)) return res.status(403).json({ error: 'Droits insuffisants pour supprimer cette demande' });
+            try {
+                const att = JSON.parse(row.attachments || '[]');
+                (att || []).forEach((a) => {
+                    if (a && a.url && a.url.indexOf('/uploads/besoins/') === 0) {
+                        const fp = path.join(__dirname, '..', a.url.replace(/^\//, ''));
+                        fs.unlink(fp, () => {});
+                    }
+                });
+            } catch (e) {}
+            db.run('DELETE FROM besoins WHERE id = ? AND enterpriseId = ?', [id, eid], function (dErr) {
+                if (dErr) return res.status(500).json({ error: dErr.message });
+                res.json({ message: 'Demande supprimée', changes: this.changes });
+            });
+        });
+    });
+
     // Pièce jointe
     app.post('/api/besoins/:id/attachment', (req, res) => {
         if (!canWrite(req)) return res.status(403).json({ error: 'Droits insuffisants' });
