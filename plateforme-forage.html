@@ -9530,6 +9530,7 @@
                 if (b.statut === 'traite') html += '<button type="button" onclick="besoinAction(' + b.id + ',\'verify\')" class="ged-btn-secondary px-3 py-1.5 rounded-lg text-xs font-bold">Vérifier</button>';
                 if (b.statut === 'verifie') html += '<button type="button" onclick="besoinAction(' + b.id + ',\'validate\')" class="ged-btn-primary px-3 py-1.5 rounded-lg text-xs font-bold">Valider</button>';
                 if (b.statut !== 'valide' && b.statut !== 'rejete') html += '<button type="button" onclick="besoinAction(' + b.id + ',\'reject\')" class="px-3 py-1.5 rounded-lg text-xs font-bold" style="border:1px solid var(--ged-danger);color:var(--ged-danger)">Rejeter</button>';
+                html += '<button type="button" onclick="besoinDelete(' + b.id + ',\'' + besoinEsc(b.numero) + '\')" class="px-3 py-1.5 rounded-lg text-xs font-bold" style="margin-left:auto;background:var(--ged-danger);color:#fff" title="Supprimer définitivement cette demande">🗑 Supprimer</button>';
                 html += '</div>';
                 html += '</div>';
             });
@@ -9552,6 +9553,15 @@
                 renderBesoins();
             }).catch(function (err) {
                 var s = document.getElementById('besCreateStatus'); if (s) { s.textContent = 'Échec : ' + (err && err.message); s.style.color = 'var(--ged-danger)'; }
+            });
+        }
+        function besoinDelete(id, numero) {
+            if (!window.confirm('Supprimer définitivement l\'expression de besoin ' + (numero || '') + ' ?\nCette action est irréversible.')) return;
+            apiRequest('/besoins/' + id, 'DELETE').then(function () {
+                if (typeof showGedToast === 'function') showGedToast('Expression de besoin supprimée', 'success');
+                renderBesoins();
+            }).catch(function (err) {
+                if (typeof showGedToast === 'function') showGedToast('Suppression impossible : ' + (err && err.message), 'danger');
             });
         }
         function besoinUpload(id, file) {
