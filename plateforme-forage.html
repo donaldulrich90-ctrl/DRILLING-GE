@@ -5668,7 +5668,10 @@
             matriculePrefix: 'EMP',
             matriculeIncludeYear: true,
             matriculeSeparator: '-',
-            matriculePadding: 3
+            matriculePadding: 3,
+            // Objectif de métrage planifié pour une journée complète (tous postes,
+            // toutes machines). Utilisé comme « Planifiée » dans le rapport.
+            dailyMetersObjective: 1479
         };
         var clients = [];
         
@@ -12254,6 +12257,12 @@
                 '<input type="checkbox" id="compMatIncludeYear" onchange="updateMatriculePreview()" class="rounded border-slate-500"' + (companyInfo.matriculeIncludeYear !== false ? ' checked' : '') + '> Inclure l\'année en cours</label>' +
                 '<p class="text-xs text-slate-400 mt-3">Aperçu : <span id="compMatPreview" class="text-emerald-300 font-mono">—</span></p>' +
                 '</div>' +
+                '<div class="border border-sky-700/40 rounded-lg p-4 bg-slate-900/30 mt-2">' +
+                '<h4 class="text-sm font-semibold text-sky-300 mb-2">Objectif de forage</h4>' +
+                '<p class="text-xs text-slate-500 mb-3">Objectif de métrage planifié pour une <b>journée complète</b> (tous les postes et toutes les machines réunis). Sert de référence « Planifiée » dans le rapport journalier.</p>' +
+                '<div><label class="block text-slate-400 mb-1 text-xs">Métrage planifié par jour (m)</label>' +
+                '<input type="number" id="compDailyMetersObjective" min="0" step="1" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white text-sm" value="' + (companyInfo.dailyMetersObjective != null && companyInfo.dailyMetersObjective !== '' ? companyInfo.dailyMetersObjective : 1479) + '" placeholder="Ex: 1479"></div>' +
+                '</div>' +
                 '<div class="mb-4">' +
                 '<label class="block text-slate-400 mb-2">Logo de l\'entreprise</label>' +
                 '<div class="flex items-center gap-4">' +
@@ -12363,6 +12372,13 @@
             if (ms) companyInfo.matriculeSeparator = ms.value != null ? ms.value : '-';
             if (mpad) { var pv = parseInt(mpad.value, 10); companyInfo.matriculePadding = (pv > 0 && pv <= 8) ? pv : 3; }
             if (my) companyInfo.matriculeIncludeYear = !!my.checked;
+
+            // Objectif de métrage planifié par jour (tous postes / machines)
+            var dmo = document.getElementById('compDailyMetersObjective');
+            if (dmo) {
+                var dmoVal = parseFloat(dmo.value);
+                companyInfo.dailyMetersObjective = (isFinite(dmoVal) && dmoVal >= 0) ? dmoVal : 0;
+            }
 
             saveData();
 
@@ -21204,6 +21220,18 @@
         function getReportPlannedProduction(dateStr, records) {
             var p = reportPlanSnapshot.plan;
             function unavailable(note) { return { value: null, note: note }; }
+            // Objectif de métrage journalier configuré (Paramètres entreprise →
+            // Objectif de forage) : il fait référence pour une journée complète,
+            // tous postes et toutes machines réunis. S'il est renseigné, il sert
+            // directement d'objectif « Planifiée » du rapport.
+            var dmo = (typeof companyInfo !== 'undefined' && companyInfo) ? parseFloat(companyInfo.dailyMetersObjective) : NaN;
+            if (isFinite(dmo) && dmo > 0) {
+                return {
+                    value: dmo,
+                    note: 'Objectif journalier : ' + dmo.toLocaleString('fr-FR', { maximumFractionDigits: 2 }) +
+                        ' m/jour (tous postes, toutes machines). Réglable dans Paramètres entreprise → Objectif de forage.'
+                };
+            }
             if (reportPlanSnapshot.error) return unavailable(reportPlanSnapshot.error);
             if (!p) return unavailable('Aucun objectif enregistré dans Planification.');
             if (p.metric !== 'metres') return unavailable('Le plan est exprimé en trous et ne peut pas être comparé aux mètres nouveaux.');
