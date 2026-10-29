@@ -19154,7 +19154,7 @@
         };
         var PATTERN_MARK_ORDER = ['drilled', 'previous', 'redrilled', 'abandoned', 'planned'];
         var PATTERN_LEGEND_POSITIONS = ['bl', 'br', 'tl', 'tr'];
-        var PATTERN_DEFAULT_RADIUS = 0.012; // rayon relatif à la largeur de l'image
+        var PATTERN_DEFAULT_RADIUS = 0.016; // rayon relatif à la largeur de l'image
 
         // Une image de pattern n'est intégrée dans un rapport que si c'est une vraie image base64.
         function isSafePatternImage(src) {
@@ -19546,7 +19546,7 @@
                 '<button type="button" id="patEdX" class="text-slate-400 hover:text-white text-2xl leading-none" title="Fermer">&times;</button></div>' +
                 '<div id="patEdBanner" class="' + (src.banner ? '' : 'hidden ') + 'px-4 py-2 text-sm bg-amber-500/15 text-amber-200 border-b border-amber-500/30">' + escapeHtml(src.banner || '') + '</div>' +
                 '<div class="flex flex-wrap items-center gap-2 px-4 py-2 border-b border-slate-700 text-sm">' + typeBtns +
-                '<label class="flex items-center gap-1 ml-1 text-xs text-slate-300">Taille <input type="range" id="patEdSize" min="4" max="40" value="' + Math.round(PATTERN_DEFAULT_RADIUS * 1000) + '"></label>' +
+                '<label class="flex items-center gap-1 ml-1 text-xs text-slate-300">Taille des marques <input type="range" id="patEdSize" min="4" max="80" value="' + Math.round(PATTERN_DEFAULT_RADIUS * 1000) + '" title="Agrandir ou réduire les marques (hachures)"></label>' +
                 '<label class="flex items-center gap-1 text-xs text-slate-300">Zoom <input type="range" id="patEdZoom" min="100" max="400" step="25" value="100"></label>' +
                 '<button type="button" id="patEdUndo" class="ged-btn-secondary px-2 py-1 rounded text-xs font-semibold">↶ Annuler</button>' +
                 '<button type="button" id="patEdClear" class="ged-btn-secondary px-2 py-1 rounded text-xs font-semibold">🗑 Tout effacer</button></div>' +
@@ -19565,7 +19565,17 @@
                 '<button type="button" id="patEdSave" class="ged-btn-primary px-4 py-2 rounded-lg font-semibold">💾 Enregistrer le plan hachuré</button></div></div></div>';
             document.body.appendChild(modal);
             modal.querySelectorAll('[data-pat-type]').forEach(function (b) { b.addEventListener('click', function () { _patEd.type = b.getAttribute('data-pat-type'); _patEdToolbar(); }); });
-            _patEdEl('patEdSize').addEventListener('input', function (e) { _patEd.r = Math.max(4, Math.min(40, parseInt(e.target.value, 10) || 12)) / 1000; });
+            _patEdEl('patEdSize').addEventListener('input', function (e) {
+                var rr = Math.max(4, Math.min(80, parseInt(e.target.value, 10) || 16)) / 1000;
+                _patEd.r = rr;
+                // Redimensionne toutes les marques déjà placées : le curseur agrandit
+                // ou réduit l'ensemble des hachures en direct (points souvent trop petits).
+                if (_patEd.marks && _patEd.marks.length) {
+                    _patEd.marks.forEach(function (m) { m.r = rr; });
+                    _patEd.dirty = true;
+                }
+                _patEdRender();
+            });
             _patEdEl('patEdZoom').addEventListener('input', function (e) { _patEd.zoom = (parseInt(e.target.value, 10) || 100) / 100; _patEdRender(); });
             _patEdEl('patEdUndo').addEventListener('click', _patEdUndo);
             _patEdEl('patEdClear').addEventListener('click', function () {
