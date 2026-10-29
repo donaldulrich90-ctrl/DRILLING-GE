@@ -21693,7 +21693,26 @@
             'table.parked-table .parked-status-maintenance{background:#dbeafe;color:#1e40af;}',
             'table.parked-table .parked-status-hs{background:#fee2e2;color:#991b1b;}',
             '@media print{html,body{background:#fff;}.print-tools{display:none!important;}.daily-sheet{width:auto;margin:0;padding:0;box-shadow:none;}.daily-section{margin-top:14px;}.daily-footer{margin-top:16px;}a{color:inherit;text-decoration:none;}.ge-brand-bottom{display:block!important;}}',
-            '@media screen and (max-width:1140px){.daily-sheet,.print-tools{width:calc(100% - 24px);}.daily-sheet{padding:24px;}.report-logos-row img{max-width:100%!important;}}@media screen and (max-width:650px){.report-kpi-grid,.daily-management .report-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr));}.daily-chart-grid{grid-template-columns:1fr;}.daily-chart-row{grid-template-columns:80px 1fr 85px;}}'
+            '@media screen and (max-width:1140px){.daily-sheet,.print-tools{width:calc(100% - 24px);}.daily-sheet{padding:24px;}.report-logos-row img{max-width:100%!important;}}@media screen and (max-width:650px){.report-kpi-grid,.daily-management .report-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr));}.daily-chart-grid{grid-template-columns:1fr;}.daily-chart-row{grid-template-columns:80px 1fr 85px;}}',
+            // Compaction impression : réduit les marges et espacements pour tenir le
+            // rapport sur le moins de pages possible (cible 2 pages en A4 paysage).
+            '@media print{',
+            '  @page{margin:6mm 8mm;}',
+            '  body{font-size:10.5px;line-height:1.3;}',
+            '  .daily-section{margin-top:8px!important;}',
+            '  .daily-section h2{font-size:12px;margin-bottom:5px;padding-bottom:3px;}',
+            '  .daily-subtitle{margin:6px 0 3px;font-size:10px;}',
+            '  .report-doc-title{font-size:17px;margin:8px 0 6px;}',
+            '  .report-meta-wrap{margin-bottom:8px;padding:6px 8px;}',
+            '  .report-logos-row{margin-bottom:7px;padding-bottom:7px;}.report-logos-row img{max-height:70px!important;}',
+            '  .report-kpi-card{min-height:64px!important;padding:5px 7px!important;}',
+            '  .report-kpi-value{font-size:19px!important;}',
+            '  table.daily-table th,table.daily-table td,table.pro2 th,table.pro2 td{padding:3px 5px!important;}',
+            '  .daily-sheet table th,.daily-sheet table td{font-size:10.5px;}',
+            '  .daily-signature{min-height:74px!important;padding:7px!important;}.daily-signature-space{height:12px!important;}',
+            '  .daily-footer{margin-top:10px;padding-top:5px;}',
+            '  .daily-table-note,.rpt-chart-note{font-size:8.5px;}',
+            '}'
         ].join('');
 
         function renderParkedMachinesTableHtml() {
@@ -26347,6 +26366,7 @@
         // « Non renseigné » / « N/A » si la donnée manque (pas de chiffre fictif).
         function buildReportKpiBandeau(records, reportDate) {
             var agg = { prod: 0, reforage: 0, flushing: 0, redrillKnown: 0, flushKnown: 0, bdn: 0, stb: 0, wMech: 0, sMech: 0 };
+            var holeSet = {};
             var pairs = {};
             function pairKey(r) {
                 return JSON.stringify([String(r.machineId), dailyRecordShiftKey({ data: _rpData(r), shift: r.shift })]);
@@ -26364,8 +26384,10 @@
                 agg.bdn += m.bdn || 0;
                 agg.stb += m.stb || 0;
                 if (m.scheduled > 0 && m.mechAvail != null && !isNaN(m.mechAvail)) { agg.wMech += m.mechAvail * m.scheduled; agg.sMech += m.scheduled; }
+                (data.holesWorked || []).forEach(function(h) { if (h && h.holeId != null && String(h.holeId).trim() !== '') holeSet[String(h.holeId).trim()] = true; });
                 pairs[pairKey(r)] = true;
             });
+            var holeCount = Object.keys(holeSet).length;
             var dispo = agg.sMech > 0 ? (agg.wMech / agg.sMech) : null;
             var planned = getReportPlannedProduction(reportDate, records);
             var goal = planned.value;
@@ -26404,6 +26426,7 @@
             var fmtM = function(v) { return v.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' m'; };
             return '<div class="report-kpi-grid">' +
                 card('Production réalisée', fmtM(agg.prod), '#1e40af', 'mètres nouveaux') +
+                card('Trous travaillés', String(holeCount), '#0f766e', holeCount > 0 ? 'nombre de trous forés' : 'aucun trou renseigné') +
                 card('Production planifiée', goal != null ? fmtM(goal) : 'Non renseigné', '#b45309', 'objectif journalier collectif') +
                 card('Taux de réalisation', rate != null ? rate.toFixed(1).replace('.', ',') + ' %' : 'N/A', '#0f172a', goal === 0 ? 'objectif nul : taux non calculable' : 'réalisé / planifié') +
                 card('Écart (réel − plan)', variance != null ? (variance > 0 ? '+' : '') + fmtM(variance) : 'N/A', '#0f172a', 'mètres nouveaux') +
