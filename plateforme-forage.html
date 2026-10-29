@@ -26146,19 +26146,28 @@
         }
 
         /** Catégorie d’arrêt pour synthèse rapport (suffixe -stb / -gsa / -bdn / -prd ou codes historiques). */
+        // Le STANDBY ne retient que les vrais temps d'attente de forage : « manque de
+        // trou » (pas de zone à forer) et « marquage / mark up ». Tout autre motif
+        // autrefois classé standby est reclassé en GSA (délais / activités de service),
+        // pour que le standby du rapport reflète la réalité du terrain.
+        var TRUE_STANDBY_REASONS = {
+            'no-work-area-scheduled-stb': 1,
+            'standby-for-mark-up-stb': 1,
+            'manque-trou': 1
+        };
         function classifyStoppageReasonToBucket(reason) {
             if (reason == null || reason === '') return 'other';
             var r = String(reason);
+            if (TRUE_STANDBY_REASONS[r]) return 'stb';
             var sfx = r.match(/-(stb|gsa|bdn|prd)$/);
-            if (sfx) return sfx[1];
+            if (sfx) return sfx[1] === 'stb' ? 'gsa' : sfx[1];
             var legacy = {
-                blast: 'stb',
+                blast: 'gsa',
                 deplacement: 'gsa',
-                'manque-trou': 'stb',
-                meteo: 'stb',
+                meteo: 'gsa',
                 panne: 'bdn',
                 attente: 'gsa',
-                securite: 'stb',
+                securite: 'gsa',
                 logistique: 'gsa',
                 autre: 'other'
             };
