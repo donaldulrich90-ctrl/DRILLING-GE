@@ -1690,7 +1690,7 @@ app.post('/api/claude-ai/parse-plan', (req, res) => {
         const { imageBase64, prompt } = req.body;
         if (!imageBase64) return res.status(400).json({ error: 'Image requise' });
         try {
-            const fetch = require('node-fetch') || globalThis.fetch;
+            const fetch = globalThis.fetch;
             const response = await fetch('https://api.anthropic.com/v1/messages', {
                 method: 'POST',
                 headers: {
@@ -1737,7 +1737,7 @@ app.post('/api/claude-ai/extract-report', (req, res) => {
         if (!imageBase64) return res.status(400).json({ error: 'Image requise' });
         const mime = mediaType || 'image/jpeg';
         try {
-            const fetch = require('node-fetch') || globalThis.fetch;
+            const fetch = globalThis.fetch;
             const response = await fetch('https://api.anthropic.com/v1/messages', {
                 method: 'POST',
                 headers: {
@@ -1868,7 +1868,7 @@ RÈGLES :
 - Si tu ne connais pas une donnée spécifique, dis-le clairement
 - Tu peux faire des calculs, des estimations et des recommandations`;
 
-            const fetch = require('node-fetch') || globalThis.fetch;
+            const fetch = globalThis.fetch;
             const response = await fetch('https://api.anthropic.com/v1/messages', {
                 method: 'POST',
                 headers: {
