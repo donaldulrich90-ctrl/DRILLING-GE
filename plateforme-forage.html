@@ -20406,33 +20406,8 @@
             // 2a — Graphiques de tendance (mêmes graphiques que la synthèse PDF)
             try { addDailyReportChartSlides(pptx, slideTitle, date, records, 'executive'); } catch (eChart) { console.warn('Graphiques PowerPoint :', eChart); }
 
-            // 2b — Zones forées et trous travaillés
-            var sZ = pptx.addSlide(); slideTitle(sZ, 'Zones forées et trous travaillés');
-            if (nbZones > 0) sZ.addText([{ text: 'Zones : ', options: { bold: true } }, { text: Object.keys(zones).join(', ') }], { x: 0.5, y: 1.35, w: 12.3, h: 0.5, fontSize: 13, color: NAVY });
-            if (nbHoles > 0) {
-                var totalHoleM = 0;
-                var ztr = [[{ text: 'Trou', options: { bold: true, color: CAT, fill: { color: NAVY }, fontSize: 12 } }, { text: 'Mètres forés', options: { bold: true, color: CAT, fill: { color: NAVY }, align: 'right', fontSize: 12 } }, { text: 'Machine(s)', options: { bold: true, color: CAT, fill: { color: NAVY }, fontSize: 12 } }]];
-                Object.keys(holesMap).forEach(function (hid, ri) {
-                    var h = holesMap[hid]; totalHoleM += h.meters;
-                    ztr.push([{ text: hid, options: { fontSize: 11, fill: { color: ri % 2 ? LIGHT : 'FFFFFF' } } }, { text: dec(h.meters) + ' m', options: { align: 'right', fontSize: 11, fill: { color: ri % 2 ? LIGHT : 'FFFFFF' } } }, { text: Object.keys(h.machines).join(', '), options: { fontSize: 11, fill: { color: ri % 2 ? LIGHT : 'FFFFFF' } } }]);
-                });
-                ztr.push([{ text: 'Total', options: { bold: true, fill: { color: 'EDF2F7' }, fontSize: 12 } }, { text: dec(totalHoleM) + ' m', options: { bold: true, align: 'right', fill: { color: 'EDF2F7' }, fontSize: 12 } }, { text: Object.keys(machinesActive).length + ' machine(s)', options: { bold: true, fill: { color: 'EDF2F7' }, fontSize: 12 } }]);
-                sZ.addTable(ztr, { x: 0.5, y: 1.9, w: 9.5, colW: [3.2, 3.0, 3.3], border: { type: 'solid', color: 'CBD5E1', pt: 0.5 }, valign: 'middle', autoPage: true, autoPageRepeatHeader: true, newSlideStartY: 0.6 });
-            } else {
-                sZ.addText('Aucun trou renseigné pour cette journée.', { x: 0.5, y: 2.0, w: 12.3, h: 0.6, fontSize: 15, italic: true, color: GRAY });
-            }
-
-            // 2c — Plans hachurés des patterns (une diapo par fosse/zone)
-            try {
-                var patMapS = (typeof reportPatternsByZone === 'object' && reportPatternsByZone) ? reportPatternsByZone : {};
-                Object.keys(patMapS).sort(function (a, b) { return a.localeCompare(b, 'fr', { numeric: true }); }).forEach(function (zk) {
-                    var pp = patMapS[zk]; if (!pp || !isSafePatternImage(pp.image)) return;
-                    var infoS = describePatternForReport(pp, records);
-                    var sp = pptx.addSlide(); slideTitle(sp, 'Plan hachuré — Fosse ' + (pp.zone || ''));
-                    try { sp.addImage({ data: pp.image, x: 0.6, y: 1.35, w: 12.1, h: 5.15, sizing: { type: 'contain', w: 12.1, h: 5.15 } }); } catch (ei) {}
-                    sp.addText([infoS.source, infoS.countsText, infoS.dayText].filter(Boolean).join('   •   '), { x: 0.6, y: 6.6, w: 12.1, h: 0.42, fontSize: 10, italic: true, color: GRAY });
-                });
-            } catch (ep) {}
+            // (Synthèse exécutive SANS détails : pas de table trou par trou,
+            //  ni de plans hachurés — disponibles dans l'« Export PowerPoint » complet.)
 
             // 3 — Disponibilité et arrêts
             var s3 = pptx.addSlide(); slideTitle(s3, 'Disponibilité et répartition des arrêts');
@@ -20455,44 +20430,8 @@
             if (!bullets.length) bullets.push('Données insuffisantes pour l\'analyse.');
             s4.addText(bullets.map(function (b) { return { text: b, options: { bullet: { indent: 15 }, fontSize: 16, color: NAVY, paraSpaceAfter: 10 } }; }), { x: 0.7, y: 1.6, w: 12, h: 4.8 });
 
-            // 5 — Faits marquants et observations
-            var s5 = pptx.addSlide(); slideTitle(s5, 'Faits marquants et observations');
-            if (obsList.length) {
-                var obsRuns = [];
-                obsList.forEach(function (o) {
-                    obsRuns.push({ text: o.machine, options: { bold: true, color: NAVY, fontSize: 14 } });
-                    if (o.lieu) obsRuns.push({ text: ' (' + o.lieu + ')', options: { color: GRAY, fontSize: 13 } });
-                    obsRuns.push({ text: ' : ' + o.note + '\n', options: { color: '1F2937', fontSize: 14, paraSpaceAfter: 8 } });
-                });
-                s5.addText(obsRuns, { x: 0.6, y: 1.5, w: 12.1, h: 5.2, valign: 'top', lineSpacingMultiple: 1.2 });
-            } else {
-                s5.addText('Non renseigné.', { x: 0.6, y: 1.8, w: 12.1, h: 0.6, fontSize: 15, italic: true, color: GRAY });
-            }
-
-            // 6 — Machines garées — état du parc
-            var s6 = pptx.addSlide(); slideTitle(s6, 'Machines garées — état du parc');
-            if (parked.length) {
-                var ptr = [[
-                    { text: 'Machine', options: { bold: true, color: CAT, fill: { color: NAVY }, fontSize: 12 } },
-                    { text: 'Lieu de stationnement', options: { bold: true, color: CAT, fill: { color: NAVY }, fontSize: 12 } },
-                    { text: 'Statut', options: { bold: true, color: CAT, fill: { color: NAVY }, fontSize: 12 } },
-                    { text: 'Motif', options: { bold: true, color: CAT, fill: { color: NAVY }, fontSize: 12 } },
-                    { text: 'Retour prévu', options: { bold: true, color: CAT, fill: { color: NAVY }, fontSize: 12 } }
-                ]];
-                parked.forEach(function (dd, ri) {
-                    var fillc = ri % 2 ? LIGHT : 'FFFFFF';
-                    ptr.push([
-                        { text: String(dd.id), options: { fontSize: 11, bold: true, fill: { color: fillc } } },
-                        { text: dd.parkLocation || dd.location || '—', options: { fontSize: 11, fill: { color: fillc } } },
-                        { text: dd.status || '—', options: { fontSize: 11, fill: { color: fillc } } },
-                        { text: dd.parkReason || '—', options: { fontSize: 11, fill: { color: fillc } } },
-                        { text: dd.expectedReturnDate ? formatDate(dd.expectedReturnDate) : 'Non définie', options: { fontSize: 11, fill: { color: fillc } } }
-                    ]);
-                });
-                s6.addTable(ptr, { x: 0.5, y: 1.5, w: 12.3, colW: [2.0, 3.3, 2.3, 3.0, 1.7], border: { type: 'solid', color: 'CBD5E1', pt: 0.5 }, valign: 'middle', autoPage: true, autoPageRepeatHeader: true, newSlideStartY: 0.6 });
-            } else {
-                s6.addText('Aucune machine garée — tout le parc est en forage.', { x: 0.6, y: 1.8, w: 12.1, h: 0.6, fontSize: 15, italic: true, color: GRAY });
-            }
+            // (Observations détaillées et inventaire des machines garées retirés
+            //  de la synthèse exécutive — disponibles dans l'« Export PowerPoint » complet.)
 
             // 7 — Visa et signatures
             var s7 = pptx.addSlide(); slideTitle(s7, 'Visa et signatures');
