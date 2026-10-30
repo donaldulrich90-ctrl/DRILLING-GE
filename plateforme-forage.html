@@ -21847,15 +21847,13 @@
                 '<main class="daily-sheet' + (detailed ? '' : ' daily-management') + '">' +
                 '<header>' + buildReportStandardEnteteHtml('RAPPORT JOURNALIER DE FORAGE', records, metaRowsDaily) + '<p class="daily-report-audience">' + (detailed ? 'RAPPORT OPÉRATIONNEL DÉTAILLÉ' : 'SYNTHÈSE MANAGEMENT') + '</p></header>' +
                 (detailed ? (
-                section('01', 'INDICATEURS CLÉS — KPI ET PRODUCTION', buildReportKpiBandeau(records, date) + '<h3 class="daily-subtitle">Tableau KPI détaillé par machine et poste</h3>' + renderOperationalKpiTableHtml(records) + buildDailyProductionChart(records, date, false) + buildForecastVsActualChart(records, date), 'daily-kpi-section') +
-                optionalSection('Graphiques de la journée', buildDailyReportChartsSection(date, records, 'detailed'), 'daily-charts-section') +
-                section('', 'Exploitation par machine et poste', operatingTables) +
-                existingSection('03', 'Production par zone / pattern et trous travaillés', buildProductionZoneSection(records) + buildProductionByLocationSection(records) + buildDailyHoleTraceability(records)) +
+                // Rapport COURT : essentiel seulement (entête, KPI, graphe planifié/réalisé,
+                // production par zone & trous, plans hachurés, pannes, standby, signatures).
+                section('01', 'INDICATEURS CLÉS — KPI ET PRODUCTION', buildReportKpiBandeau(records, date) + buildPlanVsRealSection(records, date), 'daily-kpi-section') +
+                existingSection('03', 'Production par zone / pattern et trous travaillés', buildProductionZoneSection(records) + buildDailyHoleTraceability(records)) +
                 optionalSection('Plan hachuré des patterns forés', buildPatternPlansSection(records, date), 'daily-pattern-section') +
                 existingSection('04', 'Pannes mécaniques et observations', buildPannesSection(records)) +
                 existingSection('05', 'Standby et services — motifs et suivi', buildStandbySection(records)) +
-                existingSection('06', 'Observations générales du poste', buildCommentGeneralSection(records)) +
-                section('', 'Machines garées — état du parc', renderParkedMachinesTableHtml()) +
                 section('', 'Visa et signatures', '<div class="daily-signatures">' + signatures + '</div>', 'daily-approval-section') ) : (
                 section('01', 'INDICATEURS CLÉS — KPI ET PRODUCTION', buildReportKpiBandeau(records, date) + '<h3 class="daily-subtitle">Tableau KPI par machine et poste</h3>' + renderOperationalKpiTableHtml(records), 'daily-management-kpis') +
                 section('', 'Production de la journée', buildDailyProductionChart(records, date, false), 'daily-management-charts') +
