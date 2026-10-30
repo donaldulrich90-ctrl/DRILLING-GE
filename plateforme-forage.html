@@ -4346,6 +4346,18 @@
                         </div>
                     </div>
 
+                    <div class="mb-4 rounded-lg border border-slate-600 bg-slate-900/40 p-3">
+                        <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                            <div>
+                                <label class="block text-slate-200 font-semibold">Bits utilisés et métrage <span class="text-slate-400 font-normal text-sm">— optionnel</span></label>
+                                <p class="text-xs text-slate-400">Si plusieurs bits sont utilisés sur le poste (ex. 127 mm sur 1 m puis 115 mm), indiquez le métrage foré par chaque bit. Les prix peuvent différer selon le diamètre.</p>
+                            </div>
+                            <button type="button" id="dailyEntryAddBitButton" onclick="addDailyEntryBitRow()" class="bg-blue-600 hover:bg-blue-700 px-3 py-2 rounded text-sm">+ Ajouter un bit</button>
+                        </div>
+                        <div id="dailyEntryBitsContainer" class="space-y-2"></div>
+                        <p id="dailyEntryBitsTotal" class="text-xs text-cyan-300 mt-2">Total par bit : 0 m</p>
+                    </div>
+
                     <div class="mb-4">
                         <label class="block text-slate-400 mb-2">Lieu de forage — fosse *</label>
                         <div class="flex gap-2">
@@ -21790,6 +21802,7 @@
                 // production par zone & trous, plans hachurés, pannes, standby, signatures).
                 section('01', 'INDICATEURS CLÉS — KPI ET PRODUCTION', buildReportKpiBandeau(records, date) + buildPlanVsRealSection(records, date), 'daily-kpi-section') +
                 existingSection('03', 'Production par zone / pattern et trous travaillés', buildProductionZoneSection(records) + buildDailyHoleTraceability(records)) +
+                section('', 'Productivité et métrage par bit', buildProductivitySection(records, date) + buildBitsBreakdownSection(records)) +
                 optionalSection('Plan hachuré des patterns forés', buildPatternPlansSection(records, date), 'daily-pattern-section') +
                 existingSection('04', 'Pannes mécaniques et observations', buildPannesSection(records)) +
                 existingSection('05', 'Standby et services — motifs et suivi', buildStandbySection(records)) +
@@ -26236,6 +26249,63 @@
         function _rpData(r) { var d = r.data || {}; if (typeof d === 'string') { try { d = JSON.parse(d); } catch (e) { d = {}; } } return d; }
         function _rpMachineName(r) { var drill = findDrillByMachineId(r.machineId); return drill ? drill.id : r.machineId; }
 
+        // Tableau de productivité par machine/poste : mètres nouveaux, heures
+        // utilisées, rendement (m/h), avec objectif et écart si planifié.
+        function buildProductivitySection(records, reportDate) {
+            var dec = function(v, dd) { if (v == null || !isFinite(Number(v))) return 'N/A'; return Number(v).toLocaleString('fr-FR', { minimumFractionDigits: dd == null ? 1 : dd, maximumFractionDigits: dd == null ? 1 : dd }); };
+            var rows = '', tProd = 0, tUsed = 0;
+            (records || []).forEach(function(r) {
+                var d = _rpData(r);
+                var m = computeOperationalReportMetrics(d);
+                var prod = m.production || 0, used = m.usedHours || 0;
+                tProd += prod; tUsed += used;
+                var rend = used > 0 ? prod / used : null;
+                rows += '<tr><td class="machine-cell">' + escapeHtmlReportCell(_rpMachineName(r) || 'Non renseigné') +
+                    '<small>' + escapeHtmlReportCell(getShiftLabelForReport(d.shift) || 'Poste') + (d.location ? ' — ' + escapeHtmlReportCell(d.location) : '') + '</small></td>' +
+                    '<td class="r-num">' + dec(prod) + ' m</td>' +
+                    '<td class="r-num">' + dec(used) + ' h</td>' +
+                    '<td class="r-num">' + (rend != null ? dec(rend, 2) + ' m/h' : 'N/A') + '</td></tr>';
+            });
+            var tRend = tUsed > 0 ? tProd / tUsed : null;
+            var planned = getReportPlannedProduction(reportDate, records);
+            var goal = planned && planned.value;
+            var variance = goal != null ? tProd - goal : null;
+            var rate = (goal != null && goal > 0) ? tProd / goal * 100 : null;
+            var foot = '<tr class="total"><td class="r-txt"><strong>Ensemble</strong></td><td class="r-num"><strong>' + dec(tProd) + ' m</strong></td><td class="r-num"><strong>' + dec(tUsed) + ' h</strong></td><td class="r-num"><strong>' + (tRend != null ? dec(tRend, 2) + ' m/h' : 'N/A') + '</strong></td></tr>';
+            var varianceLine = goal == null ? 'Objectif de production : <b>Non renseigné</b>.' :
+                ('Objectif : <b>' + dec(goal) + ' m</b> · Réalisé : <b>' + dec(tProd) + ' m</b> · Écart (réel − objectif) : <b style="color:' + (variance >= 0 ? '#166534' : '#b91c1c') + '">' + (variance > 0 ? '+' : '') + dec(variance) + ' m</b> · Taux : <b>' + (rate != null ? dec(rate) + ' %' : 'N/A') + '</b>.');
+            return '<h3 class="daily-subtitle">Productivité par machine et poste</h3>' +
+                '<table class="daily-table"><thead><tr><th class="machine-cell">Machine / poste</th><th class="r-num">Nouveau (m)</th><th class="r-num">Heures utilisées</th><th class="r-num">Rendement (m/h)</th></tr></thead><tbody>' +
+                (rows || '<tr><td class="daily-empty" colspan="4">Aucune donnée.</td></tr>') + foot + '</tbody></table>' +
+                '<p class="daily-table-note">Rendement = mètres nouveaux / heure utilisée. ' + varianceLine + '</p>';
+        }
+
+        // Métrage foré par type de bit (prix différents selon le diamètre) —
+        // agrégé sur la sélection d'après les bits saisis sur chaque fiche.
+        function buildBitsBreakdownSection(records) {
+            var dec = function(v) { if (v == null || !isFinite(Number(v))) return 'N/A'; return Number(v).toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }); };
+            var byBit = {}, total = 0;
+            (records || []).forEach(function(r) {
+                var d = _rpData(r);
+                (d.bitsUsed || []).forEach(function(b) {
+                    if (!b || !b.bitType) return;
+                    var mv = parseFloat(b.meters) || 0;
+                    byBit[b.bitType] = (byBit[b.bitType] || 0) + mv; total += mv;
+                });
+            });
+            var keys = Object.keys(byBit);
+            if (!keys.length) return '';
+            keys.sort(function(a, b) { return byBit[b] - byBit[a]; });
+            var rows = keys.map(function(k) {
+                var pct = total > 0 ? (byBit[k] / total * 100) : null;
+                return '<tr><td class="r-txt">' + escapeHtmlReportCell(dailyBitLabel(k)) + '</td><td class="r-num">' + dec(byBit[k]) + ' m</td><td class="r-num">' + (pct != null ? dec(pct) + ' %' : '—') + '</td></tr>';
+            }).join('');
+            return '<h3 class="daily-subtitle">Métrage par type de bit</h3>' +
+                '<table class="daily-table"><thead><tr><th>Type de bit</th><th class="r-num">Mètres forés</th><th class="r-num">% du total</th></tr></thead><tbody>' +
+                rows + '<tr class="total"><td class="r-txt"><strong>Total</strong></td><td class="r-num"><strong>' + dec(total) + ' m</strong></td><td class="r-num"><strong>100 %</strong></td></tr></tbody></table>' +
+                '<p class="daily-table-note">Métrage foré par diamètre de bit (facturation potentiellement différente selon le diamètre).</p>';
+        }
+
         function buildProductionZoneSection(records) {
             var rows = '', tN = 0, tRH = 0, tR = 0, tF = 0, patterns = {};
             (records || []).forEach(function(r) {
@@ -27221,6 +27291,67 @@
             updateDailyEntryHolesTotal(false);
         }
 
+        // ---- Bits utilisés & métrage (plusieurs bits possibles par poste, prix différents) ----
+        var DAILY_BIT_OPTIONS = [
+            { value: 'carbure-76', label: 'Bit Carbure 76mm (3")' },
+            { value: 'carbure-89', label: 'Bit Carbure 89mm (3.5")' },
+            { value: 'carbure-102', label: 'Bit Carbure 102mm (4")' },
+            { value: 'carbure-114', label: 'Bit Carbure 114mm (4.5")' },
+            { value: 'carbure-115', label: 'Bit Carbure 115mm (4.53")' },
+            { value: 'carbure-127', label: 'Bit Carbure 127mm (5")' },
+            { value: 'carbure-152', label: 'Bit Carbure 152mm (6")' },
+            { value: 'diamant-76', label: 'Bit Diamant 76mm (3")' },
+            { value: 'diamant-89', label: 'Bit Diamant 89mm (3.5")' },
+            { value: 'diamant-102', label: 'Bit Diamant 102mm (4")' },
+            { value: 'diamant-114', label: 'Bit Diamant 114mm (4.5")' },
+            { value: 'diamant-115', label: 'Bit Diamant 115mm (4.53")' },
+            { value: 'diamant-127', label: 'Bit Diamant 127mm (5")' },
+            { value: 'diamant-152', label: 'Bit Diamant 152mm (6")' },
+            { value: 'autre', label: 'Autre' }
+        ];
+        function dailyBitLabel(v) {
+            for (var i = 0; i < DAILY_BIT_OPTIONS.length; i++) { if (DAILY_BIT_OPTIONS[i].value === v) return DAILY_BIT_OPTIONS[i].label; }
+            return v ? String(v) : '—';
+        }
+        function updateDailyEntryBitsTotal() {
+            var c = document.getElementById('dailyEntryBitsContainer'); if (!c) return;
+            var tot = 0;
+            Array.prototype.forEach.call(c.querySelectorAll('[data-bit-meters]'), function(inp) { var v = parseFloat(inp.value); if (isFinite(v)) tot += v; });
+            var el = document.getElementById('dailyEntryBitsTotal');
+            if (el) el.textContent = 'Total par bit : ' + tot.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' m';
+        }
+        function addDailyEntryBitRow(bit) {
+            var c = document.getElementById('dailyEntryBitsContainer'); if (!c) return;
+            bit = bit || {};
+            var row = document.createElement('div');
+            row.className = 'flex flex-wrap items-center gap-2';
+            var opts = DAILY_BIT_OPTIONS.map(function(o) { return '<option value="' + o.value + '"' + (bit.bitType === o.value ? ' selected' : '') + '>' + o.label + '</option>'; }).join('');
+            row.innerHTML = '<select data-bit-type class="flex-1 min-w-[12rem] bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white text-sm"><option value="">Type de bit…</option>' + opts + '</select>' +
+                '<input data-bit-meters type="number" step="0.1" min="0" value="' + (bit.meters != null ? bit.meters : '') + '" placeholder="mètres" class="w-28 bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white text-sm"><span class="text-slate-400 text-xs">m</span>' +
+                '<button type="button" class="text-red-400 hover:text-red-300 px-2" title="Retirer ce bit">✕</button>';
+            row.querySelector('[data-bit-meters]').addEventListener('input', updateDailyEntryBitsTotal);
+            row.querySelector('button').addEventListener('click', function() { row.remove(); updateDailyEntryBitsTotal(); });
+            c.appendChild(row);
+            updateDailyEntryBitsTotal();
+        }
+        function collectDailyEntryBits() {
+            var c = document.getElementById('dailyEntryBitsContainer'); if (!c) return [];
+            var out = [];
+            Array.prototype.forEach.call(c.children, function(row) {
+                var ts = row.querySelector('[data-bit-type]'), ms = row.querySelector('[data-bit-meters]');
+                var bitType = ts ? ts.value : '';
+                var meters = ms && ms.value !== '' ? parseFloat(ms.value) : null;
+                if (bitType && meters != null && isFinite(meters) && meters >= 0) out.push({ bitType: bitType, meters: +meters.toFixed(2) });
+            });
+            return out;
+        }
+        function loadDailyEntryBits(list) {
+            var c = document.getElementById('dailyEntryBitsContainer'); if (!c) return;
+            c.innerHTML = '';
+            (list || []).forEach(function(b) { addDailyEntryBitRow(b); });
+            updateDailyEntryBitsTotal();
+        }
+
         function applyDailyHoleProgress(date, machineId, holesWorked) {
             var plan = getFPData();
             var changed = false;
@@ -27268,6 +27399,7 @@
             };
             if (!d) {
                 loadDailyEntryHoles([]);
+                loadDailyEntryBits([]);
                 setStr('dailyEntryDrillingType', '');
                 setStr('dailyEntryMaterialType', '');
                 setStr('dailyEntryBitType', '');
@@ -27316,6 +27448,7 @@
             setStr('dailyEntryBitType', d.bitType || '');
             setStr('dailyEntryLocation', d.location || '');
             loadDailyEntryHoles(d.holesWorked || []);
+            loadDailyEntryBits(d.bitsUsed || []);
             setNum('dailyEntryMeters', d.metersDrilled);
             setNum('dailyEntryHolesCountManual', d.holesCount != null ? d.holesCount : '');
             setNum('dailyEntryRedrillHours', d.redrillHours != null ? d.redrillHours : '');
@@ -28344,6 +28477,7 @@
             var fuelPrice = dailyEntryNumberOrNull('dailyEntryFuelPrice');
             var fuelPriceCurrency = normalizeFuelPriceCurrency(dailyEntryText('dailyEntryFuelPriceCurrency') || 'USD');
             var holesWorked = collectDailyEntryHoles();
+            var bitsUsed = collectDailyEntryBits();
             var stoppages = collectDailyEntryStoppages();
             var downtimeHoursTotal = stoppages.reduce(function(total, stop) { return total + (Number(stop.hours) || 0); }, 0);
             var hasIncompleteStops = stoppages.some(function(stop) { return stop.hours == null || !Number.isFinite(Number(stop.hours)) || Number(stop.hours) < 0; });
@@ -28425,7 +28559,7 @@
                 oilLevel: isDraft ? null : ((drill.consumables || {}).oil == null ? null : drill.consumables.oil),
                 filters: isDraft ? null : ((drill.consumables || {}).filters == null ? null : drill.consumables.filters),
                 hours: hours, metersDrilled: meters, redrillMeters: redrillMeters,
-                redrillHours: redrillHours, flushingMeters: flushingMeters, holesCount: holesCount, holesWorked: holesWorked,
+                redrillHours: redrillHours, flushingMeters: flushingMeters, holesCount: holesCount, holesWorked: holesWorked, bitsUsed: bitsUsed,
                 location: location, drillingType: drillingType, materialType: materialType || null, bitType: bitType,
                 bitChanged: dailyEntryChecked('dailyEntryBitChanged'), rodChanged: dailyEntryChecked('dailyEntryRodChanged'),
                 oilChanged: dailyEntryChecked('dailyEntryOilChanged'), filterChanged: dailyEntryChecked('dailyEntryFilterChanged'),
