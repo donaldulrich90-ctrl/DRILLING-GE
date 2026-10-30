@@ -4365,6 +4365,11 @@
                         </div>
                         <div id="dailyEntryHolesContainer" class="space-y-2"></div>
                         <p id="dailyEntryHolesTotal" class="text-xs text-cyan-300 mt-2">Total affecté : 0 m</p>
+                        <div class="mt-3 pt-3 border-t border-slate-700">
+                            <label class="block text-slate-300 text-sm font-semibold mb-1" for="dailyEntryHolesCountManual">Nombre de trous forés <span class="text-slate-500 font-normal">— optionnel</span></label>
+                            <input type="number" id="dailyEntryHolesCountManual" class="w-full md:w-48 bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white text-sm" step="1" min="0" placeholder="Ex. 24">
+                            <p class="text-slate-500 text-xs mt-1">Si vous ne listez pas chaque trou ci-dessus, indiquez simplement le nombre total de trous forés sur le poste. Ce nombre est utilisé dans le rapport.</p>
+                        </div>
                     </div>
 
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4" data-daily-production-fields>
@@ -26386,6 +26391,7 @@
         function buildReportKpiBandeau(records, reportDate) {
             var agg = { prod: 0, reforage: 0, flushing: 0, redrillKnown: 0, flushKnown: 0, bdn: 0, stb: 0, wMech: 0, sMech: 0 };
             var holeSet = {};
+            var holesManualTotal = 0;
             var pairs = {};
             function pairKey(r) {
                 return JSON.stringify([String(r.machineId), dailyRecordShiftKey({ data: _rpData(r), shift: r.shift })]);
@@ -26403,10 +26409,14 @@
                 agg.bdn += m.bdn || 0;
                 agg.stb += m.stb || 0;
                 if (m.scheduled > 0 && m.mechAvail != null && !isNaN(m.mechAvail)) { agg.wMech += m.mechAvail * m.scheduled; agg.sMech += m.scheduled; }
-                (data.holesWorked || []).forEach(function(h) { if (h && h.holeId != null && String(h.holeId).trim() !== '') holeSet[String(h.holeId).trim()] = true; });
+                // Nombre de trous : si un nombre est saisi directement sur la fiche
+                // (holesCount), on l'utilise ; sinon on compte les trous distincts listés.
+                var hc = parseFloat(data.holesCount);
+                if (isFinite(hc) && hc >= 0) holesManualTotal += Math.round(hc);
+                else (data.holesWorked || []).forEach(function(h) { if (h && h.holeId != null && String(h.holeId).trim() !== '') holeSet[String(h.holeId).trim()] = true; });
                 pairs[pairKey(r)] = true;
             });
-            var holeCount = Object.keys(holeSet).length;
+            var holeCount = holesManualTotal + Object.keys(holeSet).length;
             var dispo = agg.sMech > 0 ? (agg.wMech / agg.sMech) : null;
             var planned = getReportPlannedProduction(reportDate, records);
             var goal = planned.value;
@@ -27328,6 +27338,7 @@
                 setNum('dailyEntryMeters', '');
                 setNum('dailyEntryRedrillMeters', '');
                 setNum('dailyEntryHours', '');
+                setNum('dailyEntryHolesCountManual', '');
                 setNum('dailyEntryRedrillHours', '');
                 setNum('dailyEntryRedrillMeters', '');
                 setNum('dailyEntryFlushingMeters', '');
@@ -27369,6 +27380,7 @@
             setStr('dailyEntryLocation', d.location || '');
             loadDailyEntryHoles(d.holesWorked || []);
             setNum('dailyEntryMeters', d.metersDrilled);
+            setNum('dailyEntryHolesCountManual', d.holesCount != null ? d.holesCount : '');
             setNum('dailyEntryRedrillHours', d.redrillHours != null ? d.redrillHours : '');
             setNum('dailyEntryRedrillMeters', d.redrillMeters != null ? d.redrillMeters : '');
             setNum('dailyEntryFlushingMeters', d.flushingMeters != null ? d.flushingMeters : '');
@@ -28378,6 +28390,12 @@
                 showDailyEntryError('Les mètres de flushing doivent être positifs ou nuls.');
                 return null;
             }
+            var holesCount = dailyEntryNumberOrNull('dailyEntryHolesCountManual');
+            if (holesCount != null && holesCount < 0) {
+                showDailyEntryError('Le nombre de trous doit être positif ou nul.');
+                return null;
+            }
+            if (holesCount != null) holesCount = Math.round(holesCount);
             var hours = dailyEntryNumberOrNull('dailyEntryHours');
             var fuelAdded = dailyEntryNumberOrNull('dailyEntryFuelAdded');
             var counterStart = dailyEntryNumberOrNull('dailyEntryCounterStart');
@@ -28470,7 +28488,7 @@
                 oilLevel: isDraft ? null : ((drill.consumables || {}).oil == null ? null : drill.consumables.oil),
                 filters: isDraft ? null : ((drill.consumables || {}).filters == null ? null : drill.consumables.filters),
                 hours: hours, metersDrilled: meters, redrillMeters: redrillMeters,
-                redrillHours: redrillHours, flushingMeters: flushingMeters, holesWorked: holesWorked,
+                redrillHours: redrillHours, flushingMeters: flushingMeters, holesCount: holesCount, holesWorked: holesWorked,
                 location: location, drillingType: drillingType, materialType: materialType || null, bitType: bitType,
                 bitChanged: dailyEntryChecked('dailyEntryBitChanged'), rodChanged: dailyEntryChecked('dailyEntryRodChanged'),
                 oilChanged: dailyEntryChecked('dailyEntryOilChanged'), filterChanged: dailyEntryChecked('dailyEntryFilterChanged'),
