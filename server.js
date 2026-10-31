@@ -1884,10 +1884,33 @@ RÈGLES :
                 })
             });
             const data = await response.json();
-            if (data.error) return res.status(400).json({ error: data.error.message || 'Erreur API Claude' });
-            const text = data.content && data.content[0] && data.content[0].text || '';
+            if (!response.ok || data.error) {
+                const msg = (data && data.error && data.error.message) || ('Erreur API Claude (HTTP ' + response.status + ')');
+                console.error('[claude-ai/chat] API error:', response.status, JSON.stringify(data && data.error || data).slice(0, 500));
+                return res.status(400).json({ error: msg });
+            }
+            // Concatène TOUS les blocs de texte (certains modèles renvoient d'abord
+            // un bloc non-texte, d'où une réponse vide si on ne lit que content[0]).
+            let text = '';
+            if (Array.isArray(data.content)) {
+                text = data.content
+                    .filter(b => b && b.type === 'text' && typeof b.text === 'string')
+                    .map(b => b.text)
+                    .join('\n')
+                    .trim();
+            }
+            if (!text) {
+                console.error('[claude-ai/chat] Réponse sans texte. stop_reason=', data.stop_reason,
+                    'content types=', JSON.stringify((data.content || []).map(b => b && b.type)));
+                text = data.stop_reason === 'refusal'
+                    ? "Je ne peux pas répondre à cette demande."
+                    : "Je n'ai pas pu générer de réponse" +
+                      (data.stop_reason ? ' (raison : ' + data.stop_reason + ')' : '') +
+                      ". Réessayez ou reformulez votre question.";
+            }
             res.json({ reply: text });
         } catch(e) {
+            console.error('[claude-ai/chat] Exception:', e && e.message);
             res.status(500).json({ error: 'Erreur appel API Claude: ' + e.message });
         }
     });
