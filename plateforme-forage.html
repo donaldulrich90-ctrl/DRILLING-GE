@@ -20421,6 +20421,38 @@
                 [{ label: 'Réalisé', value: agg.production, color: '1D4ED8' }, { label: 'Planifié', value: goal != null ? goal : null, color: 'C27803' }],
                 'Objectif journalier issu de la planification enregistrée.');
 
+            // 2b — Productivité par machine et poste (demandé pour la synthèse exécutive)
+            var sPr = pptx.addSlide(); slideTitle(sPr, 'Productivité par machine et poste');
+            var prodRows = [[
+                { text: 'Machine / poste', options: { bold: true, color: CAT, fill: { color: NAVY }, fontSize: 12 } },
+                { text: 'Nouveau (m)', options: { bold: true, color: CAT, fill: { color: NAVY }, align: 'right', fontSize: 12 } },
+                { text: 'Heures utilisées', options: { bold: true, color: CAT, fill: { color: NAVY }, align: 'right', fontSize: 12 } },
+                { text: 'Rendement (m/h)', options: { bold: true, color: CAT, fill: { color: NAVY }, align: 'right', fontSize: 12 } }
+            ]];
+            var tPd = 0, tHu = 0;
+            records.forEach(function (r, ri) {
+                var d = _rpData(r); var m = computeOperationalReportMetrics(d);
+                var pd = m.production || 0, hu = m.usedHours || 0; tPd += pd; tHu += hu;
+                var rend = hu > 0 ? pd / hu : null;
+                var fillc = ri % 2 ? LIGHT : 'FFFFFF';
+                var lbl = (_rpMachineName(r) || r.machineId || '?') + ' — ' + (getShiftLabelForReport(d.shift) || 'Poste') + (d.location ? ' (' + d.location + ')' : '');
+                prodRows.push([
+                    { text: lbl, options: { fontSize: 11, fill: { color: fillc } } },
+                    { text: dec(pd) + ' m', options: { align: 'right', fontSize: 11, fill: { color: fillc } } },
+                    { text: dec(hu) + ' h', options: { align: 'right', fontSize: 11, fill: { color: fillc } } },
+                    { text: rend != null ? dec(rend, 2) : 'N/A', options: { align: 'right', fontSize: 11, fill: { color: fillc } } }
+                ]);
+            });
+            var tRd = tHu > 0 ? tPd / tHu : null;
+            prodRows.push([
+                { text: 'Ensemble', options: { bold: true, fill: { color: 'EDF2F7' }, fontSize: 12 } },
+                { text: dec(tPd) + ' m', options: { bold: true, align: 'right', fill: { color: 'EDF2F7' }, fontSize: 12 } },
+                { text: dec(tHu) + ' h', options: { bold: true, align: 'right', fill: { color: 'EDF2F7' }, fontSize: 12 } },
+                { text: tRd != null ? dec(tRd, 2) : 'N/A', options: { bold: true, align: 'right', fill: { color: 'EDF2F7' }, fontSize: 12 } }
+            ]);
+            sPr.addTable(prodRows, { x: 0.5, y: 1.5, w: 12.3, colW: [6.0, 2.1, 2.1, 2.1], border: { type: 'solid', color: 'CBD5E1', pt: 0.5 }, valign: 'middle', autoPage: true, autoPageRepeatHeader: true, newSlideStartY: 0.6 });
+            sPr.addText('Rendement = mètres nouveaux / heure utilisée.', { x: 0.5, y: 6.95, w: 12.3, h: 0.3, fontSize: 10, italic: true, color: GRAY });
+
             // 2a — Graphiques de tendance (mêmes graphiques que la synthèse PDF)
             try { addDailyReportChartSlides(pptx, slideTitle, date, records, 'executive'); } catch (eChart) { console.warn('Graphiques PowerPoint :', eChart); }
 
