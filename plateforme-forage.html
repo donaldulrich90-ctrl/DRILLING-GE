@@ -4298,6 +4298,7 @@
                     <div id="dailyEntryAuditBanner" class="hidden mb-3 px-4 py-2 rounded-lg border text-sm"></div>
                     <div id="dailyEntryErrorBanner" class="hidden mb-3 px-4 py-3 rounded-lg text-sm font-semibold shrink-0 bg-red-900/80 border border-red-400 text-red-50"></div>
                     <div id="dailyEntrySaveStatus" class="mb-3 text-sm shrink-0" role="status" aria-live="polite">Nouveau poste — aucune donnée enregistrée.</div>
+                    <div id="dailyEntryCollabBanner" class="mb-3 text-sm shrink-0 hidden" style="border-radius:10px;padding:8px 12px;background:rgba(124,58,237,.15);border:1px solid rgba(124,58,237,.5);color:#ede9fe"></div>
 
                     <div class="overflow-y-auto flex-1 min-h-0 pr-1 space-y-4 pb-2">
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
@@ -28504,6 +28505,7 @@
         function closeDailyEntryModal(force) {
             if (dailyEntrySaveInFlight) return;
             if (!force && dailyEntryFormIsDirty() && !confirm('Des modifications ne sont pas enregistrées. Fermer et les abandonner ? Pour les conserver, annulez puis cliquez sur « Pré-enregistrer ».')) return;
+            dailyEntryCollabStop();
             document.getElementById('dailyEntryModal').classList.add('hidden');
             var stCont = document.getElementById('dailyEntryStoppagesContainer');
             if (stCont) stCont.innerHTML = '';
@@ -28706,6 +28708,12 @@
         var dailyEntryLoadedSnapshot = '';
         var dailyEntryLoadedContext = null;
         var dailyEntryEditingRecordId = null;
+        // Édition collaborative : base de référence (données telles que chargées),
+        // pour fusionner au lieu d'écraser le travail de l'autre personne.
+        var dailyEntryBaselineData = {};
+        var dailyEntryBaselineNotes = '';
+        var dailyEntryCollabTimer = null;
+        var dailyEntryCollabLastModStamp = '';
 
         function dailyEntryFormSnapshot() {
             var form = document.getElementById('dailyEntryForm');
@@ -28733,6 +28741,12 @@
                 shift: (document.getElementById('dailyEntryShift') || {}).value || ''
             };
             dailyEntryEditingRecordId = record && record.id != null ? record.id : null;
+            // Base de référence pour la fusion collaborative (copie des données chargées).
+            try { dailyEntryBaselineData = record && record.data ? JSON.parse(JSON.stringify(record.data)) : {}; } catch (e) { dailyEntryBaselineData = {}; }
+            dailyEntryBaselineNotes = record && record.notes != null ? String(record.notes) : '';
+            dailyEntryCollabLastModStamp = record && record.lastModifiedAt ? String(record.lastModifiedAt) : '';
+            // Édition collaborative : présence + rafraîchissement seulement pour une saisie existante.
+            if (record && record.id != null) dailyEntryCollabStart(); else dailyEntryCollabStopTimer();
             if (!record) {
                 setDailyEntrySaveStatus('Nouveau poste — aucune donnée enregistrée.', 'info');
                 return;
@@ -28748,6 +28762,125 @@
         function dailyEntryFormIsDirty() {
             return !!dailyEntryLoadedContext && dailyEntryFormSnapshot() !== dailyEntryLoadedSnapshot;
         }
+
+        // Fusion 3-voies d'une saisie journalière (ma version / base chargée / dernière version serveur).
+        // Règle : un champ que J'AI modifié (≠ ma base) l'emporte ; sinon on garde la valeur serveur
+        // la plus récente (ce que l'autre personne a rempli). Les trous (« points ») sont fusionnés
+        // par identifiant de trou : les trous des deux personnes sont conservés.
+        function mergeDailyEntryData(mine, base, latest) {
+            mine = mine || {}; base = base || {}; latest = latest || {};
+            function j(v) { return JSON.stringify(v === undefined ? null : v); }
+            var out = Object.assign({}, latest); // on part de la dernière version serveur
+            Object.keys(mine).forEach(function(k) {
+                if (k === 'holesWorked') return; // traité à part (union)
+                if (j(mine[k]) !== j(base[k])) out[k] = mine[k]; // je l'ai changé → ma valeur
+            });
+            // Trous : si je ne les ai pas touchés → garder ceux du serveur ; sinon union par holeId.
+            var lh = Array.isArray(latest.holesWorked) ? latest.holesWorked : [];
+            var mh = Array.isArray(mine.holesWorked) ? mine.holesWorked : [];
+            var bh = Array.isArray(base.holesWorked) ? base.holesWorked : [];
+            if (j(mh) === j(bh)) {
+                out.holesWorked = lh;
+            } else {
+                var byId = {}, order = [];
+                function add(h, prefix) {
+                    var key = String((h && h.holeId) || '').trim().toUpperCase();
+                    if (!key) key = prefix + order.length; // trou sans id : on le garde tel quel
+                    if (!(key in byId)) order.push(key);
+                    byId[key] = h;
+                }
+                lh.forEach(function(h) { add(h, '__l'); });
+                mh.forEach(function(h) { add(h, '__m'); }); // mes trous écrasent le même holeId
+                out.holesWorked = order.map(function(key) { return byId[key]; });
+            }
+            return out;
+        }
+
+        // ===== Présence + rafraîchissement collaboratif sur la saisie ouverte =====
+        function dailyEntryCollabStopTimer() {
+            if (dailyEntryCollabTimer) { clearInterval(dailyEntryCollabTimer); dailyEntryCollabTimer = null; }
+        }
+        function dailyEntryCollabStop() {
+            dailyEntryCollabStopTimer();
+            var id = dailyEntryEditingRecordId;
+            if (id != null && typeof apiRequest === 'function') {
+                try { apiRequest('/daily-data/' + encodeURIComponent(id) + '/presence', 'POST', { leaving: true, name: getDailyDataActorDisplayName() }).catch(function(){}); } catch (e) {}
+            }
+            var b = document.getElementById('dailyEntryCollabBanner');
+            if (b) { b.classList.add('hidden'); b.innerHTML = ''; }
+        }
+        function dailyEntryCollabStart() {
+            dailyEntryCollabStopTimer();
+            if (dailyEntryEditingRecordId == null) return;
+            dailyEntryCollabTimer = setInterval(dailyEntryCollabTick, 7000);
+            setTimeout(dailyEntryCollabTick, 1200); // premier passage rapide
+        }
+        async function dailyEntryCollabTick() {
+            var id = dailyEntryEditingRecordId;
+            var modal = document.getElementById('dailyEntryModal');
+            if (id == null || !modal || modal.classList.contains('hidden')) return;
+            var meta = getCurrentDailyEntryRecordMeta();
+            if (!meta || !meta.record || Number(meta.record.id) !== Number(id)) return;
+            var others = [];
+            // 1) Présence (battement de cœur)
+            try {
+                var pr = await apiRequest('/daily-data/' + encodeURIComponent(id) + '/presence', 'POST', { name: getDailyDataActorDisplayName() });
+                others = (pr && pr.others) || [];
+            } catch (e) {}
+            // 2) Dernière version serveur : détecter une modif par quelqu'un d'autre
+            var updatedByOther = null, latestRec = null;
+            try {
+                var list = await window.API.DailyData.get({ date: meta.date, machineId: meta.mid });
+                latestRec = (list || []).find(function(r) { return Number(r.id) === Number(id); }) || null;
+                if (latestRec && latestRec.lastModifiedAt && String(latestRec.lastModifiedAt) !== String(dailyEntryCollabLastModStamp)) {
+                    var byMe = String(latestRec.lastModifiedByUsername || '').toLowerCase() === getDailyDataActorUsername().toLowerCase();
+                    if (!byMe) updatedByOther = latestRec;
+                }
+            } catch (e) {}
+            dailyEntryRenderCollabBanner(others, updatedByOther, latestRec);
+        }
+        function dailyEntryRenderCollabBanner(others, updatedByOther, latestRec) {
+            var b = document.getElementById('dailyEntryCollabBanner');
+            if (!b) return;
+            var parts = [];
+            if (others && others.length) {
+                parts.push('👥 <b>' + others.map(function(n){ return escapeHtmlReportCell(String(n)); }).join(', ') + '</b> ' + (others.length > 1 ? 'sont aussi' : 'est aussi') + ' sur cette saisie.');
+            }
+            if (updatedByOther) {
+                var who = escapeHtmlReportCell(String(updatedByOther.lastModifiedByName || updatedByOther.lastModifiedByUsername || 'Quelqu’un'));
+                if (dailyEntryFormIsDirty()) {
+                    parts.push('✍️ <b>' + who + '</b> a mis à jour cette saisie. Vos modifications seront <b>fusionnées</b> à l’enregistrement (rien ne sera perdu). Vous pouvez aussi <a href="#" onclick="dailyEntryRefreshFromServer(event)" style="color:#c4b5fd;text-decoration:underline">recharger maintenant</a> (vos saisies locales non enregistrées seront alors reprises depuis le serveur).');
+                } else {
+                    // Formulaire propre : on recharge automatiquement pour voir ses ajouts.
+                    dailyEntryApplyServerRecord(updatedByOther);
+                    parts.push('🔄 <b>' + who + '</b> a complété cette saisie — affichage mis à jour.');
+                }
+            }
+            if (parts.length) { b.innerHTML = parts.join('<br>'); b.classList.remove('hidden'); }
+            else { b.classList.add('hidden'); b.innerHTML = ''; }
+        }
+        function dailyEntryApplyServerRecord(latestRec) {
+            if (!latestRec) return;
+            var data = latestRec.data;
+            if (typeof data === 'string') { try { data = JSON.parse(data); } catch (e) { data = {}; } }
+            var fresh = Object.assign({}, latestRec, { data: data });
+            var idx = (dailyDataRecords || []).findIndex(function(r) { return Number(r.id) === Number(latestRec.id); });
+            if (idx >= 0) dailyDataRecords[idx] = fresh;
+            try { loadDailyEntryFormFromRecord(); } catch (e) {}
+            markDailyEntryFormClean(fresh);
+        }
+        async function dailyEntryRefreshFromServer(ev) {
+            if (ev && ev.preventDefault) ev.preventDefault();
+            var id = dailyEntryEditingRecordId; if (id == null) return;
+            if (dailyEntryFormIsDirty() && !confirm('Recharger depuis le serveur ? Vos modifications locales non enregistrées seront remplacées par la version du serveur (les parties déjà enregistrées par chacun sont conservées).')) return;
+            var meta = getCurrentDailyEntryRecordMeta();
+            try {
+                var list = await window.API.DailyData.get({ date: meta.date, machineId: meta.mid });
+                var latestRec = (list || []).find(function(r) { return Number(r.id) === Number(id); });
+                if (latestRec) dailyEntryApplyServerRecord(latestRec);
+            } catch (e) {}
+        }
+        window.dailyEntryRefreshFromServer = dailyEntryRefreshFromServer;
 
         function confirmDailyEntryContextChange() {
             if (!dailyEntryLoadedContext) return true;
@@ -29005,6 +29138,24 @@
             try {
                 var saved;
                 if (useAPI && window.API && window.API.DailyData && window.API.DailyData.save) {
+                    // Fusion collaborative : avant d'enregistrer une saisie existante, on
+                    // récupère la dernière version serveur et on fusionne pour ne pas
+                    // écraser ce qu'une autre personne a rempli entre-temps.
+                    if (existingRec && existingRec.id != null && window.API.DailyData.get) {
+                        try {
+                            var latestList = await window.API.DailyData.get({ date: date, machineId: machineId });
+                            var latestRec = (latestList || []).find(function(r) { return Number(r.id) === Number(existingRec.id); });
+                            if (latestRec) {
+                                var latestData = latestRec.data;
+                                if (typeof latestData === 'string') { try { latestData = JSON.parse(latestData); } catch (e) { latestData = {}; } }
+                                record.data = mergeDailyEntryData(record.data || {}, dailyEntryBaselineData || {}, latestData || {});
+                                var myNotes = dailyEntryText('dailyEntryNotes');
+                                record.notes = (String(myNotes) !== String(dailyEntryBaselineNotes || '')) ? myNotes : (latestRec.notes != null ? latestRec.notes : myNotes);
+                            }
+                        } catch (mergeErr) {
+                            console.warn('Fusion collaborative impossible, enregistrement direct :', mergeErr && mergeErr.message);
+                        }
+                    }
                     saved = await window.API.DailyData.save(record);
                     if (!saved || saved.id == null) throw new Error('Le serveur n’a pas confirmé cet enregistrement.');
                     if (typeof saved.data === 'string') saved.data = JSON.parse(saved.data);
