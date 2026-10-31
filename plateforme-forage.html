@@ -20195,7 +20195,7 @@
             var dec = function (v, d) { if (v == null || !isFinite(Number(v))) return 'N/A'; return Number(v).toLocaleString('fr-FR', { minimumFractionDigits: d == null ? 0 : d, maximumFractionDigits: d == null ? 2 : d }); };
 
             var totals = { scheduled: 0, usedHours: 0, productiveHours: 0, production: 0, redrill: 0, bdn: 0, stb: 0, gsa: 0, prd: 0, other: 0, fuel: 0, smu: 0 };
-            var wAvail = { sum: 0, h: 0 }, machineRows = [], counterRows = [], stopRows = [];
+            var wAvail = { sum: 0, h: 0 }, machineRows = [], machineProd = [], counterRows = [], stopRows = [];
             var holesAgg = {}, locAgg = {}, pannes = [], obsList = [], changes = [];
             records.forEach(function (r) {
                 var d = _rpData(r), m = computeOperationalReportMetrics(d);
@@ -20206,6 +20206,7 @@
                 totals.fuel += m.fuel || 0; totals.smu += m.smuHours || 0;
                 if (m.scheduled > 0 && m.mechAvail != null) { wAvail.sum += m.mechAvail * m.scheduled; wAvail.h += m.scheduled; }
                 machineRows.push([name, dec(m.scheduled), dec(m.usedHours), dec(m.productiveHours), dec(m.production), dec(m.productivity, 2), dec(m.mechAvail)]);
+                machineProd.push(m.production || 0);
                 var lpm = (m.production > 0 && m.fuel > 0) ? m.fuel / m.production : null;
                 counterRows.push([name, dec(m.smuHours, 1), dec(m.fuel, 0), lpm != null ? dec(lpm, 2) : '—', dec(m.uoa), dec(m.effectiveUoa)]);
                 stopRows.push([name, dec(m.bdn), dec(m.stb), dec(m.gsa), dec(m.prd), dec(m.other), dec(m.bdn + m.stb + m.gsa + m.prd + m.other)]);
@@ -20235,6 +20236,9 @@
             var planned = getReportPlannedProduction(date, records); var goal = planned && planned.value;
             var avail = wAvail.h > 0 ? wAvail.sum / wAvail.h : null; var taux = (goal != null && goal > 0) ? (totals.production / goal * 100) : null;
             var rendement = totals.usedHours > 0 ? totals.production / totals.usedHours : null;
+            // Classement des machines par métrage « Nouveau » décroissant.
+            var _mOrder = machineRows.map(function (_, i) { return i; }).sort(function (a, b) { return machineProd[b] - machineProd[a]; });
+            machineRows = _mOrder.map(function (i) { return machineRows[i]; });
             var parked = (drills || []).filter(function (dd) { return dd.status && dd.status !== 'EN FORAGE'; });
 
             function slideTitle(s, t) { s.addText(t, { x: 0.5, y: 0.35, w: 12.3, h: 0.7, fontSize: 22, bold: true, color: BLACK }); s.addShape(pptx.ShapeType.line, { x: 0.5, y: 1.15, w: 12.3, h: 0, line: { color: CAT, width: 3 } }); s.addText('GOOD ENGINEERS', { x: 0.5, y: 7.0, w: 6, h: 0.3, fontSize: 9, color: '9A9A9A' }); }
@@ -20516,7 +20520,8 @@
             ]];
             var tPd = 0, tHu = 0, tSc = 0, wMe = 0, sMe = 0, wUo = 0, sUo = 0, wEf = 0, sEf = 0;
             var pctP = function(v) { return (v == null || isNaN(v)) ? 'N/A' : dec(v); };
-            records.forEach(function (r, ri) {
+            var prodDataRows = [];
+            records.forEach(function (r) {
                 var d = _rpData(r); var m = computeOperationalReportMetrics(d);
                 var pd = m.production || 0, hu = m.usedHours || 0, sc = m.scheduled || 0;
                 tPd += pd; tHu += hu; tSc += sc;
@@ -20524,13 +20529,18 @@
                 if (sc > 0 && m.uoa != null && !isNaN(m.uoa)) { wUo += m.uoa * sc; sUo += sc; }
                 if (sc > 0 && m.effectiveUoa != null && !isNaN(m.effectiveUoa)) { wEf += m.effectiveUoa * sc; sEf += sc; }
                 var rend = hu > 0 ? pd / hu : null;
-                var fillc = ri % 2 ? LIGHT : 'FFFFFF';
                 var lbl = (_rpMachineName(r) || r.machineId || '?') + ' — ' + (getShiftLabelForReport(d.shift) || 'Poste') + (d.location ? ' (' + d.location + ')' : '');
+                prodDataRows.push({ pd: pd, lbl: lbl, sc: sc, hu: hu, rend: rend, mech: m.mechAvail, uoa: m.uoa, eff: m.effectiveUoa });
+            });
+            // Classement des machines par métrage « Nouveau » décroissant.
+            prodDataRows.sort(function (a, b) { return b.pd - a.pd; });
+            prodDataRows.forEach(function (x, ri) {
+                var fillc = ri % 2 ? LIGHT : 'FFFFFF';
                 var pc = function(t) { return { text: t, options: { align: 'right', fontSize: 10, fill: { color: fillc } } }; };
                 prodRows.push([
-                    { text: lbl, options: { fontSize: 10, fill: { color: fillc } } },
-                    pc(dec(sc)), pc(dec(hu)), pc(dec(pd)), pc(rend != null ? dec(rend, 2) : 'N/A'),
-                    pc(pctP(m.mechAvail)), pc(pctP(m.uoa)), pc(pctP(m.effectiveUoa))
+                    { text: x.lbl, options: { fontSize: 10, fill: { color: fillc } } },
+                    pc(dec(x.sc)), pc(dec(x.hu)), pc(dec(x.pd)), pc(x.rend != null ? dec(x.rend, 2) : 'N/A'),
+                    pc(pctP(x.mech)), pc(pctP(x.uoa)), pc(pctP(x.eff))
                 ]);
             });
             var tRd = tHu > 0 ? tPd / tHu : null, mMe = sMe > 0 ? wMe / sMe : null, mUo = sUo > 0 ? wUo / sUo : null, mEf = sEf > 0 ? wEf / sEf : null;
@@ -26560,7 +26570,7 @@
         // utilisées, rendement (m/h), avec objectif et écart si planifié.
         function buildProductivitySection(records, reportDate) {
             var dec = function(v, dd) { if (v == null || !isFinite(Number(v))) return 'N/A'; return Number(v).toLocaleString('fr-FR', { minimumFractionDigits: dd == null ? 0 : dd, maximumFractionDigits: dd == null ? 2 : dd }); };
-            var rows = '', tProd = 0, tUsed = 0, tSched = 0, tProdH = 0;
+            var rowList = [], tProd = 0, tUsed = 0, tSched = 0, tProdH = 0;
             var wMech = 0, sMech = 0, wUoa = 0, sUoa = 0, wEff = 0, sEff = 0;
             (records || []).forEach(function(r) {
                 var d = _rpData(r);
@@ -26572,7 +26582,7 @@
                 if (sched > 0 && m.uoa != null && !isNaN(m.uoa)) { wUoa += m.uoa * sched; sUoa += sched; }
                 if (sched > 0 && m.effectiveUoa != null && !isNaN(m.effectiveUoa)) { wEff += m.effectiveUoa * sched; sEff += sched; }
                 var pct = function(v) { return (v == null || isNaN(v)) ? 'N/A' : dec(v) + ' %'; };
-                rows += '<tr><td class="machine-cell">' + escapeHtmlReportCell(_rpMachineName(r) || 'Non renseigné') +
+                var rowHtml = '<tr><td class="machine-cell">' + escapeHtmlReportCell(_rpMachineName(r) || 'Non renseigné') +
                     '<small>' + escapeHtmlReportCell(getShiftLabelForReport(d.shift) || 'Poste') + (d.location ? ' — ' + escapeHtmlReportCell(d.location) : '') + '</small></td>' +
                     '<td class="r-num">' + dec(sched) + '</td>' +
                     '<td class="r-num">' + dec(used) + '</td>' +
@@ -26582,7 +26592,11 @@
                     '<td class="r-num">' + pct(m.mechAvail) + '</td>' +
                     '<td class="r-num">' + pct(m.uoa) + '</td>' +
                     '<td class="r-num">' + pct(m.effectiveUoa) + '</td></tr>';
+                rowList.push({ prod: prod, html: rowHtml });
             });
+            // Classement des machines par métrage « Nouveau » décroissant.
+            rowList.sort(function(a, b) { return b.prod - a.prod; });
+            var rows = rowList.map(function(x) { return x.html; }).join('');
             var tRend = tUsed > 0 ? tProd / tUsed : null;
             var mMech = sMech > 0 ? wMech / sMech : null, mUoa = sUoa > 0 ? wUoa / sUoa : null, mEff = sEff > 0 ? wEff / sEff : null;
             var pctT = function(v) { return (v == null || isNaN(v)) ? 'N/A' : dec(v) + ' %'; };
