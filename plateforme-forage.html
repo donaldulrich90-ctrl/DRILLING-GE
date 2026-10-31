@@ -21357,16 +21357,25 @@
                 else plan.push(null);
             });
             var labels = dates.map(function(d) { return d.slice(8, 10) + '/' + d.slice(5, 7); });
-            var datasets = [{ label: 'Réalisée', data: real, backgroundColor: '#1e40af', borderRadius: 3 }];
-            if (haveAnyPlan) datasets.push({ label: 'Planifiée', data: plan, backgroundColor: '#ea580c', borderRadius: 3 });
+            // Écart (variance) jour par jour : réalisé − objectif (positif = au-dessus
+            // de l'objectif, négatif = en dessous).
+            var ecart = real.map(function(rv, i) { return plan[i] != null ? parseFloat((rv - plan[i]).toFixed(1)) : null; });
+            var datasets = [{ type: 'bar', label: 'Réalisée', data: real, backgroundColor: '#1e40af', borderRadius: 3, order: 2 }];
+            if (haveAnyPlan) {
+                datasets.push({ type: 'bar', label: 'Planifiée', data: plan, backgroundColor: '#ea580c', borderRadius: 3, order: 2 });
+                datasets.push({ type: 'line', label: 'Écart (réel − objectif)', data: ecart, yAxisID: 'y1', borderColor: '#0f766e', backgroundColor: '#0f766e', borderWidth: 2, tension: 0.2, pointRadius: 3, pointBackgroundColor: '#0f766e', spanGaps: true, order: 1 });
+            }
+            var chartScales = { y: { beginAtZero: true, ticks: { color: '#334155' }, grid: { color: 'rgba(0,0,0,0.06)' }, title: { display: true, text: 'Mètres', color: '#334155', font: { size: 10 } } }, x: { ticks: { color: '#334155' }, grid: { display: false } } };
+            if (haveAnyPlan) chartScales.y1 = { position: 'right', ticks: { color: '#0f766e' }, grid: { drawOnChartArea: false }, title: { display: true, text: 'Écart (m)', color: '#0f766e', font: { size: 10 } } };
             var img = reportChartToImg({
                 type: 'bar', data: { labels: labels, datasets: datasets },
-                options: { plugins: { legend: { display: true, labels: { color: '#334155', font: { size: 11 } } } }, scales: { y: { beginAtZero: true, ticks: { color: '#334155' }, grid: { color: 'rgba(0,0,0,0.06)' } }, x: { ticks: { color: '#334155' }, grid: { display: false } } } }
+                options: { plugins: { legend: { display: true, labels: { color: '#334155', font: { size: 11 } } } }, scales: chartScales }
             }, 1100, 300);
             if (!img) return '';
             var taux = cumPlan > 0 ? (cumReal / cumPlan * 100) : null;
+            var ecartCum = cumReal - cumPlan;
             var caption = haveAnyPlan
-                ? ('7 jours : <b>' + cumReal.toFixed(0) + '</b> / <b>' + cumPlan.toFixed(0) + '</b> m · Réalisation ' + (taux != null ? taux.toFixed(1) + ' %' : 'N/A'))
+                ? ('7 jours : <b>' + cumReal.toFixed(0) + '</b> / <b>' + cumPlan.toFixed(0) + '</b> m · Réalisation ' + (taux != null ? taux.toFixed(1) + ' %' : 'N/A') + ' · Écart cumulé <b style="color:' + (ecartCum >= 0 ? '#166534' : '#b91c1c') + '">' + (ecartCum > 0 ? '+' : '') + ecartCum.toFixed(0) + ' m</b>')
                 : ('7 jours : <b>' + cumReal.toFixed(0) + '</b> m réalisés · Objectif planifié : <span style="color:#9ca3af;">Non renseigné</span>');
             return '<h2>Forage nouveau réalisé / planifié — 7 jours</h2>' +
                 '<div style="border:1px solid #e2e8f0;border-radius:6px;padding:10px;"><img src="' + img + '" alt="" style="width:100%;height:auto;display:block;"></div>' +
