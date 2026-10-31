@@ -18771,6 +18771,12 @@
                 '<button type="button" onclick="generateMidshiftReport()" class="mt-3 w-full bg-blue-700 hover:bg-blue-800 text-white px-4 py-2 rounded-lg font-semibold">Rapport de mi-poste</button>' +
                 '<p class="text-slate-400 text-xs mt-2">Situation provisoire à partir des saisies enregistrées, y compris les brouillons.</p>' +
                 '<div class="border-t border-slate-600 mt-4 pt-4">' +
+                '<p class="text-purple-300 text-sm font-semibold mb-2">🗓️ Rapport mensuel de production</p>' +
+                '<input type="month" id="monthlyReportMonth" value="' + (new Date().toISOString().slice(0, 7)) + '" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white mb-3 text-sm">' +
+                '<button type="button" onclick="generateMonthlyReport()" class="w-full bg-purple-700 hover:bg-purple-600 text-white px-4 py-2 rounded-lg font-semibold">🗓️ Générer le rapport mensuel</button>' +
+                '<p class="text-slate-400 text-xs mt-2">Bilan du mois minier : production vs objectif du mois, par machine, dispo/UoA, arrêts.</p>' +
+                '</div>' +
+                '<div class="border-t border-slate-600 mt-4 pt-4">' +
                 '<p class="text-indigo-300 text-sm font-semibold mb-2">🎯 Targets mensuels (envoyés par la mine)</p>' +
                 '<button type="button" onclick="openMonthlyTargetsModal()" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-semibold">🎯 Saisir / mettre à jour les targets du mois</button>' +
                 '<p class="text-slate-400 text-xs mt-2">Métrage/jour, métrage/mois, foreuses, disponibilité, UoA, heures travaillées. Réinitialise les objectifs utilisés dans les rapports.</p>' +
@@ -21776,6 +21782,145 @@
             return '<table class="parked-table"><thead><tr>' +
                 '<th>Machine</th><th>Lieu de stationnement</th><th>Site</th><th>Statut</th><th>Motif d\'arrêt</th><th>Date de sortie probable</th>' +
                 '</tr></thead><tbody>' + rows + '</tbody></table>';
+        }
+
+        // ===== Rapport MENSUEL de production (mois minier, vs target du mois) =====
+        function generateMonthlyReport() {
+            var el = document.getElementById('monthlyReportMonth');
+            var mk = el && el.value ? el.value : (new Date().toISOString().slice(0, 7));
+            var reportWindow = window.open('', '_blank');
+            if (!reportWindow) { alert('Autorisez l’ouverture de la fenêtre du rapport.'); return; }
+            try {
+                ensureReportPlanLoaded(function () {
+                    printDailyReport(null, [], reportWindow, buildMonthlyReportDocumentHtml(mk));
+                }, function () { if (!reportWindow.closed) reportWindow.close(); });
+            } catch (e) {
+                try { printDailyReport(null, [], reportWindow, buildMonthlyReportDocumentHtml(mk)); } catch (e2) { if (!reportWindow.closed) reportWindow.close(); alert('Rapport mensuel impossible : ' + (e2 && e2.message)); }
+            }
+        }
+        function buildMonthlyReportDocumentHtml(monthKey) {
+            var sid = (typeof currentSiteId !== 'undefined') ? currentSiteId : null;
+            var range = (typeof miningMonthRange === 'function') ? miningMonthRange(monthKey, sid) : { start: monthKey + '-01', end: monthKey + '-28' };
+            var monthLabel = (typeof miningMonthLabelFr === 'function') ? miningMonthLabelFr(monthKey, sid) : monthKey;
+            var all = (typeof getDailyDataForSite === 'function') ? getDailyDataForSite() : (typeof dailyDataRecords !== 'undefined' ? dailyDataRecords : []);
+            var records = (all || []).filter(function (r) {
+                if (!r || !r.date || isDailyRecordIncompleteDraft(r)) return false;
+                var k = (typeof miningMonthKey === 'function') ? miningMonthKey(r.date, sid) : r.date.slice(0, 7);
+                return k === monthKey;
+            });
+            var companyName = getReportBrandSubscriberName();
+            var projectLabel = getReportProjectLabel(records);
+            var mt = (typeof getMonthlyTargetForDate === 'function') ? getMonthlyTargetForDate(range.start) : null;
+            var dec = function (v, dd) { if (v == null || !isFinite(Number(v))) return 'N/A'; return Number(v).toLocaleString('fr-FR', { minimumFractionDigits: dd == null ? 1 : dd, maximumFractionDigits: dd == null ? 1 : dd }); };
+            var tot = { prod: 0, reforeH: 0, reforeM: 0, flush: 0, fuel: 0, sched: 0, used: 0, prodH: 0, bdn: 0, stb: 0, gsa: 0, prd: 0, other: 0 };
+            var wMech = 0, sMech = 0, wUoa = 0, sUoa = 0, wEff = 0, sEff = 0;
+            var byDay = {}, byMachine = {}, holeSet = {}, holesManual = 0, daysSet = {};
+            records.forEach(function (r) {
+                var d = _rpData(r), m = computeOperationalReportMetrics(d);
+                tot.prod += m.production || 0; tot.reforeH += parseFloat(m.redrillH) || 0; tot.reforeM += parseFloat(m.redrillM) || 0; tot.flush += parseFloat(m.flushM) || 0;
+                tot.fuel += m.fuel || 0; tot.sched += m.scheduled || 0; tot.used += m.usedHours || 0; tot.prodH += m.productiveHours || 0;
+                tot.bdn += m.bdn || 0; tot.stb += m.stb || 0; tot.gsa += m.gsa || 0; tot.prd += m.prd || 0; tot.other += m.other || 0;
+                if (m.scheduled > 0 && m.mechAvail != null && !isNaN(m.mechAvail)) { wMech += m.mechAvail * m.scheduled; sMech += m.scheduled; }
+                if (m.scheduled > 0 && m.uoa != null && !isNaN(m.uoa)) { wUoa += m.uoa * m.scheduled; sUoa += m.scheduled; }
+                if (m.scheduled > 0 && m.effectiveUoa != null && !isNaN(m.effectiveUoa)) { wEff += m.effectiveUoa * m.scheduled; sEff += m.scheduled; }
+                daysSet[r.date] = 1;
+                byDay[r.date] = (byDay[r.date] || 0) + (m.production || 0);
+                var mid = _rpMachineName(r) || r.machineId || '?';
+                if (!byMachine[mid]) byMachine[mid] = { prod: 0, used: 0, sched: 0, wMech: 0, sMech: 0, wUoa: 0, sUoa: 0 };
+                var bm = byMachine[mid]; bm.prod += m.production || 0; bm.used += m.usedHours || 0; bm.sched += m.scheduled || 0;
+                if (m.scheduled > 0 && m.mechAvail != null && !isNaN(m.mechAvail)) { bm.wMech += m.mechAvail * m.scheduled; bm.sMech += m.scheduled; }
+                if (m.scheduled > 0 && m.uoa != null && !isNaN(m.uoa)) { bm.wUoa += m.uoa * m.scheduled; bm.sUoa += m.scheduled; }
+                var hc = parseFloat(d.holesCount);
+                if (isFinite(hc) && hc >= 0) holesManual += Math.round(hc);
+                else (d.holesWorked || []).forEach(function (h) { if (h && h.holeId != null && String(h.holeId).trim() !== '') holeSet[String(h.holeId).trim()] = true; });
+            });
+            var nbDays = Object.keys(daysSet).length;
+            var holeCount = holesManual + Object.keys(holeSet).length;
+            var mMech = sMech > 0 ? wMech / sMech : null, mUoa = sUoa > 0 ? wUoa / sUoa : null, mEff = sEff > 0 ? wEff / sEff : null;
+            var rend = tot.used > 0 ? tot.prod / tot.used : null;
+            var goalMonth = (mt && mt.metersMonth != null && isFinite(parseFloat(mt.metersMonth))) ? parseFloat(mt.metersMonth) : null;
+            var goalDay = (mt && mt.metersDay != null && isFinite(parseFloat(mt.metersDay))) ? parseFloat(mt.metersDay) : ((typeof companyInfo !== 'undefined' && companyInfo && parseFloat(companyInfo.dailyMetersObjective) > 0) ? parseFloat(companyInfo.dailyMetersObjective) : null);
+            var varM = goalMonth != null ? tot.prod - goalMonth : null;
+            var varMPct = (goalMonth != null && goalMonth > 0) ? (varM / goalMonth * 100) : null;
+            var rateM = (goalMonth != null && goalMonth > 0) ? (tot.prod / goalMonth * 100) : null;
+            // Bandeau KPI mensuel
+            function card(label, value, color, sub) {
+                return '<div class="report-kpi-card"><div class="report-kpi-label">' + escapeHtmlReportCell(label) + '</div>' +
+                    '<div class="report-kpi-value" style="color:' + (color || '#0f172a') + ';">' + escapeHtmlReportCell(value) + '</div>' +
+                    (sub ? '<div class="report-kpi-sub">' + escapeHtmlReportCell(sub) + '</div>' : '') + '</div>';
+            }
+            var fmtM = function (v) { return v == null ? 'N/A' : dec(v) + ' m'; };
+            var pctCmp = function (v, target) { if (v == null) return 'Non renseigné'; var s = dec(v) + ' %'; if (target != null) s += ' / cible ' + dec(target) + ' %'; return s; };
+            var bandeau = '<div class="report-kpi-grid">' +
+                card('Production réalisée', fmtM(tot.prod), '#1e40af', 'mètres nouveaux (mois)') +
+                card('Objectif du mois', goalMonth != null ? fmtM(goalMonth) : 'Non renseigné', '#b45309', 'target mine') +
+                card('Variance (réel − objectif)', varM != null ? ((varM > 0 ? '+' : '') + dec(varM) + ' m' + (varMPct != null ? ' (' + (varMPct > 0 ? '+' : '') + dec(varMPct) + ' %)' : '')) : 'N/A', varM == null ? '#0f172a' : (varM >= 0 ? '#166534' : '#b91c1c'), 'sur le mois') +
+                card('Taux de réalisation', rateM != null ? dec(rateM) + ' %' : 'N/A', '#0f172a', 'réalisé / objectif mois') +
+                card('Jours avec production', String(nbDays), '#0f172a', 'moy. ' + (nbDays > 0 ? dec(tot.prod / nbDays) : 'N/A') + ' m/jour') +
+                card('Rendement moyen', rend != null ? dec(rend, 2) + ' m/h' : 'N/A', '#1e40af', 'mètres / heure utilisée') +
+                card('Dispo. mécanique', pctCmp(mMech, mt ? mt.availPct : null), '#1e40af', '') +
+                card('UoA', pctCmp(mUoa, mt ? mt.uoaPct : null), '#1e40af', '') +
+                card('Reforage', dec(tot.reforeH) + ' h', '#7c3aed', tot.reforeM > 0 ? dec(tot.reforeM) + ' m' : 'facturé à l\'heure') +
+                card('Trous forés', String(holeCount), '#0f766e', 'sur le mois') +
+                '</div>';
+            // Graphe production journalière vs objectif/jour
+            var dstart = new Date(range.start + 'T00:00:00'), dend = new Date(range.end + 'T00:00:00');
+            var labels = [], realArr = [], planArr = [];
+            if (!isNaN(dstart.getTime()) && !isNaN(dend.getTime())) {
+                for (var dd = new Date(dstart.getTime()); dd <= dend; dd.setDate(dd.getDate() + 1)) {
+                    var ds = dd.toISOString().slice(0, 10);
+                    labels.push(ds.slice(8, 10) + '/' + ds.slice(5, 7));
+                    realArr.push(parseFloat((byDay[ds] || 0).toFixed(1)));
+                    planArr.push(goalDay != null ? goalDay : null);
+                }
+            }
+            var chartHtml = '';
+            if (typeof reportChartToImg === 'function' && typeof Chart !== 'undefined' && labels.length) {
+                var ds2 = [{ type: 'bar', label: 'Réalisé/jour', data: realArr, backgroundColor: '#1e40af', borderRadius: 2, order: 2 }];
+                if (goalDay != null) ds2.push({ type: 'line', label: 'Objectif/jour', data: planArr, borderColor: '#ea580c', backgroundColor: '#ea580c', borderWidth: 2, pointRadius: 0, order: 1 });
+                var img = reportChartToImg({ type: 'bar', data: { labels: labels, datasets: ds2 }, options: { plugins: { legend: { display: true, labels: { color: '#334155', font: { size: 11 } } } }, scales: { y: { beginAtZero: true, ticks: { color: '#334155' }, grid: { color: 'rgba(0,0,0,0.06)' } }, x: { ticks: { color: '#334155', maxRotation: 90, minRotation: 90, font: { size: 8 } }, grid: { display: false } } } } }, 1300, 320);
+                if (img) chartHtml = '<div style="border:1px solid #e2e8f0;border-radius:6px;padding:10px;"><img src="' + img + '" alt="" style="width:100%;height:auto;display:block;"></div>';
+            }
+            // Tableau par machine
+            var machKeys = Object.keys(byMachine).sort(function (a, b) { return byMachine[b].prod - byMachine[a].prod; });
+            var machRows = machKeys.map(function (k) {
+                var bm = byMachine[k]; var rr = bm.used > 0 ? bm.prod / bm.used : null;
+                var mm = bm.sMech > 0 ? bm.wMech / bm.sMech : null, mu = bm.sUoa > 0 ? bm.wUoa / bm.sUoa : null;
+                return '<tr><td class="machine-cell">' + escapeHtmlReportCell(k) + '</td><td class="r-num">' + dec(bm.prod) + '</td><td class="r-num">' + dec(bm.used) + '</td><td class="r-num">' + (rr != null ? dec(rr, 2) : 'N/A') + '</td><td class="r-num">' + (mm != null ? dec(mm) + ' %' : 'N/A') + '</td><td class="r-num">' + (mu != null ? dec(mu) + ' %' : 'N/A') + '</td></tr>';
+            }).join('');
+            var machTable = '<table class="daily-table"><thead><tr><th class="machine-cell">Machine</th><th class="r-num">Nouveau (m)</th><th class="r-num">Heures util.</th><th class="r-num">Rendement (m/h)</th><th class="r-num">Dispo. méca (%)</th><th class="r-num">UoA (%)</th></tr></thead><tbody>' +
+                (machRows || '<tr><td class="daily-empty" colspan="6">Aucune donnée sur le mois.</td></tr>') +
+                '<tr class="total"><td class="r-txt"><strong>Ensemble</strong></td><td class="r-num"><strong>' + dec(tot.prod) + '</strong></td><td class="r-num"><strong>' + dec(tot.used) + '</strong></td><td class="r-num"><strong>' + (rend != null ? dec(rend, 2) : 'N/A') + '</strong></td><td class="r-num"><strong>' + (mMech != null ? dec(mMech) + ' %' : 'N/A') + '</strong></td><td class="r-num"><strong>' + (mUoa != null ? dec(mUoa) + ' %' : 'N/A') + '</strong></td></tr></tbody></table>';
+            // Tableau des arrêts
+            var totStops = tot.bdn + tot.stb + tot.gsa + tot.prd + tot.other;
+            var stopPct = function (v) { return totStops > 0 ? dec(v / totStops * 100) + ' %' : '—'; };
+            var stopTable = '<table class="daily-table"><thead><tr><th>Type d\'arrêt</th><th class="r-num">Heures</th><th class="r-num">% du total</th></tr></thead><tbody>' +
+                '<tr><td class="r-txt">Pannes mécaniques (BDN)</td><td class="r-num">' + dec(tot.bdn) + '</td><td class="r-num">' + stopPct(tot.bdn) + '</td></tr>' +
+                '<tr><td class="r-txt">Standby (STB)</td><td class="r-num">' + dec(tot.stb) + '</td><td class="r-num">' + stopPct(tot.stb) + '</td></tr>' +
+                '<tr><td class="r-txt">Services / délais (GSA)</td><td class="r-num">' + dec(tot.gsa) + '</td><td class="r-num">' + stopPct(tot.gsa) + '</td></tr>' +
+                '<tr><td class="r-txt">Production / autres</td><td class="r-num">' + dec(tot.prd + tot.other) + '</td><td class="r-num">' + stopPct(tot.prd + tot.other) + '</td></tr>' +
+                '<tr class="total"><td class="r-txt"><strong>Total arrêts</strong></td><td class="r-num"><strong>' + dec(totStops) + '</strong></td><td class="r-num"><strong>' + (totStops > 0 ? '100 %' : '—') + '</strong></td></tr></tbody></table>';
+            var signatures = ['Établi par', 'Contrôlé par', 'Visé par'].map(function (label) {
+                return '<div class="daily-signature"><div class="daily-signature-title">' + label + '</div><div class="daily-signature-field">Nom / fonction : <span class="daily-signature-line"></span></div><div class="daily-signature-field">Date : <span class="daily-signature-line"></span></div><div class="daily-signature-field">Signature / cachet :</div><div class="daily-signature-space"></div></div>';
+            }).join('');
+            var metaRows = [[{ label: 'Projet / site :', value: projectLabel }, { label: 'Mois minier :', value: monthLabel }, { label: 'Jours produits :', value: String(nbDays) }],
+                [{ label: 'Foreuses planifiées :', value: (mt && mt.rigs != null) ? String(mt.rigs) : 'N/A' }, { label: 'Target heures/jour :', value: (mt && mt.workingHours != null) ? dec(mt.workingHours) + ' h' : 'N/A' }]];
+            var generatedAt = new Date().toLocaleString('fr-FR');
+            var sectionN = 0;
+            function sec(title, body) { sectionN += 1; var n = (sectionN < 10 ? '0' : '') + sectionN; return '<section class="daily-section"><h2><span class="daily-section-number">' + n + '</span>' + title + '</h2>' + body + '</section>'; }
+            return '<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rapport mensuel de production — ' + escapeHtmlReportCell(monthKey) + '</title><style>' +
+                REPORT_PRINT_ENTETE_CSS + DAILY_REPORT_PRINT_CSS + '</style></head><body>' +
+                '<div class="ge-brand-bottom"><img src="' + resolveStaticAssetUrl('ge-logo.png') + '" alt="GOOD ENGINEERS" class="ge-brand-logo"></div>' +
+                '<nav class="print-tools" aria-label="Actions du rapport"><button type="button" onclick="window.print()">Imprimer / Enregistrer en PDF</button><button type="button" onclick="window.close()">Fermer</button></nav>' +
+                '<main class="daily-sheet">' +
+                '<header>' + buildReportStandardEnteteHtml('RAPPORT MENSUEL DE PRODUCTION', records, metaRows) + '<p class="daily-report-audience">BILAN DU MOIS — ' + escapeHtmlReportCell(monthLabel) + '</p></header>' +
+                sec('INDICATEURS CLÉS DU MOIS', bandeau + (mt ? '' : '<p class="daily-table-note">Aucun target mensuel saisi pour ' + escapeHtmlReportCell(monthKey) + ' — renseignez-le via « 🎯 Targets mensuels » pour comparer au objectif.</p>')) +
+                (chartHtml ? sec('Production journalière vs objectif', chartHtml) : '') +
+                sec('Production &amp; performance par machine', machTable) +
+                sec('Répartition des arrêts du mois', stopTable) +
+                sec('Visa et signatures', '<div class="daily-signatures">' + signatures + '</div>') +
+                '<footer class="daily-footer"><span>' + escapeHtmlReportCell(companyName) + '<br>Rapport mensuel de production · ' + escapeHtmlReportCell(monthLabel) + '</span><span>Document généré le ' + escapeHtmlReportCell(generatedAt) + '</span></footer>' +
+                '</main></body></html>';
         }
 
         function buildDailyReportDocumentHtml(date, records, detailed) {
