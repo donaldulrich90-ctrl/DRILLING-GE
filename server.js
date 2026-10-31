@@ -1699,7 +1699,7 @@ app.post('/api/claude-ai/parse-plan', (req, res) => {
                     'anthropic-version': '2023-06-01'
                 },
                 body: JSON.stringify({
-                    model: 'claude-sonnet-4-20250514',
+                    model: 'claude-sonnet-5-5',
                     max_tokens: 4096,
                     messages: [{
                         role: 'user',
@@ -1746,7 +1746,7 @@ app.post('/api/claude-ai/extract-report', (req, res) => {
                     'anthropic-version': '2023-06-01'
                 },
                 body: JSON.stringify({
-                    model: 'claude-sonnet-4-20250514',
+                    model: 'claude-sonnet-5-5',
                     max_tokens: 4096,
                     messages: [{
                         role: 'user',
@@ -1877,7 +1877,7 @@ RÈGLES :
                     'anthropic-version': '2023-06-01'
                 },
                 body: JSON.stringify({
-                    model: 'claude-sonnet-4-20250514',
+                    model: 'claude-sonnet-5-5',
                     max_tokens: 4096,
                     system: systemPrompt,
                     messages: messages.slice(-20) // Garder les 20 derniers messages pour le contexte
