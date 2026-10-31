@@ -3261,6 +3261,28 @@ app.get('/api/daily-data', (req, res) => {
     });
 });
 
+// Présence collaborative sur une saisie journalière (en mémoire, éphémère).
+// Permet d'afficher « X est aussi sur cette saisie » pendant l'édition partagée.
+const dailyPresence = new Map(); // recordId (String) -> Map(username -> { name, at })
+app.post('/api/daily-data/:id/presence', (req, res) => {
+    const id = String(req.params.id);
+    const user = String((req.auth && req.auth.username) || '').toLowerCase();
+    const name = (req.body && req.body.name) || (req.auth && req.auth.username) || 'Utilisateur';
+    if (!user) return res.json({ others: [] });
+    let m = dailyPresence.get(id);
+    if (!m) { m = new Map(); dailyPresence.set(id, m); }
+    if (req.body && req.body.leaving) { m.delete(user); }
+    else { m.set(user, { name: name, at: Date.now() }); }
+    const now = Date.now();
+    const others = [];
+    for (const [u, v] of Array.from(m.entries())) {
+        if (now - v.at > 20000) { m.delete(u); continue; } // expire après 20 s sans battement
+        if (u !== user) others.push(v.name);
+    }
+    if (m.size === 0) dailyPresence.delete(id);
+    res.json({ others: others });
+});
+
 app.post('/api/daily-data', (req, res) => {
     const record = req.body || {};
     const shift = (record.data && record.data.shift) || '';
