@@ -5324,7 +5324,8 @@
         ];
         var CONTRACT_SERVICE_TYPES = [
             { value: 'forage',            label: 'Forage',                          unit: 'per_meter' },
-            { value: 'refore',            label: 'Réfore (Re-forage)',               unit: 'per_meter' },
+            { value: 'refore',            label: 'Réfore (Re-forage) — au mètre',    unit: 'per_meter' },
+            { value: 'refore_horaire',    label: 'Réfore (Re-forage) — à l\'heure',   unit: 'per_hour'  },
             { value: 'soufflage',         label: 'Soufflage',                       unit: 'per_meter' },
             { value: 'carottage',         label: 'Carottage',                       unit: 'per_meter' },
             { value: 'rc',                label: 'RC (Reverse Circulation)',         unit: 'per_meter' },
@@ -14497,10 +14498,11 @@
                 var sInfo = getServiceTypeInfo(sType);
                 var isFixed = sInfo.unit === 'fixed';
                 var isPerDay = sInfo.unit === 'per_day';
+                var isPerHour = sInfo.unit === 'per_hour';
                 var lineCur = rate.currency || currency;
                 var estimatedAmount = isFixed ? (rate.rate || 0) : (rate.estimatedMeters || 0) * (rate.rate || 0);
-                var rateLabel = isFixed ? 'Montant forfaitaire *' : (isPerDay ? 'Tarif/jour *' : 'Tarif/mètre *');
-                var qtyLabel  = isPerDay ? 'Jours estimés' : 'Mètres estimés';
+                var rateLabel = isFixed ? 'Montant forfaitaire *' : (isPerDay ? 'Tarif/jour *' : (isPerHour ? 'Tarif/heure *' : 'Tarif/mètre *'));
+                var qtyLabel  = isPerDay ? 'Jours estimés' : (isPerHour ? 'Heures estimées' : 'Mètres estimés');
 
                 var html = '<div class="ged-stat-card p-4 rounded-lg" data-rate-index="' + index + '">' +
                     '<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">' +
@@ -15293,11 +15295,56 @@
                 if (typeof data === 'string') { try { data = JSON.parse(data); } catch (e) { data = {}; } }
                 var m = (parseFloat(data.metersDrilled) || 0) + (includeRedrill ? (parseFloat(data.redrillMeters) || 0) : 0);
                 if (m <= 0) return;
+                // Ventilation par diamètre d'après le détail « Bits utilisés » quand il est
+                // renseigné : les mètres de la saisie sont répartis au prorata des mètres de
+                // chaque bit (regroupés par diamètre). Sinon on retombe sur le bitType unique.
+                var bits = data.bitsUsed;
+                if (Array.isArray(bits) && bits.length) {
+                    var perDia = {}, sumBits = 0;
+                    bits.forEach(function(b) {
+                        var bm = parseFloat(b && b.meters) || 0;
+                        if (bm <= 0) return;
+                        var bd = bitTypeToDiameterMm(b.bitType);
+                        var bk = bd == null ? '' : String(bd);
+                        perDia[bk] = (perDia[bk] || 0) + bm;
+                        sumBits += bm;
+                    });
+                    if (sumBits > 0) {
+                        Object.keys(perDia).forEach(function(bk) {
+                            out[bk] = (out[bk] || 0) + m * (perDia[bk] / sumBits);
+                        });
+                        return;
+                    }
+                }
                 var d = bitTypeToDiameterMm(data.bitType);
                 var key = d == null ? '' : String(d);
                 out[key] = (out[key] || 0) + m;
             });
             return out;
+        }
+
+        // Heures de reforage d'une machine sur un mois minier (pour facturation horaire).
+        function reforageHoursForDrillInMonth(drillId, monthYYYYMM) {
+            var _sid = _siteIdForDrill(drillId);
+            var h = 0;
+            (dailyDataRecords || []).forEach(function(r) {
+                if (isDailyRecordIncompleteDraft(r) || !r.date || miningMonthKey(r.date, _sid) !== monthYYYYMM) return;
+                if (!drillIdsMatch(r.machineId, drillId)) return;
+                var data = r.data || {};
+                if (typeof data === 'string') { try { data = JSON.parse(data); } catch (e) { data = {}; } }
+                h += parseFloat(data.redrillHours) || 0;
+            });
+            return h;
+        }
+
+        // Ligne de tarif reforage horaire d'un contrat (unité per_hour, tarif > 0).
+        function contractReforageHourlyLine(contract) {
+            if (!contract || !contract.rates) return null;
+            return contract.rates.find(function(r) {
+                if (!r || !(parseFloat(r.rate) > 0)) return false;
+                var info = (typeof getServiceTypeInfo === 'function') ? getServiceTypeInfo(r.serviceType || '') : null;
+                return info && info.unit === 'per_hour';
+            }) || null;
         }
 
         // Lignes de tarif « au mètre » (forage) d'un contrat, tarif > 0.
@@ -17695,7 +17742,20 @@
                 var mbd = metersByDiameterForDrillInMonth(drill.id, currentMonthKey, contractBillsRedrill(contract));
                 var rev = contract ? revenueFromContractByDiameter(contract, mbd, dispCur) : { amount: 0, unmatched: 0, totalMeters: 0 };
                 var metersM = Object.keys(mbd).reduce(function(s, k) { return s + (mbd[k] || 0); }, 0);
-                var monthDisplay = rev.amount;
+                // Reforage facturé à l'heure : si le contrat a un tarif horaire de reforage,
+                // on ajoute heures de reforage du mois × tarif (indépendant des mètres).
+                var reforeRevenue = 0;
+                if (contract) {
+                    var rhLine = contractReforageHourlyLine(contract);
+                    if (rhLine) {
+                        var reforeHrs = reforageHoursForDrillInMonth(drill.id, currentMonthKey);
+                        if (reforeHrs > 0) {
+                            var rhCur = normalizeMoneyCurrency(rhLine.currency || contract.currency || 'XOF');
+                            reforeRevenue = convertMoneyAmountToCurrency(reforeHrs * (parseFloat(rhLine.rate) || 0), rhCur, dispCur);
+                        }
+                    }
+                }
+                var monthDisplay = rev.amount + reforeRevenue;
                 var dayDisplay = daysInThisMonth > 0 ? monthDisplay / daysInThisMonth : 0;
                 var weekDisplay = dayDisplay * 7;
                 machineRevenues[drill.id] = { day: dayDisplay, week: weekDisplay, month: monthDisplay, meters: metersM, unmatchedMeters: rev.unmatched };
@@ -17737,8 +17797,19 @@
             var salariesDisp = convertMoneyAmountToCurrency(totalSalaries, 'XOF', dispCur);
             var dailySalariesDisp = convertMoneyAmountToCurrency(dailySalaries, 'XOF', dispCur);
 
-            var consumablesCost = inventory.reduce(function(sum, item) {
-                return sum + (item.price || 0) * (item.quantity || 0);
+            // Consommation réelle du mois : sorties de stock (mouvements « exit ») valorisées
+            // au prix unitaire du mouvement, sur le mois minier analysé.
+            // (Avant : valeur totale du stock en magasin, qui n'est pas une dépense du mois.)
+            var consumablesCost = (stockMovements || []).reduce(function(sum, m) {
+                if (!m || m.type !== 'exit' || !m.date) return sum;
+                if (miningMonthKey(m.date, currentSiteId) !== reportMonthKey) return sum;
+                var qty = parseFloat(m.quantity) || 0;
+                var up = parseFloat(m.unitPrice);
+                if (!isFinite(up)) {
+                    var art = inventory.find(function(a) { return a.id == m.articleId; });
+                    up = art ? (parseFloat(art.averagePrice) || parseFloat(art.price) || 0) : 0;
+                }
+                return sum + qty * up;
             }, 0);
             var dailyConsumables = consumablesCost / 30;
             var consumablesDisp = convertMoneyAmountToCurrency(consumablesCost, invCurCompany, dispCur);
