@@ -20176,7 +20176,9 @@
 
             // 2 — Tableau de bord
             var s2 = pptx.addSlide(); slideTitle(s2, 'Tableau de bord — ' + formatDate(date));
-            var kpis = [['Mètres nouveaux', dec(totals.production) + ' m'], ['Objectif du jour', goal != null ? dec(goal) + ' m' : 'N/A'], ['Taux de réalisation', taux != null ? dec(taux) + ' %' : 'N/A'], ['Reforés', dec(totals.redrill) + ' m'], ['Dispo. mécanique', avail != null ? dec(avail) + ' %' : 'N/A'], ['Rendement', rendement != null ? dec(rendement, 2) + ' m/h' : 'N/A'], ['Carburant', dec(totals.fuel, 0) + ' L'], ['Heures utilisées', dec(totals.usedHours) + ' h']];
+            var varianceDet = goal != null ? (totals.production - goal) : null;
+            var varianceDetTxt = varianceDet == null ? 'N/A' : ((varianceDet > 0 ? '+' : '') + dec(varianceDet) + ' m');
+            var kpis = [['Mètres nouveaux', dec(totals.production) + ' m'], ['Objectif du jour', goal != null ? dec(goal) + ' m' : 'N/A'], ['Variance (réel − objectif)', varianceDetTxt], ['Taux de réalisation', taux != null ? dec(taux) + ' %' : 'N/A'], ['Reforés', dec(totals.redrill) + ' m'], ['Dispo. mécanique', avail != null ? dec(avail) + ' %' : 'N/A'], ['Rendement', rendement != null ? dec(rendement, 2) + ' m/h' : 'N/A'], ['Carburant', dec(totals.fuel, 0) + ' L']];
             kpis.forEach(function (k, i) {
                 var col = i % 4, row = Math.floor(i / 4), x = 0.5 + col * 3.15, y = 1.55 + row * 2.15;
                 s2.addShape(pptx.ShapeType.rect, { x: x, y: y, w: 2.95, h: 1.9, fill: { color: LIGHT }, line: { color: LINE, width: 1 } });
