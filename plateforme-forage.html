@@ -20177,7 +20177,8 @@
             // 2 — Tableau de bord
             var s2 = pptx.addSlide(); slideTitle(s2, 'Tableau de bord — ' + formatDate(date));
             var varianceDet = goal != null ? (totals.production - goal) : null;
-            var varianceDetTxt = varianceDet == null ? 'N/A' : ((varianceDet > 0 ? '+' : '') + dec(varianceDet) + ' m');
+            var varianceDetPct = (goal != null && goal > 0) ? (varianceDet / goal * 100) : null;
+            var varianceDetTxt = varianceDet == null ? 'N/A' : ((varianceDet > 0 ? '+' : '') + dec(varianceDet) + ' m' + (varianceDetPct != null ? ' (' + (varianceDetPct > 0 ? '+' : '') + dec(varianceDetPct) + ' %)' : ''));
             var kpis = [['Mètres nouveaux', dec(totals.production) + ' m'], ['Objectif du jour', goal != null ? dec(goal) + ' m' : 'N/A'], ['Variance (réel − objectif)', varianceDetTxt], ['Taux de réalisation', taux != null ? dec(taux) + ' %' : 'N/A'], ['Reforés', dec(totals.redrill) + ' m'], ['Dispo. mécanique', avail != null ? dec(avail) + ' %' : 'N/A'], ['Rendement', rendement != null ? dec(rendement, 2) + ' m/h' : 'N/A'], ['Carburant', dec(totals.fuel, 0) + ' L']];
             kpis.forEach(function (k, i) {
                 var col = i % 4, row = Math.floor(i / 4), x = 0.5 + col * 3.15, y = 1.55 + row * 2.15;
@@ -26345,8 +26346,9 @@
                 '<td class="r-num"><strong>' + pctT(mMech) + '</strong></td>' +
                 '<td class="r-num"><strong>' + pctT(mUoa) + '</strong></td>' +
                 '<td class="r-num"><strong>' + pctT(mEff) + '</strong></td></tr>';
+            var variancePct = (goal != null && goal > 0) ? (variance / goal * 100) : null;
             var varianceLine = goal == null ? 'Objectif de production : <b>Non renseigné</b>.' :
-                ('Objectif : <b>' + dec(goal) + ' m</b> · Réalisé : <b>' + dec(tProd) + ' m</b> · Écart (réel − objectif) : <b style="color:' + (variance >= 0 ? '#166534' : '#b91c1c') + '">' + (variance > 0 ? '+' : '') + dec(variance) + ' m</b> · Taux : <b>' + (rate != null ? dec(rate) + ' %' : 'N/A') + '</b>.');
+                ('Objectif : <b>' + dec(goal) + ' m</b> · Réalisé : <b>' + dec(tProd) + ' m</b> · Écart (réel − objectif) : <b style="color:' + (variance >= 0 ? '#166534' : '#b91c1c') + '">' + (variance > 0 ? '+' : '') + dec(variance) + ' m' + (variancePct != null ? ' (' + (variancePct > 0 ? '+' : '') + dec(variancePct) + ' %)' : '') + '</b> · Taux de réalisation : <b>' + (rate != null ? dec(rate) + ' %' : 'N/A') + '</b>.');
             return '<h3 class="daily-subtitle">Productivité par machine et poste</h3>' +
                 '<table class="daily-table"><thead><tr><th class="machine-cell">Machine / poste</th><th class="r-num">Programmé<br>(h)</th><th class="r-num">Utilisé<br>(h)</th><th class="r-num">Productif<br>(h)</th><th class="r-num">Nouveau<br>(m)</th><th class="r-num">Rendement<br>(m/h)</th><th class="r-num">Dispo. méca.<br>(%)</th><th class="r-num">UoA<br>(%)</th><th class="r-num">UoA eff.<br>(%)</th></tr></thead><tbody>' +
                 (rows || '<tr><td class="daily-empty" colspan="9">Aucune donnée.</td></tr>') + foot + '</tbody></table>' +
@@ -26538,7 +26540,7 @@
                 card('Trous travaillés', String(holeCount), '#0f766e', holeCount > 0 ? 'nombre de trous forés' : 'aucun trou renseigné') +
                 card('Production planifiée', goal != null ? fmtM(goal) : 'Non renseigné', '#b45309', 'objectif journalier collectif') +
                 card('Taux de réalisation', rate != null ? rate.toFixed(1).replace('.', ',') + ' %' : 'N/A', '#0f172a', goal === 0 ? 'objectif nul : taux non calculable' : 'réalisé / planifié') +
-                card('Écart (réel − plan)', variance != null ? (variance > 0 ? '+' : '') + fmtM(variance) : 'N/A', '#0f172a', 'mètres nouveaux') +
+                card('Écart (réel − plan)', variance != null ? (variance > 0 ? '+' : '') + fmtM(variance) : 'N/A', '#0f172a', (goal != null && goal > 0) ? ((variance / goal * 100 > 0 ? '+' : '') + (variance / goal * 100).toFixed(1).replace('.', ',') + ' % de l\'objectif') : 'mètres nouveaux') +
                 card('Disponibilité méca.', dispo != null ? dispo.toFixed(1).replace('.', ',') + ' %' : 'Non renseigné', '#1e40af', '') +
                 card('Heures de panne', agg.bdn.toFixed(1).replace('.', ',') + ' h', '#b91c1c', 'arrêt mécanique') +
                 card('Heures de standby', agg.stb.toFixed(1).replace('.', ',') + ' h', '#b45309', 'immobilisation') +
