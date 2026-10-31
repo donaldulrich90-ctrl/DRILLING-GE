@@ -20423,35 +20423,39 @@
 
             // 2b — Productivité par machine et poste (demandé pour la synthèse exécutive)
             var sPr = pptx.addSlide(); slideTitle(sPr, 'Productivité par machine et poste');
+            var ph = function(txt) { return { text: txt, options: { bold: true, color: CAT, fill: { color: NAVY }, align: 'right', fontSize: 11 } }; };
             var prodRows = [[
-                { text: 'Machine / poste', options: { bold: true, color: CAT, fill: { color: NAVY }, fontSize: 12 } },
-                { text: 'Nouveau (m)', options: { bold: true, color: CAT, fill: { color: NAVY }, align: 'right', fontSize: 12 } },
-                { text: 'Heures utilisées', options: { bold: true, color: CAT, fill: { color: NAVY }, align: 'right', fontSize: 12 } },
-                { text: 'Rendement (m/h)', options: { bold: true, color: CAT, fill: { color: NAVY }, align: 'right', fontSize: 12 } }
+                { text: 'Machine / poste', options: { bold: true, color: CAT, fill: { color: NAVY }, fontSize: 11 } },
+                ph('Progr. (h)'), ph('Util. (h)'), ph('Nouveau (m)'), ph('Rend. (m/h)'), ph('Dispo. (%)'), ph('UoA (%)'), ph('UoA eff. (%)')
             ]];
-            var tPd = 0, tHu = 0;
+            var tPd = 0, tHu = 0, tSc = 0, wMe = 0, sMe = 0, wUo = 0, sUo = 0, wEf = 0, sEf = 0;
+            var pctP = function(v) { return (v == null || isNaN(v)) ? 'N/A' : dec(v); };
             records.forEach(function (r, ri) {
                 var d = _rpData(r); var m = computeOperationalReportMetrics(d);
-                var pd = m.production || 0, hu = m.usedHours || 0; tPd += pd; tHu += hu;
+                var pd = m.production || 0, hu = m.usedHours || 0, sc = m.scheduled || 0;
+                tPd += pd; tHu += hu; tSc += sc;
+                if (sc > 0 && m.mechAvail != null && !isNaN(m.mechAvail)) { wMe += m.mechAvail * sc; sMe += sc; }
+                if (sc > 0 && m.uoa != null && !isNaN(m.uoa)) { wUo += m.uoa * sc; sUo += sc; }
+                if (sc > 0 && m.effectiveUoa != null && !isNaN(m.effectiveUoa)) { wEf += m.effectiveUoa * sc; sEf += sc; }
                 var rend = hu > 0 ? pd / hu : null;
                 var fillc = ri % 2 ? LIGHT : 'FFFFFF';
                 var lbl = (_rpMachineName(r) || r.machineId || '?') + ' — ' + (getShiftLabelForReport(d.shift) || 'Poste') + (d.location ? ' (' + d.location + ')' : '');
+                var pc = function(t) { return { text: t, options: { align: 'right', fontSize: 10, fill: { color: fillc } } }; };
                 prodRows.push([
-                    { text: lbl, options: { fontSize: 11, fill: { color: fillc } } },
-                    { text: dec(pd) + ' m', options: { align: 'right', fontSize: 11, fill: { color: fillc } } },
-                    { text: dec(hu) + ' h', options: { align: 'right', fontSize: 11, fill: { color: fillc } } },
-                    { text: rend != null ? dec(rend, 2) : 'N/A', options: { align: 'right', fontSize: 11, fill: { color: fillc } } }
+                    { text: lbl, options: { fontSize: 10, fill: { color: fillc } } },
+                    pc(dec(sc)), pc(dec(hu)), pc(dec(pd)), pc(rend != null ? dec(rend, 2) : 'N/A'),
+                    pc(pctP(m.mechAvail)), pc(pctP(m.uoa)), pc(pctP(m.effectiveUoa))
                 ]);
             });
-            var tRd = tHu > 0 ? tPd / tHu : null;
+            var tRd = tHu > 0 ? tPd / tHu : null, mMe = sMe > 0 ? wMe / sMe : null, mUo = sUo > 0 ? wUo / sUo : null, mEf = sEf > 0 ? wEf / sEf : null;
+            var pf = function(t) { return { text: t, options: { bold: true, align: 'right', fill: { color: 'EDF2F7' }, fontSize: 10 } }; };
             prodRows.push([
-                { text: 'Ensemble', options: { bold: true, fill: { color: 'EDF2F7' }, fontSize: 12 } },
-                { text: dec(tPd) + ' m', options: { bold: true, align: 'right', fill: { color: 'EDF2F7' }, fontSize: 12 } },
-                { text: dec(tHu) + ' h', options: { bold: true, align: 'right', fill: { color: 'EDF2F7' }, fontSize: 12 } },
-                { text: tRd != null ? dec(tRd, 2) : 'N/A', options: { bold: true, align: 'right', fill: { color: 'EDF2F7' }, fontSize: 12 } }
+                { text: 'Ensemble', options: { bold: true, fill: { color: 'EDF2F7' }, fontSize: 11 } },
+                pf(dec(tSc)), pf(dec(tHu)), pf(dec(tPd)), pf(tRd != null ? dec(tRd, 2) : 'N/A'),
+                pf(pctP(mMe)), pf(pctP(mUo)), pf(pctP(mEf))
             ]);
-            sPr.addTable(prodRows, { x: 0.5, y: 1.5, w: 12.3, colW: [6.0, 2.1, 2.1, 2.1], border: { type: 'solid', color: 'CBD5E1', pt: 0.5 }, valign: 'middle', autoPage: true, autoPageRepeatHeader: true, newSlideStartY: 0.6 });
-            sPr.addText('Rendement = mètres nouveaux / heure utilisée.', { x: 0.5, y: 6.95, w: 12.3, h: 0.3, fontSize: 10, italic: true, color: GRAY });
+            sPr.addTable(prodRows, { x: 0.4, y: 1.5, w: 12.5, colW: [4.3, 1.17, 1.17, 1.17, 1.17, 1.17, 1.17, 1.18], border: { type: 'solid', color: 'CBD5E1', pt: 0.5 }, valign: 'middle', autoPage: true, autoPageRepeatHeader: true, newSlideStartY: 0.6 });
+            sPr.addText('Rend. = mètres nouveaux / h utilisée · UoA = taux d\'utilisation de la disponibilité · % d\'ensemble pondérés par les heures programmées.', { x: 0.4, y: 6.95, w: 12.5, h: 0.3, fontSize: 9, italic: true, color: GRAY });
 
             // 2a — Graphiques de tendance (mêmes graphiques que la synthèse PDF)
             try { addDailyReportChartSlides(pptx, slideTitle, date, records, 'executive'); } catch (eChart) { console.warn('Graphiques PowerPoint :', eChart); }
@@ -26300,31 +26304,51 @@
         // utilisées, rendement (m/h), avec objectif et écart si planifié.
         function buildProductivitySection(records, reportDate) {
             var dec = function(v, dd) { if (v == null || !isFinite(Number(v))) return 'N/A'; return Number(v).toLocaleString('fr-FR', { minimumFractionDigits: dd == null ? 1 : dd, maximumFractionDigits: dd == null ? 1 : dd }); };
-            var rows = '', tProd = 0, tUsed = 0;
+            var rows = '', tProd = 0, tUsed = 0, tSched = 0, tProdH = 0;
+            var wMech = 0, sMech = 0, wUoa = 0, sUoa = 0, wEff = 0, sEff = 0;
             (records || []).forEach(function(r) {
                 var d = _rpData(r);
                 var m = computeOperationalReportMetrics(d);
-                var prod = m.production || 0, used = m.usedHours || 0;
-                tProd += prod; tUsed += used;
+                var prod = m.production || 0, used = m.usedHours || 0, sched = m.scheduled || 0, prodH = m.productiveHours || 0;
+                tProd += prod; tUsed += used; tSched += sched; tProdH += prodH;
                 var rend = used > 0 ? prod / used : null;
+                if (sched > 0 && m.mechAvail != null && !isNaN(m.mechAvail)) { wMech += m.mechAvail * sched; sMech += sched; }
+                if (sched > 0 && m.uoa != null && !isNaN(m.uoa)) { wUoa += m.uoa * sched; sUoa += sched; }
+                if (sched > 0 && m.effectiveUoa != null && !isNaN(m.effectiveUoa)) { wEff += m.effectiveUoa * sched; sEff += sched; }
+                var pct = function(v) { return (v == null || isNaN(v)) ? 'N/A' : dec(v) + ' %'; };
                 rows += '<tr><td class="machine-cell">' + escapeHtmlReportCell(_rpMachineName(r) || 'Non renseigné') +
                     '<small>' + escapeHtmlReportCell(getShiftLabelForReport(d.shift) || 'Poste') + (d.location ? ' — ' + escapeHtmlReportCell(d.location) : '') + '</small></td>' +
-                    '<td class="r-num">' + dec(prod) + ' m</td>' +
-                    '<td class="r-num">' + dec(used) + ' h</td>' +
-                    '<td class="r-num">' + (rend != null ? dec(rend, 2) + ' m/h' : 'N/A') + '</td></tr>';
+                    '<td class="r-num">' + dec(sched) + '</td>' +
+                    '<td class="r-num">' + dec(used) + '</td>' +
+                    '<td class="r-num">' + dec(prodH) + '</td>' +
+                    '<td class="r-num">' + dec(prod) + '</td>' +
+                    '<td class="r-num">' + (rend != null ? dec(rend, 2) : 'N/A') + '</td>' +
+                    '<td class="r-num">' + pct(m.mechAvail) + '</td>' +
+                    '<td class="r-num">' + pct(m.uoa) + '</td>' +
+                    '<td class="r-num">' + pct(m.effectiveUoa) + '</td></tr>';
             });
             var tRend = tUsed > 0 ? tProd / tUsed : null;
+            var mMech = sMech > 0 ? wMech / sMech : null, mUoa = sUoa > 0 ? wUoa / sUoa : null, mEff = sEff > 0 ? wEff / sEff : null;
+            var pctT = function(v) { return (v == null || isNaN(v)) ? 'N/A' : dec(v) + ' %'; };
             var planned = getReportPlannedProduction(reportDate, records);
             var goal = planned && planned.value;
             var variance = goal != null ? tProd - goal : null;
             var rate = (goal != null && goal > 0) ? tProd / goal * 100 : null;
-            var foot = '<tr class="total"><td class="r-txt"><strong>Ensemble</strong></td><td class="r-num"><strong>' + dec(tProd) + ' m</strong></td><td class="r-num"><strong>' + dec(tUsed) + ' h</strong></td><td class="r-num"><strong>' + (tRend != null ? dec(tRend, 2) + ' m/h' : 'N/A') + '</strong></td></tr>';
+            var foot = '<tr class="total"><td class="r-txt"><strong>Ensemble</strong></td>' +
+                '<td class="r-num"><strong>' + dec(tSched) + '</strong></td>' +
+                '<td class="r-num"><strong>' + dec(tUsed) + '</strong></td>' +
+                '<td class="r-num"><strong>' + dec(tProdH) + '</strong></td>' +
+                '<td class="r-num"><strong>' + dec(tProd) + '</strong></td>' +
+                '<td class="r-num"><strong>' + (tRend != null ? dec(tRend, 2) : 'N/A') + '</strong></td>' +
+                '<td class="r-num"><strong>' + pctT(mMech) + '</strong></td>' +
+                '<td class="r-num"><strong>' + pctT(mUoa) + '</strong></td>' +
+                '<td class="r-num"><strong>' + pctT(mEff) + '</strong></td></tr>';
             var varianceLine = goal == null ? 'Objectif de production : <b>Non renseigné</b>.' :
                 ('Objectif : <b>' + dec(goal) + ' m</b> · Réalisé : <b>' + dec(tProd) + ' m</b> · Écart (réel − objectif) : <b style="color:' + (variance >= 0 ? '#166534' : '#b91c1c') + '">' + (variance > 0 ? '+' : '') + dec(variance) + ' m</b> · Taux : <b>' + (rate != null ? dec(rate) + ' %' : 'N/A') + '</b>.');
             return '<h3 class="daily-subtitle">Productivité par machine et poste</h3>' +
-                '<table class="daily-table"><thead><tr><th class="machine-cell">Machine / poste</th><th class="r-num">Nouveau (m)</th><th class="r-num">Heures utilisées</th><th class="r-num">Rendement (m/h)</th></tr></thead><tbody>' +
-                (rows || '<tr><td class="daily-empty" colspan="4">Aucune donnée.</td></tr>') + foot + '</tbody></table>' +
-                '<p class="daily-table-note">Rendement = mètres nouveaux / heure utilisée. ' + varianceLine + '</p>';
+                '<table class="daily-table"><thead><tr><th class="machine-cell">Machine / poste</th><th class="r-num">Programmé<br>(h)</th><th class="r-num">Utilisé<br>(h)</th><th class="r-num">Productif<br>(h)</th><th class="r-num">Nouveau<br>(m)</th><th class="r-num">Rendement<br>(m/h)</th><th class="r-num">Dispo. méca.<br>(%)</th><th class="r-num">UoA<br>(%)</th><th class="r-num">UoA eff.<br>(%)</th></tr></thead><tbody>' +
+                (rows || '<tr><td class="daily-empty" colspan="9">Aucune donnée.</td></tr>') + foot + '</tbody></table>' +
+                '<p class="daily-table-note">Rendement = mètres nouveaux / heure utilisée. UoA = taux d\'utilisation de la disponibilité (heures utilisées / heures disponibles). Les % d\'ensemble sont pondérés par les heures programmées. ' + varianceLine + '</p>';
         }
 
         // Métrage foré par type de bit (prix différents selon le diamètre) —
