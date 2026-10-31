@@ -20025,7 +20025,7 @@
             prog.sort(function(a, b) {
                 return String(a.zone).localeCompare(String(b.zone), 'fr') || String(a.holeId).localeCompare(String(b.holeId), 'fr', { numeric: true });
             });
-            var dec = function(v) { return Number(v || 0).toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }); };
+            var dec = function(v) { return Number(v || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }); };
             var byZone = {};
             prog.forEach(function(p) { if (!byZone[p.zone]) byZone[p.zone] = 0; byZone[p.zone]++; });
             var cards = '<div class="report-kpi-grid">' +
@@ -20044,7 +20044,7 @@
 
         function buildProductionDaySection(records, date) {
             records = (records || []).filter(function(r) { return r && !isDailyRecordIncompleteDraft(r); });
-            var dec = function(v, d) { if (v == null || v === '' || !isFinite(Number(v))) return 'N/A'; return Number(v).toLocaleString('fr-FR', { minimumFractionDigits: d == null ? 1 : d, maximumFractionDigits: d == null ? 1 : d }); };
+            var dec = function(v, d) { if (v == null || v === '' || !isFinite(Number(v))) return 'N/A'; return Number(v).toLocaleString('fr-FR', { minimumFractionDigits: d == null ? 0 : d, maximumFractionDigits: d == null ? 2 : d }); };
             if (!records.length) {
                 return '<p class="daily-empty">Aucune saisie terminée pour cette date. La production apparaîtra une fois les rapports journaliers validés.</p>';
             }
@@ -20193,7 +20193,7 @@
             var BLACK = '141414', CAT = 'FFCD11', LIGHT = 'F5F5F2', GRAY = '555555', LINE = 'E4E2DA';
             var company = getReportBrandSubscriberName();
             var projectLabel = getReportProjectLabel(records);
-            var dec = function (v, d) { if (v == null || !isFinite(Number(v))) return 'N/A'; return Number(v).toLocaleString('fr-FR', { minimumFractionDigits: d == null ? 1 : d, maximumFractionDigits: d == null ? 1 : d }); };
+            var dec = function (v, d) { if (v == null || !isFinite(Number(v))) return 'N/A'; return Number(v).toLocaleString('fr-FR', { minimumFractionDigits: d == null ? 0 : d, maximumFractionDigits: d == null ? 2 : d }); };
 
             var totals = { scheduled: 0, usedHours: 0, productiveHours: 0, production: 0, redrill: 0, bdn: 0, stb: 0, gsa: 0, prd: 0, other: 0, fuel: 0, smu: 0 };
             var wAvail = { sum: 0, h: 0 }, machineRows = [], counterRows = [], stopRows = [];
@@ -20399,7 +20399,7 @@
             var NAVY = '141414', BLUE = 'FFCD11', GRAY = '555555', LIGHT = 'F5F5F2', CAT = 'FFCD11';
             var company = getReportBrandSubscriberName();
             var projectLabel = getReportProjectLabel(records);
-            var dec = function (v, d) { if (v == null || !isFinite(Number(v))) return 'N/A'; return Number(v).toLocaleString('fr-FR', { minimumFractionDigits: d == null ? 1 : d, maximumFractionDigits: d == null ? 1 : d }); };
+            var dec = function (v, d) { if (v == null || !isFinite(Number(v))) return 'N/A'; return Number(v).toLocaleString('fr-FR', { minimumFractionDigits: d == null ? 0 : d, maximumFractionDigits: d == null ? 2 : d }); };
 
             var agg = { scheduled: 0, usedHours: 0, productiveHours: 0, production: 0, reforage: 0, flushing: 0, bdn: 0, stb: 0, gsa: 0, prd: 0, other: 0, fuel: 0 };
             var wMech = 0, sMech = 0, wUoa = 0, sUoa = 0, machinesActive = {};
@@ -20634,7 +20634,7 @@
         function buildOperatorSheetHtml(drill, date, holes) {
             var site = (drill.siteId != null && typeof sites !== 'undefined') ? (sites || []).find(function(s) { return String(s.id) === String(drill.siteId); }) : null;
             var siteName = site ? (site.name || site.code || '') : '';
-            var dec = function(v) { return Number(v || 0).toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }); };
+            var dec = function(v) { return Number(v || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }); };
             var subSrc = getSubscriberLogoSrcForReport();
             var partner = findPartnerClientForReport([]);
             var partnerSrc = getPartnerClientLogoSrc(partner);
@@ -21326,6 +21326,29 @@
                         (mt.metersMonth != null ? ' (mois : ' + Number(mt.metersMonth).toLocaleString('fr-FR') + ' m)' : '') + '.'
                 };
             }
+            // Target mensuel avec seulement le métrage du MOIS (Mètres/mois) et pas de
+            // Mètres/jour : on déduit l'objectif journalier = métrage du mois / nombre de
+            // jours du mois minier. Permet d'avoir la variance en % même sans saisie du /jour.
+            if (mt && mt.metersMonth != null && isFinite(parseFloat(mt.metersMonth)) && parseFloat(mt.metersMonth) > 0 &&
+                (mt.metersDay == null || mt.metersDay === '' || !(parseFloat(mt.metersDay) > 0))) {
+                var _mm = parseFloat(mt.metersMonth);
+                var _days = 30;
+                try {
+                    if (typeof miningMonthRange === 'function') {
+                        var _rg = miningMonthRange(mt.ym, (typeof currentSiteId !== 'undefined' ? currentSiteId : null));
+                        var _d1 = new Date(_rg.start + 'T00:00:00'), _d2 = new Date(_rg.end + 'T00:00:00');
+                        var _n = Math.round((_d2 - _d1) / 86400000) + 1;
+                        if (isFinite(_n) && _n > 0) _days = _n;
+                    }
+                } catch (e) {}
+                var _perDay = _mm / _days;
+                return {
+                    value: _perDay,
+                    note: 'Objectif journalier déduit du target mine du mois ' + mt.ym + ' : ' +
+                        Number(_mm).toLocaleString('fr-FR') + ' m ÷ ' + _days + ' j = ' +
+                        _perDay.toLocaleString('fr-FR', { maximumFractionDigits: 2 }) + ' m/jour (saisir « Mètres/jour » pour fixer une autre valeur).'
+                };
+            }
             // Objectif de métrage journalier configuré (Paramètres entreprise →
             // Objectif de forage) : il fait référence pour une journée complète,
             // tous postes et toutes machines réunis. S'il est renseigné, il sert
@@ -21703,7 +21726,7 @@
                 (d.holesWorked || []).forEach(function (h) { if (h.holeId) loc[key].holes[String(h.holeId)] = 1; });
             });
             var keys = Object.keys(loc);
-            var dec = function (v, dd) { if (v == null || !isFinite(Number(v))) return 'N/A'; return Number(v).toLocaleString('fr-FR', { minimumFractionDigits: dd == null ? 1 : dd, maximumFractionDigits: dd == null ? 1 : dd }); };
+            var dec = function (v, dd) { if (v == null || !isFinite(Number(v))) return 'N/A'; return Number(v).toLocaleString('fr-FR', { minimumFractionDigits: dd == null ? 0 : dd, maximumFractionDigits: dd == null ? 2 : dd }); };
             if (!keys.length) return '';
             var tM = 0, tR = 0, tH = 0, tHoles = 0;
             var rows = keys.map(function (k) {
@@ -21882,7 +21905,7 @@
             var companyName = getReportBrandSubscriberName();
             var projectLabel = getReportProjectLabel(records);
             var mt = (typeof getMonthlyTargetForDate === 'function') ? getMonthlyTargetForDate(range.start) : null;
-            var dec = function (v, dd) { if (v == null || !isFinite(Number(v))) return 'N/A'; return Number(v).toLocaleString('fr-FR', { minimumFractionDigits: dd == null ? 1 : dd, maximumFractionDigits: dd == null ? 1 : dd }); };
+            var dec = function (v, dd) { if (v == null || !isFinite(Number(v))) return 'N/A'; return Number(v).toLocaleString('fr-FR', { minimumFractionDigits: dd == null ? 0 : dd, maximumFractionDigits: dd == null ? 2 : dd }); };
             var tot = { prod: 0, reforeH: 0, reforeM: 0, flush: 0, fuel: 0, sched: 0, used: 0, prodH: 0, bdn: 0, stb: 0, gsa: 0, prd: 0, other: 0 };
             var wMech = 0, sMech = 0, wUoa = 0, sUoa = 0, wEff = 0, sEff = 0;
             var byDay = {}, byMachine = {}, holeSet = {}, holesManual = 0, daysSet = {};
@@ -22138,7 +22161,7 @@
                 var shown = (sectionCount < 10 ? '0' : '') + sectionCount;
                 return '<section class="daily-section ' + (extraClass || '') + '"><h2><span class="daily-section-number">' + shown + '</span>' + title + '</h2>' + body + '</section>';
             }
-            var fmtM = function(v) { return v.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' m'; };
+            var fmtM = function(v) { return v.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + ' m'; };
             var fmtH = function(v) { return v.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' h'; };
             var fmtP = function(v) { return v.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' %'; };
 
@@ -22206,7 +22229,7 @@
                 Object.keys(holesMap).forEach(function(holeId) {
                     var h = holesMap[holeId];
                     totalHoleMeters += h.meters;
-                    holeRows += '<tr><td>' + escapeHtmlReportCell(holeId) + '</td><td class="r-num">' + h.meters.toFixed(1).replace('.', ',') + ' m</td><td>' + Object.keys(h.machines).map(function(mid) { return escapeHtmlReportCell(mid); }).join(', ') + '</td></tr>';
+                    holeRows += '<tr><td>' + escapeHtmlReportCell(holeId) + '</td><td class="r-num">' + h.meters.toLocaleString('fr-FR', { maximumFractionDigits: 2 }) + ' m</td><td>' + Object.keys(h.machines).map(function(mid) { return escapeHtmlReportCell(mid); }).join(', ') + '</td></tr>';
                 });
                 zonesBody = '<p style="margin:0 0 8px;font-size:11px;"><strong>' + nbZones + '</strong> zone(s) travaillée(s) · <strong>' + nbHoles + '</strong> trou(s) travaillé(s) · <strong>' + fmtM(totalHoleMeters) + '</strong> total forés</p>' +
                     '<table class="daily-table"><thead><tr><th>Trou</th><th class="r-num">Mètres forés</th><th>Machine(s)</th></tr></thead><tbody>' + holeRows +
@@ -26540,7 +26563,7 @@
         // Tableau de productivité par machine/poste : mètres nouveaux, heures
         // utilisées, rendement (m/h), avec objectif et écart si planifié.
         function buildProductivitySection(records, reportDate) {
-            var dec = function(v, dd) { if (v == null || !isFinite(Number(v))) return 'N/A'; return Number(v).toLocaleString('fr-FR', { minimumFractionDigits: dd == null ? 1 : dd, maximumFractionDigits: dd == null ? 1 : dd }); };
+            var dec = function(v, dd) { if (v == null || !isFinite(Number(v))) return 'N/A'; return Number(v).toLocaleString('fr-FR', { minimumFractionDigits: dd == null ? 0 : dd, maximumFractionDigits: dd == null ? 2 : dd }); };
             var rows = '', tProd = 0, tUsed = 0, tSched = 0, tProdH = 0;
             var wMech = 0, sMech = 0, wUoa = 0, sUoa = 0, wEff = 0, sEff = 0;
             (records || []).forEach(function(r) {
@@ -26592,7 +26615,7 @@
         // Métrage foré par type de bit (prix différents selon le diamètre) —
         // agrégé sur la sélection d'après les bits saisis sur chaque fiche.
         function buildBitsBreakdownSection(records) {
-            var dec = function(v) { if (v == null || !isFinite(Number(v))) return 'N/A'; return Number(v).toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }); };
+            var dec = function(v) { if (v == null || !isFinite(Number(v))) return 'N/A'; return Number(v).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }); };
             var byBit = {}, total = 0;
             (records || []).forEach(function(r) {
                 var d = _rpData(r);
@@ -26627,16 +26650,16 @@
                 tN += nouveau; tRH += reforeH; tR += refore; tF += flush; if (zone) patterns[zone] = true;
                 rows += '<tr><td class="r-txt">' + escapeHtmlReportCell(_rpMachineName(r)) + '</td>' +
                     '<td class="r-txt">' + _rpNa(zone) + '</td>' +
-                    '<td class="r-num">' + nouveau.toFixed(1).replace('.', ',') + ' m</td>' +
+                    '<td class="r-num">' + nouveau.toLocaleString('fr-FR', { maximumFractionDigits: 2 }) + ' m</td>' +
                     '<td class="r-num">' + reforeH.toFixed(1).replace('.', ',') + ' h</td>' +
-                    '<td class="r-num">' + refore.toFixed(1).replace('.', ',') + ' m</td>' +
-                    '<td class="r-num">' + flush.toFixed(1).replace('.', ',') + ' m</td></tr>';
+                    '<td class="r-num">' + refore.toLocaleString('fr-FR', { maximumFractionDigits: 2 }) + ' m</td>' +
+                    '<td class="r-num">' + flush.toLocaleString('fr-FR', { maximumFractionDigits: 2 }) + ' m</td></tr>';
             });
             return '<h2>Production par zone / pattern</h2>' +
                 '<table class="pro2"><thead><tr><th>Machine</th><th>Zone / pattern</th><th class="num">Nouveau</th><th class="num">Reforage (h)</th><th class="num">Reforé (m)</th><th class="num">Flushing</th></tr></thead><tbody>' +
                 rows +
                 '<tr class="total"><td class="r-txt"><strong>Total</strong></td><td class="r-txt">' + Object.keys(patterns).length + ' zone(s)</td>' +
-                '<td class="r-num"><strong>' + tN.toFixed(1).replace('.', ',') + ' m</strong></td><td class="r-num"><strong>' + tRH.toFixed(1).replace('.', ',') + ' h</strong></td><td class="r-num"><strong>' + tR.toFixed(1).replace('.', ',') + ' m</strong></td><td class="r-num"><strong>' + tF.toFixed(1).replace('.', ',') + ' m</strong></td></tr>' +
+                '<td class="r-num"><strong>' + tN.toLocaleString('fr-FR', { maximumFractionDigits: 2 }) + ' m</strong></td><td class="r-num"><strong>' + tRH.toFixed(1).replace('.', ',') + ' h</strong></td><td class="r-num"><strong>' + tR.toLocaleString('fr-FR', { maximumFractionDigits: 2 }) + ' m</strong></td><td class="r-num"><strong>' + tF.toLocaleString('fr-FR', { maximumFractionDigits: 2 }) + ' m</strong></td></tr>' +
                 '</tbody></table>' +
                 '<p style="font-size:10px;color:#475569;margin:5px 0 0;">Objectif = <b>mètres nouveaux uniquement</b>. Le <b>reforage est facturé à l\'heure</b> (colonne « Reforage (h) ») ; flushing suivi séparément.</p>';
         }
@@ -26768,7 +26791,7 @@
                     (sub ? '<div class="report-kpi-sub">' + escapeHtmlReportCell(sub) + '</div>' : '') +
                     '</div>';
             }
-            var fmtM = function(v) { return v.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' m'; };
+            var fmtM = function(v) { return v.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + ' m'; };
             return '<div class="report-kpi-grid">' +
                 card('Production réalisée', fmtM(agg.prod), '#1e40af', 'mètres nouveaux') +
                 card('Trous travaillés', String(holeCount), '#0f766e', holeCount > 0 ? 'nombre de trous forés' : 'aucun trou renseigné') +
