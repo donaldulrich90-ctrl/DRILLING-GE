@@ -20378,11 +20378,17 @@
                 ];
             }
             var rateColor = rate != null ? (rate >= 100 ? '16A34A' : 'DC2626') : NAVY;
+            var variance = goal != null ? (agg.production - goal) : null;
+            var variancePct = (goal != null && goal > 0) ? (variance / goal * 100) : null;
+            var varianceColor = variance == null ? NAVY : (variance >= 0 ? '16A34A' : 'DC2626');
+            var varianceTxt = variance == null ? 'Non renseigné'
+                : ((variance > 0 ? '+' : '') + dec(variance) + ' m' + (variancePct != null ? ' (' + (variancePct > 0 ? '+' : '') + dec(variancePct) + ' %)' : ''));
             var kvt = [
                 [{ text: 'Indicateur', options: { bold: true, color: NAVY, fill: { color: 'EAF0F6' }, align: 'center', fontSize: 12 } }, { text: 'Valeur', options: { bold: true, color: NAVY, fill: { color: 'EAF0F6' }, align: 'center', fontSize: 12 } }],
                 kvRow('Production réalisée (mètres nouveaux)', dec(agg.production) + ' m', true, '1E40AF'),
                 kvRow('Production planifiée', goal != null ? dec(goal) + ' m' : 'Non renseigné'),
                 kvRow('Taux de réalisation', rate != null ? dec(rate) + ' %' : 'N/A', true, rateColor),
+                kvRow('Variance (réel − objectif)', varianceTxt, true, varianceColor),
                 kvRow('Reforage', dec(agg.reforage) + ' m'),
                 kvRow('Flushing', dec(agg.flushing) + ' m'),
                 kvRow('Rendement moyen (m/h utilisée)', rendement != null ? dec(rendement, 2) + ' m/h' : 'N/A'),
