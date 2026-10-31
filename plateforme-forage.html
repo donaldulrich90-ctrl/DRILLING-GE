@@ -4415,6 +4415,17 @@
                         </div>
                     </div>
 
+                    <div class="border border-amber-700/40 rounded-lg p-4 bg-slate-900/30 mb-4">
+                        <div class="flex flex-wrap items-center justify-between gap-2 mb-1">
+                            <div>
+                                <h4 class="text-sm font-semibold text-amber-300">Autre(s) zone(s) du poste <span class="text-slate-500 font-normal">— optionnel</span></h4>
+                                <p class="text-xs text-slate-500">Si la foreuse a travaillé sur <b>deux espaces différents</b> pendant ce poste, ajoutez la 2ᵉ zone ici avec son propre métrage, heures, reforage et flushing. Les champs ci-dessus = <b>zone 1</b> ; le <b>total du poste = somme des zones</b>.</p>
+                            </div>
+                            <button type="button" id="dailyEntryAddZoneButton" onclick="addDailyEntryZoneRow()" class="bg-amber-700 hover:bg-amber-600 px-3 py-2 rounded text-sm whitespace-nowrap">+ Ajouter une zone</button>
+                        </div>
+                        <div id="dailyEntryZonesContainer" class="space-y-3 mt-2"></div>
+                    </div>
+
                     <details class="mb-4 rounded-lg border border-slate-600 bg-slate-900/40 open:border-amber-800/40">
                         <summary class="cursor-pointer list-none px-4 py-3 text-slate-300 text-sm font-medium marker:hidden flex items-center gap-2">
                             <span class="text-amber-400/90">▸</span> Relevés réservoir (optionnel — uniquement si vous n’indiquez pas les litres chargés)
@@ -26653,18 +26664,25 @@
             var rows = '', tN = 0, tRH = 0, tR = 0, tF = 0, patterns = {};
             (records || []).forEach(function(r) {
                 var d = _rpData(r);
-                var zone = _rpZoneForRecord(r);
-                var nouveau = parseFloat(d.metersDrilled) || 0;
-                var reforeH = parseFloat(d.redrillHours) || 0;
-                var refore = parseFloat(d.redrillMeters) || 0;
-                var flush = parseFloat(d.flushingMeters) || 0;
-                tN += nouveau; tRH += reforeH; tR += refore; tF += flush; if (zone) patterns[zone] = true;
-                rows += '<tr><td class="r-txt">' + escapeHtmlReportCell(_rpMachineName(r)) + '</td>' +
-                    '<td class="r-txt">' + _rpNa(zone) + '</td>' +
-                    '<td class="r-num">' + nouveau.toLocaleString('fr-FR', { maximumFractionDigits: 2 }) + ' m</td>' +
-                    '<td class="r-num">' + reforeH.toFixed(1).replace('.', ',') + ' h</td>' +
-                    '<td class="r-num">' + refore.toLocaleString('fr-FR', { maximumFractionDigits: 2 }) + ' m</td>' +
-                    '<td class="r-num">' + flush.toLocaleString('fr-FR', { maximumFractionDigits: 2 }) + ' m</td></tr>';
+                var mach = escapeHtmlReportCell(_rpMachineName(r));
+                // Une foreuse ayant travaillé plusieurs zones : une ligne par zone.
+                var zoneList;
+                if (Array.isArray(d.zones) && d.zones.length >= 1) {
+                    zoneList = d.zones.map(function(z) {
+                        return { zone: (z.location || ''), nouveau: parseFloat(z.metersDrilled) || 0, reforeH: parseFloat(z.redrillHours) || 0, refore: parseFloat(z.redrillMeters) || 0, flush: parseFloat(z.flushingMeters) || 0 };
+                    });
+                } else {
+                    zoneList = [{ zone: _rpZoneForRecord(r), nouveau: parseFloat(d.metersDrilled) || 0, reforeH: parseFloat(d.redrillHours) || 0, refore: parseFloat(d.redrillMeters) || 0, flush: parseFloat(d.flushingMeters) || 0 }];
+                }
+                zoneList.forEach(function(zl) {
+                    tN += zl.nouveau; tRH += zl.reforeH; tR += zl.refore; tF += zl.flush; if (zl.zone) patterns[zl.zone] = true;
+                    rows += '<tr><td class="r-txt">' + mach + '</td>' +
+                        '<td class="r-txt">' + _rpNa(zl.zone) + '</td>' +
+                        '<td class="r-num">' + zl.nouveau.toLocaleString('fr-FR', { maximumFractionDigits: 2 }) + ' m</td>' +
+                        '<td class="r-num">' + zl.reforeH.toFixed(1).replace('.', ',') + ' h</td>' +
+                        '<td class="r-num">' + zl.refore.toLocaleString('fr-FR', { maximumFractionDigits: 2 }) + ' m</td>' +
+                        '<td class="r-num">' + zl.flush.toLocaleString('fr-FR', { maximumFractionDigits: 2 }) + ' m</td></tr>';
+                });
             });
             return '<h2>Production par zone / pattern</h2>' +
                 '<table class="pro2"><thead><tr><th>Machine</th><th>Zone / pattern</th><th class="num">Nouveau</th><th class="num">Reforage (h)</th><th class="num">Reforé (m)</th><th class="num">Flushing</th></tr></thead><tbody>' +
@@ -27694,6 +27712,52 @@
             updateDailyEntryBitsTotal();
         }
 
+        // ===== Zones supplémentaires d'un poste (foreuse travaillant deux espaces) =====
+        function addDailyEntryZoneRow(zone) {
+            var c = document.getElementById('dailyEntryZonesContainer'); if (!c) return;
+            zone = zone || {};
+            var row = document.createElement('div');
+            row.setAttribute('data-zone-row', '1');
+            row.className = 'rounded-lg border border-slate-600 bg-slate-800/50 p-3';
+            var v = function(x) { return (x == null || x === '') ? '' : x; };
+            row.innerHTML =
+                '<div class="grid grid-cols-1 md:grid-cols-6 gap-2 items-end">' +
+                '<div class="md:col-span-2"><label class="block text-slate-400 text-xs mb-1">Lieu / fosse (zone)</label>' +
+                '<input type="text" data-zone-location list="fossesDatalist" autocomplete="off" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white text-sm" placeholder="2ᵉ zone / fosse" value="' + escapeHtmlForAttr(v(zone.location)) + '"></div>' +
+                '<div><label class="block text-slate-400 text-xs mb-1">Mètres (m)</label><input type="number" data-zone-meters step="0.1" min="0" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white text-sm" placeholder="0.0" value="' + escapeHtmlForAttr(v(zone.metersDrilled)) + '"></div>' +
+                '<div><label class="block text-slate-400 text-xs mb-1">Heures (h)</label><input type="number" data-zone-hours step="0.1" min="0" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white text-sm" placeholder="0.0" value="' + escapeHtmlForAttr(v(zone.hours)) + '"></div>' +
+                '<div><label class="block text-slate-400 text-xs mb-1">Reforage (h)</label><input type="number" data-zone-redrillh step="0.1" min="0" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white text-sm" placeholder="0.0" value="' + escapeHtmlForAttr(v(zone.redrillHours)) + '"></div>' +
+                '<div class="flex gap-2 items-end"><div class="flex-1"><label class="block text-slate-400 text-xs mb-1">Flushing (m)</label><input type="number" data-zone-flush step="0.1" min="0" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white text-sm" placeholder="0.0" value="' + escapeHtmlForAttr(v(zone.flushingMeters)) + '"></div>' +
+                '<button type="button" title="Supprimer cette zone" onclick="var r=this.closest(\'[data-zone-row]\'); if(r) r.remove();" class="bg-red-700 hover:bg-red-600 px-2 py-2 rounded text-xs">✕</button></div>' +
+                '</div>' +
+                '<div class="mt-2"><label class="block text-slate-400 text-xs mb-1">Reforé (m) — optionnel</label>' +
+                '<input type="number" data-zone-redrillm step="0.1" min="0" class="w-full md:w-40 bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white text-sm" placeholder="0.0" value="' + escapeHtmlForAttr(v(zone.redrillMeters)) + '"></div>';
+            c.appendChild(row);
+        }
+        function collectDailyEntryExtraZones() {
+            var c = document.getElementById('dailyEntryZonesContainer'); if (!c) return [];
+            var out = [];
+            Array.prototype.forEach.call(c.querySelectorAll('[data-zone-row]'), function(row) {
+                var g = function(sel) { var el = row.querySelector(sel); return el ? String(el.value) : ''; };
+                var num = function(sel) { var x = g(sel).trim(); if (x === '') return null; var n = Number(x); return Number.isFinite(n) ? n : null; };
+                var loc = g('[data-zone-location]').trim();
+                var m = num('[data-zone-meters]'), h = num('[data-zone-hours]');
+                var rh = num('[data-zone-redrillh]'), rm = num('[data-zone-redrillm]'), fl = num('[data-zone-flush]');
+                if (loc || m != null || h != null || rh != null || rm != null || fl != null) {
+                    out.push({ location: loc, metersDrilled: m || 0, hours: h || 0, redrillHours: rh || 0, redrillMeters: rm || 0, flushingMeters: fl || 0 });
+                }
+            });
+            return out;
+        }
+        function clearDailyEntryExtraZones() {
+            var c = document.getElementById('dailyEntryZonesContainer'); if (c) c.innerHTML = '';
+        }
+        function loadDailyEntryExtraZones(list) {
+            clearDailyEntryExtraZones();
+            (list || []).forEach(function(z) { addDailyEntryZoneRow(z); });
+        }
+        window.addDailyEntryZoneRow = addDailyEntryZoneRow;
+
         // ===== Targets mensuels (envoyés par la mine) =====
         function _mtCurrentMonthKey() {
             try {
@@ -27825,6 +27889,7 @@
             if (!d) {
                 loadDailyEntryHoles([]);
                 loadDailyEntryBits([]);
+                clearDailyEntryExtraZones();
                 setStr('dailyEntryDrillingType', '');
                 setStr('dailyEntryMaterialType', '');
                 setStr('dailyEntryBitType', '');
@@ -27880,6 +27945,19 @@
             setNum('dailyEntryRedrillMeters', d.redrillMeters != null ? d.redrillMeters : '');
             setNum('dailyEntryFlushingMeters', d.flushingMeters != null ? d.flushingMeters : '');
             setNum('dailyEntryHours', d.hours);
+            // Zones multiples : zone 1 → champs principaux, zones suivantes → lignes supplémentaires.
+            if (Array.isArray(d.zones) && d.zones.length >= 1) {
+                var z0 = d.zones[0] || {};
+                setStr('dailyEntryLocation', z0.location || '');
+                setNum('dailyEntryMeters', z0.metersDrilled != null ? z0.metersDrilled : '');
+                setNum('dailyEntryHours', z0.hours != null ? z0.hours : '');
+                setNum('dailyEntryRedrillHours', z0.redrillHours != null ? z0.redrillHours : '');
+                setNum('dailyEntryRedrillMeters', z0.redrillMeters != null ? z0.redrillMeters : '');
+                setNum('dailyEntryFlushingMeters', z0.flushingMeters != null ? z0.flushingMeters : '');
+                loadDailyEntryExtraZones(d.zones.slice(1));
+            } else {
+                clearDailyEntryExtraZones();
+            }
             var faLoad = parseFloat(d.fuelAdded) || 0;
             if (d.entryStage !== 'draft' && faLoad <= 0 && !d.fuelInitialFillOnly) {
                 var migL = deriveFuelLitersFromDailyData(d);
@@ -28511,6 +28589,7 @@
             if (stCont) stCont.innerHTML = '';
             var holeCont = document.getElementById('dailyEntryHolesContainer');
             if (holeCont) holeCont.innerHTML = '';
+            clearDailyEntryExtraZones();
             var dtTot = document.getElementById('dailyEntryDowntimeTotal');
             if (dtTot) dtTot.textContent = '0';
             document.getElementById('dailyEntryForm').reset();
@@ -29042,6 +29121,25 @@
             var drillingType = dailyEntryText('dailyEntryDrillingType');
             var materialType = dailyEntryText('dailyEntryMaterialType');
             var bitType = dailyEntryText('dailyEntryBitType');
+            // Zones multiples : la foreuse a travaillé plusieurs espaces dans le poste.
+            // La zone 1 = les champs principaux ci-dessus ; on ajoute les zones en plus.
+            // Les totaux du poste (métrage, heures, reforage, flushing) = somme des zones,
+            // ce qui garde les rapports, la facturation et les KPI inchangés.
+            var dailyEntryZones = null;
+            var extraZones = collectDailyEntryExtraZones();
+            if (extraZones.length) {
+                var primaryZone = {
+                    location: location, metersDrilled: (meters || 0), hours: (hours || 0),
+                    redrillHours: (redrillHours || 0), redrillMeters: (redrillMeters || 0), flushingMeters: (flushingMeters || 0)
+                };
+                dailyEntryZones = [primaryZone].concat(extraZones);
+                var sumZ = function(key) { return dailyEntryZones.reduce(function(s, z) { return s + (Number(z[key]) || 0); }, 0); };
+                meters = sumZ('metersDrilled');
+                hours = sumZ('hours');
+                redrillHours = sumZ('redrillHours');
+                redrillMeters = sumZ('redrillMeters');
+                flushingMeters = sumZ('flushingMeters');
+            }
             if (!isDraft) {
                 if (!location || !drillingType || !materialType || !bitType || meters == null || hours == null) {
                     showDailyEntryError('Complétez le lieu, le type de forage, la roche, le bit, le métrage et les heures machine avant de terminer la saisie.');
@@ -29116,7 +29214,7 @@
                 oilLevel: isDraft ? null : ((drill.consumables || {}).oil == null ? null : drill.consumables.oil),
                 filters: isDraft ? null : ((drill.consumables || {}).filters == null ? null : drill.consumables.filters),
                 hours: hours, metersDrilled: meters, redrillMeters: redrillMeters,
-                redrillHours: redrillHours, flushingMeters: flushingMeters, holesCount: holesCount, holesWorked: holesWorked, bitsUsed: bitsUsed,
+                redrillHours: redrillHours, flushingMeters: flushingMeters, holesCount: holesCount, holesWorked: holesWorked, bitsUsed: bitsUsed, zones: dailyEntryZones,
                 location: location, drillingType: drillingType, materialType: materialType || null, bitType: bitType,
                 bitChanged: dailyEntryChecked('dailyEntryBitChanged'), rodChanged: dailyEntryChecked('dailyEntryRodChanged'),
                 oilChanged: dailyEntryChecked('dailyEntryOilChanged'), filterChanged: dailyEntryChecked('dailyEntryFilterChanged'),
