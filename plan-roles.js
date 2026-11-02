@@ -5,10 +5,10 @@ const PLATFORM_ROLES = ['super_admin', 'platform_owner'];
 
 /** Plans reconnus : tout autre libellé est traité comme free pour les rôles par défaut */
 const DEFAULT_ROLES_BY_PLAN = {
-    free: ['foreur', 'aideforeur', 'superviseur', 'santesecurite'],
-    basic: ['foreur', 'aideforeur', 'superviseur', 'santesecurite', 'ingenieur'],
-    premium: ['foreur', 'aideforeur', 'superviseur', 'santesecurite', 'ingenieur', 'gestionnaire', 'gestionnaire_site'],
-    enterprise: ['foreur', 'aideforeur', 'superviseur', 'santesecurite', 'ingenieur', 'gestionnaire', 'gestionnaire_site', 'admin']
+    free: ['foreur', 'aideforeur', 'superviseur', 'santesecurite', 'visiteur'],
+    basic: ['foreur', 'aideforeur', 'superviseur', 'santesecurite', 'ingenieur', 'administratif', 'visiteur'],
+    premium: ['foreur', 'aideforeur', 'superviseur', 'santesecurite', 'ingenieur', 'administratif', 'gestionnaire', 'gestionnaire_site', 'visiteur'],
+    enterprise: ['foreur', 'aideforeur', 'superviseur', 'santesecurite', 'ingenieur', 'administratif', 'gestionnaire', 'gestionnaire_site', 'admin', 'visiteur']
 };
 
 /** Vues métier (onglets) — hors « Entreprises » (réservé plateforme).

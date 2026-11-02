@@ -6164,23 +6164,23 @@
             }
 
             var defaultPermissions = {
-                'nav-dashboard': ['foreur', 'aideforeur', 'superviseur', 'ingenieur', 'gestionnaire', 'gestionnaire_site', 'santesecurite'].includes(currentUser.role),
+                'nav-dashboard': ['foreur', 'aideforeur', 'superviseur', 'ingenieur', 'gestionnaire', 'gestionnaire_site', 'santesecurite', 'administratif', 'visiteur'].includes(currentUser.role),
                 'nav-connections': ['superviseur', 'gestionnaire', 'gestionnaire_site', 'ingenieur'].includes(currentUser.role),
                 'nav-assignments': ['superviseur', 'gestionnaire', 'gestionnaire_site'].includes(currentUser.role),
                 'nav-maintenance': ['superviseur', 'gestionnaire', 'gestionnaire_site', 'ingenieur'].includes(currentUser.role),
-                'nav-invoices': ['gestionnaire', 'gestionnaire_site'].includes(currentUser.role),
-                'nav-contracts': ['gestionnaire', 'gestionnaire_site'].includes(currentUser.role),
-                'nav-revenue': ['gestionnaire', 'gestionnaire_site', 'ingenieur'].includes(currentUser.role),
-                'nav-site_meals': ['superviseur', 'gestionnaire', 'gestionnaire_site', 'ingenieur', 'foreur', 'aideforeur'].includes(currentUser.role),
-                'nav-reports': ['superviseur', 'gestionnaire', 'gestionnaire_site', 'ingenieur'].includes(currentUser.role),
-                'nav-project_overview': ['superviseur', 'gestionnaire', 'gestionnaire_site', 'ingenieur', 'foreur', 'aideforeur', 'santesecurite'].includes(currentUser.role),
+                'nav-invoices': ['gestionnaire', 'gestionnaire_site', 'administratif'].includes(currentUser.role),
+                'nav-contracts': ['gestionnaire', 'gestionnaire_site', 'administratif'].includes(currentUser.role),
+                'nav-revenue': ['gestionnaire', 'gestionnaire_site', 'ingenieur', 'administratif'].includes(currentUser.role),
+                'nav-site_meals': ['superviseur', 'gestionnaire', 'gestionnaire_site', 'ingenieur', 'foreur', 'aideforeur', 'administratif'].includes(currentUser.role),
+                'nav-reports': ['superviseur', 'gestionnaire', 'gestionnaire_site', 'ingenieur', 'administratif', 'visiteur'].includes(currentUser.role),
+                'nav-project_overview': ['superviseur', 'gestionnaire', 'gestionnaire_site', 'ingenieur', 'foreur', 'aideforeur', 'santesecurite', 'administratif', 'visiteur'].includes(currentUser.role),
                 'nav-rh': ['superviseur', 'gestionnaire', 'gestionnaire_site'].includes(currentUser.role),
                 'nav-inventory': ['gestionnaire', 'gestionnaire_site', 'superviseur'].includes(currentUser.role),
-                'nav-clients': ['gestionnaire', 'gestionnaire_site'].includes(currentUser.role),
+                'nav-clients': ['gestionnaire', 'gestionnaire_site', 'administratif'].includes(currentUser.role),
                 'nav-sites': ['gestionnaire', 'gestionnaire_site', 'superviseur', 'ingenieur'].includes(currentUser.role),
-                'nav-translator': ['foreur', 'aideforeur', 'superviseur', 'ingenieur', 'gestionnaire', 'gestionnaire_site', 'santesecurite', 'admin'].includes(currentUser.role),
-                'nav-team_chat': ['foreur', 'aideforeur', 'superviseur', 'ingenieur', 'gestionnaire', 'gestionnaire_site', 'santesecurite', 'admin'].includes(currentUser.role),
-                'nav-company_info': ['foreur', 'aideforeur', 'superviseur', 'ingenieur', 'gestionnaire', 'gestionnaire_site', 'santesecurite', 'admin'].includes(currentUser.role),
+                'nav-translator': ['foreur', 'aideforeur', 'superviseur', 'ingenieur', 'gestionnaire', 'gestionnaire_site', 'santesecurite', 'admin', 'administratif'].includes(currentUser.role),
+                'nav-team_chat': ['foreur', 'aideforeur', 'superviseur', 'ingenieur', 'gestionnaire', 'gestionnaire_site', 'santesecurite', 'admin', 'administratif'].includes(currentUser.role),
+                'nav-company_info': ['foreur', 'aideforeur', 'superviseur', 'ingenieur', 'gestionnaire', 'gestionnaire_site', 'santesecurite', 'admin', 'administratif', 'visiteur'].includes(currentUser.role),
                 'nav-accounts': false
             };
 
@@ -24699,16 +24699,32 @@
         // ============================================
         // COMPTES
         // ============================================
-        var ACCOUNT_ROLE_LABELS = { admin: 'Administrateur', foreur: 'Foreur', aideforeur: 'Aide foreur', superviseur: 'Superviseur', santesecurite: 'Santé sécurité', ingenieur: 'Ingénieur', gestionnaire: 'Gestionnaire' };
-        var ACCOUNT_ROLES_FALLBACK_ORDER = ['admin', 'foreur', 'aideforeur', 'superviseur', 'santesecurite', 'ingenieur', 'gestionnaire'];
+        var ACCOUNT_ROLE_LABELS = {
+            foreur: 'Foreur',
+            aideforeur: 'Aide-foreur',
+            superviseur: 'Superviseur',
+            ingenieur: 'Ingénieur',
+            santesecurite: 'Santé & Sécurité (HSE)',
+            administratif: 'Administratif (factures, contrats, revenus — sans gestion des comptes)',
+            admin: 'Administrateur (accès complet + gestion des comptes)',
+            visiteur: 'Visiteur (lecture seule)',
+            gestionnaire: 'Gestionnaire',
+            gestionnaire_site: 'Gestionnaire de site'
+        };
+        // Liste affichée dans le menu déroulant « Rôle » (ordre voulu).
+        var ACCOUNT_ROLES_DISPLAY_ORDER = ['foreur', 'aideforeur', 'superviseur', 'ingenieur', 'santesecurite', 'administratif', 'admin', 'visiteur'];
+        var ACCOUNT_ROLES_FALLBACK_ORDER = ACCOUNT_ROLES_DISPLAY_ORDER.slice();
 
         function populateAccountRoleSelectFromPolicy() {
             var sel = document.getElementById('accountRole');
             if (!sel) return;
-            var allowed = (tenantRolePolicy && tenantRolePolicy.effectiveAllowedRoles && tenantRolePolicy.effectiveAllowedRoles.length > 0)
-                ? tenantRolePolicy.effectiveAllowedRoles
-                : ACCOUNT_ROLES_FALLBACK_ORDER.slice();
-            var cur = sel.value;
+            // On affiche toujours la liste voulue (rôles prédéfinis), pour qu'ils soient
+            // tous visibles (dont Santé & Sécurité, Administratif, Visiteur).
+            var allowed = ACCOUNT_ROLES_DISPLAY_ORDER.slice();
+            // Conserver le rôle actuel d'un compte existant même s'il ne fait pas partie
+            // de la liste voulue (ex. ancien « gestionnaire »), pour ne pas le changer par erreur.
+            var cur = sel.value || (currentEditingAccount && currentEditingAccount.role) || '';
+            if (cur && allowed.indexOf(cur) < 0) allowed.push(cur);
             sel.innerHTML = '<option value="">Sélectionner un rôle</option>';
             allowed.forEach(function(r) {
                 var o = document.createElement('option');
