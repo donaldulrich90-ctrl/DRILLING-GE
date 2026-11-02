@@ -371,6 +371,13 @@ Object.keys(dailyDataColumnDefinitions).forEach((col) => {
     });
 });
 
+// Targets mensuels (envoyés par la mine) : stockés en JSON sur la fiche entreprise.
+db.run("ALTER TABLE companyInfo ADD COLUMN monthlyTargets TEXT DEFAULT '{}'", (err) => {
+    if (err && !String(err.message || '').includes('duplicate column')) {
+        console.warn('Migration companyInfo.monthlyTargets:', err.message);
+    }
+});
+
 function dailyDataElevatedRoleFromAuth(auth) {
     if (!auth) return false;
     if (auth.isSuperAdmin || auth.isPlatformOwner) return true;
@@ -3651,6 +3658,9 @@ app.get('/api/company', (req, res) => {
             res.status(500).json({ error: err.message });
             return;
         }
+        if (row) {
+            try { row.monthlyTargets = row.monthlyTargets ? JSON.parse(row.monthlyTargets) : {}; } catch (e) { row.monthlyTargets = {}; }
+        }
         res.json(row || {});
     });
 });
@@ -3659,7 +3669,7 @@ app.post('/api/company', (req, res) => {
     const company = req.body;
     const entId = resolveCreateEnterpriseId(req, company);
     
-    db.get('SELECT id, fosses FROM companyInfo WHERE enterpriseId = ? LIMIT 1', [entId], (err, existing) => {
+    db.get('SELECT id, fosses, monthlyTargets FROM companyInfo WHERE enterpriseId = ? LIMIT 1', [entId], (err, existing) => {
         if (err) {
             res.status(500).json({ error: err.message });
             return;
@@ -3669,13 +3679,17 @@ app.post('/api/company', (req, res) => {
         const fossesToStore = Array.isArray(company.fosses)
             ? JSON.stringify(company.fosses)
             : (existing && existing.fosses != null ? existing.fosses : '[]');
+        // Targets mensuels : stockés en JSON ; préservés si non fournis dans cette sauvegarde.
+        const monthlyTargetsToStore = (company.monthlyTargets && typeof company.monthlyTargets === 'object')
+            ? JSON.stringify(company.monthlyTargets)
+            : (existing && existing.monthlyTargets != null ? existing.monthlyTargets : '{}');
 
         if (existing) {
             db.run(
                 `UPDATE companyInfo SET name = ?, legalName = ?, address = ?, city = ?, country = ?,
                  postalCode = ?, taxId = ?, siret = ?, ifu = ?, rccm = ?, phone = ?, email = ?, website = ?,
                  bankName = ?, iban = ?, bic = ?, vatNumber = ?, tvaRate = ?, retenueSourceRate = ?, currency = ?,
-                 signatoryFirstName = ?, signatoryLastName = ?, signatoryTitle = ?, fosses = ? WHERE enterpriseId = ?`,
+                 signatoryFirstName = ?, signatoryLastName = ?, signatoryTitle = ?, fosses = ?, monthlyTargets = ? WHERE enterpriseId = ?`,
                 [
                     company.name, company.legalName, company.address, company.city, company.country,
                     company.postalCode, company.taxId, company.siret, company.ifu || '', company.rccm || '',
@@ -3686,6 +3700,7 @@ app.post('/api/company', (req, res) => {
                     company.signatoryLastName || '',
                     company.signatoryTitle || '',
                     fossesToStore,
+                    monthlyTargetsToStore,
                     entId
                 ],
                 function(updateErr) {
@@ -3697,8 +3712,8 @@ app.post('/api/company', (req, res) => {
             db.run(
                 `INSERT INTO companyInfo (enterpriseId, name, legalName, address, city, country, postalCode, taxId,
                  siret, ifu, rccm, phone, email, website, bankName, iban, bic, vatNumber, tvaRate, retenueSourceRate, currency,
-                 signatoryFirstName, signatoryLastName, signatoryTitle, fosses)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                 signatoryFirstName, signatoryLastName, signatoryTitle, fosses, monthlyTargets)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
                     entId, company.name, company.legalName, company.address, company.city, company.country,
                     company.postalCode, company.taxId, company.siret, company.ifu || '', company.rccm || '',
@@ -3708,7 +3723,8 @@ app.post('/api/company', (req, res) => {
                     company.signatoryFirstName || '',
                     company.signatoryLastName || '',
                     company.signatoryTitle || '',
-                    fossesToStore
+                    fossesToStore,
+                    monthlyTargetsToStore
                 ],
                 function(insertErr) {
                     if (insertErr) return res.status(500).json({ error: insertErr.message });

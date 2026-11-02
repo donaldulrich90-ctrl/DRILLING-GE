@@ -29763,6 +29763,18 @@
                                 if (lsCo) Object.assign(companyInfo, JSON.parse(lsCo));
                             } catch (e) { /* ignore */ }
                         }
+                        // Targets mensuels : toujours un objet ; filet de récupération depuis le
+                        // cache local si le serveur n'en renvoie pas (ancien enregistrement local).
+                        if (typeof companyInfo.monthlyTargets === 'string') {
+                            try { companyInfo.monthlyTargets = JSON.parse(companyInfo.monthlyTargets); } catch (e) { companyInfo.monthlyTargets = {}; }
+                        }
+                        if (!companyInfo.monthlyTargets || typeof companyInfo.monthlyTargets !== 'object') companyInfo.monthlyTargets = {};
+                        if (!Object.keys(companyInfo.monthlyTargets).length && allowLocalCache) {
+                            try {
+                                var lsCo2 = localStorage.getItem('forage_companyInfo');
+                                if (lsCo2) { var pc = JSON.parse(lsCo2); if (pc && pc.monthlyTargets && typeof pc.monthlyTargets === 'object' && Object.keys(pc.monthlyTargets).length) { companyInfo.monthlyTargets = pc.monthlyTargets; } }
+                            } catch (e) { /* ignore */ }
+                        }
                         
                         hydrateLocalOnlyStoresFromDisk();
 
