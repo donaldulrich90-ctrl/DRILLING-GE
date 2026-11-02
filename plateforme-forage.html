@@ -3329,113 +3329,119 @@
                         </div>
                     </div>
                     <div class="mb-4 border-t border-slate-600 pt-4">
-                        <label class="block text-slate-400 mb-3 font-semibold">Onglets à masquer pour ce compte</label>
-                        <p class="text-xs text-amber-200/90 mb-3">Cochez chaque onglet que vous voulez <strong class="text-amber-100">retirer du menu</strong> (en plus des limites du rôle et de l’abonnement). Décochez pour autoriser à nouveau. Modifiez un compte avec le bouton <strong class="text-slate-200">Modifier</strong> dans la liste.</p>
+                        <label class="block text-slate-400 mb-3 font-semibold">Modules accessibles — cochez ce que ce compte peut ouvrir</label>
+                        <p class="text-xs text-amber-200/90 mb-3"><strong class="text-amber-100">Rien n’est donné automatiquement par le rôle.</strong> Cochez chaque module que ce compte peut utiliser. Laissez décoché pour interdire l’accès. L’Administrateur a toujours accès à tout.</p>
                         <div class="bg-slate-700 p-4 rounded-lg space-y-3">
                             <div class="flex items-center justify-between">
                                 <label class="flex items-center gap-2 cursor-pointer">
                                     <input type="checkbox" id="restrictDashboard" class="w-4 h-4 text-blue-600 rounded">
-                                    <span class="text-slate-300">Masquer le tableau de bord</span>
+                                    <span class="text-slate-300">Tableau de bord</span>
+                                </label>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" id="restrictProjectOverview" class="w-4 h-4 text-blue-600 rounded">
+                                    <span class="text-slate-300">Aperçu projet</span>
                                 </label>
                             </div>
                             <div class="flex items-center justify-between">
                                 <label class="flex items-center gap-2 cursor-pointer">
                                     <input type="checkbox" id="restrictConnections" class="w-4 h-4 text-blue-600 rounded">
-                                    <span class="text-slate-300">Masquer les connexions foreuses</span>
+                                    <span class="text-slate-300">Connexions foreuses</span>
                                 </label>
                             </div>
                             <div class="flex items-center justify-between">
                                 <label class="flex items-center gap-2 cursor-pointer">
                                     <input type="checkbox" id="restrictAssignments" class="w-4 h-4 text-blue-600 rounded">
-                                    <span class="text-slate-300">Masquer les assignations</span>
+                                    <span class="text-slate-300">Assignations</span>
                                 </label>
                             </div>
                             <div class="flex items-center justify-between">
                                 <label class="flex items-center gap-2 cursor-pointer">
                                     <input type="checkbox" id="restrictMaintenance" class="w-4 h-4 text-blue-600 rounded">
-                                    <span class="text-slate-300">Masquer la maintenance</span>
+                                    <span class="text-slate-300">Maintenance</span>
                                 </label>
                             </div>
                             <div class="flex items-center justify-between">
                                 <label class="flex items-center gap-2 cursor-pointer">
                                     <input type="checkbox" id="restrictInvoices" class="w-4 h-4 text-blue-600 rounded">
-                                    <span class="text-slate-300">Masquer les factures</span>
+                                    <span class="text-slate-300">Factures</span>
                                 </label>
                             </div>
                             <div class="flex items-center justify-between">
                                 <label class="flex items-center gap-2 cursor-pointer">
                                     <input type="checkbox" id="restrictContracts" class="w-4 h-4 text-blue-600 rounded">
-                                    <span class="text-slate-300">Masquer les contrats</span>
+                                    <span class="text-slate-300">Contrats</span>
                                 </label>
                             </div>
                             <div class="flex items-center justify-between">
                                 <label class="flex items-center gap-2 cursor-pointer">
                                     <input type="checkbox" id="restrictRevenue" class="w-4 h-4 text-blue-600 rounded">
-                                    <span class="text-slate-300">Masquer les revenus</span>
+                                    <span class="text-slate-300">Revenus</span>
                                 </label>
                             </div>
                             <div class="flex items-center justify-between">
                                 <label class="flex items-center gap-2 cursor-pointer">
                                     <input type="checkbox" id="restrictSiteMeals" class="w-4 h-4 text-blue-600 rounded">
-                                    <span class="text-slate-300">Masquer repas chantier</span>
+                                    <span class="text-slate-300">Repas chantier</span>
                                 </label>
                             </div>
                             <div class="flex items-center justify-between">
                                 <label class="flex items-center gap-2 cursor-pointer">
                                     <input type="checkbox" id="restrictReports" class="w-4 h-4 text-blue-600 rounded">
-                                    <span class="text-slate-300">Masquer les rapports</span>
+                                    <span class="text-slate-300">Rapports</span>
                                 </label>
                             </div>
                             <div class="flex items-center justify-between">
                                 <label class="flex items-center gap-2 cursor-pointer">
                                     <input type="checkbox" id="restrictRH" class="w-4 h-4 text-blue-600 rounded">
-                                    <span class="text-slate-300">Masquer la gestion RH</span>
+                                    <span class="text-slate-300">Gestion RH (personnel)</span>
                                 </label>
                             </div>
                             <div class="flex items-center justify-between">
                                 <label class="flex items-center gap-2 cursor-pointer">
                                     <input type="checkbox" id="restrictInventory" class="w-4 h-4 text-blue-600 rounded">
-                                    <span class="text-slate-300">Masquer les stocks</span>
+                                    <span class="text-slate-300">Stocks / inventaire</span>
                                 </label>
                             </div>
                             <div class="flex items-center justify-between">
                                 <label class="flex items-center gap-2 cursor-pointer">
                                     <input type="checkbox" id="restrictClients" class="w-4 h-4 text-blue-600 rounded">
-                                    <span class="text-slate-300">Masquer les clients</span>
+                                    <span class="text-slate-300">Clients</span>
                                 </label>
                             </div>
                             <div class="flex items-center justify-between">
                                 <label class="flex items-center gap-2 cursor-pointer">
                                     <input type="checkbox" id="restrictSites" class="w-4 h-4 text-blue-600 rounded">
-                                    <span class="text-slate-300">Masquer l’onglet Sites</span>
+                                    <span class="text-slate-300">Sites</span>
                                 </label>
                             </div>
                             <div class="flex items-center justify-between">
                                 <label class="flex items-center gap-2 cursor-pointer">
                                     <input type="checkbox" id="restrictTranslator" class="w-4 h-4 text-blue-600 rounded">
-                                    <span class="text-slate-300">Masquer la traduction</span>
+                                    <span class="text-slate-300">Traduction</span>
                                 </label>
                             </div>
                             <div class="flex items-center justify-between">
                                 <label class="flex items-center gap-2 cursor-pointer">
                                     <input type="checkbox" id="restrictTeamChat" class="w-4 h-4 text-blue-600 rounded">
-                                    <span class="text-slate-300">Masquer le chat d’équipe</span>
+                                    <span class="text-slate-300">Chat d’équipe</span>
                                 </label>
                             </div>
                             <div class="flex items-center justify-between">
                                 <label class="flex items-center gap-2 cursor-pointer">
                                     <input type="checkbox" id="restrictCompanyInfo" class="w-4 h-4 text-blue-600 rounded">
-                                    <span class="text-slate-300">Masquer les infos entreprise</span>
+                                    <span class="text-slate-300">Infos entreprise</span>
                                 </label>
                             </div>
                             <div class="flex items-center justify-between">
                                 <label class="flex items-center gap-2 cursor-pointer">
                                     <input type="checkbox" id="restrictAccounts" class="w-4 h-4 text-blue-600 rounded">
-                                    <span class="text-slate-300">Masquer la gestion des comptes</span>
+                                    <span class="text-slate-300">Gestion des comptes</span>
                                 </label>
                             </div>
                         </div>
-                        <p class="text-xs text-slate-500 mt-2">L’administrateur général du client voit toujours tous les onglets autorisés par l’abonnement. Les limites du <strong class="text-slate-400">rôle</strong> (ex. pas de factures pour un ingénieur) s’appliquent en plus.</p>
+                        <p class="text-xs text-slate-500 mt-2">Le rôle n’est qu’un libellé : c’est cette liste qui décide des accès. Seul l’<strong class="text-slate-400">Administrateur</strong> voit tout (y compris la gestion des comptes).</p>
                     </div>
                     <div class="mb-4 border-t border-slate-600 pt-4" id="accountSitesSection">
                         <label class="block text-slate-400 mb-2 font-semibold">Sites accessibles</label>
@@ -6160,6 +6166,25 @@
                     btn.classList.remove('hidden');
                     btn.style.display = '';
                 });
+                return;
+            }
+
+            // Modèle « autorisation explicite » : si une liste d'accès a été définie
+            // pour ce compte, on n'affiche QUE les modules cochés (le rôle ne donne rien).
+            var explicitViews = (restrictions && Array.isArray(restrictions.allowedViews)) ? restrictions.allowedViews : null;
+            if (explicitViews) {
+                var grantSet = {};
+                explicitViews.forEach(function(v) { grantSet[v] = true; });
+                allNavButtons.forEach(function(btnId) {
+                    var btn = document.getElementById(btnId);
+                    if (!btn) return;
+                    if (btnId === 'nav-enterprises') { btn.classList.add('hidden'); btn.style.display = 'none'; return; }
+                    var view = btnId.replace(/^nav-/, '');
+                    var show = grantSet[view] === true && allowedBySubscription(btnId);
+                    btn.classList.toggle('hidden', !show);
+                    btn.style.display = show ? '' : 'none';
+                });
+                applyEnterpriseBranding();
                 return;
             }
 
@@ -24715,6 +24740,74 @@
         var ACCOUNT_ROLES_DISPLAY_ORDER = ['foreur', 'aideforeur', 'superviseur', 'ingenieur', 'santesecurite', 'administratif', 'admin', 'visiteur'];
         var ACCOUNT_ROLES_FALLBACK_ORDER = ACCOUNT_ROLES_DISPLAY_ORDER.slice();
 
+        // Accès par compte = modèle « autorisation explicite » : rien n'est donné
+        // automatiquement par le rôle ; l'admin coche les modules accessibles.
+        // Correspondance case à cocher ↔ vue (onglet). La liste d'accès est stockée
+        // dans restrictions.allowedViews ; si absente, on retombe sur l'ancien
+        // comportement (défauts du rôle) pour ne pas bloquer les comptes existants.
+        var ACCOUNT_VIEW_CHECKBOXES = [
+            ['restrictDashboard', 'dashboard'], ['restrictProjectOverview', 'project_overview'],
+            ['restrictConnections', 'connections'], ['restrictAssignments', 'assignments'],
+            ['restrictMaintenance', 'maintenance'], ['restrictInvoices', 'invoices'],
+            ['restrictContracts', 'contracts'], ['restrictRevenue', 'revenue'],
+            ['restrictSiteMeals', 'site_meals'], ['restrictReports', 'reports'],
+            ['restrictRH', 'rh'], ['restrictInventory', 'inventory'],
+            ['restrictClients', 'clients'], ['restrictSites', 'sites'],
+            ['restrictTranslator', 'translator'], ['restrictTeamChat', 'team_chat'],
+            ['restrictCompanyInfo', 'company_info'], ['restrictAccounts', 'accounts']
+        ];
+        // Vues accordées par défaut à un rôle (sert UNIQUEMENT à pré-remplir les cases
+        // à l'édition d'un compte existant sans liste d'accès, pour préserver son accès).
+        function roleDefaultAllowedViews(role) {
+            var P = {
+                dashboard: ['foreur', 'aideforeur', 'superviseur', 'ingenieur', 'gestionnaire', 'gestionnaire_site', 'santesecurite', 'administratif', 'visiteur'],
+                project_overview: ['superviseur', 'gestionnaire', 'gestionnaire_site', 'ingenieur', 'foreur', 'aideforeur', 'santesecurite', 'administratif', 'visiteur'],
+                connections: ['superviseur', 'gestionnaire', 'gestionnaire_site', 'ingenieur'],
+                assignments: ['superviseur', 'gestionnaire', 'gestionnaire_site'],
+                maintenance: ['superviseur', 'gestionnaire', 'gestionnaire_site', 'ingenieur'],
+                invoices: ['gestionnaire', 'gestionnaire_site', 'administratif'],
+                contracts: ['gestionnaire', 'gestionnaire_site', 'administratif'],
+                revenue: ['gestionnaire', 'gestionnaire_site', 'ingenieur', 'administratif'],
+                site_meals: ['superviseur', 'gestionnaire', 'gestionnaire_site', 'ingenieur', 'foreur', 'aideforeur', 'administratif'],
+                reports: ['superviseur', 'gestionnaire', 'gestionnaire_site', 'ingenieur', 'administratif', 'visiteur'],
+                rh: ['superviseur', 'gestionnaire', 'gestionnaire_site'],
+                inventory: ['gestionnaire', 'gestionnaire_site', 'superviseur'],
+                clients: ['gestionnaire', 'gestionnaire_site', 'administratif'],
+                sites: ['gestionnaire', 'gestionnaire_site', 'superviseur', 'ingenieur'],
+                translator: ['foreur', 'aideforeur', 'superviseur', 'ingenieur', 'gestionnaire', 'gestionnaire_site', 'santesecurite', 'administratif'],
+                team_chat: ['foreur', 'aideforeur', 'superviseur', 'ingenieur', 'gestionnaire', 'gestionnaire_site', 'santesecurite', 'administratif'],
+                company_info: ['foreur', 'aideforeur', 'superviseur', 'ingenieur', 'gestionnaire', 'gestionnaire_site', 'santesecurite', 'administratif', 'visiteur'],
+                accounts: []
+            };
+            var out = [];
+            Object.keys(P).forEach(function(v) { if (P[v].indexOf(role) >= 0) out.push(v); });
+            return out;
+        }
+        // Récupère la liste d'accès effective d'un compte (explicite, sinon défauts du rôle).
+        function accountAllowedViews(user) {
+            var r = user && user.restrictions;
+            if (r && Array.isArray(r.allowedViews)) return r.allowedViews.slice();
+            return roleDefaultAllowedViews(user ? user.role : '');
+        }
+        // Coche les cases du formulaire d'après une liste de vues autorisées.
+        function setAccountAccessCheckboxes(allowedViews) {
+            var set = {};
+            (allowedViews || []).forEach(function(v) { set[v] = true; });
+            ACCOUNT_VIEW_CHECKBOXES.forEach(function(pair) {
+                var el = document.getElementById(pair[0]);
+                if (el) el.checked = !!set[pair[1]];
+            });
+        }
+        // Lit les cases cochées → liste de vues autorisées.
+        function collectAccountAllowedViews() {
+            var out = [];
+            ACCOUNT_VIEW_CHECKBOXES.forEach(function(pair) {
+                var el = document.getElementById(pair[0]);
+                if (el && el.checked) out.push(pair[1]);
+            });
+            return out;
+        }
+
         function populateAccountRoleSelectFromPolicy() {
             var sel = document.getElementById('accountRole');
             if (!sel) return;
@@ -24770,24 +24863,13 @@
                 '<div class="space-y-4">';
             rows.forEach(function(user) {
                 var restrictions = user.restrictions || {};
-                var restrictionsList = [];
-                if (restrictions.restrictDashboard) restrictionsList.push('Tableau de bord');
-                if (restrictions.restrictConnections) restrictionsList.push('Connexions');
-                if (restrictions.restrictAssignments) restrictionsList.push('Assignations');
-                if (restrictions.restrictMaintenance) restrictionsList.push('Maintenance');
-                if (restrictions.restrictInvoices) restrictionsList.push('Factures');
-                if (restrictions.restrictContracts) restrictionsList.push('Contrats');
-                if (restrictions.restrictRevenue) restrictionsList.push('Revenus');
-                if (restrictions.restrictSiteMeals) restrictionsList.push('Repas chantier');
-                if (restrictions.restrictReports) restrictionsList.push('Rapports');
-                if (restrictions.restrictRH) restrictionsList.push('RH');
-                if (restrictions.restrictInventory) restrictionsList.push('Stocks');
-                if (restrictions.restrictClients) restrictionsList.push('Clients');
-                if (restrictions.restrictSites) restrictionsList.push('Sites');
-                if (restrictions.restrictTranslator) restrictionsList.push('Traduction');
-                if (restrictions.restrictTeamChat) restrictionsList.push('Chat équipe');
-                if (restrictions.restrictCompanyInfo) restrictionsList.push('Infos entreprise');
-                if (restrictions.restrictAccounts) restrictionsList.push('Comptes');
+                // Affiche les MODULES AUTORISÉS de ce compte (modèle d'accès explicite).
+                var VIEW_LABELS_SHORT = { dashboard: 'Tableau de bord', project_overview: 'Aperçu projet', connections: 'Connexions', assignments: 'Assignations', maintenance: 'Maintenance', invoices: 'Factures', contracts: 'Contrats', revenue: 'Revenus', site_meals: 'Repas chantier', reports: 'Rapports', rh: 'RH', inventory: 'Stocks', clients: 'Clients', sites: 'Sites', translator: 'Traduction', team_chat: 'Chat équipe', company_info: 'Infos entreprise', accounts: 'Comptes' };
+                var allowedList = [];
+                if (user.role !== 'admin') {
+                    accountAllowedViews(user).forEach(function(v) { if (VIEW_LABELS_SHORT[v]) allowedList.push(VIEW_LABELS_SHORT[v]); });
+                }
+                var restrictionsList = allowedList;
                 
                 html += '<div class="ged-content-panel p-4 rounded-lg">' +
                     '<div class="flex justify-between items-start mb-3">' +
@@ -24801,10 +24883,10 @@
                     (user.email ? '<p class="text-sm text-slate-400 mb-1">E-mail: <span class="text-white">' + escapeHtmlReportCell(user.email) + '</span></p>' : '') +
                     (restrictionsList.length > 0 ? 
                         '<div class="mt-2">' +
-                        '<p class="text-xs text-slate-400 mb-1">Restrictions actives:</p>' +
+                        '<p class="text-xs text-slate-400 mb-1">Accès autorisés:</p>' +
                         '<div class="flex flex-wrap gap-1">' +
                         restrictionsList.map(function(r) {
-                            return '<span class="bg-red-600 bg-opacity-30 text-red-300 px-2 py-1 rounded text-xs">🚫 ' + r + '</span>';
+                            return '<span class="bg-emerald-600 bg-opacity-30 text-emerald-300 px-2 py-1 rounded text-xs">✅ ' + r + '</span>';
                         }).join('') +
                         '</div>' +
                         '</div>' :
@@ -24858,9 +24940,9 @@
             document.getElementById('accountPassword').value = '';
             document.getElementById('accountPassword').placeholder = '••••••••';
             
-            // Réinitialiser les restrictions
+            // Nouveau compte : aucun accès coché par défaut (l'admin autorise lui-même).
             var restrictionCheckboxes = [
-                'restrictDashboard', 'restrictConnections', 'restrictAssignments', 'restrictMaintenance',
+                'restrictDashboard', 'restrictProjectOverview', 'restrictConnections', 'restrictAssignments', 'restrictMaintenance',
                 'restrictInvoices', 'restrictContracts', 'restrictRevenue', 'restrictSiteMeals', 'restrictReports',
                 'restrictRH', 'restrictInventory', 'restrictClients', 'restrictSites',
                 'restrictTranslator', 'restrictTeamChat', 'restrictCompanyInfo', 'restrictAccounts'
@@ -24912,26 +24994,10 @@
             var emEl = document.getElementById('accountEmail');
             if (emEl) emEl.value = user.email || '';
             
-            // Charger les restrictions
-            var restrictions = user.restrictions || {};
-            document.getElementById('restrictDashboard').checked = restrictions.restrictDashboard || false;
-            document.getElementById('restrictConnections').checked = restrictions.restrictConnections || false;
-            document.getElementById('restrictAssignments').checked = restrictions.restrictAssignments || false;
-            document.getElementById('restrictMaintenance').checked = restrictions.restrictMaintenance || false;
-            document.getElementById('restrictInvoices').checked = restrictions.restrictInvoices || false;
-            document.getElementById('restrictContracts').checked = restrictions.restrictContracts || false;
-            document.getElementById('restrictRevenue').checked = restrictions.restrictRevenue || false;
-            document.getElementById('restrictSiteMeals').checked = restrictions.restrictSiteMeals || false;
-            document.getElementById('restrictReports').checked = restrictions.restrictReports || false;
-            document.getElementById('restrictRH').checked = restrictions.restrictRH || false;
-            document.getElementById('restrictInventory').checked = restrictions.restrictInventory || false;
-            document.getElementById('restrictClients').checked = restrictions.restrictClients || false;
-            document.getElementById('restrictSites').checked = restrictions.restrictSites || false;
-            document.getElementById('restrictTranslator').checked = restrictions.restrictTranslator || false;
-            document.getElementById('restrictTeamChat').checked = restrictions.restrictTeamChat || false;
-            document.getElementById('restrictCompanyInfo').checked = restrictions.restrictCompanyInfo || false;
-            document.getElementById('restrictAccounts').checked = restrictions.restrictAccounts || false;
-            
+            // Charger les accès explicites : liste enregistrée si présente, sinon
+            // les accès par défaut du rôle (pour préserver l'accès d'un ancien compte).
+            setAccountAccessCheckboxes(accountAllowedViews(user));
+
             updateAccountRestrictions();
             document.getElementById('accountModal').classList.remove('hidden');
         }
@@ -24953,12 +25019,12 @@
             
             // Si admin, désactiver toutes les restrictions (l'admin a toujours accès à tout)
             var restrictionCheckboxes = [
-                'restrictDashboard', 'restrictConnections', 'restrictAssignments', 'restrictMaintenance',
+                'restrictDashboard', 'restrictProjectOverview', 'restrictConnections', 'restrictAssignments', 'restrictMaintenance',
                 'restrictInvoices', 'restrictContracts', 'restrictRevenue', 'restrictSiteMeals', 'restrictReports',
                 'restrictRH', 'restrictInventory', 'restrictClients', 'restrictSites',
                 'restrictTranslator', 'restrictTeamChat', 'restrictCompanyInfo', 'restrictAccounts'
             ];
-            
+
             restrictionCheckboxes.forEach(function(id) {
                 var checkbox = document.getElementById(id);
                 if (!checkbox) return;
@@ -25044,26 +25110,12 @@
                 }
             }
             
-            // Collecter les restrictions
+            // Accès explicites : on enregistre la liste des modules cochés (autorisés).
+            // L'administrateur a tout d'office (pas de liste). Pour les autres rôles,
+            // seul ce qui est coché est accessible (rien n'est donné par le rôle).
             var restrictions = {};
             if (role !== 'admin') {
-                restrictions.restrictDashboard = document.getElementById('restrictDashboard').checked;
-                restrictions.restrictConnections = document.getElementById('restrictConnections').checked;
-                restrictions.restrictAssignments = document.getElementById('restrictAssignments').checked;
-                restrictions.restrictMaintenance = document.getElementById('restrictMaintenance').checked;
-                restrictions.restrictInvoices = document.getElementById('restrictInvoices').checked;
-                restrictions.restrictContracts = document.getElementById('restrictContracts').checked;
-                restrictions.restrictRevenue = document.getElementById('restrictRevenue').checked;
-                restrictions.restrictSiteMeals = document.getElementById('restrictSiteMeals').checked;
-                restrictions.restrictReports = document.getElementById('restrictReports').checked;
-                restrictions.restrictRH = document.getElementById('restrictRH').checked;
-                restrictions.restrictInventory = document.getElementById('restrictInventory').checked;
-                restrictions.restrictClients = document.getElementById('restrictClients').checked;
-                restrictions.restrictSites = document.getElementById('restrictSites').checked;
-                restrictions.restrictTranslator = document.getElementById('restrictTranslator').checked;
-                restrictions.restrictTeamChat = document.getElementById('restrictTeamChat').checked;
-                restrictions.restrictCompanyInfo = document.getElementById('restrictCompanyInfo').checked;
-                restrictions.restrictAccounts = document.getElementById('restrictAccounts').checked;
+                restrictions.allowedViews = collectAccountAllowedViews();
             }
             
             // Collecter les sites accessibles (vide = tous les sites, sauf pour admin qui a toujours tout)
