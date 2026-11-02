@@ -3440,6 +3440,72 @@
                                     <span class="text-slate-300">Gestion des comptes</span>
                                 </label>
                             </div>
+                            <div class="flex items-center justify-between">
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" id="restrictForagePlan" class="w-4 h-4 text-blue-600 rounded">
+                                    <span class="text-slate-300">Plan de forage</span>
+                                </label>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" id="restrictBitSharpening" class="w-4 h-4 text-blue-600 rounded">
+                                    <span class="text-slate-300">Affûtage des taillants</span>
+                                </label>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" id="restrictConsumables" class="w-4 h-4 text-blue-600 rounded">
+                                    <span class="text-slate-300">Consommables</span>
+                                </label>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" id="restrictHSE" class="w-4 h-4 text-blue-600 rounded">
+                                    <span class="text-slate-300">Santé &amp; sécurité (HSE)</span>
+                                </label>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" id="restrictAnalytics" class="w-4 h-4 text-blue-600 rounded">
+                                    <span class="text-slate-300">Performance</span>
+                                </label>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" id="restrictPlanification" class="w-4 h-4 text-blue-600 rounded">
+                                    <span class="text-slate-300">Planification &amp; suivi</span>
+                                </label>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" id="restrictBesoins" class="w-4 h-4 text-blue-600 rounded">
+                                    <span class="text-slate-300">Expression de besoin</span>
+                                </label>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" id="restrictRentabilite" class="w-4 h-4 text-blue-600 rounded">
+                                    <span class="text-slate-300">Rentabilité</span>
+                                </label>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" id="restrictDepensesPM" class="w-4 h-4 text-blue-600 rounded">
+                                    <span class="text-slate-300">Dépenses PM</span>
+                                </label>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" id="restrictPayments" class="w-4 h-4 text-blue-600 rounded">
+                                    <span class="text-slate-300">Paiements</span>
+                                </label>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" id="restrictSoustraitants" class="w-4 h-4 text-blue-600 rounded">
+                                    <span class="text-slate-300">Sous-traitants</span>
+                                </label>
+                            </div>
                         </div>
                         <p class="text-xs text-slate-500 mt-2">Le rôle n’est qu’un libellé : c’est cette liste qui décide des accès. Seul l’<strong class="text-slate-400">Administrateur</strong> voit tout (y compris la gestion des comptes).</p>
                     </div>
@@ -6071,9 +6137,20 @@
             var restrictions = currentUser.restrictions || {};
             var navMapping = {
                 'nav-dashboard': 'restrictDashboard',
+                'nav-forage_plan': 'restrictForagePlan',
                 'nav-connections': 'restrictConnections',
                 'nav-assignments': 'restrictAssignments',
                 'nav-maintenance': 'restrictMaintenance',
+                'nav-bit_sharpening': 'restrictBitSharpening',
+                'nav-consumables': 'restrictConsumables',
+                'nav-hse': 'restrictHSE',
+                'nav-analytics': 'restrictAnalytics',
+                'nav-planification': 'restrictPlanification',
+                'nav-besoins': 'restrictBesoins',
+                'nav-rentabilite': 'restrictRentabilite',
+                'nav-depenses_pm': 'restrictDepensesPM',
+                'nav-payments': 'restrictPayments',
+                'nav-soustraitants': 'restrictSoustraitants',
                 'nav-invoices': 'restrictInvoices',
                 'nav-contracts': 'restrictContracts',
                 'nav-revenue': 'restrictRevenue',
@@ -6088,7 +6165,7 @@
                 'nav-company_info': 'restrictCompanyInfo',
                 'nav-accounts': 'restrictAccounts'
             };
-            var allNavButtons = ['nav-dashboard', 'nav-connections', 'nav-assignments', 'nav-maintenance', 'nav-invoices', 'nav-contracts', 'nav-enterprises', 'nav-sites', 'nav-revenue', 'nav-site_meals', 'nav-reports', 'nav-project_overview', 'nav-rh', 'nav-inventory', 'nav-accounts', 'nav-clients', 'nav-translator', 'nav-team_chat', 'nav-company_info'];
+            var allNavButtons = ['nav-dashboard', 'nav-forage_plan', 'nav-connections', 'nav-assignments', 'nav-maintenance', 'nav-bit_sharpening', 'nav-consumables', 'nav-hse', 'nav-analytics', 'nav-planification', 'nav-besoins', 'nav-rentabilite', 'nav-depenses_pm', 'nav-payments', 'nav-soustraitants', 'nav-invoices', 'nav-contracts', 'nav-enterprises', 'nav-sites', 'nav-revenue', 'nav-site_meals', 'nav-reports', 'nav-project_overview', 'nav-rh', 'nav-inventory', 'nav-accounts', 'nav-clients', 'nav-translator', 'nav-team_chat', 'nav-company_info'];
 
             if (isPlatformBillingOnlyUser(currentUser)) {
                 allNavButtons.forEach(function(btnId) {
@@ -6131,10 +6208,15 @@
             }
 
             var subTabs = window.subscriptionAllowedViews;
+            // Onglets nouvellement gérés par l'accès explicite : jamais masqués par une
+            // ancienne liste d'abonnement (qui ne les connaît pas), pour éviter de les
+            // cacher à tort une fois ajoutés au contrôle d'accès.
+            var NEW_MANAGED_VIEWS = { forage_plan: 1, bit_sharpening: 1, consumables: 1, hse: 1, analytics: 1, planification: 1, besoins: 1, rentabilite: 1, depenses_pm: 1, payments: 1, soustraitants: 1 };
             function allowedBySubscription(navId) {
                 if (navId === 'nav-enterprises') return true;
                 if (!subTabs || !subTabs.length) return true;
                 var vid = navId.replace(/^nav-/, '');
+                if (NEW_MANAGED_VIEWS[vid]) return true;
                 return subTabs.indexOf(vid) >= 0;
             }
 
@@ -6206,7 +6288,20 @@
                 'nav-translator': ['foreur', 'aideforeur', 'superviseur', 'ingenieur', 'gestionnaire', 'gestionnaire_site', 'santesecurite', 'admin', 'administratif'].includes(currentUser.role),
                 'nav-team_chat': ['foreur', 'aideforeur', 'superviseur', 'ingenieur', 'gestionnaire', 'gestionnaire_site', 'santesecurite', 'admin', 'administratif'].includes(currentUser.role),
                 'nav-company_info': ['foreur', 'aideforeur', 'superviseur', 'ingenieur', 'gestionnaire', 'gestionnaire_site', 'santesecurite', 'admin', 'administratif', 'visiteur'].includes(currentUser.role),
-                'nav-accounts': false
+                'nav-accounts': false,
+                // Onglets historiquement visibles de tous : visibles par défaut pour les comptes
+                // SANS liste d'accès explicite (préserve l'accès existant jusqu'à édition).
+                'nav-forage_plan': true,
+                'nav-bit_sharpening': true,
+                'nav-consumables': true,
+                'nav-hse': true,
+                'nav-analytics': true,
+                'nav-planification': true,
+                'nav-besoins': true,
+                'nav-rentabilite': true,
+                'nav-depenses_pm': true,
+                'nav-payments': true,
+                'nav-soustraitants': true
             };
 
             allNavButtons.forEach(function(btnId) {
@@ -24747,9 +24842,16 @@
         // comportement (défauts du rôle) pour ne pas bloquer les comptes existants.
         var ACCOUNT_VIEW_CHECKBOXES = [
             ['restrictDashboard', 'dashboard'], ['restrictProjectOverview', 'project_overview'],
+            ['restrictForagePlan', 'forage_plan'],
             ['restrictConnections', 'connections'], ['restrictAssignments', 'assignments'],
-            ['restrictMaintenance', 'maintenance'], ['restrictInvoices', 'invoices'],
+            ['restrictMaintenance', 'maintenance'],
+            ['restrictBitSharpening', 'bit_sharpening'], ['restrictConsumables', 'consumables'],
+            ['restrictHSE', 'hse'], ['restrictAnalytics', 'analytics'],
+            ['restrictPlanification', 'planification'], ['restrictBesoins', 'besoins'],
+            ['restrictRentabilite', 'rentabilite'], ['restrictDepensesPM', 'depenses_pm'],
+            ['restrictInvoices', 'invoices'], ['restrictPayments', 'payments'],
             ['restrictContracts', 'contracts'], ['restrictRevenue', 'revenue'],
+            ['restrictSoustraitants', 'soustraitants'],
             ['restrictSiteMeals', 'site_meals'], ['restrictReports', 'reports'],
             ['restrictRH', 'rh'], ['restrictInventory', 'inventory'],
             ['restrictClients', 'clients'], ['restrictSites', 'sites'],
@@ -24779,6 +24881,10 @@
                 company_info: ['foreur', 'aideforeur', 'superviseur', 'ingenieur', 'gestionnaire', 'gestionnaire_site', 'santesecurite', 'administratif', 'visiteur'],
                 accounts: []
             };
+            // Onglets historiquement visibles de tous : pré-cochés pour tout rôle lors de
+            // l'édition d'un compte existant (préserve son accès actuel ; l'admin ajuste ensuite).
+            var ALL_ROLES_HIST = ['foreur', 'aideforeur', 'superviseur', 'ingenieur', 'gestionnaire', 'gestionnaire_site', 'santesecurite', 'administratif', 'visiteur'];
+            ['forage_plan', 'bit_sharpening', 'consumables', 'hse', 'analytics', 'planification', 'besoins', 'rentabilite', 'depenses_pm', 'payments', 'soustraitants'].forEach(function(v) { P[v] = ALL_ROLES_HIST; });
             var out = [];
             Object.keys(P).forEach(function(v) { if (P[v].indexOf(role) >= 0) out.push(v); });
             return out;
@@ -24942,7 +25048,9 @@
             
             // Nouveau compte : aucun accès coché par défaut (l'admin autorise lui-même).
             var restrictionCheckboxes = [
-                'restrictDashboard', 'restrictProjectOverview', 'restrictConnections', 'restrictAssignments', 'restrictMaintenance',
+                'restrictDashboard', 'restrictProjectOverview', 'restrictForagePlan', 'restrictConnections', 'restrictAssignments', 'restrictMaintenance',
+                'restrictBitSharpening', 'restrictConsumables', 'restrictHSE', 'restrictAnalytics', 'restrictPlanification', 'restrictBesoins',
+                'restrictRentabilite', 'restrictDepensesPM', 'restrictPayments', 'restrictSoustraitants',
                 'restrictInvoices', 'restrictContracts', 'restrictRevenue', 'restrictSiteMeals', 'restrictReports',
                 'restrictRH', 'restrictInventory', 'restrictClients', 'restrictSites',
                 'restrictTranslator', 'restrictTeamChat', 'restrictCompanyInfo', 'restrictAccounts'
@@ -25019,7 +25127,9 @@
             
             // Si admin, désactiver toutes les restrictions (l'admin a toujours accès à tout)
             var restrictionCheckboxes = [
-                'restrictDashboard', 'restrictProjectOverview', 'restrictConnections', 'restrictAssignments', 'restrictMaintenance',
+                'restrictDashboard', 'restrictProjectOverview', 'restrictForagePlan', 'restrictConnections', 'restrictAssignments', 'restrictMaintenance',
+                'restrictBitSharpening', 'restrictConsumables', 'restrictHSE', 'restrictAnalytics', 'restrictPlanification', 'restrictBesoins',
+                'restrictRentabilite', 'restrictDepensesPM', 'restrictPayments', 'restrictSoustraitants',
                 'restrictInvoices', 'restrictContracts', 'restrictRevenue', 'restrictSiteMeals', 'restrictReports',
                 'restrictRH', 'restrictInventory', 'restrictClients', 'restrictSites',
                 'restrictTranslator', 'restrictTeamChat', 'restrictCompanyInfo', 'restrictAccounts'
