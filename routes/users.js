@@ -18,25 +18,8 @@ module.exports = function registerUserRoutes(app, options) {
     }
 
     // Recopie automatique d'un compte créé/modifié dans Forage vers le Portail
-    // (qui le propage aussi à la Mine). Best-effort : n'échoue jamais la requête
-    // Forage. Nécessite PORTAIL_BASE_URL + SERVICE_API_KEY (déjà utilisés pour le SSO
-    // et les appels de service, même clé partagée entre les apps).
-    const PORTAIL_BASE_URL = (process.env.PORTAIL_BASE_URL || 'https://geportail.duckdns.org').replace(/\/+$/, '');
-    const SERVICE_API_KEY = process.env.SERVICE_API_KEY || '';
-    function propagateUserToPortal(enterpriseId, username, password, role) {
-        try {
-            if (!PORTAIL_BASE_URL || !SERVICE_API_KEY) return;
-            if (!enterpriseId || !username || !password) return;
-            const fetchFn = globalThis.fetch;
-            if (typeof fetchFn !== 'function') return;
-            fetchFn(PORTAIL_BASE_URL + '/api/service/portal-account', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-Service-Key': SERVICE_API_KEY },
-                body: JSON.stringify({ forageEnterpriseId: enterpriseId, username: username, password: password, role: role || 'foreur' })
-            }).then(function (r) { if (!r.ok) console.warn('[portal-account] HTTP ' + r.status); })
-              .catch(function (e) { console.warn('[portal-account] KO:', e && e.message); });
-        } catch (e) { console.warn('[portal-account] exception:', e && e.message); }
-    }
+    // (qui le propage aussi à la Mine). Best-effort, module partagé avec la connexion.
+    const { propagateUserToPortal } = require('../portal-sync');
 
     app.get('/api/users', requireUserManagementRole, (req, res) => {
         const isPlatform = isPlatformUser(req);

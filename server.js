@@ -2834,6 +2834,17 @@ function recalcInvoiceStatus(db, invoiceId, done) {
     });
 }
 
+// Admin plateforme (super admin / propriétaire plateforme) — corrige un
+// ReferenceError sur les routes Paiements qui référençaient isPlatformAdmin.
+function isPlatformAdmin(req) {
+    return !!(req.auth && (
+        req.auth.isSuperAdmin ||
+        req.auth.isPlatformOwner ||
+        req.auth.role === 'platform_owner' ||
+        req.auth.role === 'super_admin'
+    ));
+}
+
 // GET /api/payments — liste tous les paiements (filtres : invoiceId, clientId, from, to, method)
 app.get('/api/payments', (req, res) => {
     const entId = getEnterpriseId(req);
