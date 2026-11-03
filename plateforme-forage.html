@@ -3316,7 +3316,7 @@
                         </div>
                         <div>
                             <label class="block text-slate-400 mb-2">Rôle *</label>
-                            <select id="accountRole" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white" required onchange="updateAccountRestrictions()">
+                            <select id="accountRole" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white" required onchange="onAccountRoleChange()">
                                 <option value="">Sélectionner un rôle</option>
                                 <option value="admin">Administrateur général</option>
                                 <option value="foreur">Foreur</option>
@@ -3329,182 +3329,55 @@
                         </div>
                     </div>
                     <div class="mb-4 border-t border-slate-600 pt-4">
-                        <label class="block text-slate-400 mb-3 font-semibold">Modules accessibles — cochez ce que ce compte peut ouvrir</label>
-                        <p class="text-xs text-amber-200/90 mb-3"><strong class="text-amber-100">Rien n’est donné automatiquement par le rôle.</strong> Cochez chaque module que ce compte peut utiliser. Laissez décoché pour interdire l’accès. L’Administrateur a toujours accès à tout.</p>
-                        <div class="bg-slate-700 p-4 rounded-lg space-y-3">
-                            <div class="flex items-center justify-between">
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" id="restrictDashboard" class="w-4 h-4 text-blue-600 rounded">
-                                    <span class="text-slate-300">Tableau de bord</span>
-                                </label>
+                        <div class="flex items-center justify-between gap-2 mb-2 flex-wrap">
+                            <label class="block text-slate-400 font-semibold">Modules accessibles — cochez ce que ce compte peut ouvrir</label>
+                            <div class="flex gap-2">
+                                <button type="button" onclick="applyRoleTemplateToCheckboxes()" class="text-xs bg-slate-600 hover:bg-slate-500 text-white px-3 py-1.5 rounded">⟳ Pré-remplir selon le type</button>
+                                <button type="button" onclick="setAccountAccessCheckboxes([])" class="text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 px-3 py-1.5 rounded">Tout décocher</button>
                             </div>
-                            <div class="flex items-center justify-between">
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" id="restrictProjectOverview" class="w-4 h-4 text-blue-600 rounded">
-                                    <span class="text-slate-300">Aperçu projet</span>
-                                </label>
+                        </div>
+                        <p class="text-xs text-amber-200/90 mb-3"><strong class="text-amber-100">Rien n’est donné automatiquement par le rôle.</strong> Choisir un type de compte pré-coche une sélection que vous ajustez librement. Laissez décoché pour interdire l’accès. L’Administrateur a toujours accès à tout.</p>
+                        <div class="bg-slate-700 p-4 rounded-lg space-y-4">
+                            <p class="text-[11px] font-bold tracking-wider text-slate-400 uppercase mt-1">Opérations</p>
+                            <div class="space-y-2 pl-1">
+                                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictDashboard" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Tableau de bord</span></label>
+                                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictForagePlan" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Plan de forage</span></label>
+                                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictConnections" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Connexions</span></label>
+                                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictAssignments" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Assignations</span></label>
+                                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictMaintenance" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Maintenance</span></label>
+                                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictBitSharpening" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Affûtage des bits</span></label>
+                                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictConsumables" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Consommables</span></label>
+                                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictInventory" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Stocks</span></label>
+                                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictHSE" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Santé & sécurité</span></label>
                             </div>
-                            <div class="flex items-center justify-between">
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" id="restrictConnections" class="w-4 h-4 text-blue-600 rounded">
-                                    <span class="text-slate-300">Connexions foreuses</span>
-                                </label>
+                            <p class="text-[11px] font-bold tracking-wider text-slate-400 uppercase mt-1">Pilotage & analyse</p>
+                            <div class="space-y-2 pl-1">
+                                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictAnalytics" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Performance</span></label>
+                                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictProjectOverview" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Pilotage projet</span></label>
+                                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictPlanification" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Planification & suivi</span></label>
+                                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictBesoins" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Expression de besoin</span></label>
+                                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictReports" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Rapports</span></label>
+                                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictRentabilite" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Rentabilité consommables</span></label>
+                                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictDepensesPM" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Dépenses PM</span></label>
                             </div>
-                            <div class="flex items-center justify-between">
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" id="restrictAssignments" class="w-4 h-4 text-blue-600 rounded">
-                                    <span class="text-slate-300">Assignations</span>
-                                </label>
+                            <p class="text-[11px] font-bold tracking-wider text-slate-400 uppercase mt-1">Gestion</p>
+                            <div class="space-y-2 pl-1">
+                                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictContracts" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Gestion des Contrats</span></label>
+                                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictClients" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Clients</span></label>
+                                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictSites" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Sites</span></label>
+                                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictInvoices" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Factures</span></label>
+                                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictPayments" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Paiements</span></label>
+                                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictRevenue" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Revenus</span></label>
+                                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictSoustraitants" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Sous-traitants</span></label>
+                                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictSiteMeals" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Repas chantier</span></label>
+                                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictRH" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Ressources Humaines</span></label>
+                                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictAccounts" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Comptes</span></label>
                             </div>
-                            <div class="flex items-center justify-between">
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" id="restrictMaintenance" class="w-4 h-4 text-blue-600 rounded">
-                                    <span class="text-slate-300">Maintenance</span>
-                                </label>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" id="restrictInvoices" class="w-4 h-4 text-blue-600 rounded">
-                                    <span class="text-slate-300">Factures</span>
-                                </label>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" id="restrictContracts" class="w-4 h-4 text-blue-600 rounded">
-                                    <span class="text-slate-300">Contrats</span>
-                                </label>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" id="restrictRevenue" class="w-4 h-4 text-blue-600 rounded">
-                                    <span class="text-slate-300">Revenus</span>
-                                </label>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" id="restrictSiteMeals" class="w-4 h-4 text-blue-600 rounded">
-                                    <span class="text-slate-300">Repas chantier</span>
-                                </label>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" id="restrictReports" class="w-4 h-4 text-blue-600 rounded">
-                                    <span class="text-slate-300">Rapports</span>
-                                </label>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" id="restrictRH" class="w-4 h-4 text-blue-600 rounded">
-                                    <span class="text-slate-300">Gestion RH (personnel)</span>
-                                </label>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" id="restrictInventory" class="w-4 h-4 text-blue-600 rounded">
-                                    <span class="text-slate-300">Stocks / inventaire</span>
-                                </label>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" id="restrictClients" class="w-4 h-4 text-blue-600 rounded">
-                                    <span class="text-slate-300">Clients</span>
-                                </label>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" id="restrictSites" class="w-4 h-4 text-blue-600 rounded">
-                                    <span class="text-slate-300">Sites</span>
-                                </label>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" id="restrictTranslator" class="w-4 h-4 text-blue-600 rounded">
-                                    <span class="text-slate-300">Traduction</span>
-                                </label>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" id="restrictTeamChat" class="w-4 h-4 text-blue-600 rounded">
-                                    <span class="text-slate-300">Chat d’équipe</span>
-                                </label>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" id="restrictCompanyInfo" class="w-4 h-4 text-blue-600 rounded">
-                                    <span class="text-slate-300">Infos entreprise</span>
-                                </label>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" id="restrictAccounts" class="w-4 h-4 text-blue-600 rounded">
-                                    <span class="text-slate-300">Gestion des comptes</span>
-                                </label>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" id="restrictForagePlan" class="w-4 h-4 text-blue-600 rounded">
-                                    <span class="text-slate-300">Plan de forage</span>
-                                </label>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" id="restrictBitSharpening" class="w-4 h-4 text-blue-600 rounded">
-                                    <span class="text-slate-300">Affûtage des taillants</span>
-                                </label>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" id="restrictConsumables" class="w-4 h-4 text-blue-600 rounded">
-                                    <span class="text-slate-300">Consommables</span>
-                                </label>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" id="restrictHSE" class="w-4 h-4 text-blue-600 rounded">
-                                    <span class="text-slate-300">Santé &amp; sécurité (HSE)</span>
-                                </label>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" id="restrictAnalytics" class="w-4 h-4 text-blue-600 rounded">
-                                    <span class="text-slate-300">Performance</span>
-                                </label>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" id="restrictPlanification" class="w-4 h-4 text-blue-600 rounded">
-                                    <span class="text-slate-300">Planification &amp; suivi</span>
-                                </label>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" id="restrictBesoins" class="w-4 h-4 text-blue-600 rounded">
-                                    <span class="text-slate-300">Expression de besoin</span>
-                                </label>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" id="restrictRentabilite" class="w-4 h-4 text-blue-600 rounded">
-                                    <span class="text-slate-300">Rentabilité</span>
-                                </label>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" id="restrictDepensesPM" class="w-4 h-4 text-blue-600 rounded">
-                                    <span class="text-slate-300">Dépenses PM</span>
-                                </label>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" id="restrictPayments" class="w-4 h-4 text-blue-600 rounded">
-                                    <span class="text-slate-300">Paiements</span>
-                                </label>
-                            </div>
-                            <div class="flex items-center justify-between">
-                                <label class="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" id="restrictSoustraitants" class="w-4 h-4 text-blue-600 rounded">
-                                    <span class="text-slate-300">Sous-traitants</span>
-                                </label>
+                            <p class="text-[11px] font-bold tracking-wider text-slate-400 uppercase mt-1">Collaboration</p>
+                            <div class="space-y-2 pl-1">
+                                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictTeamChat" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Équipe</span></label>
+                                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictTranslator" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Traducteur</span></label>
+                                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictCompanyInfo" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Infos</span></label>
                             </div>
                         </div>
                         <p class="text-xs text-slate-500 mt-2">Le rôle n’est qu’un libellé : c’est cette liste qui décide des accès. Seul l’<strong class="text-slate-400">Administrateur</strong> voit tout (y compris la gestion des comptes).</p>
@@ -24913,6 +24786,45 @@
             });
             return out;
         }
+
+        // Modèles par TYPE DE COMPTE : sélection de modules pré-préparée pour chaque rôle.
+        // C'est un point de départ que l'admin ajuste ensuite (aucun accès n'est imposé).
+        function roleTemplateViews(role) {
+            var T = {
+                // Opérateurs terrain
+                foreur: ['dashboard', 'forage_plan', 'connections', 'project_overview', 'besoins', 'hse', 'site_meals', 'team_chat', 'translator', 'company_info'],
+                aideforeur: ['dashboard', 'forage_plan', 'connections', 'project_overview', 'besoins', 'hse', 'site_meals', 'team_chat', 'translator', 'company_info'],
+                // Supervision chantier
+                superviseur: ['dashboard', 'forage_plan', 'connections', 'assignments', 'maintenance', 'bit_sharpening', 'consumables', 'inventory', 'hse', 'analytics', 'project_overview', 'planification', 'besoins', 'reports', 'rentabilite', 'depenses_pm', 'sites', 'site_meals', 'rh', 'team_chat', 'translator', 'company_info'],
+                // Ingénierie
+                ingenieur: ['dashboard', 'forage_plan', 'connections', 'maintenance', 'bit_sharpening', 'consumables', 'inventory', 'hse', 'analytics', 'project_overview', 'planification', 'besoins', 'reports', 'rentabilite', 'depenses_pm', 'revenue', 'sites', 'team_chat', 'translator', 'company_info'],
+                // Gestion (tout sauf gestion des comptes)
+                gestionnaire: ['dashboard', 'forage_plan', 'connections', 'assignments', 'maintenance', 'bit_sharpening', 'consumables', 'inventory', 'hse', 'analytics', 'project_overview', 'planification', 'besoins', 'reports', 'rentabilite', 'depenses_pm', 'contracts', 'clients', 'sites', 'invoices', 'payments', 'revenue', 'soustraitants', 'site_meals', 'rh', 'team_chat', 'translator', 'company_info'],
+                gestionnaire_site: ['dashboard', 'forage_plan', 'connections', 'assignments', 'maintenance', 'bit_sharpening', 'consumables', 'inventory', 'hse', 'analytics', 'project_overview', 'planification', 'besoins', 'reports', 'rentabilite', 'depenses_pm', 'contracts', 'clients', 'sites', 'invoices', 'payments', 'revenue', 'soustraitants', 'site_meals', 'rh', 'team_chat', 'translator', 'company_info'],
+                // Administratif / finance
+                administratif: ['dashboard', 'project_overview', 'besoins', 'reports', 'rentabilite', 'depenses_pm', 'contracts', 'clients', 'invoices', 'payments', 'revenue', 'soustraitants', 'site_meals', 'rh', 'team_chat', 'translator', 'company_info'],
+                // Santé & sécurité
+                santesecurite: ['dashboard', 'project_overview', 'hse', 'besoins', 'reports', 'team_chat', 'translator', 'company_info'],
+                // Visiteur (lecture large)
+                visiteur: ['dashboard', 'project_overview', 'reports', 'company_info']
+            };
+            return (T[role] || []).slice();
+        }
+        // Applique le modèle du type de compte sélectionné (coche les cases correspondantes).
+        function applyRoleTemplateToCheckboxes() {
+            var sel = document.getElementById('accountRole');
+            var role = sel ? sel.value : '';
+            if (role === 'admin') return; // l'admin a tout d'office
+            setAccountAccessCheckboxes(roleTemplateViews(role));
+        }
+        // Déclenché quand l'admin change le TYPE DE COMPTE dans le menu déroulant :
+        // on applique le modèle du rôle (pré-préparation), puis les règles d'affichage.
+        function onAccountRoleChange() {
+            applyRoleTemplateToCheckboxes();
+            updateAccountRestrictions();
+        }
+        window.onAccountRoleChange = onAccountRoleChange;
+        window.applyRoleTemplateToCheckboxes = applyRoleTemplateToCheckboxes;
 
         function populateAccountRoleSelectFromPolicy() {
             var sel = document.getElementById('accountRole');
