@@ -20323,11 +20323,10 @@
                 table(s6, ['Trou', 'Zone / bloc', 'Machine(s)', 'Mètres forés', 'Prof. finale (m)'], hrows, ['Total (' + holeKeys.length + ' trous)' + extra, '', '', dec(totM), '—']);
             }
 
-            // 6b — Production par lieu foré
-            var sL = pptx.addSlide(); slideTitle(sL, 'Production & performance par lieu foré');
+            // 6b — Production par lieu foré (diapo seulement si des lieux sont renseignés)
             var locKeys = Object.keys(locAgg);
-            if (!locKeys.length) { sL.addText('Aucun lieu renseigné.', { x: 0.6, y: 2, w: 12, h: 0.6, fontSize: 16, color: GRAY }); }
-            else {
+            if (locKeys.length) {
+                var sL = pptx.addSlide(); slideTitle(sL, 'Production & performance par lieu foré');
                 var tM = 0, tR = 0, tH = 0, tHoles = 0;
                 var lrows = locKeys.map(function (k) { var L = locAgg[k]; var nh = Object.keys(L.holes).length; tM += L.meters; tR += L.redrill; tH += L.hours; tHoles += nh; var rend = L.hours > 0 ? L.meters / L.hours : null; return [k, String(nh), dec(L.meters), dec(L.redrill), rend != null ? dec(rend, 2) : '—', Object.keys(L.machines).join(', ')]; });
                 table(sL, ['Lieu / fosse', 'Trous', 'Nouveau (m)', 'Reforés (m)', 'Rend. (m/h)', 'Machine(s)'], lrows,
@@ -20345,24 +20344,25 @@
                 });
             } catch (ep) {}
 
-            // 7 — Pannes & observations
-            var s7 = pptx.addSlide(); slideTitle(s7, 'Pannes, observations & changements');
-            function block(s, title, items, x, y, w, h, empty, maxItems) {
-                s.addText(title, { x: x, y: y, w: w, h: 0.4, fontSize: 14, bold: true, color: BLACK });
-                if (!items.length) { s.addText(empty, { x: x, y: y + 0.45, w: w, h: 0.5, fontSize: 12, italic: true, color: '999999', valign: 'top' }); return; }
-                var shown = items.slice(0, maxItems);
-                if (items.length > maxItems) shown.push('… et ' + (items.length - maxItems) + ' autre(s)');
-                var fs = shown.length > 7 ? 10 : shown.length > 4 ? 11 : 12;
-                s.addText(shown.map(function (t) { return { text: t, options: { bullet: { indent: 12 }, fontSize: fs, color: '222222', paraSpaceAfter: 4 } }; }), { x: x, y: y + 0.45, w: w, h: h, valign: 'top' });
+            // 7 — Pannes & observations (diapo seulement s'il y a quelque chose)
+            if (pannes.length || obsList.length || changes.length) {
+                var s7 = pptx.addSlide(); slideTitle(s7, 'Pannes, observations & changements');
+                var block = function (s, title, items, x, y, w, h, empty, maxItems) {
+                    s.addText(title, { x: x, y: y, w: w, h: 0.4, fontSize: 14, bold: true, color: BLACK });
+                    if (!items.length) { s.addText(empty, { x: x, y: y + 0.45, w: w, h: 0.5, fontSize: 12, italic: true, color: '999999', valign: 'top' }); return; }
+                    var shown = items.slice(0, maxItems);
+                    if (items.length > maxItems) shown.push('… et ' + (items.length - maxItems) + ' autre(s)');
+                    var fs = shown.length > 7 ? 10 : shown.length > 4 ? 11 : 12;
+                    s.addText(shown.map(function (t) { return { text: t, options: { bullet: { indent: 12 }, fontSize: fs, color: '222222', paraSpaceAfter: 4 } }; }), { x: x, y: y + 0.45, w: w, h: h, valign: 'top' });
+                };
+                block(s7, '🔧 Pannes mécaniques', pannes, 0.6, 1.4, 6.0, 2.75, 'Aucune panne enregistrée.', 9);
+                block(s7, '📝 Observations', obsList, 6.9, 1.4, 5.8, 2.75, 'Aucune observation.', 9);
+                block(s7, '🔁 Changements / consommables', changes, 0.6, 4.75, 12.1, 1.95, 'Aucun changement signalé.', 6);
             }
-            block(s7, '🔧 Pannes mécaniques', pannes, 0.6, 1.4, 6.0, 2.75, 'Aucune panne enregistrée.', 9);
-            block(s7, '📝 Observations', obsList, 6.9, 1.4, 5.8, 2.75, 'Aucune observation.', 9);
-            block(s7, '🔁 Changements / consommables', changes, 0.6, 4.75, 12.1, 1.95, 'Aucun changement signalé.', 6);
 
-            // 8 — Machines garées
-            var s8 = pptx.addSlide(); slideTitle(s8, 'Machines garées — état du parc');
-            if (!parked.length) { s8.addText('Toutes les machines sont en forage — aucune machine garée.', { x: 0.6, y: 2, w: 12, h: 0.6, fontSize: 16, color: GRAY }); }
-            else {
+            // 8 — Machines garées (diapo seulement s'il y a des machines garées)
+            if (parked.length) {
+                var s8 = pptx.addSlide(); slideTitle(s8, 'Machines garées — état du parc');
                 var prows = parked.map(function (dd) { var site = (dd.siteId && typeof sites !== 'undefined') ? sites.find(function (s) { return s.id == dd.siteId; }) : null; return [String(dd.id), dd.parkLocation || dd.location || '—', site ? (site.name || '—') : '—', dd.status || '—', dd.parkReason || '—', dd.expectedReturnDate ? formatDate(dd.expectedReturnDate) : 'Non définie']; });
                 table(s8, ['Machine', 'Lieu de stationnement', 'Site', 'Statut', 'Motif', 'Sortie probable'], prows, null);
             }
@@ -20571,11 +20571,9 @@
             var tr = [[{ text: 'Type d\'arrêt', options: { bold: true, color: CAT, fill: { color: NAVY }, fontSize: 12 } }, { text: 'Heures', options: { bold: true, color: CAT, fill: { color: NAVY }, align: 'right', fontSize: 12 } }, { text: '% du total', options: { bold: true, color: CAT, fill: { color: NAVY }, align: 'right', fontSize: 12 } }]];
             rows.forEach(function (r, ri) { tr.push([{ text: r[0], options: { fontSize: 12, fill: { color: ri % 2 ? LIGHT : 'FFFFFF' } } }, { text: r[1], options: { align: 'right', fontSize: 12, fill: { color: ri % 2 ? LIGHT : 'FFFFFF' } } }, { text: r[2], options: { align: 'right', fontSize: 12, fill: { color: ri % 2 ? LIGHT : 'FFFFFF' } } }]); });
             tr.push([{ text: 'Total arrêts', options: { bold: true, fill: { color: 'EDF2F7' }, fontSize: 12 } }, { text: dec(totalStops) + ' h', options: { bold: true, align: 'right', fill: { color: 'EDF2F7' }, fontSize: 12 } }, { text: '100 %', options: { bold: true, align: 'right', fill: { color: 'EDF2F7' }, fontSize: 12 } }]);
-            s3.addTable(tr, { x: 0.5, y: 1.5, w: 8.0, colW: [4.0, 2.0, 2.0], border: { type: 'solid', color: 'CBD5E1', pt: 0.5 }, valign: 'middle' });
-            s3.addText([{ text: 'Heures programmées : ', options: { bold: true } }, { text: dec(agg.scheduled) + ' h\n' }, { text: 'Heures utilisées : ', options: { bold: true } }, { text: dec(agg.usedHours) + ' h\n' }, { text: 'Heures productives : ', options: { bold: true } }, { text: dec(agg.productiveHours) + ' h\n' }, { text: 'Utilisation de la dispo (UoA) : ', options: { bold: true } }, { text: uoa != null ? dec(uoa) + ' %' : 'N/A' }], { x: 8.8, y: 1.5, w: 4.0, h: 3.0, fontSize: 13, color: GRAY, lineSpacingMultiple: 1.3 });
-
-            // 4 — Synthèse des indicateurs
-            var s4 = pptx.addSlide(); slideTitle(s4, 'Synthèse des indicateurs');
+            s3.addTable(tr, { x: 0.5, y: 1.4, w: 8.0, colW: [4.0, 2.0, 2.0], border: { type: 'solid', color: 'CBD5E1', pt: 0.5 }, valign: 'middle' });
+            s3.addText([{ text: 'Heures programmées : ', options: { bold: true } }, { text: dec(agg.scheduled) + ' h\n' }, { text: 'Heures utilisées : ', options: { bold: true } }, { text: dec(agg.usedHours) + ' h\n' }, { text: 'Heures productives : ', options: { bold: true } }, { text: dec(agg.productiveHours) + ' h\n' }, { text: 'Utilisation de la dispo (UoA) : ', options: { bold: true } }, { text: uoa != null ? dec(uoa) + ' %' : 'N/A' }], { x: 8.8, y: 1.4, w: 4.0, h: 2.6, fontSize: 12, color: GRAY, lineSpacingMultiple: 1.25 });
+            // Synthèse des indicateurs fusionnée sur la même diapo (gain d'une page)
             var bullets = [];
             if (rate != null) bullets.push((rate >= 100 ? '✅ ' : '⚠️ ') + 'Objectif de production : ' + dec(rate) + ' % du planifié' + (rate >= 100 ? ' (atteint).' : '.'));
             if (dispo != null) bullets.push((dispo >= 85 ? '✅ ' : '⚠️ ') + 'Disponibilité mécanique : ' + dec(dispo) + ' %' + (dispo >= 85 ? ' (satisfaisante).' : ' (seuil recommandé 85 %).'));
@@ -20583,7 +20581,9 @@
             if (agg.stb > 2) bullets.push('⏸️ Standby élevé : ' + dec(agg.stb) + ' h. À investiguer.');
             if (parked.length > 0) bullets.push('🅿️ ' + parked.length + ' machine(s) garée(s) actuellement.');
             if (!bullets.length) bullets.push('Données insuffisantes pour l\'analyse.');
-            s4.addText(bullets.map(function (b) { return { text: b, options: { bullet: { indent: 15 }, fontSize: 16, color: NAVY, paraSpaceAfter: 10 } }; }), { x: 0.7, y: 1.6, w: 12, h: 4.8 });
+            s3.addShape(pptx.ShapeType.line, { x: 0.5, y: 4.55, w: 12.3, h: 0, line: { color: 'E4E2DA', width: 1 } });
+            s3.addText('Synthèse des indicateurs', { x: 0.5, y: 4.62, w: 12.3, h: 0.35, fontSize: 13, bold: true, color: NAVY });
+            s3.addText(bullets.map(function (b) { return { text: b, options: { bullet: { indent: 14 }, fontSize: 13, color: NAVY, paraSpaceAfter: 5 } }; }), { x: 0.6, y: 5.05, w: 12.2, h: 2.1, valign: 'top' });
 
             // (Observations détaillées et inventaire des machines garées retirés
             //  de la synthèse exécutive — disponibles dans l'« Export PowerPoint » complet.)
@@ -21848,21 +21848,31 @@
             // Compaction impression : réduit les marges et espacements pour tenir le
             // rapport sur le moins de pages possible (cible 2 pages en A4 paysage).
             '@media print{',
-            '  @page{margin:6mm 8mm;}',
-            '  body{font-size:10.5px;line-height:1.3;}',
-            '  .daily-section{margin-top:8px!important;}',
-            '  .daily-section h2{font-size:12px;margin-bottom:5px;padding-bottom:3px;}',
-            '  .daily-subtitle{margin:6px 0 3px;font-size:10px;}',
-            '  .report-doc-title{font-size:17px;margin:8px 0 6px;}',
-            '  .report-meta-wrap{margin-bottom:8px;padding:6px 8px;}',
-            '  .report-logos-row{margin-bottom:7px;padding-bottom:7px;}.report-logos-row img{max-height:70px!important;}',
-            '  .report-kpi-card{min-height:64px!important;padding:5px 7px!important;}',
-            '  .report-kpi-value{font-size:19px!important;}',
-            '  table.daily-table th,table.daily-table td,table.pro2 th,table.pro2 td{padding:3px 5px!important;}',
-            '  .daily-sheet table th,.daily-sheet table td{font-size:10.5px;}',
-            '  .daily-signature{min-height:74px!important;padding:7px!important;}.daily-signature-space{height:12px!important;}',
-            '  .daily-footer{margin-top:10px;padding-top:5px;}',
-            '  .daily-table-note,.rpt-chart-note{font-size:8.5px;}',
+            '  @page{margin:5mm 7mm;}',
+            '  body{font-size:10px;line-height:1.2;}',
+            '  .daily-sheet{padding:0!important;}',
+            '  .daily-section{margin-top:5px!important;}',
+            '  .daily-section h2{font-size:11.5px;margin-bottom:3px;padding-bottom:2px;}',
+            '  .daily-subtitle{margin:4px 0 2px;font-size:9.5px;}',
+            '  .report-doc-title{font-size:15px;margin:5px 0 4px;}',
+            '  .report-title-rule{margin-bottom:5px;}',
+            '  .report-meta-wrap{margin-bottom:5px;padding:4px 7px;line-height:1.3;}.report-meta-row{margin:1px 0;}',
+            '  .report-logos-row{margin-bottom:5px;padding-bottom:5px;}.report-logos-row img{max-height:54px!important;}',
+            '  .report-kpi-grid{gap:5px!important;margin-bottom:5px!important;}',
+            '  .report-kpi-card{min-height:50px!important;padding:4px 6px!important;}',
+            '  .report-kpi-value{font-size:16px!important;}.report-kpi-label{min-height:0!important;}',
+            '  table.daily-table,table.pro2,table.kpi-table,table.parked-table{margin:0 0 4px!important;}',
+            '  table.daily-table th,table.daily-table td,table.pro2 th,table.pro2 td,table.kpi-table th,table.kpi-table td,table.parked-table th,table.parked-table td{padding:2px 4px!important;line-height:1.2!important;}',
+            '  .daily-sheet table th,.daily-sheet table td{font-size:9.5px;}',
+            '  .daily-chart-grid{margin:4px 0 2px!important;gap:8px!important;}.daily-chart-panel{padding:7px!important;}.daily-chart-row{margin:4px 0!important;}.daily-chart-track,.daily-chart-bar{height:14px!important;}',
+            '  .summary{min-height:0!important;padding:5px 8px!important;}',
+            '  .pattern-plan{margin:4px 0 6px!important;padding:5px!important;}.pattern-plan img{max-height:95mm!important;}',
+            '  .pattern-grid{gap:6px!important;}.pattern-fig img{max-height:80mm!important;}',
+            '  .rpt-chart-card img{max-height:70mm!important;width:auto!important;margin:0 auto!important;}',
+            '  .daily-signatures{margin-top:4px!important;}.daily-signature{min-height:52px!important;padding:6px!important;}.daily-signature-space{height:8px!important;}.daily-signature-title{margin-bottom:5px!important;}.daily-signature-field{margin:3px 0!important;}',
+            '  .daily-footer{margin-top:6px;padding-top:4px;}',
+            '  .daily-table-note,.rpt-chart-note{font-size:8px;margin-top:3px!important;}',
+            '  .daily-report-audience{margin:0 0 5px!important;}',
             '}'
         ].join('');
 
