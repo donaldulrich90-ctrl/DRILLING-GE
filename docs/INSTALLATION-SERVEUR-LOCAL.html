@@ -113,6 +113,24 @@
     </div>
   </div>
 
+  <h2>Pas de WiFi au site ? Utiliser le PC comme point d'accès (Windows)</h2>
+  <div class="box" style="margin-bottom:10px;">
+    Le PC serveur peut créer son propre WiFi ; les tablettes s'y connectent (aucun internet nécessaire).
+    <ol class="steps" style="margin-top:6px;">
+      <li><div class="stitle">Activer le point d'accès</div><i>Paramètres → Réseau et Internet → Point d'accès sans fil</i>. Cliquez <b>Modifier</b> pour mettre un nom (<span class="fill">GEDRILLING</span>) et un mot de passe (8 caractères mini), puis <b>activez</b>.
+        <div class="note">Si Windows refuse (« pas de connexion à partager »), ouvrez l'invite de commandes <b>en administrateur</b> et tapez :</div>
+        <span class="cmd">netsh wlan set hostednetwork mode=allow ssid=GEDRILLING key=motdepasse123
+netsh wlan start hostednetwork</span>
+      </li>
+      <li><div class="stitle">Trouver l'IP du PC &amp; autoriser le port</div>Tapez <code>ipconfig</code> → l'IPv4 du point d'accès est en général <span class="fill">192.168.137.1</span>. Autorisez le port 3000 :
+        <span class="cmd">netsh advfirewall firewall add rule name="GEDRILLING 3000" dir=in action=allow protocol=TCP localport=3000</span>
+      </li>
+      <li><div class="stitle">Connecter les tablettes</div>Démarrez le serveur, puis sur les tablettes : WiFi <b>GEDRILLING</b> → navigateur sur <span class="fill">http://192.168.137.1:3000</span>.
+        <div class="note">Gardez le PC allumé et désactivez sa mise en veille pendant le poste.</div>
+      </li>
+    </ol>
+  </div>
+
   <h2>En cas de souci</h2>
   <table>
     <tr><th style="width:45%">Symptôme</th><th>À faire</th></tr>
