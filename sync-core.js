@@ -96,4 +96,60 @@ function applyMerge(db, entVal, payload, cb) {
     nextDaily();
 }
 
-module.exports = { buildExport, applyMerge };
+// ---- Configuration (sens online → local uniquement) ------------------------
+// Export de la configuration de l'entreprise : clients, sites, contrats,
+// foreuses, fiche entreprise (dont fosses), comptes utilisateurs.
+function buildConfigExport(db, entId, cb) {
+    const out = { clients: [], sites: [], contracts: [], drills: [], companyInfo: [], users: [] };
+    const where = entId != null ? ' WHERE enterpriseId = ?' : '';
+    const p = entId != null ? [entId] : [];
+    const tables = ['clients', 'sites', 'contracts', 'drills', 'companyInfo', 'users'];
+    let i = 0;
+    (function next() {
+        if (i >= tables.length) return cb(null, out);
+        const t = tables[i++];
+        db.all('SELECT * FROM ' + t + where, p, (e, rows) => { if (!e && rows) out[t] = rows; next(); });
+    })();
+}
+
+// Applique une configuration reçue (upsert par clé primaire). L'entreprise en
+// ligne fait foi : « online gagne » pour la config. Additif (jamais de
+// suppression). enterpriseId est forcé à entVal (sécurité).
+function applyConfig(db, entVal, cfg, cb) {
+    if (!cfg) return cb(null, {});
+    const counts = {};
+    function upsertTable(table, rows, done) {
+        rows = Array.isArray(rows) ? rows : [];
+        db.all('PRAGMA table_info(' + table + ')', [], (e, cols) => {
+            if (e || !cols) { counts[table] = 0; return done(); }
+            const colNames = cols.map((c) => c.name);
+            let n = 0, i = 0;
+            (function next() {
+                if (i >= rows.length) { counts[table] = n; return done(); }
+                const r = rows[i++] || {};
+                if (colNames.indexOf('enterpriseId') >= 0) r.enterpriseId = entVal;
+                const use = colNames.filter((c) => Object.prototype.hasOwnProperty.call(r, c));
+                if (!use.length) return next();
+                const ph = use.map(() => '?').join(',');
+                db.run('INSERT OR REPLACE INTO ' + table + ' (' + use.join(',') + ') VALUES (' + ph + ')', use.map((c) => r[c]), (ie) => { if (!ie) n++; next(); });
+            })();
+        });
+    }
+    // companyInfo : une seule ligne par entreprise → on remplace celle-ci.
+    function doCompanyInfo(done) {
+        db.run('DELETE FROM companyInfo WHERE enterpriseId = ?', [entVal], () => upsertTable('companyInfo', cfg.companyInfo, done));
+    }
+    // Ordre : parents avant enfants (clients → sites → contrats → foreuses).
+    const seq = [
+        (d) => upsertTable('clients', cfg.clients, d),
+        (d) => upsertTable('sites', cfg.sites, d),
+        (d) => upsertTable('contracts', cfg.contracts, d),
+        (d) => upsertTable('drills', cfg.drills, d),
+        (d) => doCompanyInfo(d),
+        (d) => upsertTable('users', cfg.users, d)
+    ];
+    let i = 0;
+    (function run() { if (i >= seq.length) return cb(null, counts); seq[i++](run); })();
+}
+
+module.exports = { buildExport, applyMerge, buildConfigExport, applyConfig };
