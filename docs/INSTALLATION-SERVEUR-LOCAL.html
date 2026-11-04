@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Installation serveur local — GEDRILLING</title>
+<style>
+  :root { --ink:#141414; --cat:#F5B800; --line:#d7dde5; --muted:#5a6b7c; --bg:#eef2f7; }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body { margin:0; color:var(--ink); font:13px/1.5 Arial, Helvetica, sans-serif; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .sheet { width:210mm; min-height:297mm; margin:14px auto; background:#fff; padding:14mm 15mm; box-shadow:0 6px 24px rgba(16,32,53,.12); }
+  header { display:flex; align-items:center; gap:14px; border-bottom:3px solid var(--ink); padding-bottom:10px; }
+  .badge { background:var(--ink); color:var(--cat); font-weight:900; letter-spacing:.04em; padding:8px 12px; border-radius:4px; font-size:15px; }
+  h1 { margin:0; font-size:19px; letter-spacing:.02em; }
+  header p { margin:3px 0 0; color:var(--muted); font-size:12px; }
+  h2 { font-size:13px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink); margin:16px 0 8px; border-left:4px solid var(--cat); padding-left:8px; }
+  .intro { background:#f7f9fb; border:1px solid var(--line); border-radius:6px; padding:9px 12px; margin:12px 0; font-size:12.5px; color:#2c3a49; }
+  ol.steps { margin:0; padding:0; list-style:none; counter-reset:st; }
+  ol.steps > li { counter-increment:st; position:relative; padding:9px 0 9px 40px; border-bottom:1px dashed var(--line); }
+  ol.steps > li:last-child { border-bottom:0; }
+  ol.steps > li::before { content:counter(st); position:absolute; left:0; top:8px; width:26px; height:26px; background:var(--cat); color:var(--ink); font-weight:900; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:13px; }
+  .stitle { font-weight:700; font-size:13.5px; }
+  code, .code { font-family:"Courier New", monospace; background:#141414; color:#ffe9a8; padding:2px 6px; border-radius:3px; font-size:12px; }
+  .cmd { display:block; background:#141414; color:#ffe9a8; padding:8px 10px; border-radius:5px; margin:6px 0 2px; font-family:"Courier New", monospace; font-size:12px; white-space:pre-wrap; }
+  .fill { background:#fff6d6; border:1px solid #e9c84c; padding:1px 5px; border-radius:3px; font-weight:700; }
+  .note { color:var(--muted); font-size:11.5px; margin-top:3px; }
+  table { width:100%; border-collapse:collapse; margin:4px 0; font-size:12px; }
+  td, th { border:1px solid var(--line); padding:5px 8px; text-align:left; vertical-align:top; }
+  th { background:#f1f4f8; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .box { border:1px solid var(--line); border-radius:6px; padding:9px 11px; }
+  .box h3 { margin:0 0 5px; font-size:12.5px; }
+  footer { margin-top:14px; padding-top:8px; border-top:1px solid var(--line); color:var(--muted); font-size:10.5px; display:flex; justify-content:space-between; }
+  .toolbar { width:210mm; margin:12px auto 0; text-align:right; }
+  .toolbar button { background:var(--ink); color:#fff; border:0; border-radius:5px; padding:9px 16px; font-weight:700; cursor:pointer; }
+  @media print { html,body{ background:#fff; } .sheet{ margin:0; box-shadow:none; width:auto; min-height:auto; padding:8mm 10mm; } .toolbar{ display:none; } @page{ size:A4; margin:8mm; } }
+</style>
+</head>
+<body>
+<div class="toolbar"><button onclick="window.print()">🖨️ Imprimer / Enregistrer en PDF</button></div>
+<div class="sheet">
+  <header>
+    <span class="badge">GEDRILLING</span>
+    <div>
+      <h1>Installation du serveur LOCAL (au site, sans internet)</h1>
+      <p>Fiche d'installation — à suivre une seule fois sur le PC/serveur du site.</p>
+    </div>
+  </header>
+
+  <div class="intro">
+    <b>But :</b> faire tourner la plateforme <b>au site, sans internet</b>. Les tablettes et PC du site s'y connectent par le réseau local (WiFi/LAN).
+    Quand internet revient, le serveur local se <b>synchronise tout seul</b> avec le serveur en ligne (données + configuration).
+  </div>
+
+  <h2>Avant de commencer</h2>
+  <table>
+    <tr><th style="width:38%">Il vous faut</th><th>Détail</th></tr>
+    <tr><td>Un PC/serveur au site</td><td>Allumé en permanence, connecté au réseau WiFi/LAN du site. <b>Node.js 20</b> installé (ou Docker).</td></tr>
+    <tr><td>Le dossier du logiciel</td><td>Le code de la plateforme (dossier <code>DRILLING-GE</code>) copié sur ce PC.</td></tr>
+    <tr><td>3 informations</td><td>L'<b>adresse du serveur en ligne</b>, et un <b>compte administrateur</b> (identifiant + mot de passe) de votre entreprise sur ce serveur.</td></tr>
+  </table>
+
+  <h2>Étapes</h2>
+  <ol class="steps">
+    <li>
+      <div class="stitle">Récupérer les données du serveur en ligne</div>
+      Sur le serveur <b>en ligne</b> : ouvrez la vue <b>Entreprises</b> → cliquez <b>« ⬇️ Télécharger une sauvegarde »</b>.
+      Renommez le fichier obtenu en <span class="fill">seed.db</span> et placez-le à la racine du dossier du logiciel sur le PC du site.
+      <div class="note">Ainsi le local démarre déjà avec tous vos sites, foreuses, fosses, contrats, comptes et données — rien à ressaisir.</div>
+    </li>
+    <li>
+      <div class="stitle">Créer le fichier de configuration</div>
+      Faites une copie du fichier <code>.env.local.example</code> et nommez-la <span class="fill">.env.local</span>. Ouvrez-la et remplissez :
+      <table>
+        <tr><th style="width:34%">Ligne</th><th>À mettre</th></tr>
+        <tr><td><code>SYNC_REMOTE_URL</code></td><td>L'adresse du serveur en ligne (ex. <code>https://forage.waudrilling.com</code>)</td></tr>
+        <tr><td><code>SYNC_USERNAME</code></td><td>Un compte <b>admin</b> de votre entreprise en ligne</td></tr>
+        <tr><td><code>SYNC_PASSWORD</code></td><td>Le mot de passe de ce compte</td></tr>
+      </table>
+      <div class="note">Les autres lignes (fréquence, port) peuvent rester telles quelles.</div>
+    </li>
+    <li>
+      <div class="stitle">Démarrer le serveur local</div>
+      Dans le dossier du logiciel, lancez :
+      <span class="cmd">./scripts/start-local.sh</span>
+      <div class="note">Sous Windows (PowerShell) : <code>scripts\start-local.ps1</code>. Au premier démarrage, il charge <code>seed.db</code> puis active la synchro automatique.</div>
+    </li>
+    <li>
+      <div class="stitle">Connecter les appareils du site</div>
+      Notez l'<b>adresse IP</b> du PC serveur sur le réseau du site. Sur les tablettes/PC, ouvrez le navigateur à :
+      <span class="cmd">http://ADRESSE-IP-DU-SERVEUR:3000</span>
+      <div class="note">Exemple : <code>http://192.168.1.50:3000</code>. Tous les appareils doivent être sur le même WiFi/réseau que le serveur.</div>
+    </li>
+    <li>
+      <div class="stitle">Vérifier la synchronisation</div>
+      Connectez-vous en admin → vue <b>Comptes</b> → panneau <b>« 🔄 Synchronisation local ⇄ en ligne »</b>.
+      La ligne de statut indique « activée » et la dernière synchro. Bouton <b>« Synchroniser maintenant »</b> pour forcer un cycle quand il y a internet.
+    </li>
+  </ol>
+
+  <div class="grid2">
+    <div class="box">
+      <h3>✅ Au quotidien</h3>
+      On travaille toujours sur le serveur <b>local</b> (saisies, patterns, rapports), même sans internet.
+      Dès qu'internet revient, les données remontent en ligne automatiquement et la config descend de la ligne.
+    </div>
+    <div class="box">
+      <h3>🔄 Mettre à jour le logiciel</h3>
+      Quand il y a internet, lancez :
+      <span class="cmd">./scripts/update.sh</span>
+      Récupère la dernière version et redémarre <b>sans toucher à la base</b> (dossier <code>data</code>).
+    </div>
+  </div>
+
+  <h2>En cas de souci</h2>
+  <table>
+    <tr><th style="width:45%">Symptôme</th><th>À faire</th></tr>
+    <tr><td>Le statut synchro affiche une erreur de connexion</td><td>Vérifiez l'adresse (<code>SYNC_REMOTE_URL</code>) et le mot de passe dans <code>.env.local</code>, et qu'internet est disponible.</td></tr>
+    <tr><td>Une tablette n'ouvre pas la page</td><td>Vérifiez qu'elle est sur le même WiFi et que l'IP + <code>:3000</code> sont corrects.</td></tr>
+    <tr><td>Besoin de repartir des données en ligne</td><td>Re-téléchargez une sauvegarde, remplacez <code>data/database.db</code> par ce fichier, puis redémarrez.</td></tr>
+  </table>
+
+  <footer>
+    <span>GEDRILLING — Plateforme de forage · Fiche d'installation serveur local</span>
+    <span>Conserver cette fiche près du serveur</span>
+  </footer>
+</div>
+</body>
+</html>
