@@ -1637,6 +1637,19 @@
 
         <div id="mainView-accounts" class="main-view hidden">
             <h2 class="text-2xl font-semibold mb-4" data-i18n="view.accounts">Comptes</h2>
+            <div class="mb-6 ged-content-panel p-4 rounded-xl border border-indigo-700/40">
+                <div class="flex items-center justify-between gap-4 flex-wrap mb-2">
+                    <div>
+                        <h3 class="font-semibold text-indigo-300">🔄 Synchronisation local ⇄ en ligne</h3>
+                        <p class="text-slate-400 text-sm">Quand internet est disponible : exportez les données d'un côté et fusionnez-les de l'autre. La fusion est <strong class="text-slate-300">additive</strong> (le plus récent est conservé, rien n'est effacé).</p>
+                    </div>
+                    <div class="flex gap-2 flex-wrap">
+                        <button type="button" onclick="syncExportData(this)" class="bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-lg font-semibold text-sm whitespace-nowrap">⬇️ Exporter les données</button>
+                        <label class="bg-emerald-600 hover:bg-emerald-700 px-4 py-2 rounded-lg font-semibold text-sm whitespace-nowrap cursor-pointer">⬆️ Importer / fusionner<input type="file" id="syncImportFile" accept="application/json,.json" onchange="syncImportData(this)" class="hidden"></label>
+                    </div>
+                </div>
+                <p id="syncStatus" class="text-xs text-slate-400 mt-1"></p>
+            </div>
             <div id="accountsContent" class="ged-content-panel p-6 rounded-xl"></div>
         </div>
 
@@ -16419,6 +16432,63 @@
             }
         }
         window.loadServerLogs = loadServerLogs;
+
+        function _syncHeaders(extra) {
+            var h = Object.assign({}, extra || {});
+            try { var ent = window.API && window.API.getEnterpriseId && window.API.getEnterpriseId(); if (ent != null && ent !== '') h['X-Enterprise-Id'] = String(ent); } catch (e) {}
+            return h;
+        }
+        function syncSetStatus(msg, kind) {
+            var el = document.getElementById('syncStatus'); if (!el) return;
+            el.textContent = msg || '';
+            el.style.color = kind === 'err' ? '#fca5a5' : (kind === 'ok' ? '#6ee7b7' : '');
+        }
+        async function syncExportData(btn) {
+            var prev = btn ? btn.textContent : null;
+            try {
+                if (btn) { btn.disabled = true; btn.textContent = '⏳ Export…'; }
+                syncSetStatus('Préparation de l\'export…');
+                var resp = await fetch('/api/sync/export', { credentials: 'include', headers: _syncHeaders() });
+                if (!resp.ok) { var j = {}; try { j = await resp.json(); } catch (e) {} syncSetStatus('Export impossible : ' + (j.error || resp.status), 'err'); return; }
+                var data = await resp.json();
+                var blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+                var url = URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                var ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+                a.href = url; a.download = 'synchro-donnees_' + ts + '.json';
+                document.body.appendChild(a); a.click(); a.remove();
+                setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+                syncSetStatus('Export prêt : ' + (data.dailyDataRecords || []).length + ' saisie(s), ' + (data.patternPhotos || []).length + ' pattern(s). Transférez ce fichier sur l\'autre instance puis « Importer / fusionner ».', 'ok');
+            } catch (e) {
+                syncSetStatus('Export impossible : ' + (e && e.message ? e.message : e), 'err');
+            } finally {
+                if (btn) { btn.disabled = false; if (prev != null) btn.textContent = prev; }
+            }
+        }
+        async function syncImportData(input) {
+            var file = input && input.files && input.files[0];
+            if (!file) return;
+            try {
+                syncSetStatus('Lecture du fichier…');
+                var text = await file.text();
+                var payload = JSON.parse(text);
+                if (!payload || (!Array.isArray(payload.dailyDataRecords) && !Array.isArray(payload.patternPhotos))) {
+                    syncSetStatus('Fichier de synchro invalide.', 'err'); input.value = ''; return;
+                }
+                syncSetStatus('Fusion en cours…');
+                var resp = await fetch('/api/sync/import', { method: 'POST', credentials: 'include', headers: _syncHeaders({ 'Content-Type': 'application/json' }), body: text });
+                var r = {}; try { r = await resp.json(); } catch (e) {}
+                if (!resp.ok) { syncSetStatus('Fusion impossible : ' + (r.error || resp.status), 'err'); return; }
+                syncSetStatus('✅ Fusion terminée — saisies : ' + r.dailyInserted + ' ajoutées, ' + r.dailyUpdated + ' mises à jour, ' + r.dailySkipped + ' inchangées ; patterns : ' + r.patternsInserted + ' ajoutés, ' + r.patternsUpdated + ' mis à jour, ' + r.patternsSkipped + ' inchangés.', 'ok');
+                try { if (typeof loadAllData === 'function') await loadAllData(); } catch (e) {}
+            } catch (e) {
+                syncSetStatus('Fusion impossible : ' + (e && e.message ? e.message : e), 'err');
+            } finally {
+                if (input) input.value = '';
+            }
+        }
+        window.syncExportData = syncExportData;
+        window.syncImportData = syncImportData;
 
         function renderEnterprises() {
             var content = document.getElementById('enterprisesContent');

@@ -2010,6 +2010,96 @@ app.get('/api/admin/logs', (req, res) => {
     res.json({ count: rows.length, logs: rows.slice(-limit) });
 });
 
+// ============================================================
+// SYNCHRONISATION local ⇄ en ligne (export / fusion)
+//  - Export : JSON des données opérationnelles de l'entreprise
+//    (saisies journalières + patterns), par CLÉ NATURELLE.
+//  - Import : fusion additive, « le plus récent gagne », sans
+//    jamais effacer ni écraser une version plus récente.
+// ============================================================
+function syncCanAccess(req) {
+    return req.auth && (req.auth.isSuperAdmin || req.auth.isPlatformOwner || req.auth.role === 'admin');
+}
+
+app.get('/api/sync/export', (req, res) => {
+    if (!syncCanAccess(req)) return res.status(403).json({ error: 'Réservé à l’administrateur de l’entreprise.' });
+    const entId = getEnterpriseId(req);
+    const entWhere = entId != null ? ' WHERE enterpriseId = ?' : '';
+    const entP = entId != null ? [entId] : [];
+    const includePatterns = String(req.query.patterns || '1') !== '0';
+    db.all('SELECT date, machineId, shift, data, notes, createdAt, enteredByUsername, enteredByName, enteredAt, lastModifiedByUsername, lastModifiedByName, lastModifiedAt, workflowStatus FROM dailyDataRecords' + entWhere, entP, (e, daily) => {
+        if (e) return res.status(500).json({ error: e.message });
+        if (!includePatterns) {
+            return res.json({ version: 1, exportedAt: new Date().toISOString(), enterpriseId: entId, dailyDataRecords: daily || [], patternPhotos: [] });
+        }
+        db.all('SELECT siteId, date, zone, image, source, createdAt FROM pattern_photos' + entWhere, entP, (e2, patterns) => {
+            if (e2) return res.status(500).json({ error: e2.message });
+            res.json({ version: 1, exportedAt: new Date().toISOString(), enterpriseId: entId, dailyDataRecords: daily || [], patternPhotos: patterns || [] });
+        });
+    });
+});
+
+// Fusion d'un export dans cette instance (limite de corps élevée pour les images)
+app.post('/api/sync/import', express.json({ limit: '80mb' }), (req, res) => {
+    if (!syncCanAccess(req)) return res.status(403).json({ error: 'Réservé à l’administrateur de l’entreprise.' });
+    const entId = getEnterpriseId(req);
+    const body = req.body || {};
+    const daily = Array.isArray(body.dailyDataRecords) ? body.dailyDataRecords : [];
+    const patterns = Array.isArray(body.patternPhotos) ? body.patternPhotos : [];
+    const out = { dailyInserted: 0, dailyUpdated: 0, dailySkipped: 0, patternsInserted: 0, patternsUpdated: 0, patternsSkipped: 0 };
+    const entVal = entId == null ? 1 : entId;
+
+    let di = 0;
+    function nextDaily() {
+        if (di >= daily.length) return doPatterns();
+        const r = daily[di++] || {};
+        if (!r.date || !r.machineId) { out.dailySkipped++; return nextDaily(); }
+        const shift = r.shift || '';
+        const dataStr = typeof r.data === 'string' ? r.data : JSON.stringify(r.data || {});
+        const incT = String(r.lastModifiedAt || r.enteredAt || r.createdAt || '');
+        db.get('SELECT id, lastModifiedAt, createdAt FROM dailyDataRecords WHERE date = ? AND machineId = ? AND COALESCE(shift, \'\') = ? AND enterpriseId = ?',
+            [r.date, r.machineId, shift, entVal], (e, ex) => {
+                if (e) { out.dailySkipped++; return nextDaily(); }
+                if (!ex) {
+                    db.run('INSERT INTO dailyDataRecords (enterpriseId, date, machineId, shift, data, notes, createdAt, enteredByUsername, enteredByName, enteredAt, lastModifiedByUsername, lastModifiedByName, lastModifiedAt, workflowStatus) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+                        [entVal, r.date, r.machineId, shift, dataStr, r.notes || '', r.createdAt || new Date().toISOString(), r.enteredByUsername || '', r.enteredByName || '', r.enteredAt || null, r.lastModifiedByUsername || '', r.lastModifiedByName || '', r.lastModifiedAt || null, r.workflowStatus || 'draft'],
+                        (ie) => { if (ie) out.dailySkipped++; else out.dailyInserted++; nextDaily(); });
+                } else {
+                    const exT = String(ex.lastModifiedAt || ex.createdAt || '');
+                    if (incT && incT > exT) {
+                        db.run('UPDATE dailyDataRecords SET data = ?, notes = ?, lastModifiedByUsername = ?, lastModifiedByName = ?, lastModifiedAt = ?, workflowStatus = ? WHERE id = ?',
+                            [dataStr, r.notes || '', r.lastModifiedByUsername || '', r.lastModifiedByName || '', r.lastModifiedAt || null, r.workflowStatus || 'draft', ex.id],
+                            (ue) => { if (ue) out.dailySkipped++; else out.dailyUpdated++; nextDaily(); });
+                    } else { out.dailySkipped++; nextDaily(); }
+                }
+            });
+    }
+
+    let pi = 0;
+    function doPatterns() {
+        if (pi >= patterns.length) return res.json(out);
+        const p = patterns[pi++] || {};
+        if (!p.date || !p.zone || typeof p.image !== 'string' || !/^data:image\//.test(p.image)) { out.patternsSkipped++; return doPatterns(); }
+        const siteId = (p.siteId === '' || p.siteId == null) ? null : parseInt(p.siteId, 10);
+        const incT = String(p.createdAt || '');
+        db.get('SELECT id, createdAt FROM pattern_photos WHERE enterpriseId = ? AND date = ? AND zone = ? AND IFNULL(siteId,-1) = IFNULL(?,-1)',
+            [entVal, p.date, p.zone, siteId], (e, ex) => {
+                if (e) { out.patternsSkipped++; return doPatterns(); }
+                if (!ex) {
+                    db.run('INSERT INTO pattern_photos (enterpriseId, siteId, date, zone, image, source, createdAt) VALUES (?,?,?,?,?,?,?)',
+                        [entVal, siteId, p.date, p.zone, p.image, p.source === 'auto' ? 'auto' : 'photo', p.createdAt || new Date().toISOString()],
+                        (ie) => { if (ie) out.patternsSkipped++; else out.patternsInserted++; doPatterns(); });
+                } else if (incT && incT > String(ex.createdAt || '')) {
+                    db.run('UPDATE pattern_photos SET image = ?, source = ?, createdAt = ? WHERE id = ?',
+                        [p.image, p.source === 'auto' ? 'auto' : 'photo', p.createdAt, ex.id],
+                        (ue) => { if (ue) out.patternsSkipped++; else out.patternsUpdated++; doPatterns(); });
+                } else { out.patternsSkipped++; doPatterns(); }
+            });
+    }
+
+    nextDaily();
+});
+
 // ============================================
 // PATTERNS (photo hachurée par fosse/zone et par jour)
 // ============================================
