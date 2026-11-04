@@ -1644,10 +1644,12 @@
                         <p class="text-slate-400 text-sm">Quand internet est disponible : exportez les données d'un côté et fusionnez-les de l'autre. La fusion est <strong class="text-slate-300">additive</strong> (le plus récent est conservé, rien n'est effacé).</p>
                     </div>
                     <div class="flex gap-2 flex-wrap">
-                        <button type="button" onclick="syncExportData(this)" class="bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-lg font-semibold text-sm whitespace-nowrap">⬇️ Exporter les données</button>
+                        <button type="button" onclick="syncRunNow(this)" class="bg-indigo-700 hover:bg-indigo-600 px-4 py-2 rounded-lg font-semibold text-sm whitespace-nowrap">🔄 Synchroniser maintenant</button>
+                        <button type="button" onclick="syncExportData(this)" class="bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-lg font-semibold text-sm whitespace-nowrap">⬇️ Exporter (fichier)</button>
                         <label class="bg-emerald-600 hover:bg-emerald-700 px-4 py-2 rounded-lg font-semibold text-sm whitespace-nowrap cursor-pointer">⬆️ Importer / fusionner<input type="file" id="syncImportFile" accept="application/json,.json" onchange="syncImportData(this)" class="hidden"></label>
                     </div>
                 </div>
+                <p id="syncAutoStatus" class="text-xs text-slate-400 mt-1"></p>
                 <p id="syncStatus" class="text-xs text-slate-400 mt-1"></p>
             </div>
             <div id="accountsContent" class="ged-content-panel p-6 rounded-xl"></div>
@@ -8916,6 +8918,7 @@
                 renderInventory();
             } else if (view === 'accounts') {
                 renderAccounts();
+                try { if (typeof syncLoadStatus === 'function') syncLoadStatus(); } catch (e) {}
             } else if (view === 'clients') {
                 renderClients();
             } else if (view === 'forage_plan') {
@@ -16489,6 +16492,42 @@
         }
         window.syncExportData = syncExportData;
         window.syncImportData = syncImportData;
+
+        async function syncLoadStatus() {
+            var el = document.getElementById('syncAutoStatus'); if (!el) return;
+            try {
+                var resp = await fetch('/api/sync/status', { credentials: 'include', headers: _syncHeaders() });
+                if (!resp.ok) { el.textContent = ''; return; }
+                var s = await resp.json();
+                if (!s || !s.enabled) { el.textContent = '🔁 Synchro automatique : désactivée sur cette instance (mode fichier manuel ci-dessus).'; el.style.color = ''; return; }
+                var parts = ['🔁 Synchro automatique : activée (toutes les ' + (s.intervalMinutes || '?') + ' min) → ' + (s.remote || '')];
+                if (s.lastSyncAt) parts.push('dernière : ' + s.lastSyncAt.replace('T', ' ').slice(0, 19));
+                if (s.lastPull) parts.push('reçu ' + (s.lastPull.dailyInserted + s.lastPull.dailyUpdated) + ' saisie(s)');
+                if (s.lastPush) parts.push('envoyé ' + (s.lastPush.dailyInserted + s.lastPush.dailyUpdated) + ' saisie(s)');
+                el.textContent = parts.join(' · ');
+                el.style.color = s.lastError ? '#fca5a5' : '#6ee7b7';
+                if (s.lastError) el.textContent += ' · ⚠️ ' + s.lastError;
+            } catch (e) { el.textContent = ''; }
+        }
+        async function syncRunNow(btn) {
+            var prev = btn ? btn.textContent : null;
+            try {
+                if (btn) { btn.disabled = true; btn.textContent = '⏳ Synchro…'; }
+                syncSetStatus('Synchronisation en cours…');
+                var resp = await fetch('/api/sync/run-now', { method: 'POST', credentials: 'include', headers: _syncHeaders() });
+                var r = {}; try { r = await resp.json(); } catch (e) {}
+                if (!resp.ok) { syncSetStatus('Synchro impossible : ' + (r.error || resp.status) + (resp.status === 400 ? ' (c’est normal sur le serveur en ligne : utilisez l’export/import fichier.)' : ''), 'err'); }
+                else { syncSetStatus('✅ Cycle de synchro lancé.', 'ok'); }
+                syncLoadStatus();
+                try { if (typeof loadAllData === 'function') await loadAllData(); } catch (e) {}
+            } catch (e) {
+                syncSetStatus('Synchro impossible : ' + (e && e.message ? e.message : e), 'err');
+            } finally {
+                if (btn) { btn.disabled = false; if (prev != null) btn.textContent = prev; }
+            }
+        }
+        window.syncLoadStatus = syncLoadStatus;
+        window.syncRunNow = syncRunNow;
 
         function renderEnterprises() {
             var content = document.getElementById('enterprisesContent');
