@@ -10,6 +10,7 @@ set -e
 cd "$(dirname "$0")/.."
 if [ -f .env.local ]; then set -a; . ./.env.local; set +a; else echo "⚠️  .env.local manquant — copiez .env.local.example en .env.local et remplissez-le."; exit 1; fi
 mkdir -p data
+if [ ! -d node_modules ]; then echo "→ Installation des dépendances (une seule fois, patientez)…"; npm ci || npm install; fi
 if [ ! -f data/database.db ] && [ -f seed.db ]; then cp seed.db data/database.db; echo "→ Base initialisée depuis seed.db (données du serveur en ligne)."; fi
 export SYNC_ENABLED=true
 export DB_PATH="${DB_PATH:-./data/database.db}"
