@@ -1997,6 +1997,65 @@ app.get('/api/admin/db-backup', (req, res) => {
     }).catch((e) => res.status(500).json({ error: 'Sauvegarde impossible : ' + e.message }));
 });
 
+// Sauvegarde « seed.db » de l'ENTREPRISE COURANTE uniquement (pour amorcer un
+// serveur local). Accessible à l'admin de l'entreprise : on copie la base puis
+// on retire les autres entreprises (aucune fuite entre entreprises).
+app.get('/api/admin/enterprise-seed', (req, res) => {
+    if (!req.auth || !(req.auth.isSuperAdmin || req.auth.isPlatformOwner || req.auth.role === 'admin')) {
+        return res.status(403).json({ error: 'Réservé à l’administrateur de l’entreprise.' });
+    }
+    const entId = getEnterpriseId(req);
+    if (entId == null || entId === '') {
+        return res.status(400).json({ error: 'Sélectionnez d’abord une entreprise (ou utilisez la sauvegarde complète).' });
+    }
+    const tmpPath = path.join(BACKUP_DIR, 'seed_' + entId + '_' + Date.now() + '.db');
+    backup(tmpPath).then((copyPath) => {
+        const sqlite3 = require('sqlite3');
+        const sdb = new sqlite3.Database(copyPath);
+        const finishErr = (msg) => { try { sdb.close(); } catch (e) {} try { fs.unlinkSync(copyPath); } catch (e) {} if (!res.headersSent) res.status(500).json({ error: msg }); };
+        sdb.serialize(() => {
+            sdb.all("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'", [], (e, tables) => {
+                if (e) return finishErr('Lecture du schéma: ' + e.message);
+                const names = (tables || []).map((t) => t.name);
+                let i = 0;
+                const withEnt = [], withMachine = [];
+                // Détecter les colonnes de chaque table
+                (function scan() {
+                    if (i >= names.length) return strip();
+                    const t = names[i++];
+                    sdb.all('PRAGMA table_info(' + t + ')', [], (e2, cols) => {
+                        const cn = (cols || []).map((c) => c.name);
+                        if (cn.indexOf('enterpriseId') >= 0) withEnt.push(t);
+                        else if (cn.indexOf('machineId') >= 0) withMachine.push(t);
+                        scan();
+                    });
+                })();
+                function strip() {
+                    const steps = [];
+                    // 1) retirer les lignes des AUTRES entreprises (on garde entId + les lignes à enterpriseId NULL, ex. comptes plateforme)
+                    withEnt.forEach((t) => steps.push(['DELETE FROM ' + t + ' WHERE enterpriseId IS NOT NULL AND enterpriseId <> ?', [entId]]));
+                    // 2) tables liées par machineId (sans enterpriseId) : garder celles des foreuses de l'entreprise
+                    withMachine.forEach((t) => steps.push(['DELETE FROM ' + t + ' WHERE machineId NOT IN (SELECT id FROM drills)', []]));
+                    let k = 0;
+                    (function run() {
+                        if (k >= steps.length) {
+                            sdb.run('VACUUM', [], () => {
+                                sdb.close(() => {
+                                    const name = 'seed.db';
+                                    res.download(copyPath, name, () => { try { fs.unlinkSync(copyPath); } catch (e) {} });
+                                });
+                            });
+                            return;
+                        }
+                        const s = steps[k++];
+                        sdb.run(s[0], s[1], () => run());
+                    })();
+                }
+            });
+        });
+    }).catch((e) => res.status(500).json({ error: 'Génération impossible : ' + e.message }));
+});
+
 // Journal applicatif (logs serveur) — réservé au propriétaire de la plateforme.
 app.get('/api/admin/logs', (req, res) => {
     if (!req.auth || !(req.auth.isSuperAdmin || req.auth.isPlatformOwner)) {
