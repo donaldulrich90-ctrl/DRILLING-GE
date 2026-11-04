@@ -2026,9 +2026,15 @@ app.get('/api/sync/export', (req, res) => {
     if (!syncCanAccess(req)) return res.status(403).json({ error: 'Réservé à l’administrateur de l’entreprise.' });
     const entId = getEnterpriseId(req);
     const includePatterns = String(req.query.patterns || '1') !== '0';
+    const includeConfig = String(req.query.config || '0') === '1';
     syncCore.buildExport(db, entId, includePatterns, (e, payload) => {
         if (e) return res.status(500).json({ error: e.message });
-        res.json(payload);
+        if (!includeConfig) return res.json(payload);
+        syncCore.buildConfigExport(db, entId, (e2, cfg) => {
+            if (e2) return res.status(500).json({ error: e2.message });
+            payload.config = cfg;
+            res.json(payload);
+        });
     });
 });
 

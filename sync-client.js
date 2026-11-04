@@ -64,11 +64,15 @@ async function cycle(db) {
     }
     const entId = await new Promise((resolve) => getLocalEnterpriseId(db, (e, id) => resolve(id)));
 
-    // 1) PULL : récupérer les données en ligne et les fusionner localement
+    // 1) PULL : récupérer la config + les données en ligne et les appliquer localement.
+    //    La config (foreuses, sites…) d'abord, pour que les saisies trouvent leur foreuse.
     try {
-        const r = await fetch(base + '/api/sync/export', { headers: { Cookie: cookie } });
+        const r = await fetch(base + '/api/sync/export?patterns=1&config=1', { headers: { Cookie: cookie } });
         if (!r.ok) throw new Error('export HTTP ' + r.status);
         const payload = await r.json();
+        if (payload && payload.config) {
+            status.lastConfig = await new Promise((resolve, reject) => syncCore.applyConfig(db, entId, payload.config, (e, c) => e ? reject(e) : resolve(c)));
+        }
         status.lastPull = await new Promise((resolve, reject) => syncCore.applyMerge(db, entId, payload, (e, c) => e ? reject(e) : resolve(c)));
     } catch (e) {
         status.lastError = 'Récupération (pull) : ' + e.message;
