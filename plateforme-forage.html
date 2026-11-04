@@ -7,6 +7,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@500;600;700;800&family=Montserrat:wght@400;500;600;700;800;900&family=Oswald:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Tailwind : CSS compilé en local (fonctionne HORS-LIGNE). Le CDN ci-dessous
+         n'est qu'un complément en ligne (classes générées dynamiquement). -->
+    <link rel="stylesheet" href="vendor/tailwind.css">
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -34,7 +37,9 @@
             }
         };
     </script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+    <!-- Chart.js : local d'abord (hors-ligne), repli CDN si indisponible (en ligne) -->
+    <script src="vendor/chart.umd.min.js"></script>
+    <script>if(typeof Chart==='undefined'){var s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js';document.head.appendChild(s);}</script>
     <script src="i18n.js"></script>
     <script src="api-client.js"></script>
     <style>
@@ -9931,8 +9936,13 @@
                     fr.readAsArrayBuffer(file);
                 }).catch(function (err) { plan2ImportStatus(err.message, 'err'); });
             } else {
-                plan2LoadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js').then(function () {
-                    try { pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; } catch (e) {}
+                loadVendorScript('vendor/pdf.min.js', 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js').then(function () {
+                    try {
+                        var _localWorker = resolveStaticAssetUrl('vendor/pdf.worker.min.js');
+                        pdfjsLib.GlobalWorkerOptions.workerSrc = _localWorker;
+                    } catch (e) {
+                        try { pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; } catch (e2) {}
+                    }
                     var fr = new FileReader();
                     fr.onload = function (e) {
                         pdfjsLib.getDocument({ data: new Uint8Array(e.target.result) }).promise.then(function (pdf) {
