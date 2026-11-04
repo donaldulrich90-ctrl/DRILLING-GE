@@ -17,6 +17,30 @@ const { ensureDailyDataRecordsSchema } = require('./ensure-daily-data-schema');
 const { registerSso } = require('./ge-sso');
 const { registerMetrics } = require('./ge-metrics');
 
+// ── Journal applicatif en mémoire (visible depuis la plateforme) ───────────
+// Capture console.log/info/warn/error dans un tampon circulaire, consultable
+// via GET /api/admin/logs (réservé au propriétaire de la plateforme).
+const APP_LOG_BUFFER = [];
+const APP_LOG_MAX = 800;
+(function captureConsole() {
+    const levels = ['log', 'info', 'warn', 'error'];
+    levels.forEach((lvl) => {
+        const original = console[lvl].bind(console);
+        console[lvl] = function () {
+            try {
+                const msg = Array.from(arguments).map((a) => {
+                    if (a instanceof Error) return a.stack || a.message;
+                    if (typeof a === 'object') { try { return JSON.stringify(a); } catch (e) { return String(a); } }
+                    return String(a);
+                }).join(' ');
+                APP_LOG_BUFFER.push({ t: new Date().toISOString(), level: lvl, msg: msg.slice(0, 2000) });
+                if (APP_LOG_BUFFER.length > APP_LOG_MAX) APP_LOG_BUFFER.splice(0, APP_LOG_BUFFER.length - APP_LOG_MAX);
+            } catch (e) { /* ne jamais casser le logging */ }
+            return original.apply(console, arguments);
+        };
+    });
+})();
+
 // ── Upload logo entreprise ─────────────────────────────────────────────────
 const enterpriseLogoStorage = multer.diskStorage({
     destination: (req, file, cb) => {
@@ -1970,6 +1994,20 @@ app.get('/api/admin/db-backup', (req, res) => {
             if (err && !res.headersSent) res.status(500).json({ error: 'Téléchargement impossible.' });
         });
     }).catch((e) => res.status(500).json({ error: 'Sauvegarde impossible : ' + e.message }));
+});
+
+// Journal applicatif (logs serveur) — réservé au propriétaire de la plateforme.
+app.get('/api/admin/logs', (req, res) => {
+    if (!req.auth || !(req.auth.isSuperAdmin || req.auth.isPlatformOwner)) {
+        return res.status(403).json({ error: 'Réservé au propriétaire de la plateforme.' });
+    }
+    const limit = Math.min(800, Math.max(1, parseInt(req.query.limit, 10) || 300));
+    const level = (req.query.level || '').toLowerCase();
+    let rows = APP_LOG_BUFFER;
+    if (level && ['log', 'info', 'warn', 'error'].includes(level)) {
+        rows = rows.filter((r) => r.level === level);
+    }
+    res.json({ count: rows.length, logs: rows.slice(-limit) });
 });
 
 // ============================================

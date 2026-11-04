@@ -1558,6 +1558,25 @@
                     <button type="button" onclick="downloadDbBackup(this)" class="bg-emerald-600 hover:bg-emerald-700 px-4 py-2 rounded-lg font-semibold whitespace-nowrap">⬇️ Télécharger une sauvegarde</button>
                 </div>
             </div>
+            <div class="mb-6 ged-content-panel p-4 rounded-xl border border-slate-700/60">
+                <div class="flex items-center justify-between gap-4 flex-wrap mb-3">
+                    <div>
+                        <h3 class="font-semibold text-slate-200">📜 Journal du serveur (logs)</h3>
+                        <p class="text-slate-400 text-sm">Derniers messages applicatifs du serveur (démarrage, erreurs, actions). Utile pour diagnostiquer un problème depuis la plateforme.</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <select id="serverLogLevel" class="bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white text-sm">
+                            <option value="">Tous les niveaux</option>
+                            <option value="error">Erreurs</option>
+                            <option value="warn">Avertissements</option>
+                            <option value="info">Infos</option>
+                            <option value="log">Messages</option>
+                        </select>
+                        <button type="button" onclick="loadServerLogs()" class="bg-slate-600 hover:bg-slate-500 px-4 py-2 rounded-lg font-semibold text-sm whitespace-nowrap">⟳ Rafraîchir</button>
+                    </div>
+                </div>
+                <pre id="serverLogsOutput" class="bg-black/60 border border-slate-700 rounded p-3 text-xs text-slate-200 overflow-auto" style="max-height:340px;white-space:pre-wrap;word-break:break-word;line-height:1.5;">Cliquez sur « Rafraîchir » pour charger les logs.</pre>
+            </div>
             <div id="enterprisesContent" class="ged-content-panel p-6 rounded-xl"></div>
         </div>
 
@@ -16364,6 +16383,32 @@
             }
         }
         window.downloadDbBackup = downloadDbBackup;
+
+        async function loadServerLogs() {
+            var out = document.getElementById('serverLogsOutput');
+            if (!out) return;
+            var level = (document.getElementById('serverLogLevel') || {}).value || '';
+            out.textContent = 'Chargement…';
+            try {
+                var q = '/api/admin/logs?limit=400' + (level ? '&level=' + encodeURIComponent(level) : '');
+                var hdrs = {};
+                try { var ent = window.API && window.API.getEnterpriseId && window.API.getEnterpriseId(); if (ent != null && ent !== '') hdrs['X-Enterprise-Id'] = String(ent); } catch (e) {}
+                var resp = await fetch(q, { credentials: 'include', headers: hdrs });
+                if (!resp.ok) { var j = {}; try { j = await resp.json(); } catch (e2) {} out.textContent = 'Erreur ' + resp.status + (j.error ? ' — ' + j.error : ''); return; }
+                var data = await resp.json();
+                var logs = (data && data.logs) || [];
+                if (!logs.length) { out.textContent = 'Aucun log pour ce niveau.'; return; }
+                var icon = { error: '🔴', warn: '🟠', info: '🔵', log: '⚪' };
+                out.textContent = logs.map(function (l) {
+                    var hh = (l.t || '').replace('T', ' ').replace('Z', '').slice(0, 19);
+                    return (icon[l.level] || '•') + ' ' + hh + '  ' + l.msg;
+                }).join('\n');
+                out.scrollTop = out.scrollHeight;
+            } catch (e) {
+                out.textContent = 'Impossible de charger les logs : ' + (e && e.message ? e.message : e);
+            }
+        }
+        window.loadServerLogs = loadServerLogs;
 
         function renderEnterprises() {
             var content = document.getElementById('enterprisesContent');
