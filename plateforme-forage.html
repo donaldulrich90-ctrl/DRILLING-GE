@@ -1596,12 +1596,21 @@
         <div id="mainView-revenue" class="main-view hidden">
             <h2 class="text-2xl font-semibold mb-4" data-i18n="view.revenue">Revenus</h2>
             <div class="mb-6 ged-content-panel p-5 rounded-xl border border-emerald-700/40">
-                <div class="flex items-center justify-between gap-4 flex-wrap mb-3">
+                <div class="flex items-start justify-between gap-4 flex-wrap mb-3">
                     <div>
                         <h3 class="font-semibold text-emerald-300 text-lg">📅 Rentabilité journalière</h3>
-                        <p class="text-slate-400 text-sm">Revenu estimé du jour moins les coûts du jour (carburant, consommables, dépenses, repas, main-d'œuvre).</p>
+                        <p class="text-slate-400 text-sm">Gains estimés du jour (par jour et par heure). Décochez « Déduire les coûts » pour voir les gains seuls, sans les dépenses.</p>
                     </div>
-                    <input type="date" id="dailyProfitDate" class="bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white" onchange="renderDailyProfitability()">
+                    <div class="flex items-center gap-3 flex-wrap">
+                        <select id="dailyProfitMachine" class="bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white" onchange="renderDailyProfitability()">
+                            <option value="">Toutes les machines</option>
+                        </select>
+                        <input type="date" id="dailyProfitDate" class="bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white" onchange="renderDailyProfitability()">
+                        <label class="flex items-center gap-2 text-sm text-slate-300 cursor-pointer select-none bg-slate-700/60 border border-slate-600 rounded px-3 py-2">
+                            <input type="checkbox" id="dailyProfitDeductCosts" checked onchange="renderDailyProfitability()" class="accent-emerald-500">
+                            Déduire les coûts
+                        </label>
+                    </div>
                 </div>
                 <div id="dailyProfitContent"></div>
             </div>
@@ -17910,10 +17919,29 @@
             });
             return h;
         }
-        function computeDailyProfitability(dateStr) {
+        function hoursWorkedForScopeOnDate(dateStr, drillFilterId, drillsToUse) {
+            var h = 0;
+            (dailyDataRecords || []).forEach(function (r) {
+                if (isDailyRecordIncompleteDraft(r) || !r.date || r.date !== dateStr) return;
+                if (drillFilterId) { if (!drillIdsMatch(r.machineId, drillFilterId)) return; }
+                else if (!drillsToUse.find(function (d) { return drillIdsMatch(r.machineId, d.id); })) return;
+                var data = r.data || {}; if (typeof data === 'string') { try { data = JSON.parse(data); } catch (e) { data = {}; } }
+                var hh = parseFloat(data.hours);
+                if (!isFinite(hh) || hh <= 0) {
+                    var hd = data.hoursCounterDelta;
+                    if (hd == null && data.hoursCounterStart != null && data.hoursCounterEnd != null) hd = computeDailyEntryCounterDelta(data.hoursCounterStart, data.hoursCounterEnd);
+                    hh = parseFloat(hd) || 0;
+                }
+                if (hh > 0) h += hh;
+            });
+            return h;
+        }
+        function computeDailyProfitability(dateStr, drillFilterId) {
             var dispCur = getRevenueViewDisplayCurrency();
             var invCurCompany = companyInfo.currency || 'XOF';
-            var drillsToUse = getDrillsForSite();
+            var allSiteDrills = getDrillsForSite();
+            var machineScoped = !!drillFilterId;
+            var drillsToUse = machineScoped ? allSiteDrills.filter(function (d) { return drillIdsMatch(d.id, drillFilterId); }) : allSiteDrills;
             var assignmentsToUse = getAssignmentsForSite();
             var contractsToUse = getContractsForSite();
             var revenue = 0, meters = 0;
@@ -17958,32 +17986,94 @@
             var emps = getEmployeesForSite(); var totalSalaries = emps.reduce(function (s, e) { return s + (e.salary || 0); }, 0);
             var laborCost = convertMoneyAmountToCurrency(totalSalaries / 30, 'XOF', dispCur);
             var couts = { carburant: fuelCost, consommables: consCost, mainOeuvre: laborCost, repas: mealCost, depenses: expCost };
-            var totalCouts = fuelCost + consCost + laborCost + mealCost + expCost;
+            // Coûts directement rattachés à la machine (carburant) vs coûts partagés du chantier.
+            var directCouts = fuelCost;
+            var sharedCouts = consCost + laborCost + mealCost + expCost;
+            // Quand une machine précise est choisie, on ne lui impute que ses coûts directs ;
+            // les coûts partagés du chantier sont affichés à titre indicatif, non déduits.
+            var totalCouts = machineScoped ? directCouts : (directCouts + sharedCouts);
             var profit = revenue - totalCouts;
-            return { dispCur: dispCur, revenue: revenue, meters: meters, couts: couts, totalCouts: totalCouts, profit: profit, margePct: revenue > 0 ? (profit / revenue * 100) : null };
+            var hours = hoursWorkedForScopeOnDate(dateStr, drillFilterId, drillsToUse);
+            return {
+                dispCur: dispCur, revenue: revenue, meters: meters, hours: hours,
+                couts: couts, directCouts: directCouts, sharedCouts: sharedCouts,
+                totalCouts: totalCouts, profit: profit,
+                margePct: revenue > 0 ? (profit / revenue * 100) : null,
+                machineScoped: machineScoped
+            };
+        }
+        function populateDailyProfitMachineSelect() {
+            var sel = document.getElementById('dailyProfitMachine'); if (!sel) return;
+            var prev = sel.value;
+            var drills = getDrillsForSite();
+            var opts = '<option value="">Toutes les machines</option>';
+            drills.forEach(function (d) {
+                var label = d.id + (d.location ? ' — ' + d.location : '');
+                opts += '<option value="' + String(d.id).replace(/"/g, '&quot;') + '">' + escapeHtml(label) + '</option>';
+            });
+            sel.innerHTML = opts;
+            if (prev && drills.find(function (d) { return String(d.id) === String(prev); })) sel.value = prev;
         }
         function renderDailyProfitability() {
             var cont = document.getElementById('dailyProfitContent'); if (!cont) return;
+            populateDailyProfitMachineSelect();
             var dateEl = document.getElementById('dailyProfitDate');
             if (dateEl && !dateEl.value) dateEl.value = new Date().toISOString().slice(0, 10);
             var dateStr = dateEl ? dateEl.value : new Date().toISOString().slice(0, 10);
             if (!dateStr) { cont.innerHTML = '<p class="text-slate-400 text-sm">Choisissez une date.</p>'; return; }
-            var r = computeDailyProfitability(dateStr);
+            var machineEl = document.getElementById('dailyProfitMachine');
+            var drillFilterId = machineEl ? (machineEl.value || null) : null;
+            var deductEl = document.getElementById('dailyProfitDeductCosts');
+            var deduct = deductEl ? deductEl.checked : true;
+            var r = computeDailyProfitability(dateStr, drillFilterId);
             var cur = r.dispCur;
             var pc = r.profit >= 0 ? '#34d399' : '#f87171';
-            function kpi(l, v, c) { return '<div class="bg-slate-800 border border-slate-700 rounded-lg p-3 text-center"><div class="text-[11px] text-slate-400 uppercase tracking-wide">' + l + '</div><div class="text-xl font-bold mt-1" style="color:' + (c || '#e2e8f0') + '">' + v + '</div></div>'; }
-            var kpis = '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">'
-                + kpi('Revenu estimé', formatCurrency(r.revenue, cur), '#34d399')
-                + kpi('Coûts du jour', formatCurrency(r.totalCouts, cur), '#fbbf24')
-                + kpi('Profit', formatCurrency(r.profit, cur), pc)
-                + kpi('Marge', r.margePct != null ? r.margePct.toFixed(1) + ' %' : '—', pc)
-                + '</div>';
-            var rows = [['⛽ Carburant', r.couts.carburant], ['🧰 Consommables (sorties stock)', r.couts.consommables], ['👷 Main-d\'œuvre (prorata jour)', r.couts.mainOeuvre], ['🍽️ Repas chantier', r.couts.repas], ['💸 Dépenses diverses', r.couts.depenses]];
-            var table = '<table class="w-full text-sm"><tbody>'
-                + rows.map(function (x) { return '<tr class="border-b border-slate-700/50"><td class="py-1.5 text-slate-300">' + x[0] + '</td><td class="py-1.5 text-right text-slate-200">' + formatCurrency(x[1], cur) + '</td></tr>'; }).join('')
-                + '<tr><td class="py-2 font-semibold text-slate-100">Total coûts</td><td class="py-2 text-right font-semibold text-amber-300">' + formatCurrency(r.totalCouts, cur) + '</td></tr>'
-                + '</tbody></table>';
-            var note = '<p class="text-xs text-slate-500 mt-2">Revenu = estimation (mètres forés × tarif du contrat). ' + (r.meters ? ('Mètres forés : ' + r.meters.toFixed(1) + ' m.') : 'Aucun mètre foré ce jour.') + ' Sous-traitants et maintenance non encore inclus.</p>';
+            var h = r.hours || 0;
+            var perH = function (v) { return h > 0 ? formatCurrency(v / h, cur) : '—'; };
+            function kpi(l, v, c, sub) {
+                return '<div class="bg-slate-800 border border-slate-700 rounded-lg p-3 text-center">'
+                    + '<div class="text-[11px] text-slate-400 uppercase tracking-wide">' + l + '</div>'
+                    + '<div class="text-xl font-bold mt-1" style="color:' + (c || '#e2e8f0') + '">' + v + '</div>'
+                    + (sub ? '<div class="text-[11px] text-slate-500 mt-0.5">' + sub + '</div>' : '')
+                    + '</div>';
+            }
+            var kpis;
+            if (deduct) {
+                kpis = '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">'
+                    + kpi('Gains estimés', formatCurrency(r.revenue, cur), '#34d399', perH(r.revenue) + ' /h')
+                    + kpi('Coûts du jour', formatCurrency(r.totalCouts, cur), '#fbbf24', perH(r.totalCouts) + ' /h')
+                    + kpi('Profit', formatCurrency(r.profit, cur), pc, perH(r.profit) + ' /h')
+                    + kpi('Marge', r.margePct != null ? r.margePct.toFixed(1) + ' %' : '—', pc, (h > 0 ? h.toFixed(1) + ' h travaillées' : '0 h'))
+                    + '</div>';
+            } else {
+                // Gains seuls, sans déduire les dépenses
+                kpis = '<div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">'
+                    + kpi('Gains estimés', formatCurrency(r.revenue, cur), '#34d399')
+                    + kpi('Gains / heure', perH(r.revenue), '#34d399')
+                    + kpi('Heures travaillées', (h > 0 ? h.toFixed(1) + ' h' : '—'), '#e2e8f0')
+                    + kpi('Mètres forés', (r.meters ? r.meters.toFixed(1) + ' m' : '—'), '#e2e8f0')
+                    + '</div>';
+            }
+            var table = '';
+            if (deduct) {
+                var rows = [['⛽ Carburant', r.couts.carburant, true], ['🧰 Consommables (sorties stock)', r.couts.consommables, !r.machineScoped], ['👷 Main-d\'œuvre (prorata jour)', r.couts.mainOeuvre, !r.machineScoped], ['🍽️ Repas chantier', r.couts.repas, !r.machineScoped], ['💸 Dépenses diverses', r.couts.depenses, !r.machineScoped]];
+                table = '<table class="w-full text-sm"><tbody>'
+                    + rows.map(function (x) {
+                        var deducted = x[2];
+                        var tag = deducted ? '' : ' <span class="text-[10px] text-slate-500">(chantier, non déduit)</span>';
+                        var valCls = deducted ? 'text-slate-200' : 'text-slate-500 line-through';
+                        return '<tr class="border-b border-slate-700/50"><td class="py-1.5 text-slate-300">' + x[0] + tag + '</td><td class="py-1.5 text-right ' + valCls + '">' + formatCurrency(x[1], cur) + '</td></tr>';
+                    }).join('')
+                    + '<tr><td class="py-2 font-semibold text-slate-100">Total coûts' + (r.machineScoped ? ' (machine)' : '') + '</td><td class="py-2 text-right font-semibold text-amber-300">' + formatCurrency(r.totalCouts, cur) + '</td></tr>'
+                    + '</tbody></table>';
+            }
+            var noteParts = [];
+            noteParts.push('Gains = estimation (mètres forés × tarif du contrat).');
+            noteParts.push(r.meters ? ('Mètres forés : ' + r.meters.toFixed(1) + ' m.') : 'Aucun mètre foré ce jour.');
+            if (!deduct) noteParts.push('Affichage des gains seuls — les coûts ne sont pas déduits.');
+            if (r.machineScoped && deduct) noteParts.push('Pour une machine : seul le carburant lui est imputé ; les coûts partagés du chantier (consommables, main-d\'œuvre, repas, dépenses) sont indiqués mais non déduits.');
+            noteParts.push('Sous-traitants et maintenance non encore inclus.');
+            var note = '<p class="text-xs text-slate-500 mt-2">' + noteParts.join(' ') + '</p>';
             cont.innerHTML = kpis + table + note;
         }
         window.renderDailyProfitability = renderDailyProfitability;
