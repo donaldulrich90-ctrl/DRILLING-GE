@@ -283,6 +283,9 @@ const migrations = [
     { name: 'contracts.billRedrill', sql: 'ALTER TABLE contracts ADD COLUMN billRedrill INTEGER DEFAULT 0' },
     { name: 'companyInfo.fosses', sql: "ALTER TABLE companyInfo ADD COLUMN fosses TEXT DEFAULT '[]'" },
     { name: 'sites.miningCutoffDay', sql: 'ALTER TABLE sites ADD COLUMN miningCutoffDay INTEGER DEFAULT 1' },
+    // Devise du stock (prix d'achat en XOF/USD/EUR)
+    { name: 'inventory.priceCurrency', sql: "ALTER TABLE inventory ADD COLUMN priceCurrency TEXT DEFAULT 'XOF'" },
+    { name: 'stockMovements.priceCurrency', sql: "ALTER TABLE stockMovements ADD COLUMN priceCurrency TEXT DEFAULT 'XOF'" },
     // Module paiements
     { name: 'payments.table', sql: `CREATE TABLE IF NOT EXISTS payments (
         id TEXT PRIMARY KEY,

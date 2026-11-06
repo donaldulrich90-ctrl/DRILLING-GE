@@ -3246,14 +3246,22 @@
                             </div>
                         </div>
                     </div>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                         <div>
                             <label class="block text-slate-400 mb-2">Quantité *</label>
                             <input type="number" id="entryQuantity" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white" min="1" required onchange="calculateEntryTotal()">
                         </div>
                         <div>
-                            <label class="block text-slate-400 mb-2">Prix d'achat unitaire (€) *</label>
+                            <label class="block text-slate-400 mb-2">Prix d'achat unitaire *</label>
                             <input type="number" id="entryPrice" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white" min="0" step="0.01" required onchange="calculateEntryTotal()">
+                        </div>
+                        <div>
+                            <label class="block text-slate-400 mb-2">Devise *</label>
+                            <select id="entryCurrency" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white" onchange="calculateEntryTotal()">
+                                <option value="XOF">FCFA (XOF)</option>
+                                <option value="USD">Dollar (USD)</option>
+                                <option value="EUR">Euro (EUR)</option>
+                            </select>
                         </div>
                     </div>
                     <div class="mb-4">
@@ -17978,8 +17986,10 @@
             (typeof stockMovements !== 'undefined' ? stockMovements : []).forEach(function (m) {
                 if (!m || m.type !== 'exit' || !m.date || m.date !== dateStr) return;
                 var qty = parseFloat(m.quantity) || 0; var up = parseFloat(m.unitPrice);
-                if (!isFinite(up)) { var art = (inventory || []).find(function (a) { return a.id == m.articleId; }); up = art ? (parseFloat(art.averagePrice) || parseFloat(art.price) || 0) : 0; }
-                consCost += convertMoneyAmountToCurrency(qty * up, invCurCompany, dispCur);
+                var art = (inventory || []).find(function (a) { return a.id == m.articleId; });
+                if (!isFinite(up)) { up = art ? (parseFloat(art.averagePrice) || parseFloat(art.price) || 0) : 0; }
+                var mCur = normalizeMoneyCurrency(m.priceCurrency || (art && art.priceCurrency) || invCurCompany);
+                consCost += convertMoneyAmountToCurrency(qty * up, mCur, dispCur);
             });
             var expCost = (miscellaneousExpenses || []).filter(function (e) { return e.date === dateStr; }).reduce(function (s, e) { return s + convertMoneyAmountToCurrency(e.amount || 0, e.currency || 'XOF', dispCur); }, 0);
             var mealCost = getSiteMealExpensesForSite().filter(function (e) { return e.date === dateStr; }).reduce(function (s, e) { return s + convertMoneyAmountToCurrency(e.amount || 0, e.currency || 'XOF', dispCur); }, 0);
@@ -18201,16 +18211,19 @@
             // Consommation réelle du mois : sorties de stock (mouvements « exit ») valorisées
             // au prix unitaire du mouvement, sur le mois minier analysé.
             // (Avant : valeur totale du stock en magasin, qui n'est pas une dépense du mois.)
+            // Somme déjà exprimée dans la devise de l'entreprise (invCurCompany),
+            // chaque mouvement étant converti depuis sa propre devise.
             var consumablesCost = (stockMovements || []).reduce(function(sum, m) {
                 if (!m || m.type !== 'exit' || !m.date) return sum;
                 if (miningMonthKey(m.date, currentSiteId) !== reportMonthKey) return sum;
                 var qty = parseFloat(m.quantity) || 0;
                 var up = parseFloat(m.unitPrice);
+                var art = inventory.find(function(a) { return a.id == m.articleId; });
                 if (!isFinite(up)) {
-                    var art = inventory.find(function(a) { return a.id == m.articleId; });
                     up = art ? (parseFloat(art.averagePrice) || parseFloat(art.price) || 0) : 0;
                 }
-                return sum + qty * up;
+                var mCur = normalizeMoneyCurrency(m.priceCurrency || (art && art.priceCurrency) || invCurCompany);
+                return sum + convertMoneyAmountToCurrency(qty * up, mCur, invCurCompany);
             }, 0);
             var dailyConsumables = consumablesCost / 30;
             var consumablesDisp = convertMoneyAmountToCurrency(consumablesCost, invCurCompany, dispCur);
@@ -24684,6 +24697,7 @@
                         '<div class="p-4 space-y-3">';
                     byCategory[cat].forEach(function(item) {
                     var alertClass = item.alert ? 'border-red-500' : 'border-slate-700';
+                    var itemCur = articlePriceCurrency(item);
                     var stockValue = (item.quantity || 0) * (item.averagePrice || item.price || 0);
                     
                     // Calculer les entrées et sorties récentes
@@ -24709,11 +24723,11 @@
                         '</div>' +
                         '<div class="ged-stat-card p-3 rounded">' +
                         '<p class="text-xs text-slate-400 mb-1">Prix moyen</p>' +
-                        '<p class="text-lg font-bold text-blue-400">' + formatCurrency(item.averagePrice || item.price || 0, 'EUR') + '</p>' +
+                        '<p class="text-lg font-bold text-blue-400">' + formatCurrency(item.averagePrice || item.price || 0, itemCur) + '</p>' +
                         '</div>' +
                         '<div class="ged-stat-card p-3 rounded">' +
                         '<p class="text-xs text-slate-400 mb-1">Valeur stock</p>' +
-                        '<p class="text-lg font-bold text-purple-400">' + formatCurrency(stockValue, 'EUR') + '</p>' +
+                        '<p class="text-lg font-bold text-purple-400">' + formatCurrency(stockValue, itemCur) + '</p>' +
                         '</div>' +
                         '</div>' +
                         '<div class="text-xs text-slate-400 mb-2">' +
@@ -24749,6 +24763,7 @@
                 recentMovements.forEach(function(mov) {
                     var article = inventory.find(function(a) { return a.id === mov.articleId; });
                     var articleName = article ? article.name : 'Article #' + mov.articleId;
+                    var movCur = normalizeMoneyCurrency(mov.priceCurrency || (article && article.priceCurrency) || stockDefaultCurrency());
                     var typeColor = mov.type === 'entry' ? 'bg-green-600' : 'bg-red-600';
                     var typeIcon = mov.type === 'entry' ? '⬆️' : '⬇️';
                     
@@ -24764,7 +24779,7 @@
                     if (mov.type === 'entry') {
                         html += ' | Fournisseur: ' + (mov.supplier || 'N/A');
                         if (mov.unitPrice) {
-                            html += ' | Prix: ' + formatCurrency(mov.unitPrice, 'EUR') + '/unité';
+                            html += ' | Prix: ' + formatCurrency(mov.unitPrice, movCur) + '/unité';
                         }
                     } else {
                         html += ' | Retiré par: ' + (mov.person || 'N/A');
@@ -24782,7 +24797,7 @@
                         '</div>' +
                         '</div>' +
                         '<div class="text-right">' +
-                        (mov.type === 'entry' && mov.total ? '<p class="font-bold text-green-400">' + formatCurrency(mov.total, 'EUR') + '</p>' : '') +
+                        (mov.type === 'entry' && mov.total ? '<p class="font-bold text-green-400">' + formatCurrency(mov.total, movCur) + '</p>' : '') +
                         '</div>' +
                         '</div>';
                 });
@@ -24816,25 +24831,40 @@
             document.getElementById('entryDate').value = new Date().toISOString().split('T')[0];
             document.getElementById('entryQuantity').value = '';
             document.getElementById('entryPrice').value = '';
-            document.getElementById('entryTotal').textContent = '0.00 €';
-            
+            var entryCurEl = document.getElementById('entryCurrency');
+            if (entryCurEl) entryCurEl.value = stockDefaultCurrency();
+            document.getElementById('entryTotal').textContent = formatCurrency(0, stockDefaultCurrency());
+
             if (articleId) {
                 updateEntryArticle();
             }
-            
+
             document.getElementById('stockEntryModal').classList.remove('hidden');
+        }
+
+        function stockDefaultCurrency() {
+            return normalizeMoneyCurrency((typeof companyInfo !== 'undefined' && companyInfo && companyInfo.currency) || 'XOF');
+        }
+        function articlePriceCurrency(article) {
+            return normalizeMoneyCurrency(article && article.priceCurrency ? article.priceCurrency : stockDefaultCurrency());
         }
 
         function updateEntryArticle() {
             var articleId = parseInt(document.getElementById('entryArticle').value);
             if (articleId && articleId !== 'new') {
                 var article = inventory.find(function(a) { return a.id === articleId; });
-                if (article && article.averagePrice) {
-                    document.getElementById('entryPrice').value = article.averagePrice;
+                if (article) {
+                    // Les entrées suivantes d'un article se saisissent dans SA devise (cohérence du prix moyen).
+                    var entryCurEl = document.getElementById('entryCurrency');
+                    if (entryCurEl) { entryCurEl.value = articlePriceCurrency(article); entryCurEl.disabled = true; }
+                    if (article.averagePrice) { document.getElementById('entryPrice').value = article.averagePrice; }
                     calculateEntryTotal();
                 }
+            } else {
+                var entryCurEl2 = document.getElementById('entryCurrency');
+                if (entryCurEl2) entryCurEl2.disabled = false;
             }
-            
+
             var isNew = document.getElementById('entryArticle').value === 'new';
             document.getElementById('newArticleFields').classList.toggle('hidden', !isNew);
         }
@@ -24842,8 +24872,10 @@
         function calculateEntryTotal() {
             var quantity = parseFloat(document.getElementById('entryQuantity').value) || 0;
             var price = parseFloat(document.getElementById('entryPrice').value) || 0;
+            var curEl = document.getElementById('entryCurrency');
+            var cur = curEl ? normalizeMoneyCurrency(curEl.value) : stockDefaultCurrency();
             var total = quantity * price;
-            document.getElementById('entryTotal').textContent = formatCurrency(total, 'EUR');
+            document.getElementById('entryTotal').textContent = formatCurrency(total, cur);
         }
 
         function closeStockEntryModal() {
@@ -24858,6 +24890,8 @@
             var articleId = isNewArticle ? null : parseInt(articleSelectVal);
             var quantity = parseFloat(document.getElementById('entryQuantity').value) || 0;
             var unitPrice = parseFloat(document.getElementById('entryPrice').value) || 0;
+            var curEl = document.getElementById('entryCurrency');
+            var entryCur = curEl ? normalizeMoneyCurrency(curEl.value) : stockDefaultCurrency();
             var date = document.getElementById('entryDate').value;
             var supplier = document.getElementById('entrySupplier').value.trim();
             var notes = document.getElementById('entryNotes').value.trim();
@@ -24879,19 +24913,25 @@
                     unit: document.getElementById('newArticleUnit').value.trim() || 'unite',
                     price: unitPrice,
                     averagePrice: unitPrice,
+                    priceCurrency: entryCur,
                     alert: false
                 };
                 inventory.push(article);
             } else {
                 article = inventory.find(function(a) { return a.id === articleId; });
                 if (!article) { alert('Article introuvable'); return; }
+                // L'article a sa propre devise ; on convertit le prix saisi vers cette devise pour le prix moyen.
+                var artCur = articlePriceCurrency(article);
+                if (!article.priceCurrency) article.priceCurrency = artCur;
+                var unitPriceInArtCur = convertMoneyAmountToCurrency(unitPrice, entryCur, artCur);
                 // prix moyen pondéré (pour persistance via saveData)
                 var currentValue = (article.quantity || 0) * (article.averagePrice || 0);
                 var totalQty = (article.quantity || 0) + quantity;
-                article.averagePrice = totalQty > 0 ? (currentValue + quantity * unitPrice) / totalQty : unitPrice;
+                article.averagePrice = totalQty > 0 ? (currentValue + quantity * unitPriceInArtCur) / totalQty : unitPriceInArtCur;
             }
             var movPayload = {
                 type: 'entry', articleId: articleId, quantity: quantity, unitPrice: unitPrice,
+                priceCurrency: entryCur,
                 date: date, supplier: supplier, notes: notes
             };
             saveData().then(function() {
@@ -24906,7 +24946,7 @@
                 }
                 renderInventory();
                 closeStockEntryModal();
-                alert('Entree de stock enregistree!\n\n' + quantity + ' ' + (article.unit || '') + ' de ' + article.name + '\nMontant: ' + formatCurrency(quantity * unitPrice, 'EUR'));
+                alert('Entree de stock enregistree!\n\n' + quantity + ' ' + (article.unit || '') + ' de ' + article.name + '\nMontant: ' + formatCurrency(quantity * unitPrice, entryCur));
             }).catch(function(err) { alert('Erreur mouvement: ' + (err && err.message ? err.message : err)); });
         }
 
@@ -25032,8 +25072,10 @@
             var authorizedByName = (currentUser && currentUser.name) ? currentUser.name : (currentUser && currentUser.username) ? currentUser.username : 'Gestionnaire';
             
             var exitUnitPrice = article.averagePrice || article.price || 0;
+            var exitCur = articlePriceCurrency(article);
             var movExitPayload = {
                 type: 'exit', articleId: articleId, quantity: quantity, unitPrice: exitUnitPrice,
+                priceCurrency: exitCur,
                 date: date, person: personName, personId: personId || null,
                 authorizedBy: authorizedByName, reason: reason || '', machineId: machineId || '', notes: notes
             };
@@ -25065,11 +25107,12 @@
             
             var history = 'Historique: ' + article.name + '\n\n';
             movements.forEach(function(mov) {
+                var movCur = normalizeMoneyCurrency(mov.priceCurrency || article.priceCurrency || stockDefaultCurrency());
                 history += (mov.type === 'entry' ? '⬆️ ENTRÉE' : '⬇️ SORTIE') + ' - ' + mov.date + '\n';
                 history += 'Quantité: ' + mov.quantity + ' ' + article.unit + '\n';
                 if (mov.type === 'entry') {
-                    history += 'Prix: ' + formatCurrency(mov.unitPrice, 'EUR') + '/unité\n';
-                    history += 'Total: ' + formatCurrency(mov.total, 'EUR') + '\n';
+                    history += 'Prix: ' + formatCurrency(mov.unitPrice, movCur) + '/unité\n';
+                    history += 'Total: ' + formatCurrency(mov.total, movCur) + '\n';
                     history += 'Fournisseur: ' + (mov.supplier || 'N/A') + '\n';
                 } else {
                     history += 'Retiré par: ' + (mov.person || 'N/A') + '\n';

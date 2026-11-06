@@ -439,6 +439,7 @@ db.serialize(() => {
             price REAL DEFAULT 0,
             alert INTEGER DEFAULT 0,
             averagePrice REAL DEFAULT 0,
+            priceCurrency TEXT DEFAULT 'XOF',
             createdAt TEXT DEFAULT CURRENT_TIMESTAMP
         )
     `, (err) => {
@@ -639,6 +640,7 @@ db.serialize(() => {
             articleId INTEGER NOT NULL,
             quantity INTEGER NOT NULL,
             unitPrice REAL DEFAULT 0,
+            priceCurrency TEXT DEFAULT 'XOF',
             total REAL DEFAULT 0,
             date TEXT NOT NULL,
             supplier TEXT DEFAULT '',

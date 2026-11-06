@@ -3224,11 +3224,11 @@ app.post('/api/inventory', (req, res) => {
     const item = req.body;
     const entId = resolveCreateEnterpriseId(req, item);
     db.run(
-        `INSERT INTO inventory (id, enterpriseId, name, category, quantity, minStock, unit, price, alert, averagePrice)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO inventory (id, enterpriseId, name, category, quantity, minStock, unit, price, alert, averagePrice, priceCurrency)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
             item.id, entId, item.name, item.category, item.quantity, item.minStock, item.unit,
-            item.price, item.alert ? 1 : 0, item.averagePrice || item.price
+            item.price, item.alert ? 1 : 0, item.averagePrice || item.price, item.priceCurrency || 'XOF'
         ],
         function(err) {
             if (err) {
@@ -3245,10 +3245,10 @@ app.put('/api/inventory/:id', (req, res) => {
     const entId = getEnterpriseId(req);
     const item = req.body;
     let sql = `UPDATE inventory SET name = ?, category = ?, quantity = ?, minStock = ?, unit = ?,
-         price = ?, alert = ?, averagePrice = ? WHERE id = ?`;
+         price = ?, alert = ?, averagePrice = ?, priceCurrency = ? WHERE id = ?`;
     const vals = [
         item.name, item.category, item.quantity, item.minStock, item.unit,
-        item.price, item.alert ? 1 : 0, item.averagePrice || item.price, id
+        item.price, item.alert ? 1 : 0, item.averagePrice || item.price, item.priceCurrency || 'XOF', id
     ];
     if (entId !== null) {
         sql += ' AND enterpriseId = ?';
@@ -4368,16 +4368,16 @@ app.get('/api/stock-movements', (req, res) => {
 app.post('/api/stock-movements', (req, res) => {
     const eid = getEnterpriseId(req);
     if (!eid) return res.status(400).json({ error: 'Contexte entreprise requis' });
-    const { type, articleId, quantity, unitPrice, date, supplier, person, personId, authorizedBy, authorizedById, reason, machineId, notes } = req.body;
+    const { type, articleId, quantity, unitPrice, priceCurrency, date, supplier, person, personId, authorizedBy, authorizedById, reason, machineId, notes } = req.body;
     if (!type || !articleId || !quantity || !date) return res.status(400).json({ error: 'type, articleId, quantity et date requis' });
     const qty = Number(quantity);
     const delta = type === 'entry' ? qty : -qty;
     db.serialize(() => {
         db.run('BEGIN');
         db.run(
-            `INSERT INTO stockMovements (enterpriseId, type, articleId, quantity, unitPrice, total, date, supplier, person, personId, authorizedBy, authorizedById, reason, machineId, notes)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [eid, type, articleId, qty, Number(unitPrice) || 0, qty * (Number(unitPrice) || 0),
+            `INSERT INTO stockMovements (enterpriseId, type, articleId, quantity, unitPrice, priceCurrency, total, date, supplier, person, personId, authorizedBy, authorizedById, reason, machineId, notes)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [eid, type, articleId, qty, Number(unitPrice) || 0, (priceCurrency || 'XOF'), qty * (Number(unitPrice) || 0),
              date, supplier || '', person || '', personId || null, authorizedBy || '', authorizedById || null,
              reason || '', machineId || '', notes || ''],
             function(err) {
