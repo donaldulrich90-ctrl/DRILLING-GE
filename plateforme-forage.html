@@ -24685,9 +24685,13 @@
             var overtimePay = ot.otPay || 0;
             var grossSalary = baseGross + overtimePay;
 
-            // Cotisations sociales
-            var socialSecurityRate = 0.22; // 22% de cotisations salariales
-            var socialSecurity = grossSalary * socialSecurityRate;
+            // Cotisations sociales — CNSS Burkina Faso
+            // Part salarié : 5,5 % (pension/vieillesse) retenue sur le brut.
+            // Part employeur : ~16 % (pension 5,5 % + prestations familiales 7 % + risques pro. ~3,5 %) — à la charge de l'entreprise, non déduite du net.
+            var cnssEmployeeRate = 0.055;
+            var cnssEmployerRate = 0.16;
+            var socialSecurity = grossSalary * cnssEmployeeRate;
+            var employerCharges = grossSalary * cnssEmployerRate;
             var netSalary = grossSalary - socialSecurity;
 
             // Congés payés
@@ -24716,6 +24720,9 @@
                 overtimePay: overtimePay,
                 grossSalary: grossSalary,
                 socialSecurity: socialSecurity,
+                cnssEmployeeRate: cnssEmployeeRate,
+                cnssEmployerRate: cnssEmployerRate,
+                employerCharges: employerCharges,
                 netSalary: netSalary,
                 paidLeaveDays: paidLeaveDays,
                 takenLeaveDays: takenLeaveDays,
@@ -24800,10 +24807,11 @@
                 '</div>' +
                 
                 '<div class="section">' +
-                '<div class="section-title">Cotisations sociales</div>' +
+                '<div class="section-title">Cotisations sociales (CNSS Burkina Faso)</div>' +
                 '<table>' +
                 '<tr><th>Élément</th><th class="text-right">Montant</th></tr>' +
-                '<tr><td>Cotisations sociales (22%)</td><td class="text-right">-' + formatCurrency(payslip.socialSecurity, getEmployeeSalaryCurrency()) + '</td></tr>' +
+                '<tr><td>CNSS part salarié (' + ((payslip.cnssEmployeeRate != null ? payslip.cnssEmployeeRate : 0.055) * 100).toFixed(1).replace('.', ',') + '%)</td><td class="text-right">-' + formatCurrency(payslip.socialSecurity, getEmployeeSalaryCurrency()) + '</td></tr>' +
+                '<tr><td class="text-right" style="color:#777;font-size:11px">Charges patronales CNSS (' + ((payslip.cnssEmployerRate != null ? payslip.cnssEmployerRate : 0.16) * 100).toFixed(0) + '%, à la charge de l\'employeur)</td><td class="text-right" style="color:#777;font-size:11px">' + formatCurrency(payslip.employerCharges || 0, getEmployeeSalaryCurrency()) + '</td></tr>' +
                 '</table>' +
                 '</div>' +
                 
@@ -24823,7 +24831,7 @@
                 '<div><strong>' + formatCurrency(payslip.grossSalary, getEmployeeSalaryCurrency()) + '</strong></div>' +
                 '</div>' +
                 '<div class="total-row">' +
-                '<div>Cotisations sociales:</div>' +
+                '<div>CNSS part salarié:</div>' +
                 '<div>-' + formatCurrency(payslip.socialSecurity, getEmployeeSalaryCurrency()) + '</div>' +
                 '</div>' +
                 '<div class="total-row total-final">' +
