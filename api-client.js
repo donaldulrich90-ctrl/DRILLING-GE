@@ -280,6 +280,24 @@ const DrillMonthBillingAPI = {
 };
 
 // ============================================
+// API - CLÔTURE MOIS MINIER
+// ============================================
+const MiningMonthClosureAPI = {
+    getAll: (params) => {
+        var qp = [];
+        if (params && params.siteId != null && params.siteId !== '') qp.push('siteId=' + encodeURIComponent(String(params.siteId)));
+        if (params && params.yearMonth != null && params.yearMonth !== '') qp.push('yearMonth=' + encodeURIComponent(String(params.yearMonth).slice(0, 7)));
+        return apiRequest('/mining-month-closures' + (qp.length ? '?' + qp.join('&') : ''), 'GET');
+    },
+    close: (row) => apiRequest('/mining-month-closures', 'POST', row),
+    reopen: (siteId, yearMonth) =>
+        apiRequest(
+            '/mining-month-closures/' + encodeURIComponent(siteId != null && siteId !== '' ? String(siteId) : '_') + '/' + encodeURIComponent(String(yearMonth).slice(0, 7)),
+            'DELETE'
+        )
+};
+
+// ============================================
 // API - INVENTORY
 // ============================================
 const InventoryAPI = {
@@ -638,6 +656,7 @@ if (typeof window !== 'undefined') {
         Invoices: InvoicesAPI,
         Payments: PaymentsAPI,
         DrillMonthBilling: DrillMonthBillingAPI,
+        MiningMonthClosure: MiningMonthClosureAPI,
         Inventory: InventoryAPI,
         DailyData: DailyDataAPI,
         DrillingPlan: DrillingPlanAPI,

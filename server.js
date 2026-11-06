@@ -3200,6 +3200,80 @@ app.delete('/api/drill-month-billing/:drillId/:yearMonth', (req, res) => {
     );
 });
 
+// Clôture d'un mois minier complet (archive figée des totaux ; données restent modifiables)
+app.get('/api/mining-month-closures', (req, res) => {
+    const enterpriseId = getEnterpriseId(req);
+    if (enterpriseId == null) {
+        return res.status(400).json({ error: 'Contexte entreprise requis' });
+    }
+    let sql = 'SELECT * FROM mining_month_closures WHERE enterpriseId = ?';
+    const params = [enterpriseId];
+    if (req.query.siteId !== undefined && req.query.siteId !== null && req.query.siteId !== '') {
+        sql += ' AND siteId = ?';
+        params.push(String(req.query.siteId));
+    }
+    if (req.query.yearMonth !== undefined && req.query.yearMonth !== null && req.query.yearMonth !== '') {
+        sql += ' AND yearMonth = ?';
+        params.push(String(req.query.yearMonth).slice(0, 7));
+    }
+    sql += ' ORDER BY yearMonth DESC, siteId';
+    db.all(sql, params, (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(rows || []);
+    });
+});
+
+app.post('/api/mining-month-closures', (req, res) => {
+    const enterpriseId = getEnterpriseId(req);
+    if (enterpriseId == null) {
+        return res.status(400).json({ error: 'Contexte entreprise requis' });
+    }
+    const { siteId, yearMonth, snapshot } = req.body || {};
+    const ym = yearMonth != null ? String(yearMonth).slice(0, 7) : '';
+    if (!/^\d{4}-\d{2}$/.test(ym)) {
+        return res.status(400).json({ error: 'yearMonth (YYYY-MM) requis' });
+    }
+    const sid = siteId != null ? String(siteId) : '';
+    let snapStr = '';
+    if (snapshot != null) {
+        try { snapStr = typeof snapshot === 'string' ? snapshot : JSON.stringify(snapshot); }
+        catch (e) { snapStr = ''; }
+    }
+    const closedBy = (req.auth && (req.auth.name || req.auth.username)) ? String(req.auth.name || req.auth.username) : '';
+    db.run(
+        `INSERT INTO mining_month_closures (enterpriseId, siteId, yearMonth, snapshot, closedAt, closedBy)
+         VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
+         ON CONFLICT(enterpriseId, siteId, yearMonth)
+         DO UPDATE SET snapshot = excluded.snapshot, closedAt = CURRENT_TIMESTAMP, closedBy = excluded.closedBy`,
+        [enterpriseId, sid, ym, snapStr, closedBy],
+        function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ message: 'Mois minier clôturé', closedBy: closedBy });
+        }
+    );
+});
+
+// Réouverture : réservée admin / propriétaire
+app.delete('/api/mining-month-closures/:siteId/:yearMonth', (req, res) => {
+    const enterpriseId = getEnterpriseId(req);
+    if (enterpriseId == null) {
+        return res.status(400).json({ error: 'Contexte entreprise requis' });
+    }
+    if (!req.auth || !(req.auth.isSuperAdmin || req.auth.isPlatformOwner || req.auth.role === 'admin' || req.auth.role === 'platform_owner')) {
+        return res.status(403).json({ error: 'Réouverture réservée à l’administrateur ou au propriétaire.' });
+    }
+    const sid = req.params.siteId != null ? String(req.params.siteId) : '';
+    const ym = req.params.yearMonth != null ? String(req.params.yearMonth).slice(0, 7) : '';
+    db.run(
+        'DELETE FROM mining_month_closures WHERE enterpriseId = ? AND siteId = ? AND yearMonth = ?',
+        [enterpriseId, sid === '_' ? '' : sid, ym],
+        function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ message: 'Mois minier rouvert', changes: this.changes });
+        }
+    );
+});
+
 // ============================================
 // ROUTES API - INVENTORY
 // ============================================
