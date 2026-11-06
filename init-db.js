@@ -895,6 +895,27 @@ db.serialize(() => {
         }
     );
 
+    // Clôture d'un mois minier complet (archive figée des totaux du mois, par site)
+    db.run(
+        `
+        CREATE TABLE IF NOT EXISTS mining_month_closures (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            enterpriseId INTEGER NOT NULL DEFAULT 1,
+            siteId TEXT DEFAULT '',
+            yearMonth TEXT NOT NULL,
+            snapshot TEXT DEFAULT '',
+            closedAt TEXT DEFAULT CURRENT_TIMESTAMP,
+            closedBy TEXT DEFAULT '',
+            UNIQUE(enterpriseId, siteId, yearMonth),
+            FOREIGN KEY (enterpriseId) REFERENCES enterprises(id)
+        )
+    `,
+        (err) => {
+            if (err) console.error('Erreur mining_month_closures:', err);
+            else console.log('✅ Table mining_month_closures');
+        }
+    );
+
     // ── Phase 3 — Affûtage des bits ───────────────────────────────────────
     db.run(`
         CREATE TABLE IF NOT EXISTS bits (

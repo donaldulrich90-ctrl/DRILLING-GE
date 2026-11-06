@@ -1617,6 +1617,12 @@
                     </div>
                 </div>
                 <div id="dailyProfitContent"></div>
+                <div id="miningClosureBar" class="mt-3"></div>
+            </div>
+            <div class="mb-6 ged-content-panel p-5 rounded-xl border border-amber-700/40">
+                <h3 class="font-semibold text-amber-300 text-lg mb-1">🗂️ Mois miniers clôturés (mémoire)</h3>
+                <p class="text-slate-400 text-sm mb-3">Récapitulatifs figés des mois clôturés. Les données restent modifiables ; l'archive garde les chiffres du jour de la clôture.</p>
+                <div id="miningClosuresList"></div>
             </div>
             <div id="revenueContent" class="ged-content-panel p-6 rounded-xl"></div>
         </div>
@@ -8935,6 +8941,7 @@
             } else if (view === 'revenue') {
                 renderRevenue();
                 try { renderDailyProfitability(); } catch (e) {}
+                try { loadMiningMonthClosures(); } catch (e) {}
             } else if (view === 'site_meals') {
                 renderSiteMeals();
             } else if (view === 'reports') {
@@ -18059,6 +18066,89 @@
             agg.margePct = agg.revenue > 0 ? (agg.profit / agg.revenue * 100) : null;
             return agg;
         }
+        // ---- Clôture des mois miniers (archive figée) ----
+        var miningMonthClosures = [];
+        function userCanReopenMiningMonth() {
+            if (!currentUser) return false;
+            return !!(currentUser.isSuperAdmin || currentUser.isPlatformOwner
+                || currentUser.role === 'admin' || currentUser.role === 'platform_owner');
+        }
+        function miningClosureSiteKey() {
+            return (typeof currentSiteId !== 'undefined' && currentSiteId != null) ? String(currentSiteId) : '';
+        }
+        function findMiningClosure(ym, siteKey) {
+            return (miningMonthClosures || []).find(function (c) {
+                return String(c.yearMonth).slice(0, 7) === String(ym).slice(0, 7) && String(c.siteId || '') === String(siteKey || '');
+            });
+        }
+        function loadMiningMonthClosures() {
+            if (!(useAPI && window.API && window.API.MiningMonthClosure)) { renderMiningClosures(); return; }
+            window.API.MiningMonthClosure.getAll({ siteId: miningClosureSiteKey() }).then(function (rows) {
+                miningMonthClosures = Array.isArray(rows) ? rows : [];
+                renderMiningClosures();
+                try { renderDailyProfitability(); } catch (e) {}
+            }).catch(function (e) { console.warn('Clôtures mois minier:', e && e.message); renderMiningClosures(); });
+        }
+        function submitMiningMonthClose(ym) {
+            var siteKey = miningClosureSiteKey();
+            var pSiteId = (typeof currentSiteId !== 'undefined') ? currentSiteId : null;
+            var rg = miningMonthRange(ym, pSiteId);
+            var snapAll = computeProfitabilityForRange(rg.start, rg.end, null);
+            var label = miningMonthLabelFr(ym, pSiteId);
+            if (!confirm('Clôturer le mois minier « ' + label + ' » ?\n\nUn récapitulatif figé sera archivé. Les données restent modifiables ; vous pourrez re-clôturer pour mettre à jour l\'archive.')) return;
+            var snapshot = {
+                label: label, range: rg, dispCur: snapAll.dispCur,
+                revenue: snapAll.revenue, totalCouts: snapAll.totalCouts, profit: snapAll.profit,
+                margePct: snapAll.margePct, meters: snapAll.meters, hours: snapAll.hours,
+                couts: snapAll.couts
+            };
+            if (!(useAPI && window.API && window.API.MiningMonthClosure)) { alert('Clôture indisponible hors ligne API.'); return; }
+            window.API.MiningMonthClosure.close({ siteId: siteKey, yearMonth: ym, snapshot: snapshot }).then(function () {
+                loadMiningMonthClosures();
+                alert('Mois minier clôturé : ' + label);
+            }).catch(function (e) { alert('Erreur clôture : ' + (e && e.message ? e.message : e)); });
+        }
+        function submitMiningMonthReopen(ym, siteKey) {
+            if (!userCanReopenMiningMonth()) { alert('Réouverture réservée à l’administrateur ou au propriétaire.'); return; }
+            if (!confirm('Rouvrir ce mois minier ? L\'archive figée sera supprimée.')) return;
+            window.API.MiningMonthClosure.reopen(siteKey, ym).then(function () {
+                loadMiningMonthClosures();
+            }).catch(function (e) { alert('Erreur réouverture : ' + (e && e.message ? e.message : e)); });
+        }
+        function renderMiningClosures() {
+            var cont = document.getElementById('miningClosuresList'); if (!cont) return;
+            var rows = (miningMonthClosures || []).slice().sort(function (a, b) { return String(b.yearMonth).localeCompare(String(a.yearMonth)); });
+            if (!rows.length) { cont.innerHTML = '<p class="text-slate-500 text-sm">Aucun mois clôturé pour ce site.</p>'; return; }
+            var canReopen = userCanReopenMiningMonth();
+            var html = '<div class="space-y-2">';
+            rows.forEach(function (c) {
+                var s = {}; try { s = c.snapshot ? (typeof c.snapshot === 'string' ? JSON.parse(c.snapshot) : c.snapshot) : {}; } catch (e) { s = {}; }
+                var cur = s.dispCur || (companyInfo && companyInfo.currency) || 'XOF';
+                var label = s.label || miningMonthLabelFr(c.yearMonth, (typeof currentSiteId !== 'undefined' ? currentSiteId : null));
+                var pc = (s.profit || 0) >= 0 ? '#34d399' : '#f87171';
+                var closedInfo = c.closedAt ? ('Clôturé le ' + String(c.closedAt).slice(0, 10) + (c.closedBy ? ' par ' + escapeHtml(c.closedBy) : '')) : '';
+                html += '<div class="bg-slate-800 border border-slate-700 rounded-lg p-3">'
+                    + '<div class="flex flex-wrap items-center justify-between gap-2 mb-2">'
+                    + '<span class="font-semibold text-amber-200">' + escapeHtml(label) + '</span>'
+                    + '<span class="text-xs text-slate-500">' + closedInfo + '</span>'
+                    + '</div>'
+                    + '<div class="grid grid-cols-2 md:grid-cols-5 gap-2 text-sm">'
+                    + '<div><div class="text-[11px] text-slate-400 uppercase">Gains</div><div class="font-bold" style="color:#34d399">' + formatCurrency(s.revenue || 0, cur) + '</div></div>'
+                    + '<div><div class="text-[11px] text-slate-400 uppercase">Coûts</div><div class="font-bold text-amber-300">' + formatCurrency(s.totalCouts || 0, cur) + '</div></div>'
+                    + '<div><div class="text-[11px] text-slate-400 uppercase">Profit</div><div class="font-bold" style="color:' + pc + '">' + formatCurrency(s.profit || 0, cur) + '</div></div>'
+                    + '<div><div class="text-[11px] text-slate-400 uppercase">Marge</div><div class="font-bold" style="color:' + pc + '">' + (s.margePct != null ? s.margePct.toFixed(1) + ' %' : '—') + '</div></div>'
+                    + '<div><div class="text-[11px] text-slate-400 uppercase">Mètres</div><div class="font-bold text-slate-200">' + (s.meters ? s.meters.toFixed(1) + ' m' : '—') + '</div></div>'
+                    + '</div>'
+                    + (canReopen ? '<div class="mt-2 text-right"><button type="button" onclick="submitMiningMonthReopen(\'' + String(c.yearMonth).slice(0, 7) + '\',\'' + String(c.siteId || '').replace(/'/g, "\\'") + '\')" class="bg-slate-600 hover:bg-slate-500 px-3 py-1 rounded text-white text-xs">Rouvrir</button></div>' : '')
+                    + '</div>';
+            });
+            html += '</div>';
+            cont.innerHTML = html;
+        }
+        window.loadMiningMonthClosures = loadMiningMonthClosures;
+        window.submitMiningMonthClose = submitMiningMonthClose;
+        window.submitMiningMonthReopen = submitMiningMonthReopen;
+
         function populateDailyProfitMachineSelect() {
             var sel = document.getElementById('dailyProfitMachine'); if (!sel) return;
             var prev = sel.value;
@@ -18146,6 +18236,31 @@
             var note = '<p class="text-xs text-slate-500 mt-2">' + noteParts.join(' ') + '</p>';
             var header = periodLabel ? '<p class="text-sm font-semibold text-emerald-300 mb-2">' + periodLabel + '</p>' : '';
             cont.innerHTML = header + kpis + table + note;
+            // Barre de clôture (seulement en vue « Mois minier »)
+            var bar = document.getElementById('miningClosureBar');
+            if (bar) {
+                if (period === 'mining') {
+                    var ymBar = miningMonthKey(dateStr, pSiteId);
+                    var existing = findMiningClosure(ymBar, miningClosureSiteKey());
+                    if (existing) {
+                        var cb = existing.closedBy ? ' par ' + escapeHtml(existing.closedBy) : '';
+                        var cat = existing.closedAt ? String(existing.closedAt).slice(0, 10) : '';
+                        bar.innerHTML = '<div class="flex flex-wrap items-center justify-between gap-2 bg-emerald-950/40 border border-emerald-700/50 rounded-lg px-3 py-2">'
+                            + '<span class="text-sm text-emerald-200">✅ Mois minier clôturé' + (cat ? ' le ' + cat : '') + cb + '. L\'archive garde ces chiffres.</span>'
+                            + '<span class="flex gap-2">'
+                            + '<button type="button" onclick="submitMiningMonthClose(\'' + ymBar + '\')" class="bg-amber-700 hover:bg-amber-600 px-3 py-1.5 rounded text-white text-xs font-semibold">Re-clôturer (mettre à jour l\'archive)</button>'
+                            + (userCanReopenMiningMonth() ? '<button type="button" onclick="submitMiningMonthReopen(\'' + ymBar + '\',\'' + miningClosureSiteKey().replace(/'/g, "\\'") + '\')" class="bg-slate-600 hover:bg-slate-500 px-3 py-1.5 rounded text-white text-xs">Rouvrir</button>' : '')
+                            + '</span></div>';
+                    } else {
+                        bar.innerHTML = '<div class="flex flex-wrap items-center justify-between gap-2 bg-slate-800/70 border border-amber-700/40 rounded-lg px-3 py-2">'
+                            + '<span class="text-sm text-slate-300">Ce mois minier n\'est pas encore clôturé.</span>'
+                            + '<button type="button" onclick="submitMiningMonthClose(\'' + ymBar + '\')" class="bg-amber-700 hover:bg-amber-600 px-3 py-1.5 rounded text-white text-xs font-semibold">🗂️ Clôturer ce mois minier</button>'
+                            + '</div>';
+                    }
+                } else {
+                    bar.innerHTML = '';
+                }
+            }
         }
         window.renderDailyProfitability = renderDailyProfitability;
 

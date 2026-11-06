@@ -286,6 +286,17 @@ const migrations = [
     // Devise du stock (prix d'achat en XOF/USD/EUR)
     { name: 'inventory.priceCurrency', sql: "ALTER TABLE inventory ADD COLUMN priceCurrency TEXT DEFAULT 'XOF'" },
     { name: 'stockMovements.priceCurrency', sql: "ALTER TABLE stockMovements ADD COLUMN priceCurrency TEXT DEFAULT 'XOF'" },
+    // Clôture d'un mois minier complet (archive figée des totaux du mois)
+    { name: 'mining_month_closures.table', sql: `CREATE TABLE IF NOT EXISTS mining_month_closures (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        enterpriseId INTEGER NOT NULL DEFAULT 1,
+        siteId TEXT DEFAULT '',
+        yearMonth TEXT NOT NULL,
+        snapshot TEXT DEFAULT '',
+        closedAt TEXT DEFAULT CURRENT_TIMESTAMP,
+        closedBy TEXT DEFAULT '',
+        UNIQUE(enterpriseId, siteId, yearMonth)
+    )` },
     // Module paiements
     { name: 'payments.table', sql: `CREATE TABLE IF NOT EXISTS payments (
         id TEXT PRIMARY KEY,
