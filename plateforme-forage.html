@@ -1602,6 +1602,10 @@
                         <p class="text-slate-400 text-sm">Gains estimés du jour (par jour et par heure). Décochez « Déduire les coûts » pour voir les gains seuls, sans les dépenses.</p>
                     </div>
                     <div class="flex items-center gap-3 flex-wrap">
+                        <select id="dailyProfitPeriod" class="bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white" onchange="renderDailyProfitability()">
+                            <option value="jour">Jour</option>
+                            <option value="mining">Mois minier</option>
+                        </select>
                         <select id="dailyProfitMachine" class="bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white" onchange="renderDailyProfitability()">
                             <option value="">Toutes les machines</option>
                         </select>
@@ -18023,6 +18027,38 @@
                 machineScoped: machineScoped
             };
         }
+        function profitAddDaysStr(dateStr, n) {
+            var p = String(dateStr).slice(0, 10).split('-');
+            var d = new Date(Date.UTC(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10)));
+            d.setUTCDate(d.getUTCDate() + n);
+            return d.toISOString().slice(0, 10);
+        }
+        /** Cumule la rentabilité jour par jour sur une plage [dateFrom, dateTo] incluse. */
+        function computeProfitabilityForRange(dateFrom, dateTo, drillFilterId) {
+            var agg = {
+                dispCur: getRevenueViewDisplayCurrency(), revenue: 0, meters: 0, hours: 0,
+                couts: { carburant: 0, consommables: 0, mainOeuvre: 0, repas: 0, depenses: 0 },
+                directCouts: 0, sharedCouts: 0, totalCouts: 0, profit: 0, margePct: null,
+                machineScoped: !!drillFilterId
+            };
+            if (!dateFrom || !dateTo) return agg;
+            var guard = 0;
+            for (var day = dateFrom; day <= dateTo && guard < 400; day = profitAddDaysStr(day, 1), guard++) {
+                var r = computeDailyProfitability(day, drillFilterId);
+                agg.revenue += r.revenue; agg.meters += r.meters; agg.hours += r.hours;
+                agg.couts.carburant += r.couts.carburant;
+                agg.couts.consommables += r.couts.consommables;
+                agg.couts.mainOeuvre += r.couts.mainOeuvre;
+                agg.couts.repas += r.couts.repas;
+                agg.couts.depenses += r.couts.depenses;
+                agg.directCouts += r.directCouts;
+                agg.sharedCouts += r.sharedCouts;
+                agg.totalCouts += r.totalCouts;
+            }
+            agg.profit = agg.revenue - agg.totalCouts;
+            agg.margePct = agg.revenue > 0 ? (agg.profit / agg.revenue * 100) : null;
+            return agg;
+        }
         function populateDailyProfitMachineSelect() {
             var sel = document.getElementById('dailyProfitMachine'); if (!sel) return;
             var prev = sel.value;
@@ -18046,7 +18082,19 @@
             var drillFilterId = machineEl ? (machineEl.value || null) : null;
             var deductEl = document.getElementById('dailyProfitDeductCosts');
             var deduct = deductEl ? deductEl.checked : true;
-            var r = computeDailyProfitability(dateStr, drillFilterId);
+            var periodEl = document.getElementById('dailyProfitPeriod');
+            var period = periodEl ? periodEl.value : 'jour';
+            var pSiteId = (typeof currentSiteId !== 'undefined') ? currentSiteId : null;
+            var r, periodLabel = null, periodWord = 'ce jour';
+            if (period === 'mining') {
+                var ym = miningMonthKey(dateStr, pSiteId);
+                var rg = miningMonthRange(ym, pSiteId);
+                r = computeProfitabilityForRange(rg.start, rg.end, drillFilterId);
+                periodLabel = '📆 Mois minier — ' + miningMonthLabelFr(ym, pSiteId);
+                periodWord = 'sur le mois minier';
+            } else {
+                r = computeDailyProfitability(dateStr, drillFilterId);
+            }
             var cur = r.dispCur;
             var pc = r.profit >= 0 ? '#34d399' : '#f87171';
             var h = r.hours || 0;
@@ -18090,12 +18138,14 @@
             }
             var noteParts = [];
             noteParts.push('Gains = estimation (mètres forés × tarif du contrat).');
-            noteParts.push(r.meters ? ('Mètres forés : ' + r.meters.toFixed(1) + ' m.') : 'Aucun mètre foré ce jour.');
+            noteParts.push(r.meters ? ('Mètres forés : ' + r.meters.toFixed(1) + ' m.') : ('Aucun mètre foré ' + periodWord + '.'));
+            if (period === 'mining') noteParts.push('Cumul calculé jour par jour sur le mois minier prédéfini (jour de coupure du site).');
             if (!deduct) noteParts.push('Affichage des gains seuls — les coûts ne sont pas déduits.');
             if (r.machineScoped && deduct) noteParts.push('Pour une machine : seul le carburant lui est imputé ; les coûts partagés du chantier (consommables, main-d\'œuvre, repas, dépenses) sont indiqués mais non déduits.');
             noteParts.push('Sous-traitants et maintenance non encore inclus.');
             var note = '<p class="text-xs text-slate-500 mt-2">' + noteParts.join(' ') + '</p>';
-            cont.innerHTML = kpis + table + note;
+            var header = periodLabel ? '<p class="text-sm font-semibold text-emerald-300 mb-2">' + periodLabel + '</p>' : '';
+            cont.innerHTML = header + kpis + table + note;
         }
         window.renderDailyProfitability = renderDailyProfitability;
 
