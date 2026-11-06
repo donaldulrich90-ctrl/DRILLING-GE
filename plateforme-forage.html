@@ -2394,11 +2394,9 @@
                         </div>
                     </div>
                     <div class="mb-4 border-t border-slate-600 pt-4">
-                        <label class="block text-slate-400 mb-2 font-semibold">Foreuse liée (optionnel)</label>
-                        <select id="contractLinkedDrill" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white mb-1">
-                            <option value="">Aucune — créez la machine dans le tableau de bord, puis sélectionnez-la ici</option>
-                        </select>
-                        <p class="text-xs text-slate-500">Un contrat ne crée pas automatiquement une foreuse : ajoutez-la via « + Ajouter une foreuse », puis rattachez-la au contrat pour les tarifs carburant et la traçabilité.</p>
+                        <label class="block text-slate-400 mb-2 font-semibold">Foreuses liées (optionnel — plusieurs possibles)</label>
+                        <select id="contractLinkedDrill" multiple size="4" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white mb-1"></select>
+                        <p class="text-xs text-slate-500">Vous pouvez rattacher <strong class="text-slate-300">plusieurs foreuses</strong> au même contrat (maintenez Ctrl/Cmd pour en sélectionner plusieurs). Un contrat ne crée pas automatiquement une foreuse : ajoutez-la via « + Ajouter une foreuse », puis rattachez-la ici pour les tarifs carburant et la traçabilité.</p>
                     </div>
                     <div class="mb-4 border-t border-slate-600 pt-4">
                         <label class="block text-slate-400 mb-3 font-semibold">Tarifs et prestations du contrat</label>
@@ -14303,41 +14301,52 @@
         }
         var currentEditingContractId = null;
 
-        function populateContractLinkedDrillSelect(selectedDrillId) {
+        function populateContractLinkedDrillSelect(selectedDrillIds) {
             var sel = document.getElementById('contractLinkedDrill');
             if (!sel) return;
-            sel.innerHTML = '<option value="">Aucune</option>';
+            // Accepte un id seul ou un tableau d'ids.
+            var selected = {};
+            if (Array.isArray(selectedDrillIds)) selectedDrillIds.forEach(function(id) { if (id != null && id !== '') selected[String(id)] = true; });
+            else if (selectedDrillIds != null && selectedDrillIds !== '') selected[String(selectedDrillIds)] = true;
+            sel.innerHTML = '';
             (drills || []).forEach(function(d) {
                 var o = document.createElement('option');
                 o.value = d.id;
                 o.textContent = d.id + ' — ' + (d.location || '');
+                if (selected[String(d.id)]) o.selected = true;
                 sel.appendChild(o);
             });
-            if (selectedDrillId) sel.value = selectedDrillId;
         }
 
-        function syncContractDrillLink(oldContractId, newContractId, linkedDrillId) {
+        /**
+         * Attache l'ensemble des foreuses sélectionnées à un contrat (plusieurs foreuses
+         * peuvent partager le même contrat) et détache uniquement celles qui étaient
+         * rattachées à CE contrat mais ne sont plus sélectionnées. Ne touche jamais aux
+         * foreuses liées à d'autres contrats.
+         */
+        function setContractLinkedDrills(oldContractId, newContractId, selectedDrillIds) {
+            var sel = {};
+            (selectedDrillIds || []).forEach(function(id) { if (id != null && id !== '') sel[String(id)] = true; });
+            var newC = (newContractId != null && newContractId !== '') ? String(newContractId) : '';
+            var oldC = (oldContractId != null && oldContractId !== '') ? String(oldContractId) : '';
             drills.forEach(function(d) {
-                if (newContractId != null && newContractId !== '' && d.contractId === newContractId) {
-                    d.contractId = null;
-                }
-                if (oldContractId != null && oldContractId !== '' && d.contractId === oldContractId) {
+                var dId = String(d.id);
+                var curC = d.contractId != null ? String(d.contractId) : '';
+                if (sel[dId]) {
+                    d.contractId = newC || null;
+                } else if ((oldC && curC === oldC) || (newC && curC === newC)) {
+                    // Était sur ce contrat (ancien ou nouveau numéro) mais plus sélectionnée.
                     d.contractId = null;
                 }
             });
-            if (linkedDrillId) {
-                var dr = findDrillByMachineId(linkedDrillId);
-                if (dr) dr.contractId = (newContractId != null && newContractId !== '') ? newContractId : null;
-            }
         }
 
-        /** Lier ou délier une foreuse existante d’un contrat (depuis le tableau de bord ou la vue détail). */
+        /** Lier ou délier UNE foreuse d'un contrat, sans toucher aux autres foreuses du contrat. */
         function applyDrillToContractLink(drillId, contractIdOrEmpty) {
             var drill = findDrillByMachineId(drillId);
             if (!drill) return;
-            var oldC = drill.contractId || null;
             var newC = contractIdOrEmpty ? String(contractIdOrEmpty).trim() : '';
-            syncContractDrillLink(oldC, newC, drillId);
+            drill.contractId = newC ? newC : null;
         }
 
         function persistDrillUpdate(drill) {
@@ -14502,8 +14511,8 @@
             var siteSelect = document.getElementById('contractSite');
             if (siteSelect && contract.siteId) siteSelect.value = contract.siteId;
             
-            var linkedDr = (drills || []).find(function(d) { return d.contractId === contract.id; });
-            populateContractLinkedDrillSelect(linkedDr ? linkedDr.id : '');
+            var linkedDrIds = (drills || []).filter(function(d) { return String(d.contractId) === String(contract.id); }).map(function(d) { return d.id; });
+            populateContractLinkedDrillSelect(linkedDrIds);
             
             document.getElementById('contractModalTitle').textContent = 'Modifier Contrat: ' + contract.id;
             document.getElementById('contractModal').classList.remove('hidden');
@@ -14768,14 +14777,16 @@
             };
             
             var linkedDrillEl = document.getElementById('contractLinkedDrill');
-            var linkedDrillId = linkedDrillEl ? linkedDrillEl.value : '';
-            
+            var linkedDrillIds = linkedDrillEl
+                ? Array.prototype.slice.call(linkedDrillEl.selectedOptions || []).map(function(o) { return o.value; }).filter(function(v) { return v; })
+                : [];
+
             if (currentEditingContractId) {
                 // Modification
                 var contract = contracts.find(function(c) { return c.id === currentEditingContractId; });
                 if (contract) {
                     Object.assign(contract, contractData);
-                    syncContractDrillLink(currentEditingContractId, contractNumber, linkedDrillId);
+                    setContractLinkedDrills(currentEditingContractId, contractNumber, linkedDrillIds);
                     saveData();
                     renderContracts();
                     renderDashboard();
@@ -14785,7 +14796,7 @@
             } else {
                 // Nouveau contrat
                 contracts.push(contractData);
-                syncContractDrillLink(null, contractNumber, linkedDrillId);
+                setContractLinkedDrills(null, contractNumber, linkedDrillIds);
                 saveData();
                 renderContracts();
                 renderDashboard();
