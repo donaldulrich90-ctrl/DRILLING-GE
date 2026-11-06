@@ -23720,6 +23720,7 @@
             return '<div class="flex flex-wrap gap-2 mb-5">' +
                 tab('workers', 'Travailleurs', '👷') +
                 tab('presence', 'Présence', '📋') +
+                tab('overtime', 'Heures sup.', '⏱️') +
                 tab('kiosk', 'Pointage', '🖐️') +
                 '</div>';
         }
@@ -23727,9 +23728,165 @@
         function rhShowSub(t) {
             rhSubTab = t;
             if (t === 'presence') return renderRHPresence();
+            if (t === 'overtime') return renderRHOvertime();
             if (t === 'kiosk') return renderRHKiosk();
             return renderRH();
         }
+
+        // ── Heures supplémentaires (calcul automatique depuis le pointage) ──────
+        // Base : 40 h / semaine (ISO lundi→dimanche). Majoration Code du travail BF :
+        // +15 % pour les 8 premières heures sup de la semaine, +35 % au-delà.
+        var OT_WEEKLY_THRESHOLD = 40;
+        var OT_MONTHLY_LEGAL_HOURS = 173.33; // 40 h/sem × 52/12 → taux horaire = salaire mensuel / 173.33
+        function otDateStr(d) {
+            return d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '-' + String(d.getUTCDate()).padStart(2, '0');
+        }
+        function otParseDay(s) { var p = String(s).slice(0, 10).split('-'); return new Date(Date.UTC(+p[0], +p[1] - 1, +p[2])); }
+        function otWeekStart(dateStr) { // lundi de la semaine ISO (UTC)
+            var d = otParseDay(dateStr);
+            var wd = d.getUTCDay(); // 0=dim..6=sam
+            var diff = (wd === 0 ? 6 : wd - 1);
+            d.setUTCDate(d.getUTCDate() - diff);
+            return otDateStr(d);
+        }
+        function otWeekThursdayMonth(weekStartStr) { // mois (0-11) + année du jeudi de la semaine
+            var d = otParseDay(weekStartStr); d.setUTCDate(d.getUTCDate() + 3);
+            return { year: d.getUTCFullYear(), month: d.getUTCMonth() };
+        }
+        function otDayHoursFromPunches(punches) {
+            // punches : [{type, ts}] d'un employé sur une journée, triés par ts croissant
+            var sorted = punches.slice().sort(function (a, b) { return String(a.ts).localeCompare(String(b.ts)); });
+            var hours = 0, openIn = null;
+            sorted.forEach(function (p) {
+                if (p.type === 'in') { if (openIn == null) openIn = p.ts; }
+                else if (p.type === 'out') {
+                    if (openIn != null) {
+                        var ms = new Date(p.ts).getTime() - new Date(openIn).getTime();
+                        if (isFinite(ms) && ms > 0) hours += ms / 3600000;
+                        openIn = null;
+                    }
+                }
+            });
+            return hours;
+        }
+        /** À partir des pointages bruts, renvoie par employé : heures/jour, heures/semaine, HS. */
+        function otComputeFromRows(rows, year, month) {
+            // Regroupe par employé → jour → pointages
+            var byEmp = {};
+            (rows || []).forEach(function (r) {
+                var eid = r.employeeId; if (eid == null) return;
+                var day = String(r.ts).slice(0, 10); if (day.length < 10) return;
+                if (!byEmp[eid]) byEmp[eid] = { name: r.employeeName || ('#' + eid), role: r.employeeRole || '', days: {} };
+                if (!byEmp[eid].days[day]) byEmp[eid].days[day] = [];
+                byEmp[eid].days[day].push({ type: r.type, ts: r.ts });
+            });
+            var out = [];
+            Object.keys(byEmp).forEach(function (eid) {
+                var emp = byEmp[eid];
+                var weeks = {}; // weekStart → { hours }
+                Object.keys(emp.days).forEach(function (day) {
+                    var dh = otDayHoursFromPunches(emp.days[day]);
+                    if (dh <= 0) return;
+                    var ws = otWeekStart(day);
+                    if (!weeks[ws]) weeks[ws] = 0;
+                    weeks[ws] += dh;
+                });
+                // Ne garder que les semaines rattachées au mois sélectionné (jeudi ISO dans le mois)
+                var totalHours = 0, otHours = 0, ot15 = 0, ot35 = 0, weekList = [];
+                Object.keys(weeks).sort().forEach(function (ws) {
+                    var tm = otWeekThursdayMonth(ws);
+                    if (tm.year !== year || tm.month !== month) return;
+                    var wh = weeks[ws];
+                    var ot = Math.max(0, wh - OT_WEEKLY_THRESHOLD);
+                    var o15 = Math.min(ot, 8), o35 = Math.max(0, ot - 8);
+                    totalHours += wh; otHours += ot; ot15 += o15; ot35 += o35;
+                    weekList.push({ start: ws, hours: wh, ot: ot, ot15: o15, ot35: o35 });
+                });
+                if (weekList.length) out.push({ employeeId: eid, name: emp.name, role: emp.role, totalHours: totalHours, otHours: otHours, ot15: ot15, ot35: ot35, weeks: weekList });
+            });
+            out.sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); });
+            return out;
+        }
+        function otHourlyRate(emp) { return (emp && emp.salary ? emp.salary : 0) / OT_MONTHLY_LEGAL_HOURS; }
+        function otPayForEmployee(emp, ot15, ot35) {
+            var hr = otHourlyRate(emp);
+            return hr * (ot15 * 1.15 + ot35 * 1.35);
+        }
+        function otMonthRangeForFetch(year, month) {
+            // du lundi de la semaine du 1er au dimanche de la semaine du dernier jour
+            var first = otDateStr(new Date(Date.UTC(year, month, 1)));
+            var last = otDateStr(new Date(Date.UTC(year, month + 1, 0)));
+            var from = otWeekStart(first);
+            var we = otParseDay(otWeekStart(last)); we.setUTCDate(we.getUTCDate() + 6);
+            return { from: from, to: otDateStr(we) };
+        }
+        /** Récupère les pointages du mois (+semaines débordantes) et calcule les HS. */
+        function fetchOvertimeMonth(year, month) {
+            var rg = otMonthRangeForFetch(year, month);
+            return apiRequest('/attendance?from=' + encodeURIComponent(rg.from) + '&to=' + encodeURIComponent(rg.to), 'GET')
+                .then(function (rows) { return otComputeFromRows(rows || [], year, month); });
+        }
+        var otState = { year: null, month: null };
+        function renderRHOvertime() {
+            var content = document.getElementById('rhContent'); if (!content) return;
+            var now = new Date();
+            if (otState.year == null) { otState.year = now.getFullYear(); otState.month = now.getMonth(); }
+            var monthVal = otState.year + '-' + String(otState.month + 1).padStart(2, '0');
+            var monthName = new Date(otState.year, otState.month, 1).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+            content.innerHTML = rhSubNav('overtime') +
+                '<div class="ged-content-panel rounded-xl p-5 mb-4">' +
+                '<div class="flex flex-wrap items-center gap-3 justify-between mb-3">' +
+                '<div><h3 class="font-extrabold text-lg" style="color:var(--ged-yellow)">Heures supplémentaires — ' + presEsc(monthName) + '</h3>' +
+                '<p class="text-slate-400 text-sm">Calcul automatique depuis le pointage. Base 40 h/semaine · majoration +15 % (8 premières h) puis +35 %.</p></div>' +
+                '<input type="month" id="otMonth" value="' + presEsc(monthVal) + '" class="rounded-lg px-3 py-2" onchange="onOvertimeMonthChange()">' +
+                '</div>' +
+                '<div id="otHost"><p class="text-slate-400">Chargement…</p></div>' +
+                '</div>';
+            loadOvertime();
+        }
+        function onOvertimeMonthChange() {
+            var el = document.getElementById('otMonth'); if (!el || !el.value) return;
+            var p = el.value.split('-'); otState.year = +p[0]; otState.month = (+p[1]) - 1;
+            renderRHOvertime();
+        }
+        function loadOvertime() {
+            var host = document.getElementById('otHost'); if (!host) return;
+            host.innerHTML = '<p class="text-slate-400">Chargement…</p>';
+            fetchOvertimeMonth(otState.year, otState.month).then(function (list) {
+                if (!list.length) { host.innerHTML = '<p class="text-slate-400 text-sm">Aucun pointage exploitable ce mois-ci. Les heures sup se calculent dès que les employés pointent (arrivée/départ).</p>'; return; }
+                var curSal = (companyInfo && companyInfo.currency) || 'XOF';
+                var totPay = 0, totOt = 0;
+                var rowsHtml = list.map(function (e) {
+                    var emp = findEmployeeById(e.employeeId) || { salary: 0 };
+                    var pay = otPayForEmployee(emp, e.ot15, e.ot35);
+                    totPay += pay; totOt += e.otHours;
+                    var hr = otHourlyRate(emp);
+                    return '<tr class="border-b border-slate-700/50">' +
+                        '<td class="py-2 text-slate-200">' + presEsc(e.name) + '<div class="text-[11px] text-slate-500">' + presEsc(e.role || '') + '</div></td>' +
+                        '<td class="py-2 text-right text-slate-300">' + e.totalHours.toFixed(1) + ' h</td>' +
+                        '<td class="py-2 text-right ' + (e.otHours > 0 ? 'text-amber-300 font-semibold' : 'text-slate-500') + '">' + e.otHours.toFixed(1) + ' h</td>' +
+                        '<td class="py-2 text-right text-slate-400">' + e.ot15.toFixed(1) + ' h</td>' +
+                        '<td class="py-2 text-right text-slate-400">' + e.ot35.toFixed(1) + ' h</td>' +
+                        '<td class="py-2 text-right text-slate-400">' + (hr > 0 ? formatCurrency(hr, curSal) : '—') + '</td>' +
+                        '<td class="py-2 text-right font-semibold text-emerald-300">' + (pay > 0 ? formatCurrency(pay, curSal) : '—') + '</td>' +
+                        '</tr>';
+                }).join('');
+                host.innerHTML =
+                    '<div class="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">' +
+                    presKpi('Total heures sup', totOt.toFixed(1) + ' h', 'var(--ged-yellow)') +
+                    presKpi('Employés concernés', list.filter(function (e) { return e.otHours > 0; }).length, '#60a5fa') +
+                    presKpi('Montant HS estimé', formatCurrency(totPay, curSal), 'var(--ged-success,#22c55e)') +
+                    '</div>' +
+                    '<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-left text-slate-400 border-b border-slate-600">' +
+                    '<th class="py-2">Employé</th><th class="py-2 text-right">H. travaillées</th><th class="py-2 text-right">H. sup</th><th class="py-2 text-right">dont +15%</th><th class="py-2 text-right">dont +35%</th><th class="py-2 text-right">Taux horaire</th><th class="py-2 text-right">Montant HS</th>' +
+                    '</tr></thead><tbody>' + rowsHtml + '</tbody></table></div>' +
+                    '<p class="text-xs text-slate-500 mt-3">Heures travaillées = somme des paires pointage entrée→sortie. Taux horaire = salaire mensuel ÷ ' + OT_MONTHLY_LEGAL_HOURS + ' (40 h/sem). Une semaine est rattachée au mois de son jeudi (norme ISO).</p>';
+            }).catch(function (e) {
+                host.innerHTML = '<p class="text-red-400 text-sm">Erreur de chargement du pointage : ' + presEsc(e && e.message ? e.message : String(e)) + '</p>';
+            });
+        }
+        window.renderRHOvertime = renderRHOvertime;
+        window.onOvertimeMonthChange = onOvertimeMonthChange;
 
         function presEsc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
         function presTime(ts) { if (!ts) return '—'; try { return new Date(ts).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }); } catch (e) { return '—'; } }
@@ -24488,41 +24645,55 @@
             }
         }
 
-        function generatePayslip(employeeId) {
+        /** HS d'un employé pour un mois donné (depuis le pointage). */
+        function fetchEmployeeMonthOvertime(employeeId, year, month) {
+            var emp = findEmployeeById(employeeId) || { salary: 0 };
+            return fetchOvertimeMonth(year, month).then(function (list) {
+                var e = list.find(function (x) { return String(x.employeeId) === String(employeeId); });
+                if (!e) return { otHours: 0, ot15: 0, ot35: 0, otPay: 0, hourly: otHourlyRate(emp) };
+                return { otHours: e.otHours, ot15: e.ot15, ot35: e.ot35, otPay: otPayForEmployee(emp, e.ot15, e.ot35), hourly: otHourlyRate(emp) };
+            }).catch(function () { return { otHours: 0, ot15: 0, ot35: 0, otPay: 0, hourly: otHourlyRate(emp) }; });
+        }
+        async function generatePayslip(employeeId) {
             var employee = findEmployeeById(employeeId);
             if (!employee) return;
-            
+
             var today = new Date();
             var month = today.getMonth();
             var year = today.getFullYear();
             var monthName = today.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
-            
+
             // Vérifier si le bulletin existe déjà pour ce mois
             var existingPayslip = employee.payslips && employee.payslips.find(function(p) {
                 return p.month === month && p.year === year;
             });
-            
+
             if (existingPayslip) {
                 if (!confirm('Un bulletin existe déjà pour ' + monthName + '. Voulez-vous le régénérer?')) {
                     return;
                 }
             }
-            
+
             // Calculs du bulletin de salaire
             var baseSalary = employee.salary || 0;
             var workedDays = 30; // Jours travaillés dans le mois (par défaut)
             var dailySalary = baseSalary / 30;
-            var grossSalary = dailySalary * workedDays;
-            
-            // Cotisations sociales (approximatives en France)
+            var baseGross = dailySalary * workedDays;
+
+            // Heures supplémentaires automatiques (pointage) — majoration Code du travail BF
+            var ot = await fetchEmployeeMonthOvertime(employeeId, year, month);
+            var overtimePay = ot.otPay || 0;
+            var grossSalary = baseGross + overtimePay;
+
+            // Cotisations sociales
             var socialSecurityRate = 0.22; // 22% de cotisations salariales
             var socialSecurity = grossSalary * socialSecurityRate;
             var netSalary = grossSalary - socialSecurity;
-            
+
             // Congés payés
             var paidLeaveDays = calculatePaidLeave(employee);
             var takenLeaveDays = employee.takenLeave || 0;
-            
+
             // Créer le bulletin
             var payslip = {
                 id: 'BULL-' + year + '-' + String(month + 1).padStart(2, '0') + '-' + employee.employeeNumber,
@@ -24537,6 +24708,12 @@
                 baseSalary: baseSalary,
                 workedDays: workedDays,
                 dailySalary: dailySalary,
+                baseGross: baseGross,
+                overtimeHours: ot.otHours || 0,
+                overtime15h: ot.ot15 || 0,
+                overtime35h: ot.ot35 || 0,
+                overtimeHourlyRate: ot.hourly || 0,
+                overtimePay: overtimePay,
                 grossSalary: grossSalary,
                 socialSecurity: socialSecurity,
                 netSalary: netSalary,
@@ -24613,6 +24790,11 @@
                 '<tr><td>Salaire de base</td><td class="text-right">' + formatCurrency(payslip.baseSalary, getEmployeeSalaryCurrency()) + '</td></tr>' +
                 '<tr><td>Jours travaillés</td><td class="text-right">' + payslip.workedDays + ' jours</td></tr>' +
                 '<tr><td>Salaire journalier</td><td class="text-right">' + formatCurrency(payslip.dailySalary, getEmployeeSalaryCurrency()) + '</td></tr>' +
+                ((payslip.overtimeHours || 0) > 0
+                    ? '<tr><td>Heures sup. +15% (' + (payslip.overtime15h || 0).toFixed(1) + ' h)</td><td class="text-right">' + formatCurrency((payslip.overtimeHourlyRate || 0) * (payslip.overtime15h || 0) * 1.15, getEmployeeSalaryCurrency()) + '</td></tr>' +
+                      '<tr><td>Heures sup. +35% (' + (payslip.overtime35h || 0).toFixed(1) + ' h)</td><td class="text-right">' + formatCurrency((payslip.overtimeHourlyRate || 0) * (payslip.overtime35h || 0) * 1.35, getEmployeeSalaryCurrency()) + '</td></tr>' +
+                      '<tr><td><strong>Total heures sup. (' + (payslip.overtimeHours || 0).toFixed(1) + ' h)</strong></td><td class="text-right"><strong>' + formatCurrency(payslip.overtimePay || 0, getEmployeeSalaryCurrency()) + '</strong></td></tr>'
+                    : '') +
                 '<tr><td><strong>Salaire brut</strong></td><td class="text-right"><strong>' + formatCurrency(payslip.grossSalary, getEmployeeSalaryCurrency()) + '</strong></td></tr>' +
                 '</table>' +
                 '</div>' +
