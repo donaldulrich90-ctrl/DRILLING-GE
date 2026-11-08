@@ -29988,11 +29988,21 @@
             var existingRec = (dailyDataRecords || []).find(function(r) {
                 return drillIdsMatch(r.machineId, machineId) && r.date === date && dailyRecordShiftKey(r) === shift;
             });
-            // Si on change la date ou le shift d'un record existant, retrouver ce record par son ID
+            // Si on change la date ou le shift d'un record existant, retrouver ce record par son ID.
+            // SÉCURITÉ MACHINE : on ne réutilise ce record QUE s'il concerne la MÊME foreuse que
+            // celle sélectionnée. Sinon un contexte d'édition resté en mémoire (autre foreuse)
+            // ferait enregistrer les données sur la mauvaise machine (ex. données parties sur DR3).
             if (!existingRec && dailyEntryEditingRecordId != null) {
-                existingRec = (dailyDataRecords || []).find(function(r) {
+                var candById = (dailyDataRecords || []).find(function(r) {
                     return r.id != null && Number(r.id) === Number(dailyEntryEditingRecordId);
                 }) || null;
+                if (candById && drillIdsMatch(candById.machineId, machineId)) {
+                    existingRec = candById;
+                } else if (candById && !drillIdsMatch(candById.machineId, machineId)) {
+                    // La machine a changé depuis l'ouverture : on repart sur une saisie neuve
+                    // pour la machine sélectionnée (aucun déplacement/écrasement d'une autre foreuse).
+                    dailyEntryEditingRecordId = null;
+                }
             }
             // Vérifier qu'il n'y a pas déjà un autre record à la date+machine+shift cible
             if (existingRec && dailyEntryEditingRecordId != null && Number(existingRec.id) === Number(dailyEntryEditingRecordId)) {
