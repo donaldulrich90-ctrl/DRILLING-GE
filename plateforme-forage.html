@@ -29250,6 +29250,12 @@
                 if (drillIdsMatch(d.id, machineId)) option.selected = true;
                 machineSelect.appendChild(option);
             });
+            // SÉCURITÉ : la saisie est TOUJOURS ouverte depuis une foreuse précise
+            // (onglet Ressources). On verrouille le menu sur cette foreuse pour qu'une
+            // saisie ne parte jamais sur une autre machine (ex. DR07 au lieu de DR08).
+            machineSelect.value = machineId;
+            machineSelect.disabled = true;
+            machineSelect.title = 'Saisie rattachée à ' + machineId + ' (la foreuse dont vous avez ouvert la page). Pour une autre foreuse, ouvrez sa page.';
             
             // Pré-remplir le lieu avec celui de la machine
             document.getElementById('dailyEntryLocation').value = drill.location || '';
@@ -29394,30 +29400,23 @@
                 var dateEl = document.getElementById('dailyEntryDate');
                 if (dateEl) { dateEl.value = data.date; dateEl.dispatchEvent(new Event('change')); }
             }
-            // Machine — chercher par nom dans le select
+            // Machine — on NE CHANGE JAMAIS la foreuse depuis une photo : la saisie reste
+            // rattachée à la foreuse dont la page est ouverte. Un rapprochement de nom flou
+            // (ex. DR07 vs DR08, même site) pouvait réattribuer les chiffres à la mauvaise
+            // foreuse. On se contente d'alerter si la photo semble concerner une autre machine.
             if (data.machineName) {
                 var machSel = document.getElementById('dailyEntryMachineId');
                 if (machSel) {
-                    var found = false;
+                    var curText = ((machSel.options[machSel.selectedIndex] || {}).text || '').toLowerCase().trim();
                     var nameNorm = (data.machineName || '').toLowerCase().trim();
-                    for (var i = 0; i < machSel.options.length; i++) {
-                        var optText = machSel.options[i].text.toLowerCase().trim();
-                        if (optText.indexOf(nameNorm) >= 0 || nameNorm.indexOf(optText) >= 0) {
-                            machSel.selectedIndex = i; found = true; break;
-                        }
+                    var photoNum = (nameNorm.match(/\d+/) || [])[0];
+                    var curNum = (curText.match(/\d+/) || [])[0];
+                    var differs = (photoNum && curNum)
+                        ? (photoNum !== curNum)
+                        : (nameNorm && curText.indexOf(nameNorm) < 0 && nameNorm.indexOf(curText) < 0);
+                    if (differs && typeof showDailyEntryError === 'function') {
+                        showDailyEntryError('⚠️ La photo semble concerner « ' + data.machineName + ' », mais cette saisie est rattachée à ' + ((machSel.options[machSel.selectedIndex] || {}).text || 'la foreuse ouverte') + '. La machine n\'a pas été changée — vérifiez que vous êtes bien sur la bonne foreuse.');
                     }
-                    if (!found) {
-                        // Essayer une correspondance partielle (numéro)
-                        var numMatch = nameNorm.match(/\d+/);
-                        if (numMatch) {
-                            for (var j = 0; j < machSel.options.length; j++) {
-                                if (machSel.options[j].text.indexOf(numMatch[0]) >= 0) {
-                                    machSel.selectedIndex = j; found = true; break;
-                                }
-                            }
-                        }
-                    }
-                    if (found) machSel.dispatchEvent(new Event('change'));
                 }
             }
             // Shift
