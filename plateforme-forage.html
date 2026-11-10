@@ -29926,6 +29926,37 @@
                 dailyEntryEditingRecordId = null;
                 return true;
             }
+            // Changement de FOREUSE : on ne perd JAMAIS la saisie en cours et on ne la
+            // renvoie pas en douce sur l'ancienne foreuse. Si des données sont déjà tapées,
+            // on les conserve et on rattache simplement la saisie à la foreuse choisie
+            // (saisie indépendante pour cette foreuse). C'est la cause des données « parties
+            // sur la DR3 » : avant, annuler l'abandon faisait revenir le menu sur l'ancienne
+            // foreuse et l'enregistrement partait dessus.
+            if (machineChanged) {
+                var ndrill = findDrillByMachineId(newMachine);
+                if (!dailyEntrySaveInFlight && dailyEntryFormIsDirty()) {
+                    dailyEntryLoadedContext.machineId = newMachine;
+                    if (dateChanged) dailyEntryLoadedContext.date = newDate;
+                    if (shiftChanged) dailyEntryLoadedContext.shift = newShift;
+                    // Nouvelle foreuse ⇒ saisie indépendante : ne jamais réutiliser/écraser
+                    // le poste d'une autre foreuse.
+                    dailyEntryEditingRecordId = null;
+                    var locEl = document.getElementById('dailyEntryLocation');
+                    if (locEl && ndrill && (!locEl.value || !locEl.value.trim())) locEl.value = ndrill.location || '';
+                    try { renderFossesDatalist(ndrill && ndrill.siteId != null ? ndrill.siteId : currentSiteId); } catch (e) {}
+                    updateDailyEntryShiftConstraints();
+                    updateDailyEntryModalSummary();
+                    if (typeof updateDailyEntryDeleteButtonVisibility === 'function') updateDailyEntryDeleteButtonVisibility();
+                    return false; // on garde le formulaire tel quel : les données suivent la foreuse choisie
+                }
+                // Formulaire vierge : on bascule proprement sur la nouvelle foreuse et on
+                // chargera sa saisie existante (le menu garde bien la foreuse sélectionnée).
+                dailyEntryLoadedContext.machineId = newMachine;
+                if (dateChanged) dailyEntryLoadedContext.date = newDate;
+                if (shiftChanged) dailyEntryLoadedContext.shift = newShift;
+                dailyEntryEditingRecordId = null;
+                return true;
+            }
             if (!dailyEntrySaveInFlight && (!dailyEntryFormIsDirty() || confirm('Ce poste comporte des modifications non enregistrées. Les abandonner pour changer de poste ? Pour les conserver, annulez puis cliquez sur « Pré-enregistrer ».'))) return true;
             document.getElementById('dailyEntryDate').value = old.date;
             document.getElementById('dailyEntryMachineId').value = old.machineId;
