@@ -6848,10 +6848,11 @@
                 // Depth & pressure
                 var depth = (drill.telemetry && drill.telemetry.depth != null) ? drill.telemetry.depth.toFixed(1) : '0';
                 var press = (drill.telemetry && drill.telemetry.rotation_pressure != null) ? Math.round(drill.telemetry.rotation_pressure) : 0;
-                // Today's production
-                var todayRecs = (dailyDataRecords || []).filter(function(r){ return !isDailyRecordIncompleteDraft(r) && r.date === todayStr && drillIdsMatch(r.machineId, drill.id); });
-                var todayM = todayRecs.reduce(function(s,r){ return s+( parseFloat((r.data||{}).metersDrilled)||0); }, 0);
-                var todayH = todayRecs.reduce(function(s,r){ return s+( parseFloat((r.data||{}).hours)||0); }, 0);
+                // Production du jour — on inclut les postes pré-enregistrés (brouillons) :
+                // les mètres saisis doivent apparaître tout de suite, sans attendre la clôture du poste.
+                var todayRecs = (dailyDataRecords || []).filter(function(r){ return r.date === todayStr && drillIdsMatch(r.machineId, drill.id); });
+                var todayM = todayRecs.reduce(function(s,r){ return s+( parseFloat(_rpData(r).metersDrilled)||0); }, 0);
+                var todayH = todayRecs.reduce(function(s,r){ return s+( parseFloat(_rpData(r).hours)||0); }, 0);
                 var todayROP = todayH > 0 ? (todayM/todayH).toFixed(2) : '—';
                 // Operator (most recent assignment)
                 var lastAsgn = (assignments||[]).filter(function(a){ return String(a.drillId||a.machineId||'') === String(drill.id); });
@@ -7111,11 +7112,11 @@
             var activeDrills = drillsToShow.filter(function(d) { return d.status === 'EN FORAGE'; });
             var availability = drillsToShow.length > 0 ? (activeDrills.length / drillsToShow.length) * 100 : 0;
 
-            // Métrage du jour from dailyDataRecords
+            // Métrage du jour from dailyDataRecords (brouillons/pré-enregistrés inclus)
             var todayStr = getLocalDateYYYYMMDD(new Date());
-            var todayRecs = (dailyDataRecords || []).filter(function(r) { return !isDailyRecordIncompleteDraft(r) && r.date === todayStr; });
-            var dailyM = todayRecs.reduce(function(s, r) { return s + (parseFloat((r.data || {}).metersDrilled) || 0); }, 0);
-            var dailyH = todayRecs.reduce(function(s, r) { return s + (parseFloat((r.data || {}).hours) || 0); }, 0);
+            var todayRecs = (dailyDataRecords || []).filter(function(r) { return r.date === todayStr; });
+            var dailyM = todayRecs.reduce(function(s, r) { return s + (parseFloat(_rpData(r).metersDrilled) || 0); }, 0);
+            var dailyH = todayRecs.reduce(function(s, r) { return s + (parseFloat(_rpData(r).hours) || 0); }, 0);
             var avgROP = dailyH > 0 ? (dailyM / dailyH).toFixed(1) : null;
 
             var countEl = document.getElementById('activeDrillsCount');
@@ -7191,8 +7192,8 @@
             for (var i = 6; i >= 0; i--) {
                 var d = new Date(); d.setDate(d.getDate() - i);
                 var dayStr = getLocalDateYYYYMMDD(d);
-                var recs = (dailyDataRecords || []).filter(function(r) { return !isDailyRecordIncompleteDraft(r) && r.date === dayStr; });
-                var total = recs.reduce(function(s, r) { return s + (parseFloat((r.data || {}).metersDrilled) || 0); }, 0);
+                var recs = (dailyDataRecords || []).filter(function(r) { return r.date === dayStr; });
+                var total = recs.reduce(function(s, r) { return s + (parseFloat(_rpData(r).metersDrilled) || 0); }, 0);
                 labels.push(d.toLocaleDateString('fr-CA', { weekday: 'short', day: '2-digit', month: 'short' }));
                 data.push(parseFloat(total.toFixed(1)));
             }
