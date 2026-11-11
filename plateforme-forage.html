@@ -31916,7 +31916,11 @@
             { name: 'financial_summary', description: 'Rentabilité estimée d\'un mois : revenu, coûts détaillés (carburant, consommables, main-d\'œuvre, repas, autres), profit, marge, mètres, heures. month au format AAAA-MM.', input_schema: { type: 'object', properties: { month: { type: 'string' }, drillId: { type: 'string' } }, required: ['month'] } },
             { name: 'list_invoices', description: 'Liste des factures avec client, date, mois de facturation, total, devise et statut. Filtres optionnels month (AAAA-MM) et status.', input_schema: { type: 'object', properties: { month: { type: 'string' }, status: { type: 'string' } } } },
             { name: 'stock_summary', description: 'État du stock : articles, quantités, seuils, alertes de stock bas, prix unitaire et devise.', input_schema: { type: 'object', properties: {} } },
-            { name: 'list_contracts', description: 'Liste des contrats avec client, site, devise et prix carburant.', input_schema: { type: 'object', properties: {} } }
+            { name: 'list_contracts', description: 'Liste des contrats avec client, site, devise et prix carburant.', input_schema: { type: 'object', properties: {} } },
+            { name: 'overtime_summary', description: 'Heures supplémentaires d\'un mois par employé (heures travaillées, heures sup, majorations +15%/+35%, montant). month au format AAAA-MM.', input_schema: { type: 'object', properties: { month: { type: 'string' } }, required: ['month'] } },
+            { name: 'list_employees', description: 'Liste des employés : nom, rôle, statut, date d\'embauche, salaire mensuel.', input_schema: { type: 'object', properties: {} } },
+            { name: 'maintenance_summary', description: 'État de la maintenance des foreuses : dernière et prochaine révision (date et heures), statut, et si une révision est en retard. drillId optionnel.', input_schema: { type: 'object', properties: { drillId: { type: 'string' } } } },
+            { name: 'drill_plan_progress', description: 'Avancement des plans de forage. Sans planId : liste des plans (nom, statut, nombre de trous). Avec planId : détail (trous planifiés/en cours/complétés, mètres planifiés vs forés, % avancement).', input_schema: { type: 'object', properties: { planId: { type: 'string' } } } }
         ];
         function _geAiMonthRange(ym) {
             var p = String(ym).split('-'); var y = +p[0], m = +p[1];
@@ -31976,6 +31980,50 @@
             }
             if (name === 'list_contracts') {
                 return (typeof contracts !== 'undefined' ? contracts : []).map(function(c) { return { id: c.id, client: c.clientName || '', site: c.site || '', currency: c.currency || '', fuelPrice: c.fuelPrice != null ? c.fuelPrice : null }; });
+            }
+            if (name === 'overtime_summary') {
+                var ymO = input.month; if (!ymO) return { error: 'month (AAAA-MM) requis' };
+                if (typeof fetchOvertimeMonth !== 'function') return { error: 'module heures sup indisponible' };
+                var pO = String(ymO).split('-');
+                var listO = await fetchOvertimeMonth(+pO[0], (+pO[1]) - 1);
+                var curO = (typeof companyInfo !== 'undefined' && companyInfo.currency) || 'XOF';
+                return { month: ymO, currency: curO, employees: (listO || []).map(function(e) {
+                    var emp = (typeof findEmployeeById === 'function' ? findEmployeeById(e.employeeId) : null) || { salary: 0 };
+                    var pay = (typeof otPayForEmployee === 'function') ? otPayForEmployee(emp, e.ot15, e.ot35) : 0;
+                    return { name: e.name, role: e.role || '', totalHours: +(e.totalHours || 0).toFixed(1), overtimeHours: +(e.otHours || 0).toFixed(1), ot15: +(e.ot15 || 0).toFixed(1), ot35: +(e.ot35 || 0).toFixed(1), pay: +pay.toFixed(0) };
+                }) };
+            }
+            if (name === 'list_employees') {
+                return (typeof employees !== 'undefined' ? employees : []).map(function(e) { return { name: e.name, role: e.role || '', status: e.status || '', startDate: e.startDate || '', salary: e.salary != null ? e.salary : null }; });
+            }
+            if (name === 'maintenance_summary') {
+                var scheds = (typeof getMaintenanceForSite === 'function') ? getMaintenanceForSite() : (typeof maintenanceSchedules !== 'undefined' ? maintenanceSchedules : []);
+                if (input.drillId) scheds = (scheds || []).filter(function(s) { return drillIdsMatch(s.machineId, input.drillId); });
+                var todayStrM = new Date().toISOString().slice(0, 10);
+                return (scheds || []).map(function(s) {
+                    var nd = s.nextMaintenanceDate || '';
+                    return { machineId: s.machineId, type: s.type || s.name || '', status: s.status || '', lastMaintenanceDate: s.lastMaintenanceDate || '', lastMaintenanceHours: s.lastMaintenanceHours != null ? s.lastMaintenanceHours : null, nextMaintenanceDate: nd, nextMaintenanceHours: s.nextMaintenanceHours != null ? s.nextMaintenanceHours : null, overdue: !!(nd && nd < todayStrM) };
+                });
+            }
+            if (name === 'drill_plan_progress') {
+                var authH = { 'Authorization': 'Bearer ' + (window.API && window.API.getAuthToken ? window.API.getAuthToken() : '') };
+                if (input.planId) {
+                    try {
+                        var r2 = await fetch('/api/drill-plans/' + encodeURIComponent(input.planId) + '/full', { headers: authH });
+                        if (!r2.ok) return { error: 'plan introuvable (HTTP ' + r2.status + ')' };
+                        var plan = await r2.json();
+                        var holes = plan.holes || [], byStatus = {}, planM = 0, actM = 0;
+                        holes.forEach(function(h) { var st = h.status || 'PLANIFIÉ'; byStatus[st] = (byStatus[st] || 0) + 1; planM += Number(h.planDepth) || 0; actM += Number(h.actDepth) || 0; });
+                        return { planId: input.planId, name: plan.name || '', status: plan.status || '', totalHoles: holes.length, byStatus: byStatus, completed: byStatus['COMPLETÉ'] || 0, plannedMeters: +planM.toFixed(1), drilledMeters: +actM.toFixed(1), progressPct: planM > 0 ? +((actM / planM) * 100).toFixed(1) : null };
+                    } catch (e) { return { error: String(e && e.message ? e.message : e) }; }
+                }
+                try {
+                    var r3 = await fetch('/api/drill-plans', { headers: authH });
+                    var plans = r3.ok ? await r3.json() : [];
+                    return (plans || []).map(function(p) { return { id: p.id, name: p.name, status: p.status || '', totalHoles: p.totalHoles || 0, site: p.site || '' }; });
+                } catch (e) {
+                    return (typeof DP_STATE !== 'undefined' ? (DP_STATE.plans || []) : []).map(function(p) { return { id: p.id, name: p.name, status: p.status, totalHoles: p.totalHoles }; });
+                }
             }
             return { error: 'Outil inconnu: ' + name };
         }
