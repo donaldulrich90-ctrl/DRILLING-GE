@@ -15260,6 +15260,7 @@
                 '</div></div>' +
                 '</body></html>';
 
+            try { if (window.geAiStashReport) window.geAiStashReport('Facture ' + (invoice.invoiceNumber || invoice.id) + (client && client.name ? ' — ' + client.name : ''), invoiceHTML); } catch (e) {}
             var blobHtml = new Blob([invoiceHTML], { type: 'text/html;charset=utf-8' });
             var blobUrl = URL.createObjectURL(blobHtml);
             var printWindow = window.open(blobUrl, '_blank');
@@ -31567,6 +31568,20 @@
                 <button onclick="geAiClearChat()" style="background:rgba(255,255,255,0.1);border:none;color:white;border-radius:6px;padding:4px 10px;font-size:11px;cursor:pointer" title="Nouvelle conversation">🔄 Nouveau</button>
                 <button onclick="geAiToggleChat()" style="background:none;border:none;color:white;font-size:22px;cursor:pointer;padding:4px">&times;</button>
             </div>
+            <!-- Actions rapides -->
+            <div style="display:flex;gap:6px;flex-wrap:wrap;padding:8px 14px;border-bottom:1px solid #1E293B;background:#0B1120;flex-shrink:0">
+                <button id="geAiLastDocBtn" onclick="geAiAnalyzeLastReport()" style="display:none;background:#1E293B;border:1px solid #334155;color:#C4B5FD;border-radius:8px;padding:5px 10px;font-size:11px;cursor:pointer">📄 Analyser le dernier document</button>
+                <button onclick="geAiToggleDataPicker()" style="background:#1E293B;border:1px solid #334155;color:#C4B5FD;border-radius:8px;padding:5px 10px;font-size:11px;cursor:pointer">📊 Analyser des données</button>
+            </div>
+            <!-- Sélecteur de données -->
+            <div id="geAiDataPicker" style="display:none;padding:10px 14px;border-bottom:1px solid #1E293B;background:#0B1120;flex-shrink:0">
+                <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+                    <input type="month" id="geAiDataMonth" style="background:#1E293B;border:1px solid #334155;border-radius:8px;padding:6px 8px;color:white;font-size:12px">
+                    <select id="geAiDataMachine" style="background:#1E293B;border:1px solid #334155;border-radius:8px;padding:6px 8px;color:white;font-size:12px"><option value="">Toutes les foreuses</option></select>
+                    <button onclick="geAiRunDataAnalysis()" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);border:none;color:white;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer">Analyser</button>
+                </div>
+                <p style="margin:6px 0 0;font-size:10px;color:#64748B">Je récupère les saisies du mois (et de la foreuse) pour les analyser, sans générer de rapport.</p>
+            </div>
             <!-- Messages -->
             <div id="geAiMessages" style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px">
                 <div style="background:rgba(124,58,237,0.15);border:1px solid rgba(124,58,237,0.3);border-radius:12px;padding:14px;max-width:90%">
@@ -31735,6 +31750,8 @@
                 _geAiLastReport = { title: ttl, html: html, at: Date.now() };
                 var b = document.getElementById('geAiAnalyzeLastBtn');
                 if (b) { b.style.display = 'block'; b.textContent = '🤖 Analyser « ' + ttl + ' » avec l’IA'; }
+                var b2 = document.getElementById('geAiLastDocBtn');
+                if (b2) { b2.style.display = 'block'; b2.title = ttl; }
             } catch (e) {}
         };
         function geAiHtmlToText(html) {
@@ -31759,6 +31776,85 @@
             if (input) { input.value = 'Analyse ce rapport : points clés, anomalies éventuelles, et recommandations concrètes.'; input.focus(); }
         };
 
+        // ---- Analyser des données (mois / foreuse) sans rapport ----
+        window.geAiToggleDataPicker = function() {
+            var p = document.getElementById('geAiDataPicker');
+            if (!p) return;
+            var show = p.style.display === 'none' || !p.style.display;
+            p.style.display = show ? 'block' : 'none';
+            if (show) {
+                var mEl = document.getElementById('geAiDataMonth');
+                if (mEl && !mEl.value) mEl.value = new Date().toISOString().slice(0, 7);
+                var sel = document.getElementById('geAiDataMachine');
+                if (sel) {
+                    var cur = sel.value;
+                    var list = (typeof getDrillsForSite === 'function') ? getDrillsForSite() : (typeof drills !== 'undefined' ? drills : []);
+                    sel.innerHTML = '<option value="">Toutes les foreuses</option>';
+                    (list || []).forEach(function(d) {
+                        var o = document.createElement('option');
+                        o.value = d.id; o.textContent = d.id + (d.location ? ' — ' + d.location : '');
+                        sel.appendChild(o);
+                    });
+                    if (cur) sel.value = cur;
+                }
+            }
+        };
+        function geAiBuildDataSnapshot(ym, drillId) {
+            var recs = (typeof dailyDataRecords !== 'undefined' ? dailyDataRecords : []).filter(function(r) {
+                if (!r || !r.date || String(r.date).slice(0, 7) !== ym) return false;
+                if (drillId && !drillIdsMatch(r.machineId, drillId)) return false;
+                return true;
+            });
+            if (!recs.length) return null;
+            var byDrill = {}, byDate = {};
+            recs.forEach(function(r) {
+                var d = (typeof _rpData === 'function') ? _rpData(r) : (r.data || {});
+                var mid = r.machineId;
+                if (!byDrill[mid]) byDrill[mid] = { meters: 0, hours: 0, fuel: 0, days: {}, shifts: 0, downtime: 0 };
+                var g = byDrill[mid];
+                g.meters += parseFloat(d.metersDrilled) || 0;
+                g.hours += parseFloat(d.hours) || 0;
+                g.fuel += parseFloat(d.fuelAdded) || 0;
+                g.days[r.date] = 1; g.shifts++;
+                var dt = parseFloat(d.downtimeHours); if (isFinite(dt)) g.downtime += dt;
+                if (!byDate[r.date]) byDate[r.date] = { m: 0, h: 0 };
+                byDate[r.date].m += parseFloat(d.metersDrilled) || 0;
+                byDate[r.date].h += parseFloat(d.hours) || 0;
+            });
+            var lines = [];
+            lines.push('Données de production — mois ' + ym + (drillId ? (' — foreuse ' + drillId) : ' — toutes les foreuses du site'));
+            lines.push('');
+            var totM = 0, totH = 0, totF = 0;
+            Object.keys(byDrill).forEach(function(mid) {
+                var g = byDrill[mid]; totM += g.meters; totH += g.hours; totF += g.fuel;
+                var rop = g.hours > 0 ? (g.meters / g.hours) : 0;
+                lines.push('Foreuse ' + mid + ' : ' + g.meters.toFixed(1) + ' m · ' + g.hours.toFixed(1) + ' h · ROP ' + rop.toFixed(1) + ' m/h · '
+                    + Object.keys(g.days).length + ' jour(s) · ' + g.shifts + ' poste(s) · carburant ' + g.fuel.toFixed(0) + ' L'
+                    + (g.downtime > 0 ? (' · arrêts ' + g.downtime.toFixed(1) + ' h') : ''));
+            });
+            var totRop = totH > 0 ? (totM / totH) : 0;
+            lines.push('');
+            lines.push('TOTAL : ' + totM.toFixed(1) + ' m · ' + totH.toFixed(1) + ' h · ROP moyen ' + totRop.toFixed(1) + ' m/h · carburant ' + totF.toFixed(0) + ' L · ' + recs.length + ' poste(s)');
+            lines.push('');
+            lines.push('Détail par jour :');
+            Object.keys(byDate).sort().forEach(function(dt) {
+                lines.push('  ' + dt + ' : ' + byDate[dt].m.toFixed(1) + ' m · ' + byDate[dt].h.toFixed(1) + ' h');
+            });
+            return lines.join('\n');
+        }
+        window.geAiRunDataAnalysis = function() {
+            var ym = (document.getElementById('geAiDataMonth') || {}).value;
+            var mid = (document.getElementById('geAiDataMachine') || {}).value || null;
+            if (!ym) { alert('Choisissez un mois.'); return; }
+            var snap = geAiBuildDataSnapshot(ym, mid);
+            if (!snap) { alert('Aucune saisie trouvée pour ce mois' + (mid ? ' et cette foreuse' : '') + '.'); return; }
+            geAiEnsureOpen();
+            geAiAttachText('Données ' + ym + (mid ? (' — ' + mid) : ''), snap, 'Données de production');
+            var picker = document.getElementById('geAiDataPicker'); if (picker) picker.style.display = 'none';
+            var input = document.getElementById('geAiInput');
+            if (input) { input.value = 'Analyse ces données de production : tendances, rendements (ROP), anomalies et recommandations concrètes.'; input.focus(); }
+        };
+
         window.geAiToggleChat = function() {
             _geAiOpen = !_geAiOpen;
             var panel = document.getElementById('geAiPanel');
@@ -31767,6 +31863,8 @@
                 panel.style.display = 'flex';
                 icon.textContent = '✕';
                 document.getElementById('geAiInput').focus();
+                var b2 = document.getElementById('geAiLastDocBtn');
+                if (b2) b2.style.display = _geAiLastReport ? 'block' : 'none';
             } else {
                 panel.style.display = 'none';
                 icon.textContent = '🤖';
