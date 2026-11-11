@@ -19417,6 +19417,7 @@
             
             var html = '<div class="mb-6">' +
                 '<h3 class="text-xl font-bold mb-4">Génération de Rapports</h3>' +
+                '<button type="button" id="geAiAnalyzeLastBtn" onclick="geAiAnalyzeLastReport()" style="display:' + ((window.geAiHasLastReport && window.geAiHasLastReport()) ? 'block' : 'none') + ';margin-bottom:16px" class="w-full md:w-auto bg-purple-700 hover:bg-purple-600 text-white px-4 py-2 rounded-lg font-semibold">🤖 Analyser le dernier rapport avec l’IA</button>' +
                 '<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">' +
                 '<div class="ged-content-panel p-6 rounded-xl">' +
                 '<h4 class="text-lg font-bold mb-4">📅 Rapport Journalier</h4>' +
@@ -23017,9 +23018,11 @@
                 return false;
             }
             try {
+                var _rptHtml = documentHtml || buildDailyReportDocumentHtml(date, records);
                 printWindow.document.open();
-                printWindow.document.write(documentHtml || buildDailyReportDocumentHtml(date, records));
+                printWindow.document.write(_rptHtml);
                 printWindow.document.close();
+                try { if (window.geAiStashReport) window.geAiStashReport(null, _rptHtml); } catch (e) {}
             } catch (error) {
                 alert('Le rapport journalier n’a pas pu être préparé. Veuillez réessayer.');
                 return false;
@@ -23195,6 +23198,7 @@
                 (chartsBlockWeek ? chartsBlockWeek.script : '') +
                 '</body></html>';
 
+            try { if (window.geAiStashReport) window.geAiStashReport(null, html); } catch (e) {}
             var printWindow = window.open('', '_blank');
             printWindow.document.write(html);
             printWindow.document.close();
@@ -23411,6 +23415,7 @@
             html += rowFuel('total-row', 'Total période (identique à la synthèse)', periodTotal);
             html += '</tbody></table></div>';
             html += '<div class="footer"><p>Document généré le ' + new Date().toLocaleString('fr-FR') + '</p><p>' + escapeHtmlReportCell(companyName) + ' · ' + new Date().getFullYear() + '</p></div></body></html>';
+            try { if (window.geAiStashReport) window.geAiStashReport(null, html); } catch (e) {}
             var w = window.open('', '_blank');
             w.document.write(html);
             w.document.close();
@@ -31573,19 +31578,14 @@
                     🛡️ <strong>Sécurité</strong> — procédures HSE, incidents</p>
                 </div>
             </div>
-            <!-- Pastille fichier joint -->
+            <!-- Pastilles fichiers joints (plusieurs possibles) -->
             <div id="geAiAttachBar" style="display:none;padding:0 16px 8px;background:#0B1120">
-                <div style="display:flex;align-items:center;gap:8px;background:#1E293B;border:1px solid #334155;border-radius:8px;padding:6px 10px;font-size:12px;color:#CBD5E1">
-                    <span>📎</span>
-                    <span id="geAiAttachName" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
-                    <span id="geAiAttachStatus" style="color:#64748B;font-size:11px"></span>
-                    <button onclick="geAiClearAttachment()" title="Retirer le fichier" style="background:none;border:none;color:#94A3B8;cursor:pointer;font-size:14px;line-height:1">✕</button>
-                </div>
+                <div id="geAiAttachList" style="display:flex;flex-wrap:wrap;gap:6px"></div>
             </div>
             <!-- Zone de saisie -->
             <div style="padding:12px 16px;border-top:1px solid #1E293B;display:flex;gap:8px;flex-shrink:0;background:#0B1120;align-items:flex-end">
-                <input type="file" id="geAiFileInput" style="display:none" accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.csv,.txt,.json,.md,.log,.xlsx,.xls" onchange="geAiOnFileChosen(this)">
-                <button onclick="geAiPickFile()" id="geAiAttachBtn" title="Joindre un fichier à analyser (PDF, image, Excel, CSV, texte)" style="background:#1E293B;border:1px solid #334155;color:#A78BFA;border-radius:10px;padding:10px 12px;cursor:pointer;font-size:15px;flex-shrink:0;transition:opacity .2s">📎</button>
+                <input type="file" id="geAiFileInput" multiple style="display:none" accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.csv,.txt,.json,.md,.log,.xlsx,.xls" onchange="geAiOnFileChosen(this)">
+                <button onclick="geAiPickFile()" id="geAiAttachBtn" title="Joindre un ou plusieurs fichiers à analyser (PDF, image, Excel, CSV, texte)" style="background:#1E293B;border:1px solid #334155;color:#A78BFA;border-radius:10px;padding:10px 12px;cursor:pointer;font-size:15px;flex-shrink:0;transition:opacity .2s">📎</button>
                 <textarea id="geAiInput" placeholder="Posez votre question…" rows="1" style="flex:1;background:#1E293B;border:1px solid #334155;border-radius:10px;padding:10px 14px;color:white;font-size:13px;resize:none;font-family:inherit;outline:none;max-height:100px;line-height:1.4" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();geAiSend()}"></textarea>
                 <button onclick="geAiSend()" id="geAiSendBtn" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);border:none;color:white;border-radius:10px;padding:10px 16px;cursor:pointer;font-size:14px;font-weight:600;flex-shrink:0;transition:opacity .2s" title="Envoyer">➤</button>
             </div>
@@ -31605,8 +31605,9 @@
         var _geAiOpen = false;
         var _geAiHistory = []; // {role:'user'|'assistant', content:'...'}
         var _geAiSending = false;
-        var _geAiAttachment = null; // { name, blocks:[...], note }
+        var _geAiAttachments = []; // [{ name, blocks:[...], note }]
         var GE_AI_MAX_FILE_BYTES = 8 * 1024 * 1024; // 8 Mo
+        var GE_AI_MAX_ATTACHMENTS = 10;
 
         function _geAiReadArrayBuffer(file) {
             return new Promise(function(resolve, reject) {
@@ -31636,72 +31637,126 @@
             if (el) el.click();
         };
         window.geAiClearAttachment = function() {
-            _geAiAttachment = null;
-            var bar = document.getElementById('geAiAttachBar');
-            if (bar) bar.style.display = 'none';
+            _geAiAttachments = [];
+            renderGeAiAttachBar();
             var fi = document.getElementById('geAiFileInput');
             if (fi) fi.value = '';
         };
-        function _geAiSetAttachStatus(txt) {
-            var el = document.getElementById('geAiAttachStatus');
-            if (el) el.textContent = txt || '';
+        window.geAiRemoveAttachment = function(idx) {
+            if (idx >= 0 && idx < _geAiAttachments.length) _geAiAttachments.splice(idx, 1);
+            renderGeAiAttachBar();
+        };
+        function renderGeAiAttachBar() {
+            var bar = document.getElementById('geAiAttachBar');
+            var list = document.getElementById('geAiAttachList');
+            if (!bar || !list) return;
+            if (!_geAiAttachments.length) { bar.style.display = 'none'; list.innerHTML = ''; return; }
+            bar.style.display = 'block';
+            list.innerHTML = _geAiAttachments.map(function(a, i) {
+                return '<span style="display:inline-flex;align-items:center;gap:6px;background:#1E293B;border:1px solid #334155;border-radius:8px;padding:5px 9px;font-size:12px;color:#CBD5E1;max-width:220px">'
+                    + '<span>📎</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escapeHtml(a.name) + '</span>'
+                    + '<button onclick="geAiRemoveAttachment(' + i + ')" title="Retirer" style="background:none;border:none;color:#94A3B8;cursor:pointer;font-size:13px;line-height:1;flex-shrink:0">✕</button>'
+                    + '</span>';
+            }).join('');
         }
-        window.geAiOnFileChosen = async function(input) {
-            var file = input && input.files && input.files[0];
-            if (!file) return;
-            if (file.size > GE_AI_MAX_FILE_BYTES) {
-                alert('Fichier trop volumineux (' + (file.size / 1048576).toFixed(1) + ' Mo). Maximum 8 Mo.');
-                input.value = '';
-                return;
-            }
+        // Construit l'entrée pièce jointe {name, blocks, note} à partir d'un fichier.
+        async function _geAiBuildFromFile(file) {
             var name = file.name || 'fichier';
             var ext = (name.split('.').pop() || '').toLowerCase();
             var mime = file.type || '';
-            // Afficher la pastille en mode chargement
-            var bar = document.getElementById('geAiAttachBar');
-            var nameEl = document.getElementById('geAiAttachName');
-            if (nameEl) nameEl.textContent = name;
-            if (bar) bar.style.display = 'block';
-            _geAiSetAttachStatus('lecture…');
-            try {
-                var blocks = [], note = '';
-                if (mime.indexOf('image/') === 0 || ['png', 'jpg', 'jpeg', 'webp', 'gif'].indexOf(ext) >= 0) {
-                    var mt = mime.indexOf('image/') === 0 ? mime : ('image/' + (ext === 'jpg' ? 'jpeg' : ext));
-                    var b64 = _geAiArrayBufferToBase64(await _geAiReadArrayBuffer(file));
-                    blocks.push({ type: 'image', source: { type: 'base64', media_type: mt, data: b64 } });
-                    note = 'Image jointe';
-                } else if (ext === 'pdf' || mime === 'application/pdf') {
-                    var b64p = _geAiArrayBufferToBase64(await _geAiReadArrayBuffer(file));
-                    blocks.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: b64p } });
-                    note = 'PDF joint';
-                } else if (['xlsx', 'xls'].indexOf(ext) >= 0) {
-                    var wb = XLSX.read(new Uint8Array(await _geAiReadArrayBuffer(file)), { type: 'array', cellDates: true });
-                    var parts = [];
-                    (wb.SheetNames || []).forEach(function(sn) {
-                        var csv = XLSX.utils.sheet_to_csv(wb.Sheets[sn]);
-                        parts.push('--- Feuille « ' + sn + ' » ---\n' + csv);
-                    });
-                    var xtext = parts.join('\n\n');
-                    if (xtext.length > 60000) xtext = xtext.slice(0, 60000) + '\n[...tronqué...]';
-                    blocks.push({ type: 'text', text: 'Contenu du classeur Excel « ' + name + ' » (converti en CSV) :\n\n' + xtext });
-                    note = 'Excel joint';
-                } else if (['csv', 'txt', 'json', 'md', 'log', 'tsv', 'yml', 'yaml'].indexOf(ext) >= 0 || mime.indexOf('text/') === 0) {
-                    var t = await _geAiReadText(file);
-                    if (t.length > 80000) t = t.slice(0, 80000) + '\n[...tronqué...]';
-                    blocks.push({ type: 'text', text: 'Contenu du fichier « ' + name + ' » :\n\n```\n' + t + '\n```' });
-                    note = 'Fichier texte joint';
-                } else {
-                    alert('Type de fichier non pris en charge : .' + ext + '\n\nFormats acceptés : PDF, images (PNG/JPG/WEBP/GIF), Excel (XLSX/XLS), CSV, TXT, JSON, MD.');
-                    geAiClearAttachment();
-                    return;
-                }
-                _geAiAttachment = { name: name, blocks: blocks, note: note };
-                _geAiSetAttachStatus('prêt');
-            } catch (e) {
-                _geAiSetAttachStatus('');
-                alert('Impossible de lire ce fichier : ' + (e && e.message ? e.message : e));
-                geAiClearAttachment();
+            var blocks = [], note = '';
+            if (mime.indexOf('image/') === 0 || ['png', 'jpg', 'jpeg', 'webp', 'gif'].indexOf(ext) >= 0) {
+                var mt = mime.indexOf('image/') === 0 ? mime : ('image/' + (ext === 'jpg' ? 'jpeg' : ext));
+                var b64 = _geAiArrayBufferToBase64(await _geAiReadArrayBuffer(file));
+                blocks.push({ type: 'image', source: { type: 'base64', media_type: mt, data: b64 } });
+                note = 'Image';
+            } else if (ext === 'pdf' || mime === 'application/pdf') {
+                var b64p = _geAiArrayBufferToBase64(await _geAiReadArrayBuffer(file));
+                blocks.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: b64p } });
+                note = 'PDF';
+            } else if (['xlsx', 'xls'].indexOf(ext) >= 0) {
+                var wb = XLSX.read(new Uint8Array(await _geAiReadArrayBuffer(file)), { type: 'array', cellDates: true });
+                var parts = [];
+                (wb.SheetNames || []).forEach(function(sn) {
+                    var csv = XLSX.utils.sheet_to_csv(wb.Sheets[sn]);
+                    parts.push('--- Feuille « ' + sn + ' » ---\n' + csv);
+                });
+                var xtext = parts.join('\n\n');
+                if (xtext.length > 60000) xtext = xtext.slice(0, 60000) + '\n[...tronqué...]';
+                blocks.push({ type: 'text', text: 'Contenu du classeur Excel « ' + name + ' » (converti en CSV) :\n\n' + xtext });
+                note = 'Excel';
+            } else if (['csv', 'txt', 'json', 'md', 'log', 'tsv', 'yml', 'yaml'].indexOf(ext) >= 0 || mime.indexOf('text/') === 0) {
+                var t = await _geAiReadText(file);
+                if (t.length > 80000) t = t.slice(0, 80000) + '\n[...tronqué...]';
+                blocks.push({ type: 'text', text: 'Contenu du fichier « ' + name + ' » :\n\n```\n' + t + '\n```' });
+                note = 'Texte';
+            } else {
+                throw new Error('__UNSUPPORTED__');
             }
+            return { name: name, blocks: blocks, note: note };
+        }
+        window.geAiOnFileChosen = async function(input) {
+            var files = input && input.files ? Array.prototype.slice.call(input.files) : [];
+            if (!files.length) return;
+            var rejected = [];
+            for (var k = 0; k < files.length; k++) {
+                var file = files[k];
+                if (_geAiAttachments.length >= GE_AI_MAX_ATTACHMENTS) { rejected.push(file.name + ' (max ' + GE_AI_MAX_ATTACHMENTS + ' fichiers)'); continue; }
+                if (file.size > GE_AI_MAX_FILE_BYTES) { rejected.push(file.name + ' (trop gros, max 8 Mo)'); continue; }
+                try {
+                    var entry = await _geAiBuildFromFile(file);
+                    _geAiAttachments.push(entry);
+                    renderGeAiAttachBar();
+                } catch (e) {
+                    if (e && e.message === '__UNSUPPORTED__') rejected.push(file.name + ' (type non pris en charge)');
+                    else rejected.push(file.name + ' (' + (e && e.message ? e.message : 'illisible') + ')');
+                }
+            }
+            input.value = '';
+            if (rejected.length) alert('Fichier(s) ignoré(s) :\n- ' + rejected.join('\n- ') + '\n\nFormats acceptés : PDF, images (PNG/JPG/WEBP/GIF), Excel (XLSX/XLS), CSV, TXT, JSON, MD.');
+        };
+        // Joint un contenu texte déjà présent dans la plateforme (rapport, facture) à l'assistant.
+        window.geAiAttachText = function(name, text, label) {
+            if (!text) return;
+            var t = String(text);
+            if (t.length > 120000) t = t.slice(0, 120000) + '\n[...tronqué...]';
+            _geAiAttachments.push({ name: name || 'Document', blocks: [{ type: 'text', text: (label || 'Document') + ' « ' + (name || 'Document') + ' » :\n\n' + t }], note: label || 'Document' });
+            renderGeAiAttachBar();
+        };
+
+        // ---- Analyser un rapport généré dans la plateforme, sans l'exporter ----
+        var _geAiLastReport = null; // { title, html }
+        window.geAiHasLastReport = function() { return !!_geAiLastReport; };
+        window.geAiStashReport = function(title, html) {
+            try {
+                if (typeof html !== 'string' || html.length < 200) return;
+                var ttl = title;
+                if (!ttl) { var m = html.match(/<title>([^<]+)<\/title>/i); ttl = (m && m[1]) ? m[1].trim() : 'Rapport'; }
+                _geAiLastReport = { title: ttl, html: html, at: Date.now() };
+                var b = document.getElementById('geAiAnalyzeLastBtn');
+                if (b) { b.style.display = 'block'; b.textContent = '🤖 Analyser « ' + ttl + ' » avec l’IA'; }
+            } catch (e) {}
+        };
+        function geAiHtmlToText(html) {
+            try {
+                var doc = new DOMParser().parseFromString(html, 'text/html');
+                var junk = doc.querySelectorAll('script,style,nav.print-tools,noscript');
+                for (var i = 0; i < junk.length; i++) junk[i].remove();
+                var txt = (doc.body ? (doc.body.innerText || doc.body.textContent) : '') || '';
+                return txt.replace(/\n{3,}/g, '\n\n').replace(/[ \t]{2,}/g, ' ').trim();
+            } catch (e) {
+                return String(html).replace(/<[^>]+>/g, ' ').replace(/\s{2,}/g, ' ').trim();
+            }
+        }
+        function geAiEnsureOpen() { if (!_geAiOpen && typeof window.geAiToggleChat === 'function') window.geAiToggleChat(); }
+        window.geAiAnalyzeLastReport = function() {
+            if (!_geAiLastReport) { alert('Générez d’abord un rapport, puis revenez cliquer sur « Analyser avec l’IA ».'); return; }
+            var text = geAiHtmlToText(_geAiLastReport.html);
+            if (!text) { alert('Ce rapport ne contient pas de texte analysable.'); return; }
+            geAiEnsureOpen();
+            geAiAttachText(_geAiLastReport.title || 'Rapport', text, 'Rapport');
+            var input = document.getElementById('geAiInput');
+            if (input) { input.value = 'Analyse ce rapport : points clés, anomalies éventuelles, et recommandations concrètes.'; input.focus(); }
         };
 
         window.geAiToggleChat = function() {
@@ -31759,16 +31814,20 @@
             if (_geAiSending) return;
             var input = document.getElementById('geAiInput');
             var text = input.value.trim();
-            var att = _geAiAttachment;
-            if (!text && !att) return;
+            var atts = _geAiAttachments.slice();
+            if (!text && !atts.length) return;
             input.value = '';
             input.style.height = 'auto';
 
-            var userText = text || (att ? ('Analyse ce fichier (' + att.name + ') et donne-moi les points importants, erreurs ou recommandations.') : '');
-            var displayText = (att ? '📎 ' + att.name + '\n' : '') + (text || '(analyse du fichier joint)');
+            var names = atts.map(function(a) { return a.name; });
+            var userText = text || (atts.length ? ('Analyse ' + (atts.length > 1 ? 'ces fichiers' : 'ce fichier') + ' (' + names.join(', ') + ') et donne-moi les points importants, erreurs ou recommandations.') : '');
+            var displayText = (atts.length ? atts.map(function(a) { return '📎 ' + a.name; }).join('\n') + '\n' : '') + (text || '(analyse ' + (atts.length > 1 ? 'des fichiers joints' : 'du fichier joint') + ')');
 
-            if (att) {
-                _geAiHistory.push({ role: 'user', content: att.blocks.concat([{ type: 'text', text: userText }]) });
+            if (atts.length) {
+                var allBlocks = [];
+                atts.forEach(function(a) { allBlocks = allBlocks.concat(a.blocks); });
+                allBlocks.push({ type: 'text', text: userText });
+                _geAiHistory.push({ role: 'user', content: allBlocks });
                 geAiClearAttachment();
             } else {
                 _geAiHistory.push({ role: 'user', content: userText });
