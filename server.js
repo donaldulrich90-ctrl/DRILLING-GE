@@ -1850,7 +1850,7 @@ app.post('/api/claude-ai/chat', (req, res) => {
     db.get('SELECT claudeApiKey, name FROM enterprises WHERE id = ?', [entId], async (err, ent) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!ent || !ent.claudeApiKey) return res.status(400).json({ error: 'Clé API Claude non configurée. Allez dans Paramètres > Entreprise pour ajouter votre clé.' });
-        const { messages, context } = req.body;
+        const { messages, context, tools } = req.body;
         if (!messages || !Array.isArray(messages) || messages.length === 0) return res.status(400).json({ error: 'Messages requis' });
         try {
             // Collecter le contexte de l'entreprise
@@ -1898,7 +1898,22 @@ RÈGLES :
 - Utilise les données de l'entreprise quand c'est pertinent
 - Propose des solutions pratiques et actionables
 - Si tu ne connais pas une donnée spécifique, dis-le clairement
-- Tu peux faire des calculs, des estimations et des recommandations`;
+- Tu peux faire des calculs, des estimations et des recommandations
+- OUTILS : quand des outils te sont fournis, utilise-les pour récupérer les données réelles (production, finances, factures, stock, foreuses) avant de répondre, au lieu de supposer. Appelle plusieurs outils si besoin, puis synthétise.`;
+
+            // Fenêtre glissante, sans couper une paire outil (tool_use/tool_result)
+            let windowMsgs = messages.slice(-24);
+            const hasBlock = (m, t) => Array.isArray(m.content) && m.content.some(b => b && b.type === t);
+            while (windowMsgs.length && ((windowMsgs[0].role === 'user' && hasBlock(windowMsgs[0], 'tool_result')) || (windowMsgs[0].role === 'assistant' && hasBlock(windowMsgs[0], 'tool_use')))) {
+                windowMsgs = windowMsgs.slice(1);
+            }
+            const payload = {
+                model: 'claude-sonnet-5-5',
+                max_tokens: 4096,
+                system: systemPrompt,
+                messages: windowMsgs
+            };
+            if (Array.isArray(tools) && tools.length) payload.tools = tools;
 
             const fetch = globalThis.fetch;
             const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -1908,12 +1923,7 @@ RÈGLES :
                     'x-api-key': ent.claudeApiKey,
                     'anthropic-version': '2023-06-01'
                 },
-                body: JSON.stringify({
-                    model: 'claude-sonnet-5-5',
-                    max_tokens: 4096,
-                    system: systemPrompt,
-                    messages: messages.slice(-20) // Garder les 20 derniers messages pour le contexte
-                })
+                body: JSON.stringify(payload)
             });
             const data = await response.json();
             if (!response.ok || data.error) {
@@ -1940,7 +1950,8 @@ RÈGLES :
                       (data.stop_reason ? ' (raison : ' + data.stop_reason + ')' : '') +
                       ". Réessayez ou reformulez votre question.";
             }
-            res.json({ reply: text });
+            // Renvoyer aussi la réponse brute (blocs + stop_reason) pour la boucle d'outils côté client.
+            res.json({ reply: text, stop_reason: data.stop_reason, content: data.content || [] });
         } catch(e) {
             console.error('[claude-ai/chat] Exception:', e && e.message);
             res.status(500).json({ error: 'Erreur appel API Claude: ' + e.message });

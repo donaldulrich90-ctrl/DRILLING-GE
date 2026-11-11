@@ -31908,6 +31908,78 @@
             return html;
         }
 
+        // ---- Outils : accès interactif aux données (exécutés côté client, lecture seule) ----
+        var GE_AI_TOOLS = [
+            { name: 'list_drills', description: 'Liste les foreuses de l\'entreprise avec leur emplacement, statut, type, contrat lié et profondeur actuelle.', input_schema: { type: 'object', properties: {} } },
+            { name: 'production_summary', description: 'Résumé de production d\'un mois (mètres, heures, ROP, carburant, jours, postes) par foreuse et au total, plus le détail par jour. month au format AAAA-MM.', input_schema: { type: 'object', properties: { month: { type: 'string', description: 'Mois AAAA-MM' }, drillId: { type: 'string', description: 'Optionnel : id de foreuse' } }, required: ['month'] } },
+            { name: 'daily_records', description: 'Saisies journalières brutes sur une plage de dates (date, foreuse, poste, mètres, heures, carburant, lieu, type, état). Dates au format AAAA-MM-JJ.', input_schema: { type: 'object', properties: { dateFrom: { type: 'string' }, dateTo: { type: 'string' }, drillId: { type: 'string' }, limit: { type: 'number' } }, required: ['dateFrom'] } },
+            { name: 'financial_summary', description: 'Rentabilité estimée d\'un mois : revenu, coûts détaillés (carburant, consommables, main-d\'œuvre, repas, autres), profit, marge, mètres, heures. month au format AAAA-MM.', input_schema: { type: 'object', properties: { month: { type: 'string' }, drillId: { type: 'string' } }, required: ['month'] } },
+            { name: 'list_invoices', description: 'Liste des factures avec client, date, mois de facturation, total, devise et statut. Filtres optionnels month (AAAA-MM) et status.', input_schema: { type: 'object', properties: { month: { type: 'string' }, status: { type: 'string' } } } },
+            { name: 'stock_summary', description: 'État du stock : articles, quantités, seuils, alertes de stock bas, prix unitaire et devise.', input_schema: { type: 'object', properties: {} } },
+            { name: 'list_contracts', description: 'Liste des contrats avec client, site, devise et prix carburant.', input_schema: { type: 'object', properties: {} } }
+        ];
+        function _geAiMonthRange(ym) {
+            var p = String(ym).split('-'); var y = +p[0], m = +p[1];
+            var last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+            return { from: ym + '-01', to: ym + '-' + String(last).padStart(2, '0') };
+        }
+        async function geAiExecuteTool(name, input) {
+            input = input || {};
+            var list = (typeof drills !== 'undefined' ? drills : []);
+            var data = (typeof dailyDataRecords !== 'undefined' ? dailyDataRecords : []);
+            var rp = (typeof _rpData === 'function') ? _rpData : function(r) { return r.data || {}; };
+            if (name === 'list_drills') {
+                return (list || []).map(function(d) { return { id: d.id, location: d.location || '', status: d.status || '', type: d.type || '', contractId: d.contractId || null, depth: (d.telemetry && d.telemetry.depth) || d.currentDepth || null }; });
+            }
+            if (name === 'production_summary') {
+                var ym = input.month; if (!ym) return { error: 'month (AAAA-MM) requis' };
+                var recs = data.filter(function(r) { return r && r.date && String(r.date).slice(0, 7) === ym && (!input.drillId || drillIdsMatch(r.machineId, input.drillId)); });
+                if (!recs.length) return { month: ym, drillId: input.drillId || null, message: 'aucune saisie', drills: [], totals: {} };
+                var byDrill = {}, byDate = {};
+                recs.forEach(function(r) {
+                    var d = rp(r), mid = r.machineId;
+                    byDrill[mid] = byDrill[mid] || { meters: 0, hours: 0, fuel: 0, days: {}, shifts: 0 };
+                    var g = byDrill[mid];
+                    g.meters += parseFloat(d.metersDrilled) || 0; g.hours += parseFloat(d.hours) || 0; g.fuel += parseFloat(d.fuelAdded) || 0; g.days[r.date] = 1; g.shifts++;
+                    byDate[r.date] = byDate[r.date] || { meters: 0, hours: 0 };
+                    byDate[r.date].meters += parseFloat(d.metersDrilled) || 0; byDate[r.date].hours += parseFloat(d.hours) || 0;
+                });
+                var drillsOut = Object.keys(byDrill).map(function(mid) { var g = byDrill[mid]; return { drillId: mid, meters: +g.meters.toFixed(1), hours: +g.hours.toFixed(1), rop_m_per_h: g.hours > 0 ? +(g.meters / g.hours).toFixed(2) : 0, days: Object.keys(g.days).length, shifts: g.shifts, fuel_liters: +g.fuel.toFixed(0) }; });
+                var totM = drillsOut.reduce(function(s, x) { return s + x.meters; }, 0), totH = drillsOut.reduce(function(s, x) { return s + x.hours; }, 0);
+                return { month: ym, drillId: input.drillId || null, drills: drillsOut, totals: { meters: +totM.toFixed(1), hours: +totH.toFixed(1), rop_m_per_h: totH > 0 ? +(totM / totH).toFixed(2) : 0, records: recs.length }, byDate: byDate };
+            }
+            if (name === 'daily_records') {
+                var from = input.dateFrom; if (!from) return { error: 'dateFrom (AAAA-MM-JJ) requis' };
+                var to = input.dateTo || from, limit = Math.min(input.limit || 200, 500);
+                return data.filter(function(r) { return r && r.date && r.date >= from && r.date <= to && (!input.drillId || drillIdsMatch(r.machineId, input.drillId)); })
+                    .slice(0, limit)
+                    .map(function(r) { var d = rp(r); return { date: r.date, drillId: r.machineId, shift: r.shift, meters: parseFloat(d.metersDrilled) || 0, hours: parseFloat(d.hours) || 0, fuel: parseFloat(d.fuelAdded) || 0, location: d.location || '', type: d.drillingType || '', stage: d.entryStage || 'complete' }; });
+            }
+            if (name === 'financial_summary') {
+                var ym2 = input.month; if (!ym2) return { error: 'month (AAAA-MM) requis' };
+                if (typeof computeProfitabilityForRange !== 'function') return { error: 'calcul indisponible' };
+                var rg = _geAiMonthRange(ym2), r = computeProfitabilityForRange(rg.from, rg.to, input.drillId || null);
+                return { month: ym2, drillId: input.drillId || null, currency: r.dispCur, revenue: +r.revenue.toFixed(0), costs: { total: +r.totalCouts.toFixed(0), fuel: +r.couts.carburant.toFixed(0), consumables: +r.couts.consommables.toFixed(0), labor: +r.couts.mainOeuvre.toFixed(0), meals: +r.couts.repas.toFixed(0), other: +r.couts.depenses.toFixed(0) }, profit: +r.profit.toFixed(0), margin_pct: r.margePct != null ? +r.margePct.toFixed(1) : null, meters: +r.meters.toFixed(1), hours: +r.hours.toFixed(1) };
+            }
+            if (name === 'list_invoices') {
+                var inv = (typeof invoices !== 'undefined' ? invoices : []).filter(function(i) {
+                    if (input.month && String(i.billingMonth || i.date || '').slice(0, 7) !== input.month) return false;
+                    if (input.status && i.status !== input.status) return false;
+                    return true;
+                });
+                var cl = (typeof clients !== 'undefined' ? clients : []);
+                return { count: inv.length, invoices: inv.slice(0, 100).map(function(i) { var c = cl.find(function(x) { return String(x.id) === String(i.clientId); }); return { number: i.invoiceNumber || i.id, client: c ? c.name : '', date: i.date, billingMonth: i.billingMonth || null, total: i.total != null ? i.total : null, currency: i.currency || (c && c.currency) || '', status: i.status || '' }; }) };
+            }
+            if (name === 'stock_summary') {
+                var items = (typeof inventory !== 'undefined' ? inventory : []).map(function(a) { return { name: a.name, category: a.category || '', quantity: a.quantity || 0, unit: a.unit || '', minStock: a.minStock || 0, alert: !!a.alert || ((a.quantity || 0) <= (a.minStock || 0)), unitPrice: a.averagePrice || a.price || 0, currency: a.priceCurrency || 'XOF' }; });
+                return { count: items.length, lowStock: items.filter(function(x) { return x.alert; }).length, items: items.slice(0, 200) };
+            }
+            if (name === 'list_contracts') {
+                return (typeof contracts !== 'undefined' ? contracts : []).map(function(c) { return { id: c.id, client: c.clientName || '', site: c.site || '', currency: c.currency || '', fuelPrice: c.fuelPrice != null ? c.fuelPrice : null }; });
+            }
+            return { error: 'Outil inconnu: ' + name };
+        }
+
         window.geAiSend = async function() {
             if (_geAiSending) return;
             var input = document.getElementById('geAiInput');
@@ -31942,23 +32014,45 @@
             _geAiSending = true;
             var sendBtn = document.getElementById('geAiSendBtn');
             sendBtn.disabled = true; sendBtn.style.opacity = '0.5';
+            var loaderLabel = loader.querySelector('span:last-child');
+            function setLoader(txt) { if (loaderLabel) loaderLabel.textContent = txt; }
 
             try {
-                var resp = await fetch('/api/claude-ai/chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (window.API && window.API.getAuthToken ? window.API.getAuthToken() : '') },
-                    body: JSON.stringify({ messages: _geAiHistory })
-                });
-                var data = await resp.json();
-                loader.remove();
-                if (data.error) {
-                    if (data.error.indexOf('Clé API') >= 0) {
-                        document.getElementById('geAiKeyConfig').style.display = 'block';
+                var finalText = '', errored = false, maxTurns = 6;
+                for (var turn = 0; turn < maxTurns; turn++) {
+                    var resp = await fetch('/api/claude-ai/chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (window.API && window.API.getAuthToken ? window.API.getAuthToken() : '') },
+                        body: JSON.stringify({ messages: _geAiHistory, tools: GE_AI_TOOLS })
+                    });
+                    var data = await resp.json();
+                    if (data.error) {
+                        if (data.error.indexOf('Clé API') >= 0) document.getElementById('geAiKeyConfig').style.display = 'block';
+                        loader.remove(); geAiAddMsg('assistant', '⚠️ ' + data.error); errored = true; break;
                     }
-                    geAiAddMsg('assistant', '⚠️ ' + data.error);
-                } else {
-                    _geAiHistory.push({ role: 'assistant', content: data.reply });
-                    geAiAddMsg('assistant', data.reply);
+                    var content = Array.isArray(data.content) ? data.content : [];
+                    // Mémoriser le tour de l'assistant (blocs complets) pour la suite de la conversation.
+                    _geAiHistory.push({ role: 'assistant', content: content.length ? content : (data.reply || '') });
+                    if (data.stop_reason === 'tool_use') {
+                        var toolUses = content.filter(function(b) { return b && b.type === 'tool_use'; });
+                        var toolNames = toolUses.map(function(t) { return t.name; });
+                        setLoader('Consultation des données : ' + toolNames.join(', ') + '…');
+                        var results = [];
+                        for (var ti = 0; ti < toolUses.length; ti++) {
+                            var tu = toolUses[ti], out;
+                            try { out = await geAiExecuteTool(tu.name, tu.input || {}); }
+                            catch (err) { out = { error: String(err && err.message ? err.message : err) }; }
+                            results.push({ type: 'tool_result', tool_use_id: tu.id, content: typeof out === 'string' ? out : JSON.stringify(out) });
+                        }
+                        _geAiHistory.push({ role: 'user', content: results });
+                        continue; // relancer pour que l'IA exploite les résultats
+                    }
+                    finalText = data.reply || content.filter(function(b) { return b.type === 'text'; }).map(function(b) { return b.text; }).join('\n');
+                    break;
+                }
+                if (!errored) {
+                    loader.remove();
+                    geAiAddMsg('assistant', finalText || '⚠️ Je n\'ai pas pu finaliser la réponse (trop d\'étapes). Reformulez ou précisez votre demande.');
                 }
             } catch(e) {
                 loader.remove();
