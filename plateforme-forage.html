@@ -29100,8 +29100,23 @@
             }
         }
 
+        // Bascule la page foreuse (derrière le modal) sur la machine choisie dans la saisie,
+        // pour qu'on voie toujours sur quelle foreuse les chiffres vont s'ajouter.
+        function syncDetailPageToDailyEntryMachine() {
+            var sel = document.getElementById('dailyEntryMachineId');
+            var mid = sel && sel.value;
+            if (!mid) return;
+            if (typeof currentDrillId !== 'undefined' && drillIdsMatch(currentDrillId, mid)) return;
+            var drill = findDrillByMachineId(mid);
+            if (!drill) return;
+            showDrillDetails(drill.id); // met à jour le titre, le contrat lié et la télémétrie (profondeur/métrage)
+        }
+
         function onDailyEntryContextChanged(keepSelectedShift) {
-            if (!confirmDailyEntryContextChange()) return;
+            var proceed = confirmDailyEntryContextChange();
+            // Dans tous les cas, synchroniser la page du bas sur la machine finalement retenue.
+            try { syncDetailPageToDailyEntryMachine(); } catch (e) {}
+            if (!proceed) return;
             if (!keepSelectedShift) preselectDailyEntryShiftWhenSingleRecordForDate();
             loadDailyEntryFormFromRecord();
             updateDailyEntryModalSummary();
@@ -29250,12 +29265,12 @@
                 if (drillIdsMatch(d.id, machineId)) option.selected = true;
                 machineSelect.appendChild(option);
             });
-            // SÉCURITÉ : la saisie est TOUJOURS ouverte depuis une foreuse précise
-            // (onglet Ressources). On verrouille le menu sur cette foreuse pour qu'une
-            // saisie ne parte jamais sur une autre machine (ex. DR07 au lieu de DR08).
+            // Le menu reste modifiable : changer de foreuse ici bascule AUSSI la page
+            // foreuse derrière le modal sur la même machine (voir syncDetailPageToDailyEntryMachine),
+            // pour qu'on voie toujours sur quelle foreuse la saisie va s'ajouter.
             machineSelect.value = machineId;
-            machineSelect.disabled = true;
-            machineSelect.title = 'Saisie rattachée à ' + machineId + ' (la foreuse dont vous avez ouvert la page). Pour une autre foreuse, ouvrez sa page.';
+            machineSelect.disabled = false;
+            machineSelect.title = 'Changer de foreuse bascule aussi la page du bas sur cette foreuse.';
             
             // Pré-remplir le lieu avec celui de la machine
             document.getElementById('dailyEntryLocation').value = drill.location || '';
