@@ -94,8 +94,8 @@ app.use(cors({
     credentials: true,
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Enterprise-Id']
 }));
-app.use(bodyParser.json({ limit: '5mb' }));
-app.use(bodyParser.urlencoded({ extended: true, limit: '5mb' }));
+app.use(bodyParser.json({ limit: '25mb' })); // 25mb : permet l'analyse de fichiers joints (PDF/images/Excel) par l'assistant IA
+app.use(bodyParser.urlencoded({ extended: true, limit: '25mb' }));
 
 // ── Portail GOOD ENGINEERS ─────────────────────────────────────────────────
 // Montées AVANT le gardien « JWT requis pour /api » : /sso est publique et
