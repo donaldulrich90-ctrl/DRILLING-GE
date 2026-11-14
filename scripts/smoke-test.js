@@ -391,7 +391,7 @@ async function main() {
 
         const dailyDraft = await request(baseUrl, '/api/daily-data', {
             method: 'POST',
-            token: updatedWorkerLogin.body.token,
+            token: tokenA,
             body: {
                 date: '2026-09-05',
                 machineId: 'DRILL-A-01',
@@ -413,7 +413,7 @@ async function main() {
 
         const submitted = await request(baseUrl, `/api/daily-data/${dailyDraft.body.id}/submit`, {
             method: 'POST',
-            token: updatedWorkerLogin.body.token,
+            token: tokenA,
             body: {}
         });
         assert.equal(submitted.status, 200, JSON.stringify(submitted.body));
@@ -421,7 +421,7 @@ async function main() {
 
         const lockedEdit = await request(baseUrl, '/api/daily-data', {
             method: 'POST',
-            token: updatedWorkerLogin.body.token,
+            token: tokenA,
             body: { date: '2026-09-05', machineId: 'DRILL-A-01', data: submitted.body.data, notes: 'Modification interdite' }
         });
         assert.equal(lockedEdit.status, 409, 'Un poste soumis doit être verrouillé');
@@ -456,7 +456,7 @@ async function main() {
         assert.equal(reopened.body.workflowStatus, 'draft');
 
         const resubmitted = await request(baseUrl, `/api/daily-data/${dailyDraft.body.id}/submit`, {
-            method: 'POST', token: updatedWorkerLogin.body.token, body: {}
+            method: 'POST', token: tokenA, body: {}
         });
         assert.equal(resubmitted.status, 200, JSON.stringify(resubmitted.body));
 
