@@ -627,6 +627,9 @@
             text-transform: uppercase;
             padding: 12px 11px 5px;
         }
+        .ged-nav-toggle { cursor: pointer; user-select: none; display: flex; align-items: center; gap: 5px; }
+        .ged-nav-toggle:hover { color: #94A3B8; }
+        .ged-nav-toggle .nav-caret { font-size: 8px; display: inline-block; width: 9px; }
         .main-nav-btn {
             border-left: 0 !important;
             border-radius: 9px !important;
@@ -1318,7 +1321,11 @@
                     </div>
                 </div>
                 <nav class="flex-1 py-2 px-2" aria-label="Navigation principale">
-                    <p class="ged-nav-section">Opérations</p>
+                    <div style="padding:4px 6px 8px">
+                        <input type="text" id="gedNavSearch" placeholder="🔍 Rechercher un module…" oninput="filterGedNavigation(this.value)" autocomplete="off"
+                            style="width:100%;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:8px;padding:7px 10px;color:#E8EEF6;font-size:12px;outline:none">
+                    </div>
+                    <p class="ged-nav-section ged-nav-toggle" onclick="gedToggleNavSection(this)"><span class="nav-caret">▾</span>Opérations</p>
                     <button type="button" onclick="showMainView('dashboard')" class="ged-nav-item main-nav-btn active" id="nav-dashboard">▦ &nbsp;Centre de pilotage</button>
                     <button type="button" onclick="showMainView('forage_plan')" class="ged-nav-item main-nav-btn" id="nav-forage_plan">◎ &nbsp;Plan de forage</button>
                     <button type="button" onclick="showMainView('connections')" class="ged-nav-item main-nav-btn" id="nav-connections">⌁ &nbsp;Connexions machines</button>
@@ -1329,7 +1336,7 @@
                     <button type="button" onclick="showMainView('inventory')" class="ged-nav-item main-nav-btn" id="nav-inventory">▣ &nbsp;Stocks</button>
                     <button type="button" onclick="showMainView('hse')" class="ged-nav-item main-nav-btn" id="nav-hse">✚ &nbsp;Santé &amp; sécurité</button>
 
-                    <p class="ged-nav-section">Pilotage &amp; analyse</p>
+                    <p class="ged-nav-section ged-nav-toggle" onclick="gedToggleNavSection(this)"><span class="nav-caret">▾</span>Pilotage &amp; analyse</p>
                     <button type="button" onclick="showMainView('analytics')" class="ged-nav-item main-nav-btn" id="nav-analytics">◒ &nbsp;Performance</button>
                     <button type="button" onclick="showMainView('project_overview')" class="ged-nav-item main-nav-btn" id="nav-project_overview" data-i18n="nav.project_overview">◈ &nbsp;Synthèse projet</button>
                     <button type="button" onclick="showMainView('planification')" class="ged-nav-item main-nav-btn" id="nav-planification">🗓️ &nbsp;Planification &amp; suivi</button>
@@ -1338,7 +1345,7 @@
                     <button type="button" onclick="showMainView('rentabilite')" class="ged-nav-item main-nav-btn" id="nav-rentabilite">↗ &nbsp;Rentabilité consommables</button>
                     <button type="button" onclick="showMainView('depenses_pm')" class="ged-nav-item main-nav-btn" id="nav-depenses_pm">◇ &nbsp;Dépenses PM</button>
 
-                    <p class="ged-nav-section">Gestion</p>
+                    <p class="ged-nav-section ged-nav-toggle" onclick="gedToggleNavSection(this)"><span class="nav-caret">▾</span>Gestion</p>
                     <button type="button" onclick="showMainView('contracts')" class="ged-nav-item main-nav-btn" id="nav-contracts">▤ &nbsp;Contrats</button>
                     <button type="button" onclick="showMainView('clients')" class="ged-nav-item main-nav-btn" id="nav-clients">▰ &nbsp;Clients</button>
                     <button type="button" onclick="showMainView('sites')" class="ged-nav-item main-nav-btn" id="nav-sites">⌖ &nbsp;Sites</button>
@@ -1351,7 +1358,7 @@
                     <button type="button" onclick="showMainView('accounts')" class="ged-nav-item main-nav-btn" id="nav-accounts">⊙ &nbsp;Comptes &amp; accès</button>
                     <button type="button" onclick="showMainView('enterprises')" class="ged-nav-item main-nav-btn hidden" id="nav-enterprises">▰ &nbsp;Entreprises</button>
 
-                    <p class="ged-nav-section">Collaboration</p>
+                    <p class="ged-nav-section ged-nav-toggle" onclick="gedToggleNavSection(this)"><span class="nav-caret">▾</span>Collaboration</p>
                     <button type="button" onclick="showMainView('team_chat')" class="ged-nav-item main-nav-btn" id="nav-team_chat">◐ &nbsp;Équipe</button>
                     <button type="button" onclick="showMainView('translator')" class="ged-nav-item main-nav-btn" id="nav-translator">文 &nbsp;Traducteur</button>
                     <button type="button" onclick="showMainView('company_info')" class="ged-nav-item main-nav-btn" id="nav-company_info">◧ &nbsp;Informations</button>
@@ -6215,6 +6222,7 @@
                     btn.style.display = show ? '' : 'none';
                 });
                 applyEnterpriseBranding();
+                try { filterGedNavigation((document.getElementById('gedNavSearch') || {}).value || ''); } catch (e) {}
                 return;
             }
 
@@ -6277,6 +6285,7 @@
                 }
             });
             applyEnterpriseBranding();
+            try { filterGedNavigation((document.getElementById('gedNavSearch') || {}).value || ''); } catch (e) {}
         }
 
         // ============================================
@@ -6292,26 +6301,49 @@
             document.body.style.overflow = shouldOpen && window.innerWidth < 1024 ? 'hidden' : '';
         }
 
+        // Sections repliées (mémorisées par utilisateur)
+        function _gedCollapsedKey() { return 'ged_nav_collapsed_' + ((currentUser && currentUser.username) || 'anon'); }
+        function _gedLoadCollapsed() { try { return JSON.parse(localStorage.getItem(_gedCollapsedKey()) || '{}') || {}; } catch (e) { return {}; } }
+        function _gedSaveCollapsed(obj) { try { localStorage.setItem(_gedCollapsedKey(), JSON.stringify(obj)); } catch (e) {} }
+        function _gedSectionLabel(section) { return String(section.textContent || '').replace(/[▸▾]/g, '').trim(); }
+
         function filterGedNavigation(searchValue) {
             var nav = document.querySelector('#gedSidebar nav');
             if (!nav) return;
             var query = String(searchValue || '').trim().toLowerCase();
-            nav.querySelectorAll('.main-nav-btn').forEach(function(button) {
-                var matches = !query || String(button.textContent || '').toLowerCase().indexOf(query) >= 0;
-                button.style.display = matches ? '' : 'none';
-            });
+            var collapsed = _gedLoadCollapsed();
             nav.querySelectorAll('.ged-nav-section').forEach(function(section) {
+                var label = _gedSectionLabel(section);
+                var isCollapsed = !query && !!collapsed[label];
+                var caret = section.querySelector('.nav-caret');
+                if (caret) caret.textContent = isCollapsed ? '▸' : '▾';
                 var cursor = section.nextElementSibling;
                 var hasVisibleItem = false;
                 while (cursor && !cursor.classList.contains('ged-nav-section')) {
-                    if (cursor.classList.contains('main-nav-btn') && !cursor.classList.contains('hidden') && cursor.style.display !== 'none') {
-                        hasVisibleItem = true;
+                    if (cursor.classList.contains('main-nav-btn')) {
+                        var accessHidden = cursor.classList.contains('hidden');
+                        var matches = !query || String(cursor.textContent || '').toLowerCase().indexOf(query) >= 0;
+                        var show = !accessHidden && matches && !isCollapsed;
+                        cursor.style.display = show ? '' : 'none';
+                        if (show) hasVisibleItem = true;
                     }
                     cursor = cursor.nextElementSibling;
                 }
-                section.style.display = hasVisibleItem ? '' : 'none';
+                // Un en-tête de section reste visible s'il a des items visibles, ou s'il est replié (pour pouvoir le rouvrir)
+                section.style.display = (hasVisibleItem || isCollapsed) ? '' : 'none';
             });
         }
+        function gedToggleNavSection(section) {
+            if (!section) return;
+            var label = _gedSectionLabel(section);
+            var collapsed = _gedLoadCollapsed();
+            collapsed[label] = !collapsed[label];
+            _gedSaveCollapsed(collapsed);
+            var searchEl = document.getElementById('gedNavSearch');
+            filterGedNavigation(searchEl ? searchEl.value : '');
+        }
+        window.gedToggleNavSection = gedToggleNavSection;
+        window.filterGedNavigation = filterGedNavigation;
 
         function showMainView(view) {
             var prevView = typeof currentMainView !== 'undefined' ? currentMainView : null;
