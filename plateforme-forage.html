@@ -1359,6 +1359,7 @@
                     <button type="button" onclick="showMainView('inventory')" class="ged-nav-item main-nav-btn" id="nav-inventory">▣ &nbsp;Stocks</button>
                     <button type="button" onclick="showMainView('hse')" class="ged-nav-item main-nav-btn" id="nav-hse">✚ &nbsp;Santé &amp; sécurité</button>
                     <button type="button" onclick="showMainView('souterrain')" class="ged-nav-item main-nav-btn" id="nav-souterrain">🕳️ &nbsp;Mine souterraine</button>
+                    <button type="button" onclick="showMainView('carriere')" class="ged-nav-item main-nav-btn" id="nav-carriere">⛰️ &nbsp;Carrière à ciel ouvert</button>
 
                     <p class="ged-nav-section ged-nav-toggle" onclick="gedToggleNavSection(this)"><span class="nav-caret">▾</span>Pilotage &amp; analyse</p>
                     <button type="button" onclick="showMainView('analytics')" class="ged-nav-item main-nav-btn" id="nav-analytics">◒ &nbsp;Performance</button>
@@ -1974,6 +1975,15 @@
                 <p class="text-slate-400 text-sm mt-1">Galeries &amp; niveaux · avancement · soutènement</p>
             </div>
             <div id="souterrainContent"></div>
+        </div>
+
+        <!-- ═══ VUE CARRIÈRE À CIEL OUVERT ══════════════════════════════ -->
+        <div id="mainView-carriere" class="main-view hidden">
+            <div class="mb-6 pb-4 border-b border-slate-700">
+                <h2 class="text-2xl font-extrabold tracking-tight" style="color:var(--ged-yellow)">⛰️ Carrière à ciel ouvert</h2>
+                <p class="text-slate-400 text-sm mt-1">Fronts &amp; gradins · tirs de mine · extraction</p>
+            </div>
+            <div id="carriereContent"></div>
         </div>
 
         <!-- Modal Ajout/Modification Client -->
@@ -3504,6 +3514,7 @@
                                 <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictInventory" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Stocks</span></label>
                                 <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictHSE" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Santé & sécurité</span></label>
                                 <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictSouterrain" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Mine souterraine</span></label>
+                                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictCarriere" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Carrière à ciel ouvert</span></label>
                             </div>
                             <p class="text-[11px] font-bold tracking-wider text-slate-400 uppercase mt-1">Pilotage & analyse</p>
                             <div class="space-y-2 pl-1">
@@ -6173,6 +6184,7 @@
                 'nav-consumables': 'restrictConsumables',
                 'nav-hse': 'restrictHSE',
                 'nav-souterrain': 'restrictSouterrain',
+                'nav-carriere': 'restrictCarriere',
                 'nav-analytics': 'restrictAnalytics',
                 'nav-planification': 'restrictPlanification',
                 'nav-besoins': 'restrictBesoins',
@@ -6194,7 +6206,7 @@
                 'nav-company_info': 'restrictCompanyInfo',
                 'nav-accounts': 'restrictAccounts'
             };
-            var allNavButtons = ['nav-dashboard', 'nav-forage_plan', 'nav-connections', 'nav-assignments', 'nav-maintenance', 'nav-bit_sharpening', 'nav-consumables', 'nav-hse', 'nav-souterrain', 'nav-analytics', 'nav-planification', 'nav-besoins', 'nav-rentabilite', 'nav-depenses_pm', 'nav-payments', 'nav-soustraitants', 'nav-invoices', 'nav-contracts', 'nav-enterprises', 'nav-sites', 'nav-revenue', 'nav-site_meals', 'nav-reports', 'nav-project_overview', 'nav-rh', 'nav-inventory', 'nav-accounts', 'nav-clients', 'nav-translator', 'nav-team_chat', 'nav-company_info'];
+            var allNavButtons = ['nav-dashboard', 'nav-forage_plan', 'nav-connections', 'nav-assignments', 'nav-maintenance', 'nav-bit_sharpening', 'nav-consumables', 'nav-hse', 'nav-souterrain', 'nav-carriere', 'nav-analytics', 'nav-planification', 'nav-besoins', 'nav-rentabilite', 'nav-depenses_pm', 'nav-payments', 'nav-soustraitants', 'nav-invoices', 'nav-contracts', 'nav-enterprises', 'nav-sites', 'nav-revenue', 'nav-site_meals', 'nav-reports', 'nav-project_overview', 'nav-rh', 'nav-inventory', 'nav-accounts', 'nav-clients', 'nav-translator', 'nav-team_chat', 'nav-company_info'];
 
             if (isPlatformBillingOnlyUser(currentUser)) {
                 allNavButtons.forEach(function(btnId) {
@@ -6240,7 +6252,7 @@
             // Onglets nouvellement gérés par l'accès explicite : jamais masqués par une
             // ancienne liste d'abonnement (qui ne les connaît pas), pour éviter de les
             // cacher à tort une fois ajoutés au contrôle d'accès.
-            var NEW_MANAGED_VIEWS = { forage_plan: 1, bit_sharpening: 1, consumables: 1, hse: 1, souterrain: 1, analytics: 1, planification: 1, besoins: 1, rentabilite: 1, depenses_pm: 1, payments: 1, soustraitants: 1 };
+            var NEW_MANAGED_VIEWS = { forage_plan: 1, bit_sharpening: 1, consumables: 1, hse: 1, souterrain: 1, carriere: 1, analytics: 1, planification: 1, besoins: 1, rentabilite: 1, depenses_pm: 1, payments: 1, soustraitants: 1 };
             function allowedBySubscription(navId) {
                 if (navId === 'nav-enterprises') return true;
                 if (!subTabs || !subTabs.length) return true;
@@ -6326,6 +6338,7 @@
                 'nav-consumables': true,
                 'nav-hse': true,
                 'nav-souterrain': true,
+                'nav-carriere': true,
                 'nav-analytics': true,
                 'nav-planification': true,
                 'nav-besoins': true,
@@ -8896,6 +8909,177 @@
         }
         window.renderSouterrain = renderSouterrain;
 
+        // ============================================================
+        // CARRIÈRE À CIEL OUVERT (Phase 1 — Extraction)
+        // ============================================================
+        function _cqKey() { return 'ged_cq_data_' + (window.API && window.API.getEnterpriseId ? (window.API.getEnterpriseId() || '0') : '0'); }
+        function getCQData() {
+            var def = { fronts: [], tirs: [] };
+            try {
+                var raw = localStorage.getItem(_cqKey()); if (!raw) return def;
+                var d = JSON.parse(raw);
+                ['fronts', 'tirs'].forEach(function (k) { if (!Array.isArray(d[k])) d[k] = []; });
+                return d;
+            } catch (e) { return def; }
+        }
+        function saveCQData(d) {
+            try { localStorage.setItem(_cqKey(), JSON.stringify(d)); } catch (e) {}
+            try { if (window.API && window.API.ModuleState) window.API.ModuleState.set('quarry', d).catch(function () {}); } catch (e) {}
+        }
+        function cqSyncFromServer() {
+            if (!(window.API && window.API.ModuleState && window.API.getAuthToken && window.API.getAuthToken())) return;
+            window.API.ModuleState.get('quarry').then(function (res) {
+                if (res && res.data && Array.isArray(res.data.fronts)) {
+                    try { localStorage.setItem(_cqKey(), JSON.stringify(res.data)); } catch (e) {}
+                    renderCarriere();
+                }
+            }).catch(function () {});
+        }
+        window.cqSyncFromServer = cqSyncFromServer;
+        function _cqNextId(arr, prefix) { var m = 0; (arr || []).forEach(function (x) { var n = parseInt(String(x.id || '').replace(prefix + '-', ''), 10); if (!isNaN(n) && n > m) m = n; }); return prefix + '-' + String(m + 1).padStart(3, '0'); }
+
+        window.cqAddFront = function () {
+            var data = getCQData();
+            var name = ((document.getElementById('cqFrontName') || {}).value || '').trim();
+            var niveau = ((document.getElementById('cqFrontNiveau') || {}).value || '').trim();
+            var longueur = parseFloat((document.getElementById('cqFrontLongueur') || {}).value) || 0;
+            var hauteur = parseFloat((document.getElementById('cqFrontHauteur') || {}).value) || 0;
+            var angle = parseFloat((document.getElementById('cqFrontAngle') || {}).value) || 0;
+            if (!name) { alert('Nom du front requis.'); return; }
+            data.fronts.push({ id: _cqNextId(data.fronts, 'FRT'), name: name, niveau: niveau, longueurM: longueur, hauteurM: hauteur, angle: angle, status: 'EN COURS' });
+            saveCQData(data);
+            renderCarriere();
+        };
+        window.cqDeleteFront = function (id) {
+            if (!confirm('Supprimer ce front et ses tirs de mine ?')) return;
+            var data = getCQData();
+            data.fronts = data.fronts.filter(function (f) { return f.id !== id; });
+            data.tirs = data.tirs.filter(function (t) { return t.frontId !== id; });
+            saveCQData(data); renderCarriere();
+        };
+        window.cqToggleFrontStatus = function (id) {
+            var data = getCQData();
+            var f = data.fronts.find(function (x) { return x.id === id; });
+            if (!f) return;
+            f.status = f.status === 'TERMINÉ' ? 'EN COURS' : 'TERMINÉ';
+            saveCQData(data); renderCarriere();
+        };
+        window.cqAddTir = function () {
+            var data = getCQData();
+            var fid = (document.getElementById('cqTirFront') || {}).value || '';
+            var date = (document.getElementById('cqTirDate') || {}).value || '';
+            var nbTrous = parseInt((document.getElementById('cqTirTrous') || {}).value, 10) || 0;
+            var espacement = parseFloat((document.getElementById('cqTirEspacement') || {}).value) || 0;
+            var charge = parseFloat((document.getElementById('cqTirCharge') || {}).value) || 0;
+            var explosif = (document.getElementById('cqTirExplosif') || {}).value || '';
+            var volume = parseFloat((document.getElementById('cqTirVolume') || {}).value) || 0;
+            var notes = ((document.getElementById('cqTirNotes') || {}).value || '').trim();
+            if (!fid) { alert('Choisissez un front.'); return; }
+            if (!date) { alert('Date requise.'); return; }
+            if (charge <= 0) { alert('Charge totale requise.'); return; }
+            data.tirs.unshift({ id: _cqNextId(data.tirs, 'TIR'), frontId: fid, date: date, nbTrous: nbTrous, espacementM: espacement, chargeKg: charge, explosifType: explosif, volumeBCM: volume, notes: notes });
+            saveCQData(data); renderCarriere();
+        };
+        window.cqDeleteTir = function (id) {
+            var data = getCQData();
+            data.tirs = data.tirs.filter(function (t) { return t.id !== id; });
+            saveCQData(data); renderCarriere();
+        };
+
+        function renderCarriere() {
+            var el = document.getElementById('carriereContent');
+            if (!el) return;
+            var data = getCQData();
+            var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); };
+            var kpi = function (l, v, c) { return '<div class="ged-content-panel rounded-xl px-5 py-4"><p class="text-[10px] uppercase tracking-widest font-semibold mb-1" style="color:#64748B">' + l + '</p><p class="text-2xl font-black font-mono" style="color:' + (c || 'var(--ged-black)') + '">' + v + '</p></div>'; };
+
+            var activeFronts = data.fronts.filter(function (f) { return f.status !== 'TERMINÉ'; }).length;
+            var totVolume = data.tirs.reduce(function (s, t) { return s + (parseFloat(t.volumeBCM) || 0); }, 0);
+            var totCharge = data.tirs.reduce(function (s, t) { return s + (parseFloat(t.chargeKg) || 0); }, 0);
+
+            var kpiRow = kpi('Fronts actifs', activeFronts || '—', '#F5B800') +
+                kpi('Volume extrait (BCM)', totVolume > 0 ? totVolume.toFixed(0) + ' m³' : '—', '#28A745') +
+                kpi('Charge totale', totCharge > 0 ? totCharge.toFixed(0) + ' kg' : '—', '') +
+                kpi('Tirs enregistrés', data.tirs.length || '—', '');
+
+            // ── Formulaire ajout front ──
+            var frontForm =
+                '<div class="ged-content-panel rounded-xl p-5 mb-5">' +
+                '<h3 class="font-bold text-sm mb-3" style="color:var(--ged-black)">➕ Ajouter un front / gradin</h3>' +
+                '<div class="grid grid-cols-2 md:grid-cols-5 gap-3">' +
+                '<div class="col-span-2"><label class="block text-xs text-slate-500 mb-1">Nom *</label><input id="cqFrontName" placeholder="Ex. Front Nord — Banc 3" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                '<div><label class="block text-xs text-slate-500 mb-1">Niveau (m NGF)</label><input id="cqFrontNiveau" placeholder="Ex. 320" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                '<div><label class="block text-xs text-slate-500 mb-1">Longueur (m)</label><input id="cqFrontLongueur" type="number" min="0" step="1" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                '<div><label class="block text-xs text-slate-500 mb-1">Hauteur gradin (m)</label><input id="cqFrontHauteur" type="number" min="0" step="0.5" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                '</div>' +
+                '<button onclick="cqAddFront()" class="mt-3 bg-amber-600 hover:bg-amber-700 px-4 py-2 rounded-lg font-semibold text-sm">Ajouter le front</button>' +
+                '</div>';
+
+            var frontRows = data.fronts.map(function (f) {
+                var tirsFront = data.tirs.filter(function (t) { return t.frontId === f.id; });
+                var volFront = tirsFront.reduce(function (s, t) { return s + (parseFloat(t.volumeBCM) || 0); }, 0);
+                var pill = f.status === 'TERMINÉ'
+                    ? '<span style="background:rgba(40,167,69,.15);color:#28A745;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700">Terminé</span>'
+                    : '<span style="background:rgba(245,184,0,.15);color:#B45309;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700">En cours</span>';
+                return '<tr style="border-bottom:1px solid rgba(255,255,255,0.06)">' +
+                    '<td class="px-3 py-3"><div class="font-bold" style="color:var(--ged-yellow)">' + esc(f.name) + '</div>' +
+                    '<div class="text-[11px] text-slate-500">Niveau ' + esc(f.niveau || '—') + ' · ' + (f.longueurM || '—') + ' m · h=' + (f.hauteurM || '—') + ' m</div></td>' +
+                    '<td class="px-3 py-3 text-center">' + pill + '</td>' +
+                    '<td class="px-3 py-3 text-right font-mono text-sm">' + (volFront > 0 ? volFront.toFixed(0) + ' m³' : '—') + '</td>' +
+                    '<td class="px-3 py-3 text-right font-mono text-sm text-slate-400">' + tirsFront.length + ' tir' + (tirsFront.length > 1 ? 's' : '') + '</td>' +
+                    '<td class="px-3 py-3 text-right">' +
+                    '<button onclick="cqToggleFrontStatus(\'' + f.id + '\')" class="text-slate-400 hover:text-white text-xs mr-2">' + (f.status === 'TERMINÉ' ? 'Réactiver' : 'Terminer') + '</button>' +
+                    '<button onclick="cqDeleteFront(\'' + f.id + '\')" class="text-red-400 hover:text-red-300 text-xs">Supprimer</button>' +
+                    '</td></tr>';
+            }).join('');
+            var frontTable = data.fronts.length
+                ? '<div class="ged-content-panel rounded-xl overflow-hidden mb-5"><div class="px-5 py-3 border-b border-slate-700"><h3 class="font-bold text-sm" style="color:var(--ged-black)">Fronts &amp; gradins</h3></div><div style="overflow-x:auto"><table style="width:100%;font-size:13px;border-collapse:collapse"><thead><tr style="font-size:11px;text-transform:uppercase;color:#64748B;background:rgba(0,0,0,0.15)"><th class="px-3 py-2 text-left">Front / Gradin</th><th class="px-3 py-2 text-center">Statut</th><th class="px-3 py-2 text-right">Volume BCM</th><th class="px-3 py-2 text-right">Tirs</th><th class="px-3 py-2"></th></tr></thead><tbody>' + frontRows + '</tbody></table></div></div>'
+                : '<div class="ged-content-panel rounded-xl p-8 text-center mb-5"><p style="font-size:40px">⛰️</p><p class="font-bold mt-2" style="color:var(--ged-black)">Aucun front enregistré</p><p class="text-sm text-slate-500 mt-1">Ajoutez un front ci-dessus pour commencer le suivi des tirs.</p></div>';
+
+            // ── Formulaire tir de mine ──
+            var tirForm = data.fronts.length
+                ? '<div class="ged-content-panel rounded-xl p-5 mb-5">' +
+                  '<h3 class="font-bold text-sm mb-3" style="color:var(--ged-black)">💥 Enregistrer un tir de mine</h3>' +
+                  '<div class="grid grid-cols-2 md:grid-cols-6 gap-3">' +
+                  '<div class="col-span-2"><label class="block text-xs text-slate-500 mb-1">Front *</label><select id="cqTirFront" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm">' +
+                  data.fronts.map(function (f) { return '<option value="' + f.id + '">' + esc(f.name) + '</option>'; }).join('') +
+                  '</select></div>' +
+                  '<div><label class="block text-xs text-slate-500 mb-1">Date *</label><input id="cqTirDate" type="date" value="' + new Date().toISOString().slice(0, 10) + '" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                  '<div><label class="block text-xs text-slate-500 mb-1">Nb trous</label><input id="cqTirTrous" type="number" min="0" step="1" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                  '<div><label class="block text-xs text-slate-500 mb-1">Espacement (m)</label><input id="cqTirEspacement" type="number" min="0" step="0.1" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                  '<div><label class="block text-xs text-slate-500 mb-1">Charge totale (kg) *</label><input id="cqTirCharge" type="number" min="0" step="1" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                  '<div><label class="block text-xs text-slate-500 mb-1">Explosif</label><select id="cqTirExplosif" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm">' +
+                  ['', 'ANFO', 'Emulsion', 'ANFO + Emulsion', 'TNT', 'Dynamite', 'Autre'].map(function (e) { return '<option value="' + e + '">' + (e || '—') + '</option>'; }).join('') +
+                  '</select></div>' +
+                  '<div><label class="block text-xs text-slate-500 mb-1">Volume abattu (BCM m³)</label><input id="cqTirVolume" type="number" min="0" step="1" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                  '<div class="col-span-2 md:col-span-5"><label class="block text-xs text-slate-500 mb-1">Notes</label><input id="cqTirNotes" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                  '</div><button onclick="cqAddTir()" class="mt-3 bg-emerald-600 hover:bg-emerald-700 px-4 py-2 rounded-lg font-semibold text-sm">Enregistrer le tir</button></div>'
+                : '';
+
+            var tirRows = (data.tirs || []).slice(0, 30).map(function (t) {
+                var fr = data.fronts.find(function (x) { return x.id === t.frontId; });
+                return '<tr style="border-bottom:1px solid rgba(255,255,255,0.06)">' +
+                    '<td class="px-3 py-2 text-slate-300">' + esc(t.date) + '</td>' +
+                    '<td class="px-3 py-2 text-slate-300">' + esc(fr ? fr.name : t.frontId) + '</td>' +
+                    '<td class="px-3 py-2 text-right font-mono">' + (t.nbTrous || '—') + '</td>' +
+                    '<td class="px-3 py-2 text-right font-mono">' + (t.chargeKg ? t.chargeKg.toFixed(0) + ' kg' : '—') + '</td>' +
+                    '<td class="px-3 py-2 text-slate-400 text-xs">' + esc(t.explosifType || '—') + '</td>' +
+                    '<td class="px-3 py-2 text-right font-mono">' + (t.volumeBCM ? t.volumeBCM.toFixed(0) + ' m³' : '—') + '</td>' +
+                    '<td class="px-3 py-2 text-slate-400 text-xs">' + esc(t.notes || '') + '</td>' +
+                    '<td class="px-3 py-2 text-right"><button onclick="cqDeleteTir(\'' + t.id + '\')" class="text-red-400 hover:text-red-300 text-xs">×</button></td>' +
+                    '</tr>';
+            }).join('');
+            var tirHist = data.tirs.length
+                ? '<div class="ged-content-panel rounded-xl overflow-hidden"><div class="px-5 py-3 border-b border-slate-700"><h3 class="font-bold text-sm" style="color:var(--ged-black)">Historique des tirs</h3></div><div style="overflow-x:auto"><table style="width:100%;font-size:13px;border-collapse:collapse"><thead><tr style="font-size:11px;text-transform:uppercase;color:#64748B;background:rgba(0,0,0,0.15)"><th class="px-3 py-2 text-left">Date</th><th class="px-3 py-2 text-left">Front</th><th class="px-3 py-2 text-right">Trous</th><th class="px-3 py-2 text-right">Charge</th><th class="px-3 py-2 text-left">Explosif</th><th class="px-3 py-2 text-right">Volume BCM</th><th class="px-3 py-2 text-left">Notes</th><th class="px-3 py-2"></th></tr></thead><tbody>' + tirRows + '</tbody></table></div></div>'
+                : '';
+
+            el.innerHTML =
+                '<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">' + kpiRow + '</div>' +
+                frontForm + frontTable + tirForm + tirHist +
+                '<p class="text-xs text-slate-500 mt-3">Module Carrière — données enregistrées sur le serveur (accessibles sur tous vos appareils).</p>';
+        }
+        window.renderCarriere = renderCarriere;
+
         function renderHSE() {
             var el = document.getElementById('hseContent');
             if (!el) return;
@@ -9841,6 +10025,9 @@
             } else if (view === 'souterrain') {
                 renderSouterrain();
                 try { ugSyncFromServer(); } catch (e) {}
+            } else if (view === 'carriere') {
+                renderCarriere();
+                try { cqSyncFromServer(); } catch (e) {}
             } else if (view === 'bit_sharpening') {
                 renderBitSharpening();
             } else if (view === 'soustraitants') {
@@ -26680,7 +26867,7 @@
             ['restrictConnections', 'connections'], ['restrictAssignments', 'assignments'],
             ['restrictMaintenance', 'maintenance'],
             ['restrictBitSharpening', 'bit_sharpening'], ['restrictConsumables', 'consumables'],
-            ['restrictHSE', 'hse'], ['restrictSouterrain', 'souterrain'], ['restrictAnalytics', 'analytics'],
+            ['restrictHSE', 'hse'], ['restrictSouterrain', 'souterrain'], ['restrictCarriere', 'carriere'], ['restrictAnalytics', 'analytics'],
             ['restrictPlanification', 'planification'], ['restrictBesoins', 'besoins'],
             ['restrictRentabilite', 'rentabilite'], ['restrictDepensesPM', 'depenses_pm'],
             ['restrictInvoices', 'invoices'], ['restrictPayments', 'payments'],
