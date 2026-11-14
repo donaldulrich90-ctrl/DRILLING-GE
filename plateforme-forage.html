@@ -1045,6 +1045,22 @@
         @media (prefers-reduced-motion: reduce) {
             *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
         }
+        /* ── Centre d'alertes ──────────────────────────────────────── */
+        #gedAlertPanel {
+            position: fixed; top: 0; right: 0; width: min(400px, 96vw); height: 100vh;
+            background: #fff; box-shadow: -4px 0 30px rgba(0,0,0,0.18);
+            z-index: 9900; display: flex; flex-direction: column;
+            transform: translateX(100%); transition: transform .28s cubic-bezier(.2,.8,.2,1);
+        }
+        #gedAlertPanel.is-open { transform: translateX(0); }
+        #gedAlertPanelOverlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.35);
+            z-index: 9899; display: none;
+        }
+        #gedAlertPanelOverlay.is-open { display: block; }
+        #gedAlertList { flex: 1; overflow-y: auto; padding: 12px 16px; }
+        .ged-alert-btn-active { border-color: #DC2626 !important; animation: gedAlertPulse 1.6s ease-in-out infinite; }
+        @keyframes gedAlertPulse { 0%,100%{box-shadow:0 0 0 0 rgba(220,38,38,.4)} 50%{box-shadow:0 0 0 6px rgba(220,38,38,0)} }
 
         /* ══════════════════════════════════════════════════════════════
            HARMONISATION DESIGN — alignement sur GOOD ENGINEERS OS (Mine)
@@ -1099,6 +1115,13 @@
             border-radius: 12px; padding: 8px 10px; text-align: center; box-shadow: 0 6px 18px rgba(0,0,0,.25); }
         .gedm-sb-logo img { width: 100%; max-width: 200px; height: auto; display: inline-block; }
         @media print { .gedm-masthead, .gedm-marquee { display: none !important; } }
+        .ap-btn { background: rgba(255,255,255,0.05); color: #94A3B8; border: 1px solid rgba(255,255,255,0.1); }
+        @media print {
+            #ged-sidebar, #ged-nav, .gedm-sidebar, [id^="nav-"],
+            #analyticsPeriodBar, .ap-btn, button[onclick*="printAnalytics"], button[onclick*="shareAnalytics"] { display: none !important; }
+            #mainView-analytics { display: block !important; }
+            body { background: #fff !important; }
+        }
  </style>
     <link rel="stylesheet" href="/gedrilling-login.css">
     <link rel="stylesheet" href="/gedrilling-platform-theme.css">
@@ -1336,6 +1359,7 @@
                     <button type="button" onclick="showMainView('inventory')" class="ged-nav-item main-nav-btn" id="nav-inventory">▣ &nbsp;Stocks</button>
                     <button type="button" onclick="showMainView('hse')" class="ged-nav-item main-nav-btn" id="nav-hse">✚ &nbsp;Santé &amp; sécurité</button>
                     <button type="button" onclick="showMainView('souterrain')" class="ged-nav-item main-nav-btn" id="nav-souterrain">🕳️ &nbsp;Mine souterraine</button>
+                    <button type="button" onclick="showMainView('carriere')" class="ged-nav-item main-nav-btn" id="nav-carriere">⛰️ &nbsp;Carrière à ciel ouvert</button>
 
                     <p class="ged-nav-section ged-nav-toggle" onclick="gedToggleNavSection(this)"><span class="nav-caret">▾</span>Pilotage &amp; analyse</p>
                     <button type="button" onclick="showMainView('analytics')" class="ged-nav-item main-nav-btn" id="nav-analytics">◒ &nbsp;Performance</button>
@@ -1343,6 +1367,7 @@
                     <button type="button" onclick="showMainView('planification')" class="ged-nav-item main-nav-btn" id="nav-planification">🗓️ &nbsp;Planification &amp; suivi</button>
                     <button type="button" onclick="showMainView('besoins')" class="ged-nav-item main-nav-btn" id="nav-besoins">📝 &nbsp;Expression de besoin <span id="besoinsNavBadge" class="hidden" style="background:var(--ged-danger);color:#fff;border-radius:999px;font-size:10px;padding:1px 7px;margin-left:4px;font-weight:800"></span></button>
                     <button type="button" onclick="showMainView('reports')" class="ged-nav-item main-nav-btn" id="nav-reports">≡ &nbsp;Rapports</button>
+                    <button type="button" onclick="showMainView('weekly_report')" class="ged-nav-item main-nav-btn" id="nav-weekly_report">📊 &nbsp;Rapport hebdomadaire</button>
                     <button type="button" onclick="showMainView('rentabilite')" class="ged-nav-item main-nav-btn" id="nav-rentabilite">↗ &nbsp;Rentabilité consommables</button>
                     <button type="button" onclick="showMainView('depenses_pm')" class="ged-nav-item main-nav-btn" id="nav-depenses_pm">◇ &nbsp;Dépenses PM</button>
 
@@ -1417,6 +1442,10 @@
                                 <option value="" data-i18n="common.all_sites">Tous les sites</option>
                             </select>
                         </div>
+                        <button type="button" id="gedAlertBtn" onclick="toggleAlertPanel()" title="Centre d'alertes" style="position:relative;display:inline-flex;align-items:center;gap:5px;padding:7px 12px;border-radius:9px;border:2px solid var(--ged-border);background:var(--ged-panel-bg);color:var(--ged-black);font-weight:700;font-size:13px;cursor:pointer;transition:border-color .2s">
+                            <span aria-hidden="true" style="font-size:16px">🔔</span>
+                            <span id="gedAlertBadge" style="display:none;position:absolute;top:-6px;right:-6px;background:#DC2626;color:#fff;border-radius:999px;min-width:18px;height:18px;font-size:11px;font-weight:800;align-items:center;justify-content:center;padding:0 4px">0</span>
+                        </button>
                         <span class="text-sm font-bold text-ged-black px-2 py-1 bg-gray-100 rounded border border-gray-200" id="currentUser">Admin</span>
                         <button type="button" onclick="openChangePasswordModal()" class="ged-btn-secondary px-3 py-2 rounded-lg text-sm" title="Modifier votre mot de passe">Mot de passe</button>
                         <div id="headerEnterpriseLogo" class="flex items-center justify-end min-w-[100px]" style="flex: 0 0 auto;"></div>
@@ -1474,6 +1503,11 @@
                 </div>
             </div>
             <div id="dashStatusBar" class="flex flex-wrap gap-3 mb-5"></div>
+            <!-- Vue direction : synthèse finance/production, visible uniquement pour admin/gestionnaire -->
+            <div id="directionDashboard" class="hidden mb-5 p-4 rounded-xl border border-amber-500/30" style="background:rgba(245,184,0,0.04)">
+                <p class="text-[10px] font-bold tracking-[0.15em] uppercase mb-3" style="color:#F5B800">Vue Direction — Synthèse 30 derniers jours</p>
+                <div id="directionKPIs" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3"></div>
+            </div>
             <div class="mb-4 flex flex-wrap justify-between items-center gap-2">
                 <p class="text-slate-400 text-sm" data-i18n="dashboard.filter_hint">Foreuses rattachées à votre entreprise. Filtrez par site avec le menu en haut à droite.</p>
                 <div class="flex flex-wrap gap-2">
@@ -1869,6 +1903,15 @@
             <div id="soustraitantsContent"></div>
         </div>
 
+        <!-- ═══ VUE RAPPORT HEBDOMADAIRE ════════════════════════════════ -->
+        <div id="mainView-weekly_report" class="main-view hidden">
+            <div class="mb-6 pb-4 border-b border-slate-700">
+                <h2 class="text-2xl font-extrabold tracking-tight" style="color:var(--ged-yellow)">📊 Rapport Hebdomadaire</h2>
+                <p class="text-slate-400 text-sm mt-1">Générez un rapport de la semaine · partagez via WhatsApp · téléchargez en HTML</p>
+            </div>
+            <div id="weeklyReportContent"></div>
+        </div>
+
         <!-- ═══ VUE RENTABILITÉ CONSOMMABLES ════════════════════════════ -->
         <div id="mainView-rentabilite" class="main-view hidden">
             <div class="mb-6 pb-4 border-b border-slate-700">
@@ -1889,9 +1932,29 @@
 
         <!-- ═══ VUE PERFORMANCE ANALYTICS ══════════════════════════════ -->
         <div id="mainView-analytics" class="main-view hidden">
-            <div class="mb-6 pb-4 border-b border-slate-700">
-                <h2 class="text-2xl font-extrabold tracking-tight" style="color:var(--ged-yellow)">📊 Tableau de Performance</h2>
-                <p class="text-slate-400 text-sm mt-1">KPIs globaux · production par machine · tendances · disponibilité</p>
+            <div class="mb-5 pb-4 border-b border-slate-700">
+                <div class="flex flex-wrap items-start justify-between gap-3 mb-4">
+                    <div>
+                        <h2 class="text-2xl font-extrabold tracking-tight" style="color:var(--ged-yellow)">📊 Tableau de Performance</h2>
+                        <p class="text-slate-400 text-sm mt-1">KPIs opérationnels · production · maintenance · disponibilité</p>
+                    </div>
+                    <div class="flex gap-2 flex-shrink-0">
+                        <button onclick="printAnalytics()" class="px-3 py-1.5 rounded-lg text-xs font-semibold border" style="background:rgba(255,255,255,0.05);color:#94A3B8;border-color:rgba(255,255,255,0.1)">🖨️ Imprimer</button>
+                        <button onclick="shareAnalyticsWhatsApp()" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-white" style="background:#25D366">📱 WhatsApp</button>
+                    </div>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                    <span class="text-xs font-medium" style="color:#64748B">Période :</span>
+                    <button onclick="setAnalyticsPeriod('7d')"  id="ap-7d"  class="ap-btn px-3 py-1 rounded-full text-xs font-semibold transition-colors">7 jours</button>
+                    <button onclick="setAnalyticsPeriod('30d')" id="ap-30d" class="ap-btn px-3 py-1 rounded-full text-xs font-semibold transition-colors">30 jours</button>
+                    <button onclick="setAnalyticsPeriod('90d')" id="ap-90d" class="ap-btn px-3 py-1 rounded-full text-xs font-semibold transition-colors">90 jours</button>
+                    <button onclick="setAnalyticsPeriod('ytd')" id="ap-ytd" class="ap-btn px-3 py-1 rounded-full text-xs font-semibold transition-colors">Cette année</button>
+                    <button onclick="setAnalyticsPeriod('all')" id="ap-all" class="ap-btn px-3 py-1 rounded-full text-xs font-semibold transition-colors" style="background:#F5B800;color:#111;border-color:#F5B800">Tout</button>
+                    <span class="text-xs mx-1" style="color:#475569">|</span>
+                    <input type="date" id="apFrom" class="text-xs px-2 py-1 rounded focus:outline-none" style="background:#1e293b;color:#cbd5e1;border:1px solid #334155" onchange="setAnalyticsPeriod('custom')">
+                    <span class="text-xs" style="color:#64748B">→</span>
+                    <input type="date" id="apTo"   class="text-xs px-2 py-1 rounded focus:outline-none" style="background:#1e293b;color:#cbd5e1;border:1px solid #334155" onchange="setAnalyticsPeriod('custom')">
+                </div>
             </div>
             <div id="analyticsContent"></div>
         </div>
@@ -1912,6 +1975,15 @@
                 <p class="text-slate-400 text-sm mt-1">Galeries &amp; niveaux · avancement · soutènement</p>
             </div>
             <div id="souterrainContent"></div>
+        </div>
+
+        <!-- ═══ VUE CARRIÈRE À CIEL OUVERT ══════════════════════════════ -->
+        <div id="mainView-carriere" class="main-view hidden">
+            <div class="mb-6 pb-4 border-b border-slate-700">
+                <h2 class="text-2xl font-extrabold tracking-tight" style="color:var(--ged-yellow)">⛰️ Carrière à ciel ouvert</h2>
+                <p class="text-slate-400 text-sm mt-1">Fronts &amp; gradins · tirs de mine · extraction</p>
+            </div>
+            <div id="carriereContent"></div>
         </div>
 
         <!-- Modal Ajout/Modification Client -->
@@ -3442,6 +3514,7 @@
                                 <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictInventory" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Stocks</span></label>
                                 <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictHSE" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Santé & sécurité</span></label>
                                 <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictSouterrain" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Mine souterraine</span></label>
+                                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictCarriere" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Carrière à ciel ouvert</span></label>
                             </div>
                             <p class="text-[11px] font-bold tracking-wider text-slate-400 uppercase mt-1">Pilotage & analyse</p>
                             <div class="space-y-2 pl-1">
@@ -6111,6 +6184,7 @@
                 'nav-consumables': 'restrictConsumables',
                 'nav-hse': 'restrictHSE',
                 'nav-souterrain': 'restrictSouterrain',
+                'nav-carriere': 'restrictCarriere',
                 'nav-analytics': 'restrictAnalytics',
                 'nav-planification': 'restrictPlanification',
                 'nav-besoins': 'restrictBesoins',
@@ -6132,7 +6206,7 @@
                 'nav-company_info': 'restrictCompanyInfo',
                 'nav-accounts': 'restrictAccounts'
             };
-            var allNavButtons = ['nav-dashboard', 'nav-forage_plan', 'nav-connections', 'nav-assignments', 'nav-maintenance', 'nav-bit_sharpening', 'nav-consumables', 'nav-hse', 'nav-souterrain', 'nav-analytics', 'nav-planification', 'nav-besoins', 'nav-rentabilite', 'nav-depenses_pm', 'nav-payments', 'nav-soustraitants', 'nav-invoices', 'nav-contracts', 'nav-enterprises', 'nav-sites', 'nav-revenue', 'nav-site_meals', 'nav-reports', 'nav-project_overview', 'nav-rh', 'nav-inventory', 'nav-accounts', 'nav-clients', 'nav-translator', 'nav-team_chat', 'nav-company_info'];
+            var allNavButtons = ['nav-dashboard', 'nav-forage_plan', 'nav-connections', 'nav-assignments', 'nav-maintenance', 'nav-bit_sharpening', 'nav-consumables', 'nav-hse', 'nav-souterrain', 'nav-carriere', 'nav-analytics', 'nav-planification', 'nav-besoins', 'nav-rentabilite', 'nav-depenses_pm', 'nav-payments', 'nav-soustraitants', 'nav-invoices', 'nav-contracts', 'nav-enterprises', 'nav-sites', 'nav-revenue', 'nav-site_meals', 'nav-reports', 'nav-project_overview', 'nav-rh', 'nav-inventory', 'nav-accounts', 'nav-clients', 'nav-translator', 'nav-team_chat', 'nav-company_info'];
 
             if (isPlatformBillingOnlyUser(currentUser)) {
                 allNavButtons.forEach(function(btnId) {
@@ -6178,7 +6252,7 @@
             // Onglets nouvellement gérés par l'accès explicite : jamais masqués par une
             // ancienne liste d'abonnement (qui ne les connaît pas), pour éviter de les
             // cacher à tort une fois ajoutés au contrôle d'accès.
-            var NEW_MANAGED_VIEWS = { forage_plan: 1, bit_sharpening: 1, consumables: 1, hse: 1, souterrain: 1, analytics: 1, planification: 1, besoins: 1, rentabilite: 1, depenses_pm: 1, payments: 1, soustraitants: 1 };
+            var NEW_MANAGED_VIEWS = { forage_plan: 1, bit_sharpening: 1, consumables: 1, hse: 1, souterrain: 1, carriere: 1, analytics: 1, planification: 1, besoins: 1, rentabilite: 1, depenses_pm: 1, payments: 1, soustraitants: 1 };
             function allowedBySubscription(navId) {
                 if (navId === 'nav-enterprises') return true;
                 if (!subTabs || !subTabs.length) return true;
@@ -6264,6 +6338,7 @@
                 'nav-consumables': true,
                 'nav-hse': true,
                 'nav-souterrain': true,
+                'nav-carriere': true,
                 'nav-analytics': true,
                 'nav-planification': true,
                 'nav-besoins': true,
@@ -6369,7 +6444,7 @@
                 view !== 'enterprises' && subNav.indexOf(view) < 0) {
                 view = 'dashboard';
             }
-            var views = ['consumables', 'dashboard', 'connections', 'assignments', 'maintenance', 'bit_sharpening', 'invoices', 'payments', 'contracts', 'sites', 'enterprises', 'revenue', 'site_meals', 'reports', 'project_overview', 'planification', 'besoins', 'rh', 'inventory', 'accounts', 'clients', 'translator', 'team_chat', 'company_info', 'forage_plan', 'rentabilite', 'depenses_pm', 'analytics', 'hse', 'souterrain', 'soustraitants'];
+            var views = ['consumables', 'dashboard', 'connections', 'assignments', 'maintenance', 'bit_sharpening', 'invoices', 'payments', 'contracts', 'sites', 'enterprises', 'revenue', 'site_meals', 'reports', 'project_overview', 'planification', 'besoins', 'rh', 'inventory', 'accounts', 'clients', 'translator', 'team_chat', 'company_info', 'forage_plan', 'rentabilite', 'depenses_pm', 'analytics', 'hse', 'souterrain', 'soustraitants', 'weekly_report'];
             views.forEach(function(v) {
                 var el = document.getElementById('mainView-' + v);
                 if (el) el.classList.add('hidden');
@@ -6951,6 +7026,8 @@
 
             updateGlobalStats();
             renderDashboardExtras();
+            renderRoleDashboard();
+            fillDashboardPanels();
         }
 
         function showAddDrillModal() {
@@ -7202,6 +7279,164 @@
         function renderDashboardExtras() {
             renderDashAlerts();
             initDashProductionChart();
+        }
+
+        function isManagementRole(role) {
+            return !role || ['admin','super_admin','gestionnaire','gestionnaire_site'].indexOf(role) >= 0;
+        }
+
+        function renderRoleDashboard() {
+            var role = (typeof currentUser !== 'undefined' && currentUser) ? (currentUser.role || '') : '';
+            var box = document.getElementById('directionDashboard');
+            if (!box) return;
+            if (isManagementRole(role)) {
+                box.classList.remove('hidden');
+                renderDirectionKPIs();
+            } else {
+                box.classList.add('hidden');
+            }
+        }
+
+        function renderDirectionKPIs() {
+            var el = document.getElementById('directionKPIs');
+            if (!el) return;
+            el.innerHTML = '<p class="text-slate-500 text-sm col-span-full text-center py-3">Chargement…</p>';
+
+            var now = new Date(), today = now.toISOString().slice(0,10);
+            var from30 = new Date(now - 30*86400000).toISOString().slice(0,10);
+
+            var invFilt = (invoices||[]).filter(function(inv){ return inv.date && inv.date >= from30 && inv.date <= today; });
+            var invTotal = invFilt.reduce(function(s,i){ return s+(parseFloat(i.total)||0); }, 0);
+            var payFilt = (payments||[]).filter(function(p){ return p.date && p.date >= from30 && p.date <= today; });
+            var payTotal = payFilt.reduce(function(s,p){ return s+(parseFloat(p.amount)||0); }, 0);
+            var overdueInv = (invoices||[]).filter(function(i){ return i.status==='pending' && i.dueDate && i.dueDate < today; });
+            var activeCt = (contracts||[]).filter(function(c){ return c.status==='active' || c.status==='en_cours'; }).length;
+            var currency = (invFilt.length > 0 ? invFilt[0].currency : null) || (payFilt.length > 0 ? payFilt[0].currency : null) || 'XOF';
+            var recsFilt = (dailyDataRecords||[]).filter(function(r){ return r.date && r.date >= from30 && r.date <= today; });
+            var totM30 = recsFilt.reduce(function(s,r){ return s+(parseFloat(_rpData(r).metersDrilled)||0); }, 0);
+
+            function dkpi(label, val, sub, color) {
+                return '<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px 14px">' +
+                    '<p style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#94A3B8;margin-bottom:6px">'+label+'</p>' +
+                    '<p style="font-size:20px;font-weight:900;font-family:monospace;color:'+(color||'#F5B800')+'">'+val+'</p>' +
+                    (sub ? '<p style="font-size:10px;color:#64748B;margin-top:3px">'+sub+'</p>' : '') +
+                    '</div>';
+            }
+            function fmtAmt(v) {
+                if (v >= 1000000) return (v/1000000).toFixed(1)+'M';
+                if (v >= 1000)    return (v/1000).toFixed(0)+'k';
+                return Math.round(v)+'';
+            }
+
+            function paint(f, p, cur) {
+                el.innerHTML =
+                    dkpi('Facturé (30j)',   fmtAmt(f.invoicedAmount  != null ? f.invoicedAmount  : invTotal)  +' '+cur, invFilt.length+' factures',   '#F5B800') +
+                    dkpi('Encaissé (30j)',  fmtAmt(f.collectedAmount != null ? f.collectedAmount : payTotal)  +' '+cur, payFilt.length+' paiements',  '#28A745') +
+                    dkpi('Impayés', (f.overdueCount != null ? f.overdueCount : overdueInv.length)+' factures',
+                        fmtAmt(f.overdueAmount != null ? f.overdueAmount : overdueInv.reduce(function(s,i){return s+(parseFloat(i.total)||0);},0))+' '+cur,
+                        (f.overdueCount||overdueInv.length) > 0 ? '#DC3545' : '#28A745') +
+                    dkpi('Contrats actifs', activeCt, '', '#3b82f6') +
+                    dkpi('Mètres (30j)',    (p.totalMeters != null ? p.totalMeters : totM30).toFixed(0)+' m',
+                        p.avgROP ? 'ROP '+p.avgROP+' m/h' : '', '#a78bfa');
+            }
+
+            paint({ invoicedAmount: invTotal, collectedAmount: payTotal, overdueCount: overdueInv.length,
+                    overdueAmount: overdueInv.reduce(function(s,i){return s+(parseFloat(i.total)||0);},0) },
+                  { totalMeters: totM30 }, currency);
+
+            if (window.API && window.API.Analytics) {
+                window.API.Analytics.getSummary(from30, today).then(function(d) {
+                    if (!d) return;
+                    paint(d.finance || {}, d.production || {}, (d.finance && d.finance.currency) || currency);
+                }).catch(function(){});
+            }
+        }
+
+        function fillDashboardPanels() {
+            // Disponibilité & Utilisation
+            var dispoEl = document.getElementById('dashDispoContent');
+            if (dispoEl) {
+                var drills = getDrillsForSite();
+                var sc = { 'EN FORAGE': 0, 'EN PAUSE': 0, 'EN MAINTENANCE': 0, 'HORS SERVICE': 0 };
+                drills.forEach(function(d){ if (sc.hasOwnProperty(d.status)) sc[d.status]++; });
+                var total = drills.length;
+                var pct = total > 0 ? Math.round(sc['EN FORAGE'] / total * 100) : 0;
+                var rows = [
+                    { label:'En forage',    n:sc['EN FORAGE'],      color:'#28A745' },
+                    { label:'En pause',     n:sc['EN PAUSE'],       color:'#F5B800' },
+                    { label:'Maintenance',  n:sc['EN MAINTENANCE'], color:'#3b82f6' },
+                    { label:'Hors service', n:sc['HORS SERVICE'],   color:'#DC3545' }
+                ];
+                dispoEl.innerHTML = '<div style="margin-bottom:8px;text-align:center">' +
+                    '<span style="font-size:28px;font-weight:900;font-family:monospace;color:#28A745">'+pct+'%</span>' +
+                    '<span style="font-size:11px;color:#64748B;margin-left:5px">disponibilité</span></div>' +
+                    rows.filter(function(r){return r.n>0;}).map(function(r){
+                        return '<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:12px">' +
+                            '<span style="color:#94A3B8">'+r.label+'</span>' +
+                            '<span style="font-weight:700;color:'+r.color+'">'+r.n+' foreuse'+(r.n>1?'s':'')+'</span></div>';
+                    }).join('');
+            }
+
+            // Interventions maintenance
+            var maintEl = document.getElementById('dashMaintenanceContent');
+            if (maintEl) {
+                var todayM = new Date().toISOString().slice(0,10);
+                var in7 = new Date(Date.now()+7*86400000).toISOString().slice(0,10);
+                var overdueM = (maintenanceSchedules||[]).filter(function(m){ return m.scheduledDate && m.scheduledDate < todayM && m.status !== 'completed'; });
+                var upcoming = (maintenanceSchedules||[]).filter(function(m){ return m.scheduledDate && m.scheduledDate >= todayM && m.scheduledDate <= in7 && m.status !== 'completed'; });
+                if (overdueM.length === 0 && upcoming.length === 0) {
+                    maintEl.innerHTML = '<p style="color:#64748B;font-size:12px;text-align:center;padding:10px 0">Aucune intervention planifiée</p>';
+                } else {
+                    var html = '';
+                    if (overdueM.length > 0) {
+                        html += '<p style="font-size:10px;color:#DC3545;font-weight:700;text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px">En retard ('+overdueM.length+')</p>' +
+                            overdueM.slice(0,3).map(function(m){
+                                return '<div style="font-size:11px;padding:3px 0;color:#94A3B8">🔴 '+String(m.machineId||m.drillId||'').slice(0,15)+'&nbsp;—&nbsp;'+String(m.type||m.maintenanceType||'').slice(0,20)+'</div>';
+                            }).join('');
+                    }
+                    if (upcoming.length > 0) {
+                        html += '<p style="font-size:10px;color:#F5B800;font-weight:700;text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px;margin-top:6px">7 jours ('+upcoming.length+')</p>' +
+                            upcoming.slice(0,3).map(function(m){
+                                return '<div style="font-size:11px;padding:3px 0;color:#94A3B8">🟡 '+String(m.machineId||m.drillId||'').slice(0,15)+'&nbsp;—&nbsp;'+String(m.scheduledDate||'').slice(5)+'</div>';
+                            }).join('');
+                    }
+                    maintEl.innerHTML = html;
+                }
+            }
+
+            // Coût par mètre
+            var costEl = document.getElementById('dashCostContent');
+            if (costEl) {
+                var from30c = new Date(Date.now()-30*86400000).toISOString().slice(0,10);
+                var recs30c = (dailyDataRecords||[]).filter(function(r){ return r.date && r.date >= from30c; });
+                var m30c = recs30c.reduce(function(s,r){ return s+(parseFloat(_rpData(r).metersDrilled)||0); }, 0);
+                var maintCost = (maintenanceHistory||[]).filter(function(h){ return h.date && h.date >= from30c; })
+                    .reduce(function(s,h){ return s+(parseFloat(h.cost)||0); }, 0);
+                var cpm = m30c > 0 ? (maintCost/m30c).toFixed(2) : null;
+                costEl.innerHTML = '<div style="text-align:center;padding:6px 0">' +
+                    '<p style="font-size:28px;font-weight:900;font-family:monospace;color:#F5B800">'+(cpm?cpm+'<span style="font-size:12px;font-weight:400;color:#64748B"> $/m</span>':'—')+'</p>' +
+                    '<p style="font-size:10px;color:#64748B;margin-top:4px">30 derniers jours</p>' +
+                    '<div style="margin-top:8px;display:flex;justify-content:space-between;font-size:11px;color:#94A3B8">' +
+                    '<span>'+m30c.toFixed(0)+' m</span><span>'+maintCost.toFixed(0)+' maint.</span></div></div>';
+            }
+
+            // Consommation carburant
+            var fuelEl = document.getElementById('dashFuelContent');
+            if (fuelEl) {
+                var from30f = new Date(Date.now()-30*86400000).toISOString().slice(0,10);
+                var recs30f = (dailyDataRecords||[]).filter(function(r){ return r.date && r.date >= from30f; });
+                var totalFuel = recs30f.reduce(function(s,r){
+                    var d = _rpData(r);
+                    return s+(parseFloat(d.fuelConsumptionEffective||d.fuelConsumed)||0);
+                }, 0);
+                var totHf = recs30f.reduce(function(s,r){ return s+(parseFloat(_rpData(r).hours)||0); }, 0);
+                var fuelPerH = totHf > 0 ? (totalFuel/totHf).toFixed(1) : null;
+                fuelEl.innerHTML = '<div style="text-align:center;padding:6px 0">' +
+                    '<p style="font-size:28px;font-weight:900;font-family:monospace;color:#3b82f6">'+totalFuel.toFixed(0)+'<span style="font-size:12px;font-weight:400;color:#64748B"> L</span></p>' +
+                    '<p style="font-size:10px;color:#64748B;margin-top:4px">30 derniers jours</p>' +
+                    (fuelPerH ? '<p style="font-size:12px;color:#94A3B8;margin-top:6px">'+fuelPerH+' L/h en moyenne</p>' : '') +
+                    '</div>';
+            }
         }
 
         // ====================================================================
@@ -8674,6 +8909,177 @@
         }
         window.renderSouterrain = renderSouterrain;
 
+        // ============================================================
+        // CARRIÈRE À CIEL OUVERT (Phase 1 — Extraction)
+        // ============================================================
+        function _cqKey() { return 'ged_cq_data_' + (window.API && window.API.getEnterpriseId ? (window.API.getEnterpriseId() || '0') : '0'); }
+        function getCQData() {
+            var def = { fronts: [], tirs: [] };
+            try {
+                var raw = localStorage.getItem(_cqKey()); if (!raw) return def;
+                var d = JSON.parse(raw);
+                ['fronts', 'tirs'].forEach(function (k) { if (!Array.isArray(d[k])) d[k] = []; });
+                return d;
+            } catch (e) { return def; }
+        }
+        function saveCQData(d) {
+            try { localStorage.setItem(_cqKey(), JSON.stringify(d)); } catch (e) {}
+            try { if (window.API && window.API.ModuleState) window.API.ModuleState.set('quarry', d).catch(function () {}); } catch (e) {}
+        }
+        function cqSyncFromServer() {
+            if (!(window.API && window.API.ModuleState && window.API.getAuthToken && window.API.getAuthToken())) return;
+            window.API.ModuleState.get('quarry').then(function (res) {
+                if (res && res.data && Array.isArray(res.data.fronts)) {
+                    try { localStorage.setItem(_cqKey(), JSON.stringify(res.data)); } catch (e) {}
+                    renderCarriere();
+                }
+            }).catch(function () {});
+        }
+        window.cqSyncFromServer = cqSyncFromServer;
+        function _cqNextId(arr, prefix) { var m = 0; (arr || []).forEach(function (x) { var n = parseInt(String(x.id || '').replace(prefix + '-', ''), 10); if (!isNaN(n) && n > m) m = n; }); return prefix + '-' + String(m + 1).padStart(3, '0'); }
+
+        window.cqAddFront = function () {
+            var data = getCQData();
+            var name = ((document.getElementById('cqFrontName') || {}).value || '').trim();
+            var niveau = ((document.getElementById('cqFrontNiveau') || {}).value || '').trim();
+            var longueur = parseFloat((document.getElementById('cqFrontLongueur') || {}).value) || 0;
+            var hauteur = parseFloat((document.getElementById('cqFrontHauteur') || {}).value) || 0;
+            var angle = parseFloat((document.getElementById('cqFrontAngle') || {}).value) || 0;
+            if (!name) { alert('Nom du front requis.'); return; }
+            data.fronts.push({ id: _cqNextId(data.fronts, 'FRT'), name: name, niveau: niveau, longueurM: longueur, hauteurM: hauteur, angle: angle, status: 'EN COURS' });
+            saveCQData(data);
+            renderCarriere();
+        };
+        window.cqDeleteFront = function (id) {
+            if (!confirm('Supprimer ce front et ses tirs de mine ?')) return;
+            var data = getCQData();
+            data.fronts = data.fronts.filter(function (f) { return f.id !== id; });
+            data.tirs = data.tirs.filter(function (t) { return t.frontId !== id; });
+            saveCQData(data); renderCarriere();
+        };
+        window.cqToggleFrontStatus = function (id) {
+            var data = getCQData();
+            var f = data.fronts.find(function (x) { return x.id === id; });
+            if (!f) return;
+            f.status = f.status === 'TERMINÉ' ? 'EN COURS' : 'TERMINÉ';
+            saveCQData(data); renderCarriere();
+        };
+        window.cqAddTir = function () {
+            var data = getCQData();
+            var fid = (document.getElementById('cqTirFront') || {}).value || '';
+            var date = (document.getElementById('cqTirDate') || {}).value || '';
+            var nbTrous = parseInt((document.getElementById('cqTirTrous') || {}).value, 10) || 0;
+            var espacement = parseFloat((document.getElementById('cqTirEspacement') || {}).value) || 0;
+            var charge = parseFloat((document.getElementById('cqTirCharge') || {}).value) || 0;
+            var explosif = (document.getElementById('cqTirExplosif') || {}).value || '';
+            var volume = parseFloat((document.getElementById('cqTirVolume') || {}).value) || 0;
+            var notes = ((document.getElementById('cqTirNotes') || {}).value || '').trim();
+            if (!fid) { alert('Choisissez un front.'); return; }
+            if (!date) { alert('Date requise.'); return; }
+            if (charge <= 0) { alert('Charge totale requise.'); return; }
+            data.tirs.unshift({ id: _cqNextId(data.tirs, 'TIR'), frontId: fid, date: date, nbTrous: nbTrous, espacementM: espacement, chargeKg: charge, explosifType: explosif, volumeBCM: volume, notes: notes });
+            saveCQData(data); renderCarriere();
+        };
+        window.cqDeleteTir = function (id) {
+            var data = getCQData();
+            data.tirs = data.tirs.filter(function (t) { return t.id !== id; });
+            saveCQData(data); renderCarriere();
+        };
+
+        function renderCarriere() {
+            var el = document.getElementById('carriereContent');
+            if (!el) return;
+            var data = getCQData();
+            var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); };
+            var kpi = function (l, v, c) { return '<div class="ged-content-panel rounded-xl px-5 py-4"><p class="text-[10px] uppercase tracking-widest font-semibold mb-1" style="color:#64748B">' + l + '</p><p class="text-2xl font-black font-mono" style="color:' + (c || 'var(--ged-black)') + '">' + v + '</p></div>'; };
+
+            var activeFronts = data.fronts.filter(function (f) { return f.status !== 'TERMINÉ'; }).length;
+            var totVolume = data.tirs.reduce(function (s, t) { return s + (parseFloat(t.volumeBCM) || 0); }, 0);
+            var totCharge = data.tirs.reduce(function (s, t) { return s + (parseFloat(t.chargeKg) || 0); }, 0);
+
+            var kpiRow = kpi('Fronts actifs', activeFronts || '—', '#F5B800') +
+                kpi('Volume extrait (BCM)', totVolume > 0 ? totVolume.toFixed(0) + ' m³' : '—', '#28A745') +
+                kpi('Charge totale', totCharge > 0 ? totCharge.toFixed(0) + ' kg' : '—', '') +
+                kpi('Tirs enregistrés', data.tirs.length || '—', '');
+
+            // ── Formulaire ajout front ──
+            var frontForm =
+                '<div class="ged-content-panel rounded-xl p-5 mb-5">' +
+                '<h3 class="font-bold text-sm mb-3" style="color:var(--ged-black)">➕ Ajouter un front / gradin</h3>' +
+                '<div class="grid grid-cols-2 md:grid-cols-5 gap-3">' +
+                '<div class="col-span-2"><label class="block text-xs text-slate-500 mb-1">Nom *</label><input id="cqFrontName" placeholder="Ex. Front Nord — Banc 3" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                '<div><label class="block text-xs text-slate-500 mb-1">Niveau (m NGF)</label><input id="cqFrontNiveau" placeholder="Ex. 320" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                '<div><label class="block text-xs text-slate-500 mb-1">Longueur (m)</label><input id="cqFrontLongueur" type="number" min="0" step="1" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                '<div><label class="block text-xs text-slate-500 mb-1">Hauteur gradin (m)</label><input id="cqFrontHauteur" type="number" min="0" step="0.5" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                '</div>' +
+                '<button onclick="cqAddFront()" class="mt-3 bg-amber-600 hover:bg-amber-700 px-4 py-2 rounded-lg font-semibold text-sm">Ajouter le front</button>' +
+                '</div>';
+
+            var frontRows = data.fronts.map(function (f) {
+                var tirsFront = data.tirs.filter(function (t) { return t.frontId === f.id; });
+                var volFront = tirsFront.reduce(function (s, t) { return s + (parseFloat(t.volumeBCM) || 0); }, 0);
+                var pill = f.status === 'TERMINÉ'
+                    ? '<span style="background:rgba(40,167,69,.15);color:#28A745;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700">Terminé</span>'
+                    : '<span style="background:rgba(245,184,0,.15);color:#B45309;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700">En cours</span>';
+                return '<tr style="border-bottom:1px solid rgba(255,255,255,0.06)">' +
+                    '<td class="px-3 py-3"><div class="font-bold" style="color:var(--ged-yellow)">' + esc(f.name) + '</div>' +
+                    '<div class="text-[11px] text-slate-500">Niveau ' + esc(f.niveau || '—') + ' · ' + (f.longueurM || '—') + ' m · h=' + (f.hauteurM || '—') + ' m</div></td>' +
+                    '<td class="px-3 py-3 text-center">' + pill + '</td>' +
+                    '<td class="px-3 py-3 text-right font-mono text-sm">' + (volFront > 0 ? volFront.toFixed(0) + ' m³' : '—') + '</td>' +
+                    '<td class="px-3 py-3 text-right font-mono text-sm text-slate-400">' + tirsFront.length + ' tir' + (tirsFront.length > 1 ? 's' : '') + '</td>' +
+                    '<td class="px-3 py-3 text-right">' +
+                    '<button onclick="cqToggleFrontStatus(\'' + f.id + '\')" class="text-slate-400 hover:text-white text-xs mr-2">' + (f.status === 'TERMINÉ' ? 'Réactiver' : 'Terminer') + '</button>' +
+                    '<button onclick="cqDeleteFront(\'' + f.id + '\')" class="text-red-400 hover:text-red-300 text-xs">Supprimer</button>' +
+                    '</td></tr>';
+            }).join('');
+            var frontTable = data.fronts.length
+                ? '<div class="ged-content-panel rounded-xl overflow-hidden mb-5"><div class="px-5 py-3 border-b border-slate-700"><h3 class="font-bold text-sm" style="color:var(--ged-black)">Fronts &amp; gradins</h3></div><div style="overflow-x:auto"><table style="width:100%;font-size:13px;border-collapse:collapse"><thead><tr style="font-size:11px;text-transform:uppercase;color:#64748B;background:rgba(0,0,0,0.15)"><th class="px-3 py-2 text-left">Front / Gradin</th><th class="px-3 py-2 text-center">Statut</th><th class="px-3 py-2 text-right">Volume BCM</th><th class="px-3 py-2 text-right">Tirs</th><th class="px-3 py-2"></th></tr></thead><tbody>' + frontRows + '</tbody></table></div></div>'
+                : '<div class="ged-content-panel rounded-xl p-8 text-center mb-5"><p style="font-size:40px">⛰️</p><p class="font-bold mt-2" style="color:var(--ged-black)">Aucun front enregistré</p><p class="text-sm text-slate-500 mt-1">Ajoutez un front ci-dessus pour commencer le suivi des tirs.</p></div>';
+
+            // ── Formulaire tir de mine ──
+            var tirForm = data.fronts.length
+                ? '<div class="ged-content-panel rounded-xl p-5 mb-5">' +
+                  '<h3 class="font-bold text-sm mb-3" style="color:var(--ged-black)">💥 Enregistrer un tir de mine</h3>' +
+                  '<div class="grid grid-cols-2 md:grid-cols-6 gap-3">' +
+                  '<div class="col-span-2"><label class="block text-xs text-slate-500 mb-1">Front *</label><select id="cqTirFront" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm">' +
+                  data.fronts.map(function (f) { return '<option value="' + f.id + '">' + esc(f.name) + '</option>'; }).join('') +
+                  '</select></div>' +
+                  '<div><label class="block text-xs text-slate-500 mb-1">Date *</label><input id="cqTirDate" type="date" value="' + new Date().toISOString().slice(0, 10) + '" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                  '<div><label class="block text-xs text-slate-500 mb-1">Nb trous</label><input id="cqTirTrous" type="number" min="0" step="1" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                  '<div><label class="block text-xs text-slate-500 mb-1">Espacement (m)</label><input id="cqTirEspacement" type="number" min="0" step="0.1" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                  '<div><label class="block text-xs text-slate-500 mb-1">Charge totale (kg) *</label><input id="cqTirCharge" type="number" min="0" step="1" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                  '<div><label class="block text-xs text-slate-500 mb-1">Explosif</label><select id="cqTirExplosif" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm">' +
+                  ['', 'ANFO', 'Emulsion', 'ANFO + Emulsion', 'TNT', 'Dynamite', 'Autre'].map(function (e) { return '<option value="' + e + '">' + (e || '—') + '</option>'; }).join('') +
+                  '</select></div>' +
+                  '<div><label class="block text-xs text-slate-500 mb-1">Volume abattu (BCM m³)</label><input id="cqTirVolume" type="number" min="0" step="1" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                  '<div class="col-span-2 md:col-span-5"><label class="block text-xs text-slate-500 mb-1">Notes</label><input id="cqTirNotes" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                  '</div><button onclick="cqAddTir()" class="mt-3 bg-emerald-600 hover:bg-emerald-700 px-4 py-2 rounded-lg font-semibold text-sm">Enregistrer le tir</button></div>'
+                : '';
+
+            var tirRows = (data.tirs || []).slice(0, 30).map(function (t) {
+                var fr = data.fronts.find(function (x) { return x.id === t.frontId; });
+                return '<tr style="border-bottom:1px solid rgba(255,255,255,0.06)">' +
+                    '<td class="px-3 py-2 text-slate-300">' + esc(t.date) + '</td>' +
+                    '<td class="px-3 py-2 text-slate-300">' + esc(fr ? fr.name : t.frontId) + '</td>' +
+                    '<td class="px-3 py-2 text-right font-mono">' + (t.nbTrous || '—') + '</td>' +
+                    '<td class="px-3 py-2 text-right font-mono">' + (t.chargeKg ? t.chargeKg.toFixed(0) + ' kg' : '—') + '</td>' +
+                    '<td class="px-3 py-2 text-slate-400 text-xs">' + esc(t.explosifType || '—') + '</td>' +
+                    '<td class="px-3 py-2 text-right font-mono">' + (t.volumeBCM ? t.volumeBCM.toFixed(0) + ' m³' : '—') + '</td>' +
+                    '<td class="px-3 py-2 text-slate-400 text-xs">' + esc(t.notes || '') + '</td>' +
+                    '<td class="px-3 py-2 text-right"><button onclick="cqDeleteTir(\'' + t.id + '\')" class="text-red-400 hover:text-red-300 text-xs">×</button></td>' +
+                    '</tr>';
+            }).join('');
+            var tirHist = data.tirs.length
+                ? '<div class="ged-content-panel rounded-xl overflow-hidden"><div class="px-5 py-3 border-b border-slate-700"><h3 class="font-bold text-sm" style="color:var(--ged-black)">Historique des tirs</h3></div><div style="overflow-x:auto"><table style="width:100%;font-size:13px;border-collapse:collapse"><thead><tr style="font-size:11px;text-transform:uppercase;color:#64748B;background:rgba(0,0,0,0.15)"><th class="px-3 py-2 text-left">Date</th><th class="px-3 py-2 text-left">Front</th><th class="px-3 py-2 text-right">Trous</th><th class="px-3 py-2 text-right">Charge</th><th class="px-3 py-2 text-left">Explosif</th><th class="px-3 py-2 text-right">Volume BCM</th><th class="px-3 py-2 text-left">Notes</th><th class="px-3 py-2"></th></tr></thead><tbody>' + tirRows + '</tbody></table></div></div>'
+                : '';
+
+            el.innerHTML =
+                '<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">' + kpiRow + '</div>' +
+                frontForm + frontTable + tirForm + tirHist +
+                '<p class="text-xs text-slate-500 mt-3">Module Carrière — données enregistrées sur le serveur (accessibles sur tous vos appareils).</p>';
+        }
+        window.renderCarriere = renderCarriere;
+
         function renderHSE() {
             var el = document.getElementById('hseContent');
             if (!el) return;
@@ -9619,10 +10025,15 @@
             } else if (view === 'souterrain') {
                 renderSouterrain();
                 try { ugSyncFromServer(); } catch (e) {}
+            } else if (view === 'carriere') {
+                renderCarriere();
+                try { cqSyncFromServer(); } catch (e) {}
             } else if (view === 'bit_sharpening') {
                 renderBitSharpening();
             } else if (view === 'soustraitants') {
                 renderSoustraitants();
+            } else if (view === 'weekly_report') {
+                renderWeeklyReportView();
             }
         }
 
@@ -12317,6 +12728,67 @@
         // TABLEAU DE PERFORMANCE ANALYTIQUE
         // ============================================
         var _analyticsCharts = [];
+        var _analyticsPeriod = { preset: 'all', from: null, to: null };
+
+        function setAnalyticsPeriod(preset) {
+            var now = new Date(), today = now.toISOString().slice(0,10);
+            _analyticsPeriod.preset = preset;
+            var fromMap = {
+                '7d':  new Date(now - 7  * 86400000).toISOString().slice(0,10),
+                '30d': new Date(now - 30 * 86400000).toISOString().slice(0,10),
+                '90d': new Date(now - 90 * 86400000).toISOString().slice(0,10),
+                'ytd': now.getFullYear() + '-01-01'
+            };
+            if (preset === 'custom') {
+                var fi = document.getElementById('apFrom'), ti = document.getElementById('apTo');
+                _analyticsPeriod.from = (fi && fi.value) || null;
+                _analyticsPeriod.to   = (ti && ti.value) || today;
+            } else {
+                _analyticsPeriod.from = fromMap[preset] || null;
+                _analyticsPeriod.to   = preset === 'all' ? null : today;
+                var fi2 = document.getElementById('apFrom'); if (fi2) fi2.value = _analyticsPeriod.from || '';
+                var ti2 = document.getElementById('apTo');   if (ti2) ti2.value = _analyticsPeriod.to   || '';
+            }
+            ['7d','30d','90d','ytd','all'].forEach(function(p) {
+                var btn = document.getElementById('ap-'+p);
+                if (!btn) return;
+                if (p === preset) { btn.style.background='#F5B800'; btn.style.color='#111'; btn.style.borderColor='#F5B800'; }
+                else              { btn.style.background='rgba(255,255,255,0.05)'; btn.style.color='#94A3B8'; btn.style.borderColor='rgba(255,255,255,0.1)'; }
+            });
+            renderAnalytics();
+        }
+
+        function printAnalytics() {
+            window.print();
+        }
+
+        function shareAnalyticsWhatsApp() {
+            var s = window._analyticsSummary;
+            var lines = ['📊 *Tableau de Performance GEDRILLING*'];
+            if (s && s.period && (s.period.from || s.period.to)) {
+                lines.push('Période : ' + (s.period.from||'…') + ' → ' + (s.period.to||'…'));
+            }
+            if (s && s.production) {
+                lines.push('', '⛏ *Production*');
+                lines.push('• Mètres forés : ' + (s.production.totalMeters||0) + ' m');
+                lines.push('• Heures machine : ' + (s.production.totalHours||0) + ' h');
+                if (s.production.avgROP != null) lines.push('• ROP moyen : ' + s.production.avgROP + ' m/h');
+                lines.push('• Foreuses actives : ' + (s.production.drillCount||0));
+            }
+            if (s && s.maintenance) {
+                lines.push('', '🔧 *Maintenance*');
+                lines.push('• Interventions : ' + (s.maintenance.totalInterventions||0));
+            }
+            if (s && s.stock) {
+                lines.push('', '📦 *Stock*');
+                lines.push('• Épuisés : ' + (s.stock.emptyItems||0) + '  Critique : ' + (s.stock.criticalItems||0));
+            }
+            var wa = '';
+            try { wa = String((typeof companyInfo !== 'undefined' && companyInfo && companyInfo.whatsapp) || ''); } catch(e) {}
+            var text = encodeURIComponent(lines.join('\n'));
+            window.open((wa ? 'https://wa.me/' + wa.replace(/[^\d+]/g,'') + '?text=' + text : 'https://wa.me/?text=' + text), '_blank');
+        }
+
         function renderAnalytics() {
             var el = document.getElementById('analyticsContent');
             if (!el) return;
@@ -12325,6 +12797,13 @@
             _analyticsCharts = [];
 
             var records = getDailyDataForSite();
+            // Apply date range filter from period selector
+            (function(){
+                var af = _analyticsPeriod.from, at = _analyticsPeriod.to;
+                if (af || at) records = records.filter(function(r){
+                    return r.date && (!af || r.date >= af) && (!at || r.date <= at);
+                });
+            })();
             var fC = function(v){ return Number(v).toLocaleString('fr-CA',{style:'currency',currency:'CAD',minimumFractionDigits:0}); };
             var kpi = function(lbl,val,cls,sub){
                 return '<div class="ged-content-panel rounded-xl px-5 py-4"><p class="text-[10px] uppercase tracking-widest font-semibold mb-1" style="color:#64748B">'+lbl+'</p>'+
@@ -12505,6 +12984,8 @@
 
             var machCols = ['#F5B800','#FF6B00','#1E3A5F','#28A745','#6366F1','#EC4899','#14B8A6','#F97316'];
             var machIds = machines.map(function(m){return m.id;});
+            var _role = (typeof currentUser !== 'undefined' && currentUser) ? (currentUser.role || '') : '';
+            var _showFinance = isManagementRole(_role);
 
             // ── Detail table ──────────────────────────────────────
             var tblRows = machines.map(function(m,i){
@@ -12544,7 +13025,7 @@
                 kpi('Carburant total',totF.toFixed(0)+' L','',totH>0?(totF/totH).toFixed(1)+' L/h moy.':'')+
                 kpi('Disponibilité',avgAvail.toFixed(1)+'%',avgAvail>=80?'text-green-600':avgAvail>=60?'text-amber-600':'text-red-600',availMachines.length+' machines')+
                 kpi('Machines actives',machines.length,'',drills.filter(function(d){return d.status==='EN FORAGE';}).length+' en forage')+
-                kpi('Coût PM/mètre',totM>0?effCpm.toFixed(2)+' $/m':'—','',totM>0?'maintenance directe':'')+
+                (_showFinance ? kpi('Coût PM/mètre',totM>0?effCpm.toFixed(2)+' $/m':'—','',totM>0?'maintenance directe':'') : '')+
                 '</div>'+
                 '<div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">'+
                 '<div class="ged-content-panel rounded-xl p-5"><p class="text-[11px] uppercase tracking-widest font-semibold mb-3" style="color:#64748B">Mètres forés par machine</p><canvas id="chartMachineMeters" height="220"></canvas></div>'+
@@ -12606,6 +13087,20 @@
                 '<div class="px-5 py-2 text-xs" style="color:#94A3B8;background:rgba(0,0,0,0.02)">Coût/m = coûts du chantier sur la période répartis par heures machine, divisés par les mètres (une machine plus lente ressort avec un coût/m plus élevé).</div></div>'+
                 planVsActualHtml+
                 reliabilityHtml;
+
+            // Store computed summary for WhatsApp share
+            window._analyticsSummary = {
+                period: { from: _analyticsPeriod.from || (sortedDates[0]||'—'), to: _analyticsPeriod.to || (sortedDates[sortedDates.length-1]||'—') },
+                production: { totalMeters: totM, totalHours: totH, avgROP: totH>0?(totM/totH).toFixed(2):null, drillCount: machines.length },
+                maintenance: { totalInterventions: Object.values(maintMap).reduce(function(s,m){return s+m.count;},0) },
+                stock: null
+            };
+            // Enrich summary from server analytics API (async, background)
+            if (window.API && window.API.Analytics) {
+                window.API.Analytics.getSummary(_analyticsPeriod.from, _analyticsPeriod.to)
+                    .then(function(d){ window._analyticsSummary = d; })
+                    .catch(function(){});
+            }
 
             // ── Charts ────────────────────────────────────────────
             var chartDefaults = {
@@ -26372,7 +26867,7 @@
             ['restrictConnections', 'connections'], ['restrictAssignments', 'assignments'],
             ['restrictMaintenance', 'maintenance'],
             ['restrictBitSharpening', 'bit_sharpening'], ['restrictConsumables', 'consumables'],
-            ['restrictHSE', 'hse'], ['restrictSouterrain', 'souterrain'], ['restrictAnalytics', 'analytics'],
+            ['restrictHSE', 'hse'], ['restrictSouterrain', 'souterrain'], ['restrictCarriere', 'carriere'], ['restrictAnalytics', 'analytics'],
             ['restrictPlanification', 'planification'], ['restrictBesoins', 'besoins'],
             ['restrictRentabilite', 'rentabilite'], ['restrictDepensesPM', 'depenses_pm'],
             ['restrictInvoices', 'invoices'], ['restrictPayments', 'payments'],
@@ -32368,6 +32863,131 @@
         })();
 
         console.log('Application initialisée');
+
+        // ── Centre d'alertes ────────────────────────────────────────
+        (function() {
+            var panelOpen = false;
+
+            // Injecter le HTML du panneau dans le body
+            var panel = document.createElement('div');
+            panel.id = 'gedAlertPanel';
+            panel.setAttribute('role', 'dialog');
+            panel.setAttribute('aria-label', 'Centre d\'alertes');
+            panel.innerHTML =
+                '<div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:2px solid #F1F5F9;background:#1A0900">' +
+                    '<div style="display:flex;align-items:center;gap:10px">' +
+                        '<span style="font-size:20px">🔔</span>' +
+                        '<div><p style="margin:0;color:#FFCD00;font-weight:800;font-size:16px;letter-spacing:.03em">CENTRE D\'ALERTES</p>' +
+                        '<p id="gedAlertSummary" style="margin:0;color:#94A3B8;font-size:12px">Chargement...</p></div>' +
+                    '</div>' +
+                    '<button type="button" onclick="closeAlertPanel()" aria-label="Fermer" style="background:none;border:none;color:#94A3B8;font-size:22px;cursor:pointer;padding:4px 8px;border-radius:6px">×</button>' +
+                '</div>' +
+                '<div id="gedAlertList" style="flex:1;overflow-y:auto;padding:12px 16px"></div>' +
+                '<div style="padding:12px 16px;border-top:1px solid #F1F5F9">' +
+                    '<button type="button" onclick="loadAlerts()" style="width:100%;padding:9px;border-radius:9px;background:#F1F5F9;border:none;color:#475569;font-weight:700;font-size:13px;cursor:pointer">↻ Actualiser</button>' +
+                '</div>';
+            document.body.appendChild(panel);
+
+            var overlay = document.createElement('div');
+            overlay.id = 'gedAlertPanelOverlay';
+            overlay.onclick = function() { closeAlertPanel(); };
+            document.body.appendChild(overlay);
+
+            window.toggleAlertPanel = function() { panelOpen ? closeAlertPanel() : openAlertPanel(); };
+
+            window.openAlertPanel = function() {
+                panelOpen = true;
+                panel.classList.add('is-open');
+                overlay.classList.add('is-open');
+                loadAlerts();
+            };
+
+            window.closeAlertPanel = function() {
+                panelOpen = false;
+                panel.classList.remove('is-open');
+                overlay.classList.remove('is-open');
+            };
+
+            window.loadAlerts = function() {
+                var list = document.getElementById('gedAlertList');
+                var summary = document.getElementById('gedAlertSummary');
+                if (list) list.innerHTML = '<p style="color:#94A3B8;text-align:center;padding:28px">Chargement...</p>';
+                if (!window.API || !API.Alerts) return;
+                API.Alerts.getAll()
+                    .then(function(data) {
+                        updateAlertBadge(data.total, data.critical);
+                        if (summary) {
+                            if (data.total === 0) summary.textContent = 'Aucune alerte active';
+                            else summary.textContent = data.critical + ' critique(s) · ' + data.warning + ' avertissement(s) · ' + data.info + ' info(s)';
+                        }
+                        renderAlertList(data, list);
+                    })
+                    .catch(function(e) {
+                        if (list) list.innerHTML = '<p style="color:#DC2626;text-align:center;padding:28px">Erreur : ' + escapeHtml(e.message || 'inconnue') + '</p>';
+                    });
+            };
+
+            window.updateAlertBadge = function(total, critical) {
+                var badge = document.getElementById('gedAlertBadge');
+                var btn = document.getElementById('gedAlertBtn');
+                if (!badge) return;
+                if (total === 0) {
+                    badge.style.display = 'none';
+                    if (btn) btn.classList.remove('ged-alert-btn-active');
+                } else {
+                    badge.style.display = 'inline-flex';
+                    badge.textContent = total > 99 ? '99+' : String(total);
+                    badge.style.background = critical > 0 ? '#DC2626' : '#D97706';
+                    if (btn) {
+                        if (critical > 0) btn.classList.add('ged-alert-btn-active');
+                        else btn.classList.remove('ged-alert-btn-active');
+                        btn.style.borderColor = critical > 0 ? '#DC2626' : '#D97706';
+                    }
+                }
+            };
+
+            var ALERT_ICONS = { critical: '🔴', warning: '🟡', info: '🔵' };
+            var ALERT_LABELS = {
+                maintenance_overdue: 'Révision en retard',
+                stock_critical: 'Stock critique',
+                contract_expired: 'Contrat expiré',
+                contract_expiring: 'Contrat expire bientôt',
+                invoice_overdue: 'Facture en souffrance',
+                no_daily_entry: 'Saisie manquante'
+            };
+
+            window.renderAlertList = function(data, list) {
+                if (!list) list = document.getElementById('gedAlertList');
+                if (!list) return;
+                if (!data.items || data.items.length === 0) {
+                    list.innerHTML = '<div style="text-align:center;padding:36px 16px"><div style="font-size:40px;margin-bottom:12px">✅</div>' +
+                        '<p style="color:#15803D;font-weight:700;font-size:15px;margin:0">Aucune alerte active</p>' +
+                        '<p style="color:#94A3B8;font-size:13px;margin:6px 0 0">Toutes les opérations sont dans les normes.</p></div>';
+                    return;
+                }
+                list.innerHTML = data.items.map(function(item) {
+                    var bg = item.severity === 'critical' ? '#FEF2F2' : item.severity === 'warning' ? '#FFFBEB' : '#EFF6FF';
+                    var bord = item.severity === 'critical' ? '#DC2626' : item.severity === 'warning' ? '#D97706' : '#3B82F6';
+                    return '<div style="margin-bottom:10px;padding:12px 14px;border-radius:10px;background:' + bg + ';border-left:4px solid ' + bord + '">' +
+                        '<div style="display:flex;align-items:center;gap:7px;margin-bottom:4px">' +
+                            (ALERT_ICONS[item.severity] || '⚪') + ' ' +
+                            '<span style="font-size:11px;font-weight:800;color:' + bord + ';text-transform:uppercase;letter-spacing:.08em">' + escapeHtml(ALERT_LABELS[item.type] || item.type) + '</span>' +
+                        '</div>' +
+                        '<p style="margin:0;font-size:13px;color:#1E293B;font-weight:600;line-height:1.4">' + escapeHtml(item.message) + '</p>' +
+                        '</div>';
+                }).join('');
+            };
+
+            // Rafraîchir le badge toutes les 5 minutes (compte uniquement, sans ouvrir le panneau)
+            setInterval(function() {
+                if (window.API && API.Alerts && window._isAuthenticated) {
+                    API.Alerts.getAll()
+                        .then(function(d) { updateAlertBadge(d.total, d.critical); })
+                        .catch(function() {});
+                }
+            }, 5 * 60 * 1000);
+        })();
+
     </script>
     <!-- Barre de bascule GOOD ENGINEERS (cookie ge_switchbar posé par /sso). -->
     <script>
@@ -32973,6 +33593,266 @@
                 e.target.style.height = Math.min(e.target.scrollHeight, 100) + 'px';
             }
         });
+    })();
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // RAPPORT HEBDOMADAIRE — vue + logique
+    // ══════════════════════════════════════════════════════════════════════════
+    (function() {
+        var _wrConfig = null;
+        var _wrHistory = [];
+        var _wrCurrentHtml = null;
+
+        // ── Rendu de la vue principale ─────────────────────────────────────────
+        window.renderWeeklyReportView = function() {
+            var el = document.getElementById('weeklyReportContent');
+            if (!el) return;
+            el.innerHTML = '<div class="p-6 text-center text-slate-400">Chargement...</div>';
+            Promise.all([
+                window.API.WeeklyReport.getConfig(),
+                window.API.WeeklyReport.getHistory()
+            ]).then(function(results) {
+                _wrConfig  = results[0];
+                _wrHistory = results[1];
+                el.innerHTML = buildWeeklyReportPage();
+            }).catch(function(err) {
+                el.innerHTML = '<div class="p-6 text-red-400">Erreur : ' + err.message + '</div>';
+            });
+        };
+
+        function buildWeeklyReportPage() {
+            var days = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
+            var sectionOpts = [
+                { key:'alerts',      label:'Alertes opérationnelles' },
+                { key:'production',  label:'Production de forage' },
+                { key:'maintenance', label:'Maintenance' },
+                { key:'stock',       label:'Stock' },
+                { key:'finance',     label:'Finance' }
+            ];
+            var inc = Array.isArray(_wrConfig.includeSections) ? _wrConfig.includeSections : [];
+
+            var sectionChecks = sectionOpts.map(function(s) {
+                var chk = inc.indexOf(s.key) >= 0 ? 'checked' : '';
+                return '<label class="flex items-center gap-2 text-sm cursor-pointer">' +
+                    '<input type="checkbox" class="wr-section-chk" value="' + s.key + '" ' + chk + ' style="accent-color:#F5B800">' +
+                    s.label + '</label>';
+            }).join('');
+
+            var dayOpts = days.map(function(d, i) {
+                var sel = (_wrConfig.reportDay === i) ? 'selected' : '';
+                return '<option value="' + i + '" ' + sel + '>' + d + '</option>';
+            }).join('');
+
+            var historyRows = _wrHistory.length === 0
+                ? '<tr><td colspan="4" class="text-center text-slate-400 py-4 text-sm">Aucun rapport généré</td></tr>'
+                : _wrHistory.map(function(r) {
+                    var sum = r.summary || {};
+                    var prod = sum.production || {};
+                    var crit = (sum.alerts || {}).critical || 0;
+                    return '<tr class="border-b border-slate-700 hover:bg-slate-800/40">' +
+                        '<td class="px-4 py-2 text-sm">' + fmtWRDate(r.weekStart) + ' – ' + fmtWRDate(r.weekEnd) + '</td>' +
+                        '<td class="px-4 py-2 text-sm text-center">' + (prod.totalMeters || 0) + ' m</td>' +
+                        '<td class="px-4 py-2 text-sm text-center">' +
+                            (crit > 0 ? '<span style="color:#DC2626;font-weight:700">' + crit + ' crit.</span>' : '—') +
+                        '</td>' +
+                        '<td class="px-4 py-2 text-sm">' +
+                            '<button onclick="wrViewReport(' + r.id + ')" class="text-blue-400 hover:underline mr-3">Voir</button>' +
+                            '<button onclick="wrDownloadReport(' + r.id + ')" class="text-green-400 hover:underline mr-3">⬇ HTML</button>' +
+                            ((_wrConfig.whatsappNumber) ? '<button onclick="wrShareWhatsApp(' + r.id + ')" class="text-green-400 hover:underline">WhatsApp</button>' : '') +
+                        '</td></tr>';
+                }).join('');
+
+            return '<div class="grid gap-6" style="max-width:860px">' +
+                // Config card
+                '<div class="bg-slate-800/60 border border-slate-700 rounded-xl p-5">' +
+                    '<h3 class="font-bold text-sm uppercase tracking-widest mb-4" style="color:#F5B800">Configuration</h3>' +
+                    '<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">' +
+                        '<div>' +
+                            '<label class="block text-xs text-slate-400 mb-1">Jour de génération automatique</label>' +
+                            '<select id="wrDaySelect" class="w-full rounded px-3 py-2 bg-slate-700 border border-slate-600 text-sm">' + dayOpts + '</select>' +
+                        '</div>' +
+                        '<div>' +
+                            '<label class="block text-xs text-slate-400 mb-1">N° WhatsApp destinataire (avec indicatif)</label>' +
+                            '<input id="wrWaNumber" type="tel" value="' + (_wrConfig.whatsappNumber || '') + '" placeholder="ex: 22670000000" class="w-full rounded px-3 py-2 bg-slate-700 border border-slate-600 text-sm">' +
+                        '</div>' +
+                        '<div>' +
+                            '<label class="block text-xs text-slate-400 mb-1">Nom du destinataire</label>' +
+                            '<input id="wrRecipient" type="text" value="' + (_wrConfig.recipientName || '') + '" placeholder="Direction" class="w-full rounded px-3 py-2 bg-slate-700 border border-slate-600 text-sm">' +
+                        '</div>' +
+                    '</div>' +
+                    '<div class="mt-4">' +
+                        '<label class="block text-xs text-slate-400 mb-2">Sections à inclure</label>' +
+                        '<div class="flex flex-wrap gap-4">' + sectionChecks + '</div>' +
+                    '</div>' +
+                    '<div class="mt-4 flex gap-3">' +
+                        '<button onclick="wrSaveConfig()" class="px-4 py-2 rounded font-semibold text-sm" style="background:#F5B800;color:#063D2B">Enregistrer</button>' +
+                    '</div>' +
+                '</div>' +
+                // Generate card
+                '<div class="bg-slate-800/60 border border-slate-700 rounded-xl p-5">' +
+                    '<h3 class="font-bold text-sm uppercase tracking-widest mb-4" style="color:#F5B800">Générer le rapport</h3>' +
+                    '<div class="flex gap-3 flex-wrap items-end">' +
+                        '<div>' +
+                            '<label class="block text-xs text-slate-400 mb-1">Semaine de référence (lundi)</label>' +
+                            '<input id="wrWeekStart" type="date" class="rounded px-3 py-2 bg-slate-700 border border-slate-600 text-sm">' +
+                        '</div>' +
+                        '<button onclick="wrGenerate()" id="wrGenerateBtn" class="px-5 py-2 rounded font-bold text-sm" style="background:#063D2B;color:#F5B800;border:1px solid #F5B800">📊 Générer</button>' +
+                    '</div>' +
+                    '<div id="wrGenerateResult" class="mt-4"></div>' +
+                '</div>' +
+                // Preview pane
+                '<div id="wrPreviewPane" class="hidden bg-slate-800/60 border border-slate-700 rounded-xl overflow-hidden">' +
+                    '<div class="flex items-center justify-between px-5 py-3 border-b border-slate-700">' +
+                        '<h3 class="font-bold text-sm uppercase tracking-widest" style="color:#F5B800">Prévisualisation</h3>' +
+                        '<div class="flex gap-2">' +
+                            '<button id="wrDownloadBtn" onclick="wrDownloadCurrent()" class="px-3 py-1 rounded text-xs font-semibold bg-green-700 hover:bg-green-600 text-white">⬇ Télécharger HTML</button>' +
+                            '<button id="wrWhatsAppBtn" onclick="wrShareCurrentWhatsApp()" class="px-3 py-1 rounded text-xs font-semibold text-white" style="background:#25D366">WhatsApp</button>' +
+                        '</div>' +
+                    '</div>' +
+                    '<iframe id="wrPreviewFrame" style="width:100%;height:520px;border:none;background:#fff;"></iframe>' +
+                '</div>' +
+                // History
+                '<div class="bg-slate-800/60 border border-slate-700 rounded-xl p-5">' +
+                    '<h3 class="font-bold text-sm uppercase tracking-widest mb-4" style="color:#F5B800">Historique</h3>' +
+                    '<div class="overflow-x-auto">' +
+                        '<table class="w-full text-sm"><thead class="border-b border-slate-600">' +
+                        '<tr><th class="px-4 py-2 text-left text-xs uppercase tracking-wider">Semaine</th>' +
+                        '<th class="px-4 py-2 text-center text-xs uppercase tracking-wider">Mètres</th>' +
+                        '<th class="px-4 py-2 text-center text-xs uppercase tracking-wider">Alertes</th>' +
+                        '<th class="px-4 py-2 text-left text-xs uppercase tracking-wider">Actions</th></tr></thead>' +
+                        '<tbody>' + historyRows + '</tbody></table>' +
+                    '</div>' +
+                '</div>' +
+            '</div>';
+        }
+
+        function fmtWRDate(d) {
+            if (!d) return '';
+            var p = d.split('-');
+            return p[2] + '/' + p[1] + '/' + p[0];
+        }
+
+        // ── Enregistrement config ──────────────────────────────────────────────
+        window.wrSaveConfig = function() {
+            var sections = [];
+            document.querySelectorAll('.wr-section-chk:checked').forEach(function(c) { sections.push(c.value); });
+            var payload = {
+                reportDay:      parseInt(document.getElementById('wrDaySelect').value, 10),
+                whatsappNumber: (document.getElementById('wrWaNumber').value || '').trim(),
+                recipientName:  (document.getElementById('wrRecipient').value || '').trim(),
+                includeSections: sections
+            };
+            window.API.WeeklyReport.saveConfig(payload).then(function() {
+                _wrConfig = Object.assign({}, _wrConfig, payload);
+                if (typeof showGedToast === 'function') showGedToast('Configuration enregistrée', 'success');
+            }).catch(function(err) {
+                if (typeof showGedToast === 'function') showGedToast('Erreur : ' + err.message, 'error');
+            });
+        };
+
+        // ── Génération ─────────────────────────────────────────────────────────
+        window.wrGenerate = function() {
+            var btn = document.getElementById('wrGenerateBtn');
+            var resultEl = document.getElementById('wrGenerateResult');
+            if (btn) { btn.disabled = true; btn.textContent = '⏳ Génération…'; }
+            if (resultEl) resultEl.innerHTML = '';
+
+            var weekStartInput = document.getElementById('wrWeekStart');
+            var weekStart = weekStartInput ? weekStartInput.value : null;
+
+            window.API.WeeklyReport.run(weekStart || null).then(function(data) {
+                if (btn) { btn.disabled = false; btn.textContent = '📊 Générer'; }
+                _wrCurrentHtml = null;
+                return window.API.WeeklyReport.getReportHtml(data.id).then(function(html) {
+                    _wrCurrentHtml = html;
+                    _wrCurrentId = data.id;
+                    // Afficher la prévisualisation
+                    var pane = document.getElementById('wrPreviewPane');
+                    var frame = document.getElementById('wrPreviewFrame');
+                    if (pane && frame) {
+                        pane.classList.remove('hidden');
+                        var blob = new Blob([html], { type: 'text/html' });
+                        var url = URL.createObjectURL(blob);
+                        frame.src = url;
+                    }
+                    if (resultEl) resultEl.innerHTML = '<p class="text-green-400 text-sm mt-2">Rapport généré · semaine du ' + fmtWRDate(data.weekStart) + ' au ' + fmtWRDate(data.weekEnd) + '</p>';
+                    // Rafraîchir historique
+                    return window.API.WeeklyReport.getHistory();
+                });
+            }).then(function(hist) {
+                if (hist) { _wrHistory = hist; }
+            }).catch(function(err) {
+                if (btn) { btn.disabled = false; btn.textContent = '📊 Générer'; }
+                if (resultEl) resultEl.innerHTML = '<p class="text-red-400 text-sm mt-2">Erreur : ' + err.message + '</p>';
+            });
+        };
+
+        var _wrCurrentId = null;
+
+        window.wrViewReport = function(id) {
+            window.API.WeeklyReport.getReportHtml(id).then(function(html) {
+                _wrCurrentHtml = html;
+                _wrCurrentId = id;
+                var pane = document.getElementById('wrPreviewPane');
+                var frame = document.getElementById('wrPreviewFrame');
+                if (pane && frame) {
+                    pane.classList.remove('hidden');
+                    var blob = new Blob([html], { type: 'text/html' });
+                    frame.src = URL.createObjectURL(blob);
+                    pane.scrollIntoView({ behavior: 'smooth' });
+                }
+            }).catch(function(err) {
+                if (typeof showGedToast === 'function') showGedToast('Erreur : ' + err.message, 'error');
+            });
+        };
+
+        window.wrDownloadReport = function(id) {
+            window.API.WeeklyReport.getReportHtml(id).then(function(html) {
+                var blob = new Blob([html], { type: 'text/html' });
+                var a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = 'rapport-hebdo-' + id + '.html';
+                a.click();
+            });
+        };
+
+        window.wrDownloadCurrent = function() {
+            if (!_wrCurrentHtml) return;
+            var blob = new Blob([_wrCurrentHtml], { type: 'text/html' });
+            var a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'rapport-hebdo-' + (_wrCurrentId || 'export') + '.html';
+            a.click();
+        };
+
+        window.wrShareCurrentWhatsApp = function() {
+            if (!_wrConfig || !_wrConfig.whatsappNumber) {
+                if (typeof showGedToast === 'function') showGedToast('Configurez d\'abord un numéro WhatsApp', 'warning');
+                return;
+            }
+            var recipName = (_wrConfig.recipientName || 'Bonjour').trim();
+            var text = encodeURIComponent(
+                recipName + ',\n\nVeuillez trouver ci-joint le rapport hebdomadaire GEDRILLING.\n' +
+                'Généré le ' + new Date().toLocaleString('fr-FR') + '.\n\n— GOOD ENGINEERS'
+            );
+            var wa = (_wrConfig.whatsappNumber || '').replace(/[^\d]/g, '');
+            window.open('https://wa.me/' + wa + '?text=' + text, '_blank');
+        };
+
+        window.wrShareWhatsApp = function(id) {
+            if (!_wrConfig || !_wrConfig.whatsappNumber) {
+                if (typeof showGedToast === 'function') showGedToast('Configurez d\'abord un numéro WhatsApp', 'warning');
+                return;
+            }
+            var r = _wrHistory.find(function(x) { return x.id === id; });
+            var period = r ? (' du ' + fmtWRDate(r.weekStart) + ' au ' + fmtWRDate(r.weekEnd)) : '';
+            var recipName = (_wrConfig.recipientName || 'Bonjour').trim();
+            var text = encodeURIComponent(
+                recipName + ',\n\nRapport hebdomadaire GEDRILLING' + period + '.\nGénéré le ' + new Date().toLocaleString('fr-FR') + '.\n\n— GOOD ENGINEERS'
+            );
+            var wa = (_wrConfig.whatsappNumber || '').replace(/[^\d]/g, '');
+            window.open('https://wa.me/' + wa + '?text=' + text, '_blank');
+        };
     })();
     </script>
 </body>

@@ -322,6 +322,29 @@ const migrations = [
         createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (enterpriseId) REFERENCES enterprises(id),
         FOREIGN KEY (invoiceId) REFERENCES invoices(id)
+    )` },
+    // Rapport hebdomadaire configurable (Item B)
+    { name: 'weeklyReportConfigs.table', sql: `CREATE TABLE IF NOT EXISTS weeklyReportConfigs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        enterpriseId INTEGER NOT NULL,
+        reportDay INTEGER DEFAULT 5,
+        includeSections TEXT DEFAULT '["alerts","production","maintenance","stock","finance"]',
+        recipientName TEXT DEFAULT '',
+        whatsappNumber TEXT DEFAULT '',
+        notes TEXT DEFAULT '',
+        updatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (enterpriseId) REFERENCES enterprises(id)
+    )` },
+    { name: 'weeklyReports.table', sql: `CREATE TABLE IF NOT EXISTS weeklyReports (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        enterpriseId INTEGER NOT NULL,
+        weekStart TEXT NOT NULL,
+        weekEnd TEXT NOT NULL,
+        generatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
+        generatedBy TEXT DEFAULT '',
+        htmlContent TEXT DEFAULT '',
+        summary TEXT DEFAULT '{}',
+        FOREIGN KEY (enterpriseId) REFERENCES enterprises(id)
     )` }
 ];
 

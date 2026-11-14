@@ -640,6 +640,75 @@ async function saveAllData(data) {
     }
 }
 
+// ============================================
+// API ALERTES
+// ============================================
+const AlertsAPI = {
+    async getAll() {
+        const base = getApiBaseUrl();
+        const headers = { 'Content-Type': 'application/json' };
+        const eid = getEnterpriseId();
+        if (eid) headers['X-Enterprise-Id'] = eid;
+        const resp = await fetch(`${base}/alerts`, { credentials: 'include', headers });
+        if (!resp.ok) throw new Error(`Alertes : ${resp.status}`);
+        return resp.json();
+    }
+};
+
+// ============================================
+// API RAPPORT HEBDOMADAIRE
+// ============================================
+function wrFetch(path, opts) {
+    const base = getApiBaseUrl();
+    const headers = Object.assign({ 'Content-Type': 'application/json' }, opts && opts.headers);
+    const eid = getEnterpriseId();
+    if (eid) headers['X-Enterprise-Id'] = eid;
+    return fetch(`${base}${path}`, Object.assign({ credentials: 'include', headers }, opts));
+}
+
+const WeeklyReportAPI = {
+    async getConfig() {
+        const r = await wrFetch('/reports/weekly/config');
+        if (!r.ok) throw new Error(`Config rapport : ${r.status}`);
+        return r.json();
+    },
+    async saveConfig(payload) {
+        const r = await wrFetch('/reports/weekly/config', { method: 'PUT', body: JSON.stringify(payload) });
+        if (!r.ok) throw new Error(`Sauvegarde config : ${r.status}`);
+        return r.json();
+    },
+    async run(weekStart) {
+        const body = weekStart ? JSON.stringify({ weekStart }) : '{}';
+        const r = await wrFetch('/reports/weekly/run', { method: 'POST', body });
+        if (!r.ok) {
+            const e = await r.json().catch(() => ({}));
+            throw new Error(e.error || `Génération : ${r.status}`);
+        }
+        return r.json();
+    },
+    async getHistory() {
+        const r = await wrFetch('/reports/weekly');
+        if (!r.ok) throw new Error(`Historique : ${r.status}`);
+        return r.json();
+    },
+    async getReportHtml(id) {
+        const r = await wrFetch(`/reports/weekly/${id}`);
+        if (!r.ok) throw new Error(`Rapport #${id} : ${r.status}`);
+        return r.text();
+    }
+};
+
+const AnalyticsAPI = {
+    async getSummary(from, to) {
+        const params = new URLSearchParams();
+        if (from) params.set('from', from);
+        if (to)   params.set('to',   to);
+        const r = await wrFetch(`/analytics/summary?${params}`);
+        if (!r.ok) throw new Error(`Analytics : ${r.status}`);
+        return r.json();
+    }
+};
+
 // Exporter pour utilisation globale
 if (typeof window !== 'undefined') {
     window.API = {
@@ -676,6 +745,9 @@ if (typeof window !== 'undefined') {
         WorkerChat: WorkerChatAPI,
         CompanyInfo: CompanyInfoAPI,
         ReportDist: ReportDistAPI,
+        Alerts: AlertsAPI,
+        WeeklyReport: WeeklyReportAPI,
+        Analytics: AnalyticsAPI,
         loadAllData,
         saveAllData
     };
