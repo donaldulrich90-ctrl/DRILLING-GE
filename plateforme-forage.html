@@ -1036,6 +1036,22 @@
         @media (prefers-reduced-motion: reduce) {
             *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
         }
+        /* ── Centre d'alertes ──────────────────────────────────────── */
+        #gedAlertPanel {
+            position: fixed; top: 0; right: 0; width: min(400px, 96vw); height: 100vh;
+            background: #fff; box-shadow: -4px 0 30px rgba(0,0,0,0.18);
+            z-index: 9900; display: flex; flex-direction: column;
+            transform: translateX(100%); transition: transform .28s cubic-bezier(.2,.8,.2,1);
+        }
+        #gedAlertPanel.is-open { transform: translateX(0); }
+        #gedAlertPanelOverlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.35);
+            z-index: 9899; display: none;
+        }
+        #gedAlertPanelOverlay.is-open { display: block; }
+        #gedAlertList { flex: 1; overflow-y: auto; padding: 12px 16px; }
+        .ged-alert-btn-active { border-color: #DC2626 !important; animation: gedAlertPulse 1.6s ease-in-out infinite; }
+        @keyframes gedAlertPulse { 0%,100%{box-shadow:0 0 0 0 rgba(220,38,38,.4)} 50%{box-shadow:0 0 0 6px rgba(220,38,38,0)} }
  </style>
     <link rel="stylesheet" href="/gedrilling-login.css">
     <link rel="stylesheet" href="/gedrilling-platform-theme.css">
@@ -1210,6 +1226,10 @@
                                 <option value="" data-i18n="common.all_sites">Tous les sites</option>
                             </select>
                         </div>
+                        <button type="button" id="gedAlertBtn" onclick="toggleAlertPanel()" title="Centre d'alertes" style="position:relative;display:inline-flex;align-items:center;gap:5px;padding:7px 12px;border-radius:9px;border:2px solid var(--ged-border);background:var(--ged-panel-bg);color:var(--ged-black);font-weight:700;font-size:13px;cursor:pointer;transition:border-color .2s">
+                            <span aria-hidden="true" style="font-size:16px">🔔</span>
+                            <span id="gedAlertBadge" style="display:none;position:absolute;top:-6px;right:-6px;background:#DC2626;color:#fff;border-radius:999px;min-width:18px;height:18px;font-size:11px;font-weight:800;align-items:center;justify-content:center;padding:0 4px">0</span>
+                        </button>
                         <span class="text-sm font-bold text-ged-black px-2 py-1 bg-gray-100 rounded border border-gray-200" id="currentUser">Admin</span>
                         <button type="button" onclick="openChangePasswordModal()" class="ged-btn-secondary px-3 py-2 rounded-lg text-sm" title="Modifier votre mot de passe">Mot de passe</button>
                         <div id="headerEnterpriseLogo" class="flex items-center justify-end min-w-[100px]" style="flex: 0 0 auto;"></div>
@@ -21675,6 +21695,131 @@
         })();
 
         console.log('Application initialisée');
+
+        // ── Centre d'alertes ────────────────────────────────────────
+        (function() {
+            var panelOpen = false;
+
+            // Injecter le HTML du panneau dans le body
+            var panel = document.createElement('div');
+            panel.id = 'gedAlertPanel';
+            panel.setAttribute('role', 'dialog');
+            panel.setAttribute('aria-label', 'Centre d\'alertes');
+            panel.innerHTML =
+                '<div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:2px solid #F1F5F9;background:#1A0900">' +
+                    '<div style="display:flex;align-items:center;gap:10px">' +
+                        '<span style="font-size:20px">🔔</span>' +
+                        '<div><p style="margin:0;color:#FFCD00;font-weight:800;font-size:16px;letter-spacing:.03em">CENTRE D\'ALERTES</p>' +
+                        '<p id="gedAlertSummary" style="margin:0;color:#94A3B8;font-size:12px">Chargement...</p></div>' +
+                    '</div>' +
+                    '<button type="button" onclick="closeAlertPanel()" aria-label="Fermer" style="background:none;border:none;color:#94A3B8;font-size:22px;cursor:pointer;padding:4px 8px;border-radius:6px">×</button>' +
+                '</div>' +
+                '<div id="gedAlertList" style="flex:1;overflow-y:auto;padding:12px 16px"></div>' +
+                '<div style="padding:12px 16px;border-top:1px solid #F1F5F9">' +
+                    '<button type="button" onclick="loadAlerts()" style="width:100%;padding:9px;border-radius:9px;background:#F1F5F9;border:none;color:#475569;font-weight:700;font-size:13px;cursor:pointer">↻ Actualiser</button>' +
+                '</div>';
+            document.body.appendChild(panel);
+
+            var overlay = document.createElement('div');
+            overlay.id = 'gedAlertPanelOverlay';
+            overlay.onclick = function() { closeAlertPanel(); };
+            document.body.appendChild(overlay);
+
+            window.toggleAlertPanel = function() { panelOpen ? closeAlertPanel() : openAlertPanel(); };
+
+            window.openAlertPanel = function() {
+                panelOpen = true;
+                panel.classList.add('is-open');
+                overlay.classList.add('is-open');
+                loadAlerts();
+            };
+
+            window.closeAlertPanel = function() {
+                panelOpen = false;
+                panel.classList.remove('is-open');
+                overlay.classList.remove('is-open');
+            };
+
+            window.loadAlerts = function() {
+                var list = document.getElementById('gedAlertList');
+                var summary = document.getElementById('gedAlertSummary');
+                if (list) list.innerHTML = '<p style="color:#94A3B8;text-align:center;padding:28px">Chargement...</p>';
+                if (!window.API || !API.Alerts) return;
+                API.Alerts.getAll()
+                    .then(function(data) {
+                        updateAlertBadge(data.total, data.critical);
+                        if (summary) {
+                            if (data.total === 0) summary.textContent = 'Aucune alerte active';
+                            else summary.textContent = data.critical + ' critique(s) · ' + data.warning + ' avertissement(s) · ' + data.info + ' info(s)';
+                        }
+                        renderAlertList(data, list);
+                    })
+                    .catch(function(e) {
+                        if (list) list.innerHTML = '<p style="color:#DC2626;text-align:center;padding:28px">Erreur : ' + escapeHtml(e.message || 'inconnue') + '</p>';
+                    });
+            };
+
+            window.updateAlertBadge = function(total, critical) {
+                var badge = document.getElementById('gedAlertBadge');
+                var btn = document.getElementById('gedAlertBtn');
+                if (!badge) return;
+                if (total === 0) {
+                    badge.style.display = 'none';
+                    if (btn) btn.classList.remove('ged-alert-btn-active');
+                } else {
+                    badge.style.display = 'inline-flex';
+                    badge.textContent = total > 99 ? '99+' : String(total);
+                    badge.style.background = critical > 0 ? '#DC2626' : '#D97706';
+                    if (btn) {
+                        if (critical > 0) btn.classList.add('ged-alert-btn-active');
+                        else btn.classList.remove('ged-alert-btn-active');
+                        btn.style.borderColor = critical > 0 ? '#DC2626' : '#D97706';
+                    }
+                }
+            };
+
+            var ALERT_ICONS = { critical: '🔴', warning: '🟡', info: '🔵' };
+            var ALERT_LABELS = {
+                maintenance_overdue: 'Révision en retard',
+                stock_critical: 'Stock critique',
+                contract_expired: 'Contrat expiré',
+                contract_expiring: 'Contrat expire bientôt',
+                invoice_overdue: 'Facture en souffrance',
+                no_daily_entry: 'Saisie manquante'
+            };
+
+            window.renderAlertList = function(data, list) {
+                if (!list) list = document.getElementById('gedAlertList');
+                if (!list) return;
+                if (!data.items || data.items.length === 0) {
+                    list.innerHTML = '<div style="text-align:center;padding:36px 16px"><div style="font-size:40px;margin-bottom:12px">✅</div>' +
+                        '<p style="color:#15803D;font-weight:700;font-size:15px;margin:0">Aucune alerte active</p>' +
+                        '<p style="color:#94A3B8;font-size:13px;margin:6px 0 0">Toutes les opérations sont dans les normes.</p></div>';
+                    return;
+                }
+                list.innerHTML = data.items.map(function(item) {
+                    var bg = item.severity === 'critical' ? '#FEF2F2' : item.severity === 'warning' ? '#FFFBEB' : '#EFF6FF';
+                    var bord = item.severity === 'critical' ? '#DC2626' : item.severity === 'warning' ? '#D97706' : '#3B82F6';
+                    return '<div style="margin-bottom:10px;padding:12px 14px;border-radius:10px;background:' + bg + ';border-left:4px solid ' + bord + '">' +
+                        '<div style="display:flex;align-items:center;gap:7px;margin-bottom:4px">' +
+                            (ALERT_ICONS[item.severity] || '⚪') + ' ' +
+                            '<span style="font-size:11px;font-weight:800;color:' + bord + ';text-transform:uppercase;letter-spacing:.08em">' + escapeHtml(ALERT_LABELS[item.type] || item.type) + '</span>' +
+                        '</div>' +
+                        '<p style="margin:0;font-size:13px;color:#1E293B;font-weight:600;line-height:1.4">' + escapeHtml(item.message) + '</p>' +
+                        '</div>';
+                }).join('');
+            };
+
+            // Rafraîchir le badge toutes les 5 minutes (compte uniquement, sans ouvrir le panneau)
+            setInterval(function() {
+                if (window.API && API.Alerts && window._isAuthenticated) {
+                    API.Alerts.getAll()
+                        .then(function(d) { updateAlertBadge(d.total, d.critical); })
+                        .catch(function() {});
+                }
+            }, 5 * 60 * 1000);
+        })();
+
     </script>
 </body>
 </html>

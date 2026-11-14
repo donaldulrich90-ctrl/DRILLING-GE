@@ -559,6 +559,21 @@ async function saveAllData(data) {
     }
 }
 
+// ============================================
+// API ALERTES
+// ============================================
+const AlertsAPI = {
+    async getAll() {
+        const base = getApiBaseUrl();
+        const headers = { 'Content-Type': 'application/json' };
+        const eid = getEnterpriseId();
+        if (eid) headers['X-Enterprise-Id'] = eid;
+        const resp = await fetch(`${base}/alerts`, { credentials: 'include', headers });
+        if (!resp.ok) throw new Error(`Alertes : ${resp.status}`);
+        return resp.json();
+    }
+};
+
 // Exporter pour utilisation globale
 if (typeof window !== 'undefined') {
     window.API = {
@@ -590,6 +605,7 @@ if (typeof window !== 'undefined') {
         WorkerChat: WorkerChatAPI,
         CompanyInfo: CompanyInfoAPI,
         ReportDist: ReportDistAPI,
+        Alerts: AlertsAPI,
         loadAllData,
         saveAllData
     };

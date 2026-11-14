@@ -481,8 +481,18 @@ async function main() {
         assert.equal(stored.password, '', 'Aucun mot de passe en clair ne doit être stocké');
         assert.ok(stored.passwordHash && stored.passwordHash.startsWith('$2'), 'Le hash bcrypt doit être stocké');
 
+        // ── Centre d'alertes ────────────────────────────────────────
+        const alertsAnon = await request(baseUrl, '/api/alerts');
+        assert.equal(alertsAnon.status, 401, 'GET /api/alerts doit refuser un appel sans JWT');
+
+        const alertsOk = await request(baseUrl, '/api/alerts', { token: tokenA });
+        assert.equal(alertsOk.status, 200, JSON.stringify(alertsOk.body));
+        assert.ok(Array.isArray(alertsOk.body.items), 'items doit être un tableau');
+        assert.ok(typeof alertsOk.body.total === 'number', 'total doit être un nombre');
+        assert.ok(typeof alertsOk.body.critical === 'number', 'critical doit être un nombre');
+
         console.log('✅ Smoke test GEDRILLING réussi');
-        console.log('   santé API, JWT, isolation tenant, plans normalisés, workflow journalier, rôles et mots de passe vérifiés');
+        console.log('   santé API, JWT, isolation tenant, plans normalisés, workflow journalier, rôles, mots de passe et alertes vérifiés');
     } finally {
         if (server && server.exitCode == null) {
             server.kill();
