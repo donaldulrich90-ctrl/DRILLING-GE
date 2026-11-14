@@ -7159,6 +7159,95 @@
             initDashProductionChart();
         }
 
+        // ====================================================================
+        //  Bilan hebdomadaire configurable + moteur d'alertes opérationnelles
+        // ====================================================================
+        var GED_DIGEST_DEFAULTS = {
+            sections: { production: true, finance: true, equipment: true, stock: true, rh: false },
+            thresholds: { weeklyMetersTarget: 0, marginMinPct: 10, maintenanceLeadDays: 7 }
+        };
+        function _digestKey() { return 'ged_digest_cfg_' + (window.API && window.API.getEnterpriseId ? (window.API.getEnterpriseId() || '0') : '0'); }
+        function geLoadDigestConfig() {
+            try {
+                var raw = localStorage.getItem(_digestKey());
+                if (!raw) return JSON.parse(JSON.stringify(GED_DIGEST_DEFAULTS));
+                var c = JSON.parse(raw);
+                return { sections: Object.assign({}, GED_DIGEST_DEFAULTS.sections, c.sections || {}), thresholds: Object.assign({}, GED_DIGEST_DEFAULTS.thresholds, c.thresholds || {}) };
+            } catch (e) { return JSON.parse(JSON.stringify(GED_DIGEST_DEFAULTS)); }
+        }
+        function geSaveDigestConfig(cfg) { try { localStorage.setItem(_digestKey(), JSON.stringify(cfg)); } catch (e) {} }
+        function geDigestConfigHtml(cfg) {
+            function chk(id, label, on) { return '<label class="flex items-center gap-2 text-slate-300 text-sm py-1"><input type="checkbox" id="' + id + '" ' + (on ? 'checked' : '') + ' onchange="geSaveDigestConfigFromDom()" class="accent-amber-500"> ' + label + '</label>'; }
+            function num(id, label, val, suffix) { return '<label class="flex items-center justify-between gap-2 text-slate-300 text-sm py-1">' + label + '<span class="flex items-center gap-1"><input type="number" id="' + id + '" value="' + val + '" min="0" step="1" onchange="geSaveDigestConfigFromDom()" class="w-20 bg-slate-900 border border-slate-600 rounded px-2 py-1 text-white text-right">' + (suffix ? '<span class="text-slate-500 text-xs">' + suffix + '</span>' : '') + '</span></label>'; }
+            var s = cfg.sections, t = cfg.thresholds;
+            return '<div class="text-[11px] uppercase tracking-wide text-slate-500 mb-1">Sections incluses</div>'
+                + chk('digSecProd', '⛏️ Production', s.production) + chk('digSecFin', '💰 Finance / rentabilité', s.finance)
+                + chk('digSecEquip', '🔧 Équipements &amp; maintenance', s.equipment) + chk('digSecStock', '🧰 Stock', s.stock)
+                + chk('digSecRh', '👷 RH / présence', s.rh)
+                + '<div class="text-[11px] uppercase tracking-wide text-slate-500 mt-3 mb-1">Seuils d\'alerte</div>'
+                + num('digThMeters', 'Objectif mètres / semaine', t.weeklyMetersTarget, 'm')
+                + num('digThMargin', 'Marge minimale', t.marginMinPct, '%')
+                + num('digThMaint', 'Révision à venir sous', t.maintenanceLeadDays, 'jours');
+        }
+        window.geSaveDigestConfigFromDom = function() {
+            function b(id) { var e = document.getElementById(id); return e ? !!e.checked : false; }
+            function n(id, d) { var e = document.getElementById(id); var v = e ? parseFloat(e.value) : NaN; return isFinite(v) ? v : d; }
+            if (!document.getElementById('digSecProd')) return;
+            geSaveDigestConfig({
+                sections: { production: b('digSecProd'), finance: b('digSecFin'), equipment: b('digSecEquip'), stock: b('digSecStock'), rh: b('digSecRh') },
+                thresholds: { weeklyMetersTarget: n('digThMeters', 0), marginMinPct: n('digThMargin', 10), maintenanceLeadDays: n('digThMaint', 7) }
+            });
+        };
+        function _digestAddDays(dateStr, n) { var p = String(dateStr).slice(0, 10).split('-'); var d = new Date(Date.UTC(+p[0], +p[1] - 1, +p[2])); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+        // Moteur d'alertes opérationnelles sur une plage [from,to]. cfg = config du bilan.
+        function computeOperationalAlerts(fromStr, toStr, cfg) {
+            cfg = cfg || geLoadDigestConfig();
+            var th = cfg.thresholds || {}, out = [];
+            var recs = (dailyDataRecords || []).filter(function(r) { return r && r.date && r.date >= fromStr && r.date <= toStr; });
+            // Production sous objectif
+            if (th.weeklyMetersTarget > 0) {
+                var m = recs.reduce(function(s, r) { return s + (parseFloat(_rpData(r).metersDrilled) || 0); }, 0);
+                if (m < th.weeklyMetersTarget) {
+                    var pct = Math.round(m / th.weeklyMetersTarget * 100);
+                    out.push({ level: pct < 70 ? 'critical' : 'warning', cat: 'Production', msg: 'Production ' + m.toFixed(0) + ' m sous l\'objectif de ' + th.weeklyMetersTarget + ' m (' + pct + '%)' });
+                }
+            }
+            // Marge faible (sur la plage, si calcul dispo)
+            if (typeof computeProfitabilityForRange === 'function' && th.marginMinPct > 0) {
+                try {
+                    var r = computeProfitabilityForRange(fromStr, toStr, null);
+                    if (r.revenue > 0 && r.margePct != null && r.margePct < th.marginMinPct) {
+                        out.push({ level: r.margePct < 0 ? 'critical' : 'warning', cat: 'Finance', msg: 'Marge de la période ' + r.margePct.toFixed(1) + '% sous le seuil de ' + th.marginMinPct + '%' });
+                    }
+                } catch (e) {}
+            }
+            // Stock critique
+            (inventory || []).forEach(function(a) {
+                var low = !!a.alert || ((a.quantity || 0) <= (a.minStock || 0));
+                if (low) out.push({ level: (a.quantity || 0) <= 0 ? 'critical' : 'warning', cat: 'Stock', msg: 'Stock bas : ' + a.name + ' (' + (a.quantity || 0) + ' ' + (a.unit || '') + ', seuil ' + (a.minStock || 0) + ')' });
+            });
+            // Maintenance en retard / à venir
+            var scheds = (typeof getMaintenanceForSite === 'function') ? getMaintenanceForSite() : (maintenanceSchedules || []);
+            var todayS = new Date().toISOString().slice(0, 10);
+            var lead = th.maintenanceLeadDays || 7, leadDate = _digestAddDays(todayS, lead);
+            (scheds || []).forEach(function(s) {
+                var nd = s.nextMaintenanceDate; if (!nd) return;
+                if (nd < todayS) out.push({ level: 'critical', cat: 'Maintenance', msg: 'Révision en retard : ' + s.machineId + ' (prévue le ' + nd + ')' });
+                else if (nd <= leadDate) out.push({ level: 'warning', cat: 'Maintenance', msg: 'Révision proche : ' + s.machineId + ' le ' + nd });
+            });
+            // Factures impayées
+            var unpaid = (typeof invoices !== 'undefined' ? invoices : []).filter(function(i) { return i.status && /impay|unpaid|en attente|overdue|retard/i.test(i.status); });
+            if (unpaid.length) out.push({ level: 'warning', cat: 'Factures', msg: unpaid.length + ' facture(s) impayée(s)' });
+            return out;
+        }
+        // Semaine courante (lundi→dimanche) en chaînes AAAA-MM-JJ
+        function _currentWeekRange() {
+            var d = new Date(); var wd = d.getDay(); var diff = (wd === 0 ? 6 : wd - 1);
+            var mon = new Date(d); mon.setDate(d.getDate() - diff);
+            var monStr = getLocalDateYYYYMMDD(mon);
+            return { from: monStr, to: _digestAddDays(monStr, 6) };
+        }
+
         function renderDashAlerts() {
             var el = document.getElementById('dashAlerts');
             if (!el) return;
@@ -7171,6 +7260,11 @@
                 if (fuelPct > 0 && fuelPct <= 20) alerts.push({ level: 'critical', msg: drill.id + ' — Carburant bas : ' + fuelPct + '%' });
                 else if (fuelPct > 20 && fuelPct <= 30) alerts.push({ level: 'warning', msg: drill.id + ' — Carburant faible : ' + fuelPct + '%' });
             });
+            // Alertes opérationnelles (semaine courante + mois) selon la configuration
+            try {
+                var wk = _currentWeekRange();
+                computeOperationalAlerts(wk.from, wk.to).forEach(function(a) { alerts.push({ level: a.level, msg: a.cat + ' — ' + a.msg }); });
+            } catch (e) {}
             if (alerts.length === 0) {
                 el.innerHTML = '<div style="text-align:center;padding:24px 0;color:#a7b4c0;font-size:12px">' +
                                '<div style="font-size:22px;margin-bottom:8px">✓</div>Aucune alerte active</div>';
@@ -7183,6 +7277,93 @@
                 return '<div style="padding:8px 11px;border-radius:8px;border:1px solid '+color+'44;background:'+bg+';font-size:11px;color:'+color+';font-weight:600">'+icon+' '+String(a.msg).replace(/</g,'&lt;')+'</div>';
             }).join('');
         }
+
+        window.geGenerateWeeklyDigest = function() {
+            var wkEl = document.getElementById('digestWeek');
+            var val = wkEl ? wkEl.value : '';
+            if (!val || val.indexOf('-W') < 0) { alert('Choisissez une semaine.'); return; }
+            geSaveDigestConfigFromDom();
+            var cfg = geLoadDigestConfig();
+            var parts = val.split('-W'); var year = parseInt(parts[0], 10), week = parseInt(parts[1], 10);
+            var start = getDateOfISOWeek(year, week);
+            var from = getLocalDateYYYYMMDD(start), to = _digestAddDays(from, 6);
+            var recs = (dailyDataRecords || []).filter(function(r) { return r && r.date && r.date >= from && r.date <= to; });
+            var cur = (typeof getRevenueViewDisplayCurrency === 'function') ? getRevenueViewDisplayCurrency() : ((companyInfo && companyInfo.currency) || 'XOF');
+            var esc = function(s) { return String(s == null ? '' : s).replace(/[&<>]/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); };
+            var company = (companyInfo && companyInfo.name) || 'GOOD ENGINEERS';
+            var sections = '';
+
+            // Alertes
+            var alerts = computeOperationalAlerts(from, to, cfg);
+            var alertHtml = alerts.length
+                ? '<div class="sec"><h2>🔔 Alertes de la semaine (' + alerts.length + ')</h2>' + alerts.map(function(a) {
+                    var c = a.level === 'critical' ? '#b91c1c' : (a.level === 'warning' ? '#b45309' : '#1d4ed8');
+                    var bg = a.level === 'critical' ? '#fef2f2' : (a.level === 'warning' ? '#fffbeb' : '#eff6ff');
+                    return '<div style="border-left:4px solid ' + c + ';background:' + bg + ';padding:8px 12px;margin:6px 0;color:' + c + ';font-weight:600">[' + esc(a.cat) + '] ' + esc(a.msg) + '</div>';
+                }).join('') + '</div>'
+                : '<div class="sec"><h2>🔔 Alertes de la semaine</h2><p style="color:#16a34a">Aucune alerte — tous les seuils sont respectés.</p></div>';
+
+            if (cfg.sections.production) {
+                var byDrill = {}, totM = 0, totH = 0;
+                recs.forEach(function(r) { var d = _rpData(r), mid = r.machineId; byDrill[mid] = byDrill[mid] || { m: 0, h: 0, f: 0 }; var mm = parseFloat(d.metersDrilled) || 0, hh = parseFloat(d.hours) || 0; byDrill[mid].m += mm; byDrill[mid].h += hh; byDrill[mid].f += parseFloat(d.fuelAdded) || 0; totM += mm; totH += hh; });
+                var rows = Object.keys(byDrill).map(function(mid) { var g = byDrill[mid]; return '<tr><td>' + esc(mid) + '</td><td class="r">' + g.m.toFixed(1) + '</td><td class="r">' + g.h.toFixed(1) + '</td><td class="r">' + (g.h > 0 ? (g.m / g.h).toFixed(1) : '—') + '</td><td class="r">' + g.f.toFixed(0) + '</td></tr>'; }).join('');
+                sections += '<div class="sec"><h2>⛏️ Production</h2>'
+                    + '<div class="kpis"><div class="kpi"><div class="kv">' + totM.toFixed(1) + ' m</div><div class="kl">Mètres</div></div>'
+                    + '<div class="kpi"><div class="kv">' + totH.toFixed(1) + ' h</div><div class="kl">Heures</div></div>'
+                    + '<div class="kpi"><div class="kv">' + (totH > 0 ? (totM / totH).toFixed(1) : '—') + ' m/h</div><div class="kl">ROP moyen</div></div>'
+                    + '<div class="kpi"><div class="kv">' + recs.length + '</div><div class="kl">Postes</div></div></div>'
+                    + (rows ? '<table><thead><tr><th>Foreuse</th><th class="r">Mètres</th><th class="r">Heures</th><th class="r">ROP</th><th class="r">Carburant (L)</th></tr></thead><tbody>' + rows + '</tbody></table>' : '<p>Aucune saisie cette semaine.</p>')
+                    + '</div>';
+            }
+            if (cfg.sections.finance && typeof computeProfitabilityForRange === 'function') {
+                try {
+                    var r = computeProfitabilityForRange(from, to, null);
+                    sections += '<div class="sec"><h2>💰 Finance</h2><div class="kpis">'
+                        + '<div class="kpi"><div class="kv">' + formatCurrency(r.revenue, cur) + '</div><div class="kl">Revenu estimé</div></div>'
+                        + '<div class="kpi"><div class="kv">' + formatCurrency(r.totalCouts, cur) + '</div><div class="kl">Coûts</div></div>'
+                        + '<div class="kpi"><div class="kv">' + formatCurrency(r.profit, cur) + '</div><div class="kl">Profit</div></div>'
+                        + '<div class="kpi"><div class="kv">' + (r.margePct != null ? r.margePct.toFixed(1) + '%' : '—') + '</div><div class="kl">Marge</div></div></div></div>';
+                } catch (e) {}
+            }
+            if (cfg.sections.equipment) {
+                var scheds = (typeof getMaintenanceForSite === 'function') ? getMaintenanceForSite() : (maintenanceSchedules || []);
+                var todayS = new Date().toISOString().slice(0, 10);
+                var mrows = (scheds || []).map(function(s) { var nd = s.nextMaintenanceDate || ''; var st = !nd ? '—' : (nd < todayS ? '<b style="color:#b91c1c">En retard</b>' : 'À venir'); return '<tr><td>' + esc(s.machineId) + '</td><td>' + esc(s.type || s.name || '') + '</td><td>' + esc(s.lastMaintenanceDate || '—') + '</td><td>' + esc(nd || '—') + '</td><td>' + st + '</td></tr>'; }).join('');
+                sections += '<div class="sec"><h2>🔧 Équipements &amp; maintenance</h2>' + (mrows ? '<table><thead><tr><th>Foreuse</th><th>Type</th><th>Dernière</th><th>Prochaine</th><th>Statut</th></tr></thead><tbody>' + mrows + '</tbody></table>' : '<p>Aucune planification de maintenance.</p>') + '</div>';
+            }
+            if (cfg.sections.stock) {
+                var low = (inventory || []).filter(function(a) { return !!a.alert || ((a.quantity || 0) <= (a.minStock || 0)); });
+                sections += '<div class="sec"><h2>🧰 Stock</h2>' + (low.length ? '<table><thead><tr><th>Article</th><th class="r">Quantité</th><th class="r">Seuil</th></tr></thead><tbody>' + low.map(function(a) { return '<tr><td>' + esc(a.name) + '</td><td class="r">' + (a.quantity || 0) + ' ' + esc(a.unit || '') + '</td><td class="r">' + (a.minStock || 0) + '</td></tr>'; }).join('') + '</tbody></table>' : '<p style="color:#16a34a">Aucun article sous le seuil.</p>') + '</div>';
+            }
+            if (cfg.sections.rh) {
+                var emps = (typeof employees !== 'undefined' ? employees : []);
+                var actifs = emps.filter(function(e) { return !e.status || /actif|active/i.test(e.status); }).length;
+                sections += '<div class="sec"><h2>👷 RH</h2><div class="kpis"><div class="kpi"><div class="kv">' + emps.length + '</div><div class="kl">Employés</div></div><div class="kpi"><div class="kv">' + actifs + '</div><div class="kl">Actifs</div></div></div><p style="color:#64748b;font-size:12px">Les heures supplémentaires détaillées sont disponibles par mois dans RH → Heures sup.</p></div>';
+            }
+
+            var periodeFr = new Date(from + 'T00:00:00').toLocaleDateString('fr-FR') + ' → ' + new Date(to + 'T00:00:00').toLocaleDateString('fr-FR');
+            var html = '<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Bilan hebdomadaire S' + week + ' ' + year + '</title>'
+                + '<style>body{font-family:Arial,Helvetica,sans-serif;color:#1e293b;margin:0;padding:28px;background:#fff}'
+                + 'h1{font-size:22px;margin:0 0 2px}h2{font-size:16px;margin:0 0 10px;color:#0b2447;border-bottom:2px solid #F5B800;padding-bottom:5px}'
+                + '.head{border-bottom:3px solid #0b2447;padding-bottom:12px;margin-bottom:18px}.sub{color:#64748b;font-size:13px}'
+                + '.sec{margin:20px 0;page-break-inside:avoid}.kpis{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:10px}'
+                + '.kpi{flex:1;min-width:120px;border:1px solid #e2e8f0;border-radius:8px;padding:10px;text-align:center;background:#f8fafc}'
+                + '.kv{font-size:18px;font-weight:700;color:#0b2447}.kl{font-size:11px;color:#64748b;text-transform:uppercase}'
+                + 'table{width:100%;border-collapse:collapse;font-size:13px;margin-top:6px}th,td{border:1px solid #e2e8f0;padding:7px 9px;text-align:left}'
+                + 'th{background:#0b2447;color:#fff;font-size:11px;text-transform:uppercase}td.r,th.r{text-align:right}'
+                + '@media print{.noprint{display:none}}</style></head><body>'
+                + '<div class="head"><h1>Bilan hebdomadaire — Semaine ' + week + ' / ' + year + '</h1>'
+                + '<div class="sub">' + esc(company) + ' · ' + periodeFr + '</div></div>'
+                + alertHtml + sections
+                + '<p style="margin-top:28px;color:#94a3b8;font-size:11px">Généré le ' + new Date().toLocaleString('fr-FR') + ' · GEDRILLING</p>'
+                + '<div class="noprint" style="margin-top:16px"><button onclick="window.print()" style="background:#0b2447;color:#fff;border:none;padding:10px 18px;border-radius:8px;cursor:pointer">🖨️ Imprimer / PDF</button></div>'
+                + '</body></html>';
+
+            try { if (window.geAiStashReport) window.geAiStashReport('Bilan hebdomadaire S' + week + ' ' + year, html); } catch (e) {}
+            var w = window.open('', '_blank');
+            if (w) { w.document.open(); w.document.write(html); w.document.close(); }
+            else alert('Autorisez les fenêtres pop-up pour afficher le bilan.');
+        };
 
         function initDashProductionChart() {
             var canvas = document.getElementById('dashProductionChart');
@@ -19482,6 +19663,15 @@
                 '<input type="week" id="reportWeeklyWeek" class="w-full bg-slate-800 border border-slate-600 rounded px-4 py-2 text-white" value="' + currentWeek + '">' +
                 '</div>' +
                 '<button onclick="generateWeeklyReport()" class="w-full bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg font-semibold">📄 Générer Rapport Hebdomadaire</button>' +
+                '</div>' +
+                '<div class="ged-content-panel p-6 rounded-xl">' +
+                '<h4 class="text-lg font-bold mb-2">🧭 Bilan hebdomadaire configurable + alertes</h4>' +
+                '<p class="text-slate-400 text-sm mb-4">Synthèse paramétrable (production, finance, équipements, stock, RH) avec alertes selon vos seuils.</p>' +
+                '<div class="mb-3"><label class="block text-slate-400 mb-2">Semaine</label>' +
+                '<input type="week" id="digestWeek" class="w-full bg-slate-800 border border-slate-600 rounded px-4 py-2 text-white" value="' + currentWeek + '"></div>' +
+                '<details class="mb-3 bg-slate-800/50 rounded-lg border border-slate-700"><summary class="cursor-pointer px-3 py-2 text-slate-300 text-sm font-semibold">⚙️ Configuration (sections &amp; seuils)</summary>' +
+                '<div class="p-3" id="digestConfigBody">' + geDigestConfigHtml(geLoadDigestConfig()) + '</div></details>' +
+                '<button onclick="geGenerateWeeklyDigest()" class="w-full bg-amber-600 hover:bg-amber-700 px-4 py-2 rounded-lg font-semibold">🧭 Générer le bilan hebdomadaire</button>' +
                 '</div>' +
                 '<div class="ged-content-panel p-6 rounded-xl">' +
                 '<h4 class="text-lg font-bold mb-4">⛽ Rapport Consommation Carburant</h4>' +
