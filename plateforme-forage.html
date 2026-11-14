@@ -8253,17 +8253,41 @@
         // SANTÉ ET SÉCURITÉ AU TRAVAIL (HSE)
         // ============================================================
 
+        function _hseKey() { return 'ged_hse_data_' + (window.API && window.API.getEnterpriseId ? (window.API.getEnterpriseId() || '0') : '0'); }
         function getHSEData() {
             try {
-                var raw = localStorage.getItem('ged_hse_data');
+                var raw = localStorage.getItem(_hseKey());
+                if (!raw) raw = localStorage.getItem('ged_hse_data'); // migration depuis l'ancienne clé non scopée
                 if (!raw) return {incidents:[], epi:[], formations:[], permis:[]};
-                return JSON.parse(raw);
+                var d = JSON.parse(raw);
+                if (!Array.isArray(d.incidents)) d.incidents = [];
+                if (!Array.isArray(d.epi)) d.epi = [];
+                if (!Array.isArray(d.formations)) d.formations = [];
+                if (!Array.isArray(d.permis)) d.permis = [];
+                return d;
             } catch(e) { return {incidents:[], epi:[], formations:[], permis:[]}; }
         }
 
         function saveHSEData(data) {
-            try { localStorage.setItem('ged_hse_data', JSON.stringify(data)); } catch(e) {}
+            try { localStorage.setItem(_hseKey(), JSON.stringify(data)); } catch(e) {}
+            // Persistance serveur (anti-perte, multi-appareil, sauvegardes)
+            try { if (window.API && window.API.ModuleState) window.API.ModuleState.set('hse', data).catch(function(){}); } catch(e) {}
         }
+        function _hseIsEmpty(d) { return !d || ((d.incidents||[]).length===0 && (d.epi||[]).length===0 && (d.formations||[]).length===0 && (d.permis||[]).length===0); }
+        function hseSyncFromServer() {
+            if (!(window.API && window.API.ModuleState && window.API.getAuthToken && window.API.getAuthToken())) return;
+            window.API.ModuleState.get('hse').then(function(res) {
+                if (res && res.data && (Array.isArray(res.data.incidents) || Array.isArray(res.data.epi) || Array.isArray(res.data.formations) || Array.isArray(res.data.permis))) {
+                    try { localStorage.setItem(_hseKey(), JSON.stringify(res.data)); } catch(e) {}
+                    renderHSE();
+                } else {
+                    // Serveur vide : si des données locales existent, on les y sème pour ne rien perdre.
+                    var local = getHSEData();
+                    if (!_hseIsEmpty(local)) { try { window.API.ModuleState.set('hse', local).catch(function(){}); } catch(e) {} }
+                }
+            }).catch(function(){});
+        }
+        window.hseSyncFromServer = hseSyncFromServer;
 
         // ============================================================
         // PLAN DE FORAGE — Persistance
@@ -9445,6 +9469,7 @@
                 renderAnalytics();
             } else if (view === 'hse') {
                 renderHSE();
+                try { hseSyncFromServer(); } catch (e) {}
             } else if (view === 'souterrain') {
                 renderSouterrain();
                 try { ugSyncFromServer(); } catch (e) {}
