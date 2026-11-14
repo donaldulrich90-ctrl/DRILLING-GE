@@ -8388,8 +8388,13 @@
         // ============================================================
         function _ugKey() { return 'ged_ug_data_' + (window.API && window.API.getEnterpriseId ? (window.API.getEnterpriseId() || '0') : '0'); }
         function getUGData() {
-            try { var raw = localStorage.getItem(_ugKey()); if (!raw) return { galleries: [], advances: [] }; var d = JSON.parse(raw); if (!Array.isArray(d.galleries)) d.galleries = []; if (!Array.isArray(d.advances)) d.advances = []; return d; }
-            catch (e) { return { galleries: [], advances: [] }; }
+            var def = { galleries: [], advances: [], stopes: [], abattage: [], ventilation: [], personnel: [] };
+            try {
+                var raw = localStorage.getItem(_ugKey()); if (!raw) return def;
+                var d = JSON.parse(raw);
+                ['galleries', 'advances', 'stopes', 'abattage', 'ventilation', 'personnel'].forEach(function (k) { if (!Array.isArray(d[k])) d[k] = []; });
+                return d;
+            } catch (e) { return def; }
         }
         function saveUGData(d) {
             try { localStorage.setItem(_ugKey(), JSON.stringify(d)); } catch (e) {}
@@ -8450,6 +8455,75 @@
             data.advances = data.advances.filter(function (a) { return a.id !== id; });
             saveUGData(data); renderSouterrain();
         };
+
+        window._ugTab = window._ugTab || 'galleries';
+        window.ugSetTab = function (t) { window._ugTab = t; renderSouterrain(); };
+
+        // ── Abattage (stopes / chantiers d'abattage) ──
+        window.ugAddStope = function () {
+            var data = getUGData();
+            var name = ((document.getElementById('ugStopeName') || {}).value || '').trim();
+            var level = (document.getElementById('ugStopeLevel') || {}).value || '';
+            var method = (document.getElementById('ugStopeMethod') || {}).value || '';
+            var target = parseFloat((document.getElementById('ugStopeTarget') || {}).value) || 0;
+            if (!name) { alert('Nom du chantier requis.'); return; }
+            data.stopes.push({ id: _ugNextId(data.stopes, 'STP'), name: name, level: level, method: method, targetTonnage: target, status: 'EN COURS' });
+            saveUGData(data); renderSouterrain();
+        };
+        window.ugDeleteStope = function (id) {
+            if (!confirm('Supprimer ce chantier et sa production ?')) return;
+            var data = getUGData();
+            data.stopes = data.stopes.filter(function (s) { return s.id !== id; });
+            data.abattage = data.abattage.filter(function (a) { return a.stopeId !== id; });
+            saveUGData(data); renderSouterrain();
+        };
+        function ugStopeTonnage(data, stopeId) { return (data.abattage || []).filter(function (a) { return a.stopeId === stopeId; }).reduce(function (s, a) { return s + (parseFloat(a.tonnage) || 0); }, 0); }
+        window.ugAddAbattage = function () {
+            var data = getUGData();
+            var sid = (document.getElementById('ugAbStope') || {}).value || '';
+            var date = (document.getElementById('ugAbDate') || {}).value || '';
+            var tonnage = parseFloat((document.getElementById('ugAbTonnage') || {}).value) || 0;
+            var rounds = parseInt((document.getElementById('ugAbRounds') || {}).value, 10) || 0;
+            var notes = ((document.getElementById('ugAbNotes') || {}).value || '').trim();
+            if (!sid) { alert('Choisissez un chantier.'); return; }
+            if (!date) { alert('Date requise.'); return; }
+            if (tonnage <= 0) { alert('Tonnage requis.'); return; }
+            data.abattage.unshift({ id: _ugNextId(data.abattage, 'ABT'), stopeId: sid, date: date, tonnage: tonnage, rounds: rounds, notes: notes });
+            var st = data.stopes.find(function (x) { return x.id === sid; });
+            if (st && st.targetTonnage > 0 && ugStopeTonnage(data, sid) >= st.targetTonnage - 0.5) st.status = 'TERMINÉ';
+            saveUGData(data); renderSouterrain();
+        };
+        window.ugDeleteAbattage = function (id) { var d = getUGData(); d.abattage = d.abattage.filter(function (a) { return a.id !== id; }); saveUGData(d); renderSouterrain(); };
+
+        // ── Sécurité du fond : ventilation/gaz + registre personnel ──
+        window.ugAddVentilation = function () {
+            var data = getUGData();
+            var date = (document.getElementById('ugVentDate') || {}).value || '';
+            var loc = ((document.getElementById('ugVentLoc') || {}).value || '').trim();
+            var air = parseFloat((document.getElementById('ugVentAir') || {}).value);
+            var co = parseFloat((document.getElementById('ugVentCO') || {}).value);
+            var nox = parseFloat((document.getElementById('ugVentNOx') || {}).value);
+            var temp = parseFloat((document.getElementById('ugVentTemp') || {}).value);
+            if (!date || !loc) { alert('Date et emplacement requis.'); return; }
+            data.ventilation.unshift({ id: _ugNextId(data.ventilation, 'VEN'), date: date, location: loc, airFlow: isFinite(air) ? air : null, co: isFinite(co) ? co : null, nox: isFinite(nox) ? nox : null, temp: isFinite(temp) ? temp : null });
+            saveUGData(data); renderSouterrain();
+        };
+        window.ugDeleteVentilation = function (id) { var d = getUGData(); d.ventilation = d.ventilation.filter(function (v) { return v.id !== id; }); saveUGData(d); renderSouterrain(); };
+        window.ugCheckIn = function () {
+            var data = getUGData();
+            var name = ((document.getElementById('ugPersName') || {}).value || '').trim();
+            var role = ((document.getElementById('ugPersRole') || {}).value || '').trim();
+            var loc = ((document.getElementById('ugPersLoc') || {}).value || '').trim();
+            if (!name) { alert('Nom requis.'); return; }
+            data.personnel.unshift({ id: _ugNextId(data.personnel, 'PRS'), name: name, role: role, location: loc, inAt: new Date().toISOString(), outAt: null });
+            saveUGData(data); renderSouterrain();
+        };
+        window.ugCheckOut = function (id) {
+            var data = getUGData();
+            var p = data.personnel.find(function (x) { return x.id === id; });
+            if (p && !p.outAt) { p.outAt = new Date().toISOString(); saveUGData(data); renderSouterrain(); }
+        };
+        window.ugDeletePersonnel = function (id) { var d = getUGData(); d.personnel = d.personnel.filter(function (p) { return p.id !== id; }); saveUGData(d); renderSouterrain(); };
 
         function renderSouterrain() {
             var el = document.getElementById('souterrainContent');
@@ -8517,14 +8591,86 @@
                 '<div class="ged-content-panel rounded-xl overflow-hidden"><div class="px-5 py-3 border-b border-slate-700"><h3 class="font-bold text-sm" style="color:var(--ged-black)">Historique des avancements</h3></div><div style="overflow-x:auto"><table style="width:100%;font-size:13px;border-collapse:collapse"><thead><tr style="font-size:11px;text-transform:uppercase;color:#64748B;background:rgba(0,0,0,0.15)"><th class="px-3 py-2 text-left">Date</th><th class="px-3 py-2 text-left">Galerie</th><th class="px-3 py-2 text-right">Mètres</th><th class="px-3 py-2 text-right">Volées</th><th class="px-3 py-2 text-left">Soutènement / notes</th><th class="px-3 py-2"></th></tr></thead><tbody>' + advRows + '</tbody></table></div></div>'
                 : '';
 
-            el.innerHTML =
-                '<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">' +
-                kpi('Galeries actives', active, '#F5B800') +
-                kpi('Mètres planifiés', totPlan.toFixed(0) + ' m', '') +
-                kpi('Mètres avancés', totAdv.toFixed(0) + ' m', '#28A745') +
-                kpi('Avancement global', prog.toFixed(1) + ' %', prog >= 90 ? '#28A745' : prog >= 50 ? '#F5B800' : '#DC3545') +
-                '</div>' + galForm + galTable + advForm + advHist +
-                '<p class="text-xs text-slate-500 mt-3">Module Mine souterraine v1 — données enregistrées localement sur cet appareil (comme le module HSE). La persistance serveur et la ventilation/sécurité du fond viendront ensuite.</p>';
+            var galleriesTab = galForm + galTable + advForm + advHist;
+
+            // ── Onglet Abattage ──
+            var activeStopes = data.stopes.filter(function (s) { return s.status !== 'TERMINÉ'; }).length;
+            var totTon = data.abattage.reduce(function (s, a) { return s + (parseFloat(a.tonnage) || 0); }, 0);
+            var stopeForm =
+                '<div class="ged-content-panel rounded-xl p-5 mb-5"><h3 class="font-bold text-sm mb-3" style="color:var(--ged-black)">➕ Chantier d\'abattage (stope)</h3>' +
+                '<div class="grid grid-cols-2 md:grid-cols-4 gap-3">' +
+                '<div><label class="block text-xs text-slate-500 mb-1">Nom *</label><input id="ugStopeName" placeholder="Ex. Stope 120-E" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                '<div><label class="block text-xs text-slate-500 mb-1">Niveau</label><input id="ugStopeLevel" placeholder="Ex. N-120" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                '<div><label class="block text-xs text-slate-500 mb-1">Méthode</label><select id="ugStopeMethod" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm">' + ['', 'Chambres-magasins', 'Chambres-piliers', 'Sous-niveaux abattus', 'Longue taille', 'Remblai (cut & fill)', 'Foudroyage', 'Autre'].map(function (m) { return '<option value="' + m + '">' + (m || '—') + '</option>'; }).join('') + '</select></div>' +
+                '<div><label class="block text-xs text-slate-500 mb-1">Objectif tonnage (t)</label><input id="ugStopeTarget" type="number" min="0" step="10" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                '</div><button onclick="ugAddStope()" class="mt-3 bg-amber-600 hover:bg-amber-700 px-4 py-2 rounded-lg font-semibold text-sm">Ajouter</button></div>';
+            var stopeRows = data.stopes.map(function (s) {
+                var t = ugStopeTonnage(data, s.id);
+                var p = (parseFloat(s.targetTonnage) || 0) > 0 ? Math.min(100, t / s.targetTonnage * 100) : 0;
+                var pc = p >= 90 ? '#28A745' : p >= 50 ? '#F5B800' : '#DC3545';
+                var pill = s.status === 'TERMINÉ' ? '<span style="background:rgba(40,167,69,.15);color:#28A745;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700">Terminé</span>' : '<span style="background:rgba(245,184,0,.15);color:#B45309;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700">En cours</span>';
+                return '<tr style="border-bottom:1px solid rgba(255,255,255,0.06)"><td class="px-3 py-3"><div class="font-bold" style="color:var(--ged-yellow)">' + esc(s.name) + '</div><div class="text-[11px] text-slate-500">' + esc(s.level || '—') + ' · ' + esc(s.method || 'méthode n.c.') + '</div></td>' +
+                    '<td class="px-3 py-3 text-right font-mono text-sm">' + t.toFixed(0) + ' / ' + (parseFloat(s.targetTonnage) || 0).toFixed(0) + ' t</td>' +
+                    '<td class="px-3 py-3" style="min-width:120px"><div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:8px;background:rgba(255,255,255,0.1);border-radius:4px;overflow:hidden"><div style="width:' + p.toFixed(0) + '%;height:100%;background:' + pc + '"></div></div><span class="font-mono text-xs" style="color:' + pc + '">' + p.toFixed(0) + '%</span></div></td>' +
+                    '<td class="px-3 py-3 text-center">' + pill + '</td><td class="px-3 py-3 text-right"><button onclick="ugDeleteStope(\'' + s.id + '\')" class="text-red-400 hover:text-red-300 text-xs">Supprimer</button></td></tr>';
+            }).join('');
+            var stopeTable = data.stopes.length ? '<div class="ged-content-panel rounded-xl overflow-hidden mb-5"><div class="px-5 py-3 border-b border-slate-700"><h3 class="font-bold text-sm" style="color:var(--ged-black)">Chantiers d\'abattage</h3></div><div style="overflow-x:auto"><table style="width:100%;font-size:13px;border-collapse:collapse"><thead><tr style="font-size:11px;text-transform:uppercase;color:#64748B;background:rgba(0,0,0,0.15)"><th class="px-3 py-2 text-left">Chantier</th><th class="px-3 py-2 text-right">Abattu / objectif</th><th class="px-3 py-2 text-left">Avancement</th><th class="px-3 py-2 text-center">Statut</th><th class="px-3 py-2"></th></tr></thead><tbody>' + stopeRows + '</tbody></table></div></div>' : '<div class="ged-content-panel rounded-xl p-8 text-center mb-5"><p style="font-size:40px">⛏️</p><p class="font-bold mt-2" style="color:var(--ged-black)">Aucun chantier d\'abattage</p></div>';
+            var abForm = data.stopes.length ? '<div class="ged-content-panel rounded-xl p-5 mb-5"><h3 class="font-bold text-sm mb-3" style="color:var(--ged-black)">📦 Saisir une production (abattage)</h3><div class="grid grid-cols-2 md:grid-cols-5 gap-3">' +
+                '<div class="col-span-2"><label class="block text-xs text-slate-500 mb-1">Chantier *</label><select id="ugAbStope" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm">' + data.stopes.map(function (s) { return '<option value="' + s.id + '">' + esc(s.name) + '</option>'; }).join('') + '</select></div>' +
+                '<div><label class="block text-xs text-slate-500 mb-1">Date *</label><input id="ugAbDate" type="date" value="' + new Date().toISOString().slice(0, 10) + '" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                '<div><label class="block text-xs text-slate-500 mb-1">Tonnage (t) *</label><input id="ugAbTonnage" type="number" min="0" step="1" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                '<div><label class="block text-xs text-slate-500 mb-1">Volées</label><input id="ugAbRounds" type="number" min="0" step="1" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                '<div class="col-span-2 md:col-span-5"><label class="block text-xs text-slate-500 mb-1">Notes</label><input id="ugAbNotes" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                '</div><button onclick="ugAddAbattage()" class="mt-3 bg-emerald-600 hover:bg-emerald-700 px-4 py-2 rounded-lg font-semibold text-sm">Enregistrer</button></div>' : '';
+            var abRows = (data.abattage || []).slice(0, 25).map(function (a) { var s = data.stopes.find(function (x) { return x.id === a.stopeId; }); return '<tr style="border-bottom:1px solid rgba(255,255,255,0.06)"><td class="px-3 py-2 text-slate-300">' + esc(a.date) + '</td><td class="px-3 py-2 text-slate-300">' + esc(s ? s.name : a.stopeId) + '</td><td class="px-3 py-2 text-right font-mono">' + (parseFloat(a.tonnage) || 0).toFixed(0) + ' t</td><td class="px-3 py-2 text-right font-mono text-slate-400">' + (a.rounds || 0) + '</td><td class="px-3 py-2 text-slate-400 text-xs">' + esc(a.notes || '') + '</td><td class="px-3 py-2 text-right"><button onclick="ugDeleteAbattage(\'' + a.id + '\')" class="text-red-400 hover:text-red-300 text-xs">×</button></td></tr>'; }).join('');
+            var abHist = (data.abattage || []).length ? '<div class="ged-content-panel rounded-xl overflow-hidden"><div class="px-5 py-3 border-b border-slate-700"><h3 class="font-bold text-sm" style="color:var(--ged-black)">Historique d\'abattage</h3></div><div style="overflow-x:auto"><table style="width:100%;font-size:13px;border-collapse:collapse"><thead><tr style="font-size:11px;text-transform:uppercase;color:#64748B;background:rgba(0,0,0,0.15)"><th class="px-3 py-2 text-left">Date</th><th class="px-3 py-2 text-left">Chantier</th><th class="px-3 py-2 text-right">Tonnage</th><th class="px-3 py-2 text-right">Volées</th><th class="px-3 py-2 text-left">Notes</th><th class="px-3 py-2"></th></tr></thead><tbody>' + abRows + '</tbody></table></div></div>' : '';
+            var abattageTab = stopeForm + stopeTable + abForm + abHist;
+
+            // ── Onglet Sécurité ──
+            var underground = data.personnel.filter(function (p) { return !p.outAt; });
+            var ventForm = '<div class="ged-content-panel rounded-xl p-5 mb-5"><h3 class="font-bold text-sm mb-3" style="color:var(--ged-black)">💨 Relevé ventilation / gaz</h3><div class="grid grid-cols-2 md:grid-cols-6 gap-3">' +
+                '<div><label class="block text-xs text-slate-500 mb-1">Date *</label><input id="ugVentDate" type="date" value="' + new Date().toISOString().slice(0, 10) + '" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                '<div class="col-span-2"><label class="block text-xs text-slate-500 mb-1">Emplacement *</label><input id="ugVentLoc" placeholder="Galerie / niveau" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                '<div><label class="block text-xs text-slate-500 mb-1">Débit air (m³/s)</label><input id="ugVentAir" type="number" step="0.1" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                '<div><label class="block text-xs text-slate-500 mb-1">CO (ppm)</label><input id="ugVentCO" type="number" step="1" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                '<div><label class="block text-xs text-slate-500 mb-1">NOx (ppm)</label><input id="ugVentNOx" type="number" step="0.1" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                '<div><label class="block text-xs text-slate-500 mb-1">Temp. (°C)</label><input id="ugVentTemp" type="number" step="0.5" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                '</div><button onclick="ugAddVentilation()" class="mt-3 bg-sky-600 hover:bg-sky-700 px-4 py-2 rounded-lg font-semibold text-sm">Enregistrer le relevé</button></div>';
+            function gasCell(v, warn, crit, unit) { if (v == null) return '<td class="px-3 py-2 text-right text-slate-500">—</td>'; var c = v >= crit ? '#DC3545' : v >= warn ? '#B45309' : '#28A745'; return '<td class="px-3 py-2 text-right font-mono font-semibold" style="color:' + c + '">' + v + (unit || '') + '</td>'; }
+            var ventRows = (data.ventilation || []).slice(0, 25).map(function (v) { return '<tr style="border-bottom:1px solid rgba(255,255,255,0.06)"><td class="px-3 py-2 text-slate-300">' + esc(v.date) + '</td><td class="px-3 py-2 text-slate-300">' + esc(v.location) + '</td><td class="px-3 py-2 text-right font-mono text-slate-300">' + (v.airFlow != null ? v.airFlow : '—') + '</td>' + gasCell(v.co, 30, 50, '') + gasCell(v.nox, 3, 5, '') + '<td class="px-3 py-2 text-right font-mono text-slate-300">' + (v.temp != null ? v.temp + '°' : '—') + '</td><td class="px-3 py-2 text-right"><button onclick="ugDeleteVentilation(\'' + v.id + '\')" class="text-red-400 hover:text-red-300 text-xs">×</button></td></tr>'; }).join('');
+            var ventTable = (data.ventilation || []).length ? '<div class="ged-content-panel rounded-xl overflow-hidden mb-5"><div class="px-5 py-3 border-b border-slate-700"><h3 class="font-bold text-sm" style="color:var(--ged-black)">Relevés ventilation / gaz</h3></div><div style="overflow-x:auto"><table style="width:100%;font-size:13px;border-collapse:collapse"><thead><tr style="font-size:11px;text-transform:uppercase;color:#64748B;background:rgba(0,0,0,0.15)"><th class="px-3 py-2 text-left">Date</th><th class="px-3 py-2 text-left">Emplacement</th><th class="px-3 py-2 text-right">Air (m³/s)</th><th class="px-3 py-2 text-right">CO</th><th class="px-3 py-2 text-right">NOx</th><th class="px-3 py-2 text-right">Temp.</th><th class="px-3 py-2"></th></tr></thead><tbody>' + ventRows + '</tbody></table></div><div class="px-5 py-2 text-[11px]" style="color:#94A3B8;background:rgba(0,0,0,0.1)">Seuils indicatifs : CO orange ≥ 30 ppm / rouge ≥ 50 ppm · NOx orange ≥ 3 / rouge ≥ 5 ppm. À adapter à votre réglementation.</div></div>' : '';
+            var persForm = '<div class="ged-content-panel rounded-xl p-5 mb-5"><h3 class="font-bold text-sm mb-3" style="color:var(--ged-black)">👷 Registre entrée / sortie du fond</h3><div class="grid grid-cols-2 md:grid-cols-3 gap-3">' +
+                '<div><label class="block text-xs text-slate-500 mb-1">Nom *</label><input id="ugPersName" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                '<div><label class="block text-xs text-slate-500 mb-1">Fonction</label><input id="ugPersRole" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                '<div><label class="block text-xs text-slate-500 mb-1">Zone</label><input id="ugPersLoc" placeholder="Niveau / galerie" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                '</div><button onclick="ugCheckIn()" class="mt-3 bg-emerald-600 hover:bg-emerald-700 px-4 py-2 rounded-lg font-semibold text-sm">⬇️ Entrée au fond</button></div>';
+            var fmtT = function (iso) { if (!iso) return '—'; try { return new Date(iso).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); } catch (e) { return iso; } };
+            var persRows = (data.personnel || []).slice(0, 40).map(function (p) {
+                var out = p.outAt ? fmtT(p.outAt) : '<span style="color:#F5B800;font-weight:700">AU FOND</span>';
+                var act = p.outAt ? '<button onclick="ugDeletePersonnel(\'' + p.id + '\')" class="text-red-400 hover:text-red-300 text-xs">×</button>' : '<button onclick="ugCheckOut(\'' + p.id + '\')" class="bg-slate-600 hover:bg-slate-500 text-white text-xs px-2 py-1 rounded">⬆️ Sortie</button>';
+                return '<tr style="border-bottom:1px solid rgba(255,255,255,0.06)"><td class="px-3 py-2 text-slate-200 font-semibold">' + esc(p.name) + '</td><td class="px-3 py-2 text-slate-400 text-xs">' + esc(p.role || '') + '</td><td class="px-3 py-2 text-slate-400 text-xs">' + esc(p.location || '') + '</td><td class="px-3 py-2 text-slate-300 text-xs">' + fmtT(p.inAt) + '</td><td class="px-3 py-2 text-slate-300 text-xs">' + out + '</td><td class="px-3 py-2 text-right">' + act + '</td></tr>';
+            }).join('');
+            var persTable = (data.personnel || []).length ? '<div class="ged-content-panel rounded-xl overflow-hidden"><div class="px-5 py-3 border-b border-slate-700 flex justify-between items-center"><h3 class="font-bold text-sm" style="color:var(--ged-black)">Registre du personnel</h3><span class="text-xs font-bold" style="color:' + (underground.length ? '#F5B800' : '#28A745') + '">' + underground.length + ' au fond</span></div><div style="overflow-x:auto"><table style="width:100%;font-size:13px;border-collapse:collapse"><thead><tr style="font-size:11px;text-transform:uppercase;color:#64748B;background:rgba(0,0,0,0.15)"><th class="px-3 py-2 text-left">Nom</th><th class="px-3 py-2 text-left">Fonction</th><th class="px-3 py-2 text-left">Zone</th><th class="px-3 py-2 text-left">Entrée</th><th class="px-3 py-2 text-left">Sortie</th><th class="px-3 py-2"></th></tr></thead><tbody>' + persRows + '</tbody></table></div></div>' : '';
+            var securiteTab = ventForm + ventTable + persForm + persTable;
+
+            // KPIs selon l'onglet
+            var kpiRow;
+            if (window._ugTab === 'abattage') {
+                kpiRow = kpi('Chantiers actifs', activeStopes, '#F5B800') + kpi('Tonnage abattu', totTon.toFixed(0) + ' t', '#28A745') + kpi('Chantiers', data.stopes.length, '') + kpi('Saisies', data.abattage.length, '');
+            } else if (window._ugTab === 'securite') {
+                var lastVent = data.ventilation[0];
+                kpiRow = kpi('Personnel au fond', underground.length, underground.length ? '#F5B800' : '#28A745') + kpi('Relevés ventilation', data.ventilation.length, '') + kpi('Dernier CO', lastVent && lastVent.co != null ? lastVent.co + ' ppm' : '—', '') + kpi('Dernier relevé', lastVent ? lastVent.date : '—', '');
+            } else {
+                kpiRow = kpi('Galeries actives', active, '#F5B800') + kpi('Mètres planifiés', totPlan.toFixed(0) + ' m', '') + kpi('Mètres avancés', totAdv.toFixed(0) + ' m', '#28A745') + kpi('Avancement global', prog.toFixed(1) + ' %', prog >= 90 ? '#28A745' : prog >= 50 ? '#F5B800' : '#DC3545');
+            }
+            function tabBtn(id, label) { var on = window._ugTab === id; return '<button onclick="ugSetTab(\'' + id + '\')" style="padding:8px 16px;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;' + (on ? 'background:var(--ged-yellow);color:#1a1200' : 'background:rgba(255,255,255,0.06);color:#A7B6C9') + '">' + label + '</button>'; }
+            var tabBar = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px">' + tabBtn('galleries', '🕳️ Galeries') + tabBtn('abattage', '⛏️ Abattage') + tabBtn('securite', '🛟 Sécurité du fond') + '</div>';
+            var content = window._ugTab === 'abattage' ? abattageTab : (window._ugTab === 'securite' ? securiteTab : galleriesTab);
+
+            el.innerHTML = tabBar +
+                '<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">' + kpiRow + '</div>' +
+                content +
+                '<p class="text-xs text-slate-500 mt-3">Module Mine souterraine — données enregistrées sur le serveur (sauvegardées et accessibles sur tous vos appareils).</p>';
         }
         window.renderSouterrain = renderSouterrain;
 
