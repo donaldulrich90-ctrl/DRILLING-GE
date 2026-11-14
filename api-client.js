@@ -655,6 +655,49 @@ const AlertsAPI = {
     }
 };
 
+// ============================================
+// API RAPPORT HEBDOMADAIRE
+// ============================================
+function wrFetch(path, opts) {
+    const base = getApiBaseUrl();
+    const headers = Object.assign({ 'Content-Type': 'application/json' }, opts && opts.headers);
+    const eid = getEnterpriseId();
+    if (eid) headers['X-Enterprise-Id'] = eid;
+    return fetch(`${base}${path}`, Object.assign({ credentials: 'include', headers }, opts));
+}
+
+const WeeklyReportAPI = {
+    async getConfig() {
+        const r = await wrFetch('/reports/weekly/config');
+        if (!r.ok) throw new Error(`Config rapport : ${r.status}`);
+        return r.json();
+    },
+    async saveConfig(payload) {
+        const r = await wrFetch('/reports/weekly/config', { method: 'PUT', body: JSON.stringify(payload) });
+        if (!r.ok) throw new Error(`Sauvegarde config : ${r.status}`);
+        return r.json();
+    },
+    async run(weekStart) {
+        const body = weekStart ? JSON.stringify({ weekStart }) : '{}';
+        const r = await wrFetch('/reports/weekly/run', { method: 'POST', body });
+        if (!r.ok) {
+            const e = await r.json().catch(() => ({}));
+            throw new Error(e.error || `Génération : ${r.status}`);
+        }
+        return r.json();
+    },
+    async getHistory() {
+        const r = await wrFetch('/reports/weekly');
+        if (!r.ok) throw new Error(`Historique : ${r.status}`);
+        return r.json();
+    },
+    async getReportHtml(id) {
+        const r = await wrFetch(`/reports/weekly/${id}`);
+        if (!r.ok) throw new Error(`Rapport #${id} : ${r.status}`);
+        return r.text();
+    }
+};
+
 // Exporter pour utilisation globale
 if (typeof window !== 'undefined') {
     window.API = {
@@ -692,6 +735,7 @@ if (typeof window !== 'undefined') {
         CompanyInfo: CompanyInfoAPI,
         ReportDist: ReportDistAPI,
         Alerts: AlertsAPI,
+        WeeklyReport: WeeklyReportAPI,
         loadAllData,
         saveAllData
     };

@@ -1359,6 +1359,7 @@
                     <button type="button" onclick="showMainView('planification')" class="ged-nav-item main-nav-btn" id="nav-planification">🗓️ &nbsp;Planification &amp; suivi</button>
                     <button type="button" onclick="showMainView('besoins')" class="ged-nav-item main-nav-btn" id="nav-besoins">📝 &nbsp;Expression de besoin <span id="besoinsNavBadge" class="hidden" style="background:var(--ged-danger);color:#fff;border-radius:999px;font-size:10px;padding:1px 7px;margin-left:4px;font-weight:800"></span></button>
                     <button type="button" onclick="showMainView('reports')" class="ged-nav-item main-nav-btn" id="nav-reports">≡ &nbsp;Rapports</button>
+                    <button type="button" onclick="showMainView('weekly_report')" class="ged-nav-item main-nav-btn" id="nav-weekly_report">📊 &nbsp;Rapport hebdomadaire</button>
                     <button type="button" onclick="showMainView('rentabilite')" class="ged-nav-item main-nav-btn" id="nav-rentabilite">↗ &nbsp;Rentabilité consommables</button>
                     <button type="button" onclick="showMainView('depenses_pm')" class="ged-nav-item main-nav-btn" id="nav-depenses_pm">◇ &nbsp;Dépenses PM</button>
 
@@ -1887,6 +1888,15 @@
                 <button type="button" class="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded text-sm" data-sttab="allocation" onclick="stSwitch('allocation')">🚜 Allocation foreuses</button>
             </div>
             <div id="soustraitantsContent"></div>
+        </div>
+
+        <!-- ═══ VUE RAPPORT HEBDOMADAIRE ════════════════════════════════ -->
+        <div id="mainView-weekly_report" class="main-view hidden">
+            <div class="mb-6 pb-4 border-b border-slate-700">
+                <h2 class="text-2xl font-extrabold tracking-tight" style="color:var(--ged-yellow)">📊 Rapport Hebdomadaire</h2>
+                <p class="text-slate-400 text-sm mt-1">Générez un rapport de la semaine · partagez via WhatsApp · téléchargez en HTML</p>
+            </div>
+            <div id="weeklyReportContent"></div>
         </div>
 
         <!-- ═══ VUE RENTABILITÉ CONSOMMABLES ════════════════════════════ -->
@@ -6389,7 +6399,7 @@
                 view !== 'enterprises' && subNav.indexOf(view) < 0) {
                 view = 'dashboard';
             }
-            var views = ['consumables', 'dashboard', 'connections', 'assignments', 'maintenance', 'bit_sharpening', 'invoices', 'payments', 'contracts', 'sites', 'enterprises', 'revenue', 'site_meals', 'reports', 'project_overview', 'planification', 'besoins', 'rh', 'inventory', 'accounts', 'clients', 'translator', 'team_chat', 'company_info', 'forage_plan', 'rentabilite', 'depenses_pm', 'analytics', 'hse', 'souterrain', 'soustraitants'];
+            var views = ['consumables', 'dashboard', 'connections', 'assignments', 'maintenance', 'bit_sharpening', 'invoices', 'payments', 'contracts', 'sites', 'enterprises', 'revenue', 'site_meals', 'reports', 'project_overview', 'planification', 'besoins', 'rh', 'inventory', 'accounts', 'clients', 'translator', 'team_chat', 'company_info', 'forage_plan', 'rentabilite', 'depenses_pm', 'analytics', 'hse', 'souterrain', 'soustraitants', 'weekly_report'];
             views.forEach(function(v) {
                 var el = document.getElementById('mainView-' + v);
                 if (el) el.classList.add('hidden');
@@ -9643,6 +9653,8 @@
                 renderBitSharpening();
             } else if (view === 'soustraitants') {
                 renderSoustraitants();
+            } else if (view === 'weekly_report') {
+                renderWeeklyReportView();
             }
         }
 
@@ -33118,6 +33130,266 @@
                 e.target.style.height = Math.min(e.target.scrollHeight, 100) + 'px';
             }
         });
+    })();
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // RAPPORT HEBDOMADAIRE — vue + logique
+    // ══════════════════════════════════════════════════════════════════════════
+    (function() {
+        var _wrConfig = null;
+        var _wrHistory = [];
+        var _wrCurrentHtml = null;
+
+        // ── Rendu de la vue principale ─────────────────────────────────────────
+        window.renderWeeklyReportView = function() {
+            var el = document.getElementById('weeklyReportContent');
+            if (!el) return;
+            el.innerHTML = '<div class="p-6 text-center text-slate-400">Chargement...</div>';
+            Promise.all([
+                window.API.WeeklyReport.getConfig(),
+                window.API.WeeklyReport.getHistory()
+            ]).then(function(results) {
+                _wrConfig  = results[0];
+                _wrHistory = results[1];
+                el.innerHTML = buildWeeklyReportPage();
+            }).catch(function(err) {
+                el.innerHTML = '<div class="p-6 text-red-400">Erreur : ' + err.message + '</div>';
+            });
+        };
+
+        function buildWeeklyReportPage() {
+            var days = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
+            var sectionOpts = [
+                { key:'alerts',      label:'Alertes opérationnelles' },
+                { key:'production',  label:'Production de forage' },
+                { key:'maintenance', label:'Maintenance' },
+                { key:'stock',       label:'Stock' },
+                { key:'finance',     label:'Finance' }
+            ];
+            var inc = Array.isArray(_wrConfig.includeSections) ? _wrConfig.includeSections : [];
+
+            var sectionChecks = sectionOpts.map(function(s) {
+                var chk = inc.indexOf(s.key) >= 0 ? 'checked' : '';
+                return '<label class="flex items-center gap-2 text-sm cursor-pointer">' +
+                    '<input type="checkbox" class="wr-section-chk" value="' + s.key + '" ' + chk + ' style="accent-color:#F5B800">' +
+                    s.label + '</label>';
+            }).join('');
+
+            var dayOpts = days.map(function(d, i) {
+                var sel = (_wrConfig.reportDay === i) ? 'selected' : '';
+                return '<option value="' + i + '" ' + sel + '>' + d + '</option>';
+            }).join('');
+
+            var historyRows = _wrHistory.length === 0
+                ? '<tr><td colspan="4" class="text-center text-slate-400 py-4 text-sm">Aucun rapport généré</td></tr>'
+                : _wrHistory.map(function(r) {
+                    var sum = r.summary || {};
+                    var prod = sum.production || {};
+                    var crit = (sum.alerts || {}).critical || 0;
+                    return '<tr class="border-b border-slate-700 hover:bg-slate-800/40">' +
+                        '<td class="px-4 py-2 text-sm">' + fmtWRDate(r.weekStart) + ' – ' + fmtWRDate(r.weekEnd) + '</td>' +
+                        '<td class="px-4 py-2 text-sm text-center">' + (prod.totalMeters || 0) + ' m</td>' +
+                        '<td class="px-4 py-2 text-sm text-center">' +
+                            (crit > 0 ? '<span style="color:#DC2626;font-weight:700">' + crit + ' crit.</span>' : '—') +
+                        '</td>' +
+                        '<td class="px-4 py-2 text-sm">' +
+                            '<button onclick="wrViewReport(' + r.id + ')" class="text-blue-400 hover:underline mr-3">Voir</button>' +
+                            '<button onclick="wrDownloadReport(' + r.id + ')" class="text-green-400 hover:underline mr-3">⬇ HTML</button>' +
+                            ((_wrConfig.whatsappNumber) ? '<button onclick="wrShareWhatsApp(' + r.id + ')" class="text-green-400 hover:underline">WhatsApp</button>' : '') +
+                        '</td></tr>';
+                }).join('');
+
+            return '<div class="grid gap-6" style="max-width:860px">' +
+                // Config card
+                '<div class="bg-slate-800/60 border border-slate-700 rounded-xl p-5">' +
+                    '<h3 class="font-bold text-sm uppercase tracking-widest mb-4" style="color:#F5B800">Configuration</h3>' +
+                    '<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">' +
+                        '<div>' +
+                            '<label class="block text-xs text-slate-400 mb-1">Jour de génération automatique</label>' +
+                            '<select id="wrDaySelect" class="w-full rounded px-3 py-2 bg-slate-700 border border-slate-600 text-sm">' + dayOpts + '</select>' +
+                        '</div>' +
+                        '<div>' +
+                            '<label class="block text-xs text-slate-400 mb-1">N° WhatsApp destinataire (avec indicatif)</label>' +
+                            '<input id="wrWaNumber" type="tel" value="' + (_wrConfig.whatsappNumber || '') + '" placeholder="ex: 22670000000" class="w-full rounded px-3 py-2 bg-slate-700 border border-slate-600 text-sm">' +
+                        '</div>' +
+                        '<div>' +
+                            '<label class="block text-xs text-slate-400 mb-1">Nom du destinataire</label>' +
+                            '<input id="wrRecipient" type="text" value="' + (_wrConfig.recipientName || '') + '" placeholder="Direction" class="w-full rounded px-3 py-2 bg-slate-700 border border-slate-600 text-sm">' +
+                        '</div>' +
+                    '</div>' +
+                    '<div class="mt-4">' +
+                        '<label class="block text-xs text-slate-400 mb-2">Sections à inclure</label>' +
+                        '<div class="flex flex-wrap gap-4">' + sectionChecks + '</div>' +
+                    '</div>' +
+                    '<div class="mt-4 flex gap-3">' +
+                        '<button onclick="wrSaveConfig()" class="px-4 py-2 rounded font-semibold text-sm" style="background:#F5B800;color:#063D2B">Enregistrer</button>' +
+                    '</div>' +
+                '</div>' +
+                // Generate card
+                '<div class="bg-slate-800/60 border border-slate-700 rounded-xl p-5">' +
+                    '<h3 class="font-bold text-sm uppercase tracking-widest mb-4" style="color:#F5B800">Générer le rapport</h3>' +
+                    '<div class="flex gap-3 flex-wrap items-end">' +
+                        '<div>' +
+                            '<label class="block text-xs text-slate-400 mb-1">Semaine de référence (lundi)</label>' +
+                            '<input id="wrWeekStart" type="date" class="rounded px-3 py-2 bg-slate-700 border border-slate-600 text-sm">' +
+                        '</div>' +
+                        '<button onclick="wrGenerate()" id="wrGenerateBtn" class="px-5 py-2 rounded font-bold text-sm" style="background:#063D2B;color:#F5B800;border:1px solid #F5B800">📊 Générer</button>' +
+                    '</div>' +
+                    '<div id="wrGenerateResult" class="mt-4"></div>' +
+                '</div>' +
+                // Preview pane
+                '<div id="wrPreviewPane" class="hidden bg-slate-800/60 border border-slate-700 rounded-xl overflow-hidden">' +
+                    '<div class="flex items-center justify-between px-5 py-3 border-b border-slate-700">' +
+                        '<h3 class="font-bold text-sm uppercase tracking-widest" style="color:#F5B800">Prévisualisation</h3>' +
+                        '<div class="flex gap-2">' +
+                            '<button id="wrDownloadBtn" onclick="wrDownloadCurrent()" class="px-3 py-1 rounded text-xs font-semibold bg-green-700 hover:bg-green-600 text-white">⬇ Télécharger HTML</button>' +
+                            '<button id="wrWhatsAppBtn" onclick="wrShareCurrentWhatsApp()" class="px-3 py-1 rounded text-xs font-semibold text-white" style="background:#25D366">WhatsApp</button>' +
+                        '</div>' +
+                    '</div>' +
+                    '<iframe id="wrPreviewFrame" style="width:100%;height:520px;border:none;background:#fff;"></iframe>' +
+                '</div>' +
+                // History
+                '<div class="bg-slate-800/60 border border-slate-700 rounded-xl p-5">' +
+                    '<h3 class="font-bold text-sm uppercase tracking-widest mb-4" style="color:#F5B800">Historique</h3>' +
+                    '<div class="overflow-x-auto">' +
+                        '<table class="w-full text-sm"><thead class="border-b border-slate-600">' +
+                        '<tr><th class="px-4 py-2 text-left text-xs uppercase tracking-wider">Semaine</th>' +
+                        '<th class="px-4 py-2 text-center text-xs uppercase tracking-wider">Mètres</th>' +
+                        '<th class="px-4 py-2 text-center text-xs uppercase tracking-wider">Alertes</th>' +
+                        '<th class="px-4 py-2 text-left text-xs uppercase tracking-wider">Actions</th></tr></thead>' +
+                        '<tbody>' + historyRows + '</tbody></table>' +
+                    '</div>' +
+                '</div>' +
+            '</div>';
+        }
+
+        function fmtWRDate(d) {
+            if (!d) return '';
+            var p = d.split('-');
+            return p[2] + '/' + p[1] + '/' + p[0];
+        }
+
+        // ── Enregistrement config ──────────────────────────────────────────────
+        window.wrSaveConfig = function() {
+            var sections = [];
+            document.querySelectorAll('.wr-section-chk:checked').forEach(function(c) { sections.push(c.value); });
+            var payload = {
+                reportDay:      parseInt(document.getElementById('wrDaySelect').value, 10),
+                whatsappNumber: (document.getElementById('wrWaNumber').value || '').trim(),
+                recipientName:  (document.getElementById('wrRecipient').value || '').trim(),
+                includeSections: sections
+            };
+            window.API.WeeklyReport.saveConfig(payload).then(function() {
+                _wrConfig = Object.assign({}, _wrConfig, payload);
+                if (typeof showGedToast === 'function') showGedToast('Configuration enregistrée', 'success');
+            }).catch(function(err) {
+                if (typeof showGedToast === 'function') showGedToast('Erreur : ' + err.message, 'error');
+            });
+        };
+
+        // ── Génération ─────────────────────────────────────────────────────────
+        window.wrGenerate = function() {
+            var btn = document.getElementById('wrGenerateBtn');
+            var resultEl = document.getElementById('wrGenerateResult');
+            if (btn) { btn.disabled = true; btn.textContent = '⏳ Génération…'; }
+            if (resultEl) resultEl.innerHTML = '';
+
+            var weekStartInput = document.getElementById('wrWeekStart');
+            var weekStart = weekStartInput ? weekStartInput.value : null;
+
+            window.API.WeeklyReport.run(weekStart || null).then(function(data) {
+                if (btn) { btn.disabled = false; btn.textContent = '📊 Générer'; }
+                _wrCurrentHtml = null;
+                return window.API.WeeklyReport.getReportHtml(data.id).then(function(html) {
+                    _wrCurrentHtml = html;
+                    _wrCurrentId = data.id;
+                    // Afficher la prévisualisation
+                    var pane = document.getElementById('wrPreviewPane');
+                    var frame = document.getElementById('wrPreviewFrame');
+                    if (pane && frame) {
+                        pane.classList.remove('hidden');
+                        var blob = new Blob([html], { type: 'text/html' });
+                        var url = URL.createObjectURL(blob);
+                        frame.src = url;
+                    }
+                    if (resultEl) resultEl.innerHTML = '<p class="text-green-400 text-sm mt-2">Rapport généré · semaine du ' + fmtWRDate(data.weekStart) + ' au ' + fmtWRDate(data.weekEnd) + '</p>';
+                    // Rafraîchir historique
+                    return window.API.WeeklyReport.getHistory();
+                });
+            }).then(function(hist) {
+                if (hist) { _wrHistory = hist; }
+            }).catch(function(err) {
+                if (btn) { btn.disabled = false; btn.textContent = '📊 Générer'; }
+                if (resultEl) resultEl.innerHTML = '<p class="text-red-400 text-sm mt-2">Erreur : ' + err.message + '</p>';
+            });
+        };
+
+        var _wrCurrentId = null;
+
+        window.wrViewReport = function(id) {
+            window.API.WeeklyReport.getReportHtml(id).then(function(html) {
+                _wrCurrentHtml = html;
+                _wrCurrentId = id;
+                var pane = document.getElementById('wrPreviewPane');
+                var frame = document.getElementById('wrPreviewFrame');
+                if (pane && frame) {
+                    pane.classList.remove('hidden');
+                    var blob = new Blob([html], { type: 'text/html' });
+                    frame.src = URL.createObjectURL(blob);
+                    pane.scrollIntoView({ behavior: 'smooth' });
+                }
+            }).catch(function(err) {
+                if (typeof showGedToast === 'function') showGedToast('Erreur : ' + err.message, 'error');
+            });
+        };
+
+        window.wrDownloadReport = function(id) {
+            window.API.WeeklyReport.getReportHtml(id).then(function(html) {
+                var blob = new Blob([html], { type: 'text/html' });
+                var a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = 'rapport-hebdo-' + id + '.html';
+                a.click();
+            });
+        };
+
+        window.wrDownloadCurrent = function() {
+            if (!_wrCurrentHtml) return;
+            var blob = new Blob([_wrCurrentHtml], { type: 'text/html' });
+            var a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'rapport-hebdo-' + (_wrCurrentId || 'export') + '.html';
+            a.click();
+        };
+
+        window.wrShareCurrentWhatsApp = function() {
+            if (!_wrConfig || !_wrConfig.whatsappNumber) {
+                if (typeof showGedToast === 'function') showGedToast('Configurez d\'abord un numéro WhatsApp', 'warning');
+                return;
+            }
+            var recipName = (_wrConfig.recipientName || 'Bonjour').trim();
+            var text = encodeURIComponent(
+                recipName + ',\n\nVeuillez trouver ci-joint le rapport hebdomadaire GEDRILLING.\n' +
+                'Généré le ' + new Date().toLocaleString('fr-FR') + '.\n\n— GOOD ENGINEERS'
+            );
+            var wa = (_wrConfig.whatsappNumber || '').replace(/[^\d]/g, '');
+            window.open('https://wa.me/' + wa + '?text=' + text, '_blank');
+        };
+
+        window.wrShareWhatsApp = function(id) {
+            if (!_wrConfig || !_wrConfig.whatsappNumber) {
+                if (typeof showGedToast === 'function') showGedToast('Configurez d\'abord un numéro WhatsApp', 'warning');
+                return;
+            }
+            var r = _wrHistory.find(function(x) { return x.id === id; });
+            var period = r ? (' du ' + fmtWRDate(r.weekStart) + ' au ' + fmtWRDate(r.weekEnd)) : '';
+            var recipName = (_wrConfig.recipientName || 'Bonjour').trim();
+            var text = encodeURIComponent(
+                recipName + ',\n\nRapport hebdomadaire GEDRILLING' + period + '.\nGénéré le ' + new Date().toLocaleString('fr-FR') + '.\n\n— GOOD ENGINEERS'
+            );
+            var wa = (_wrConfig.whatsappNumber || '').replace(/[^\d]/g, '');
+            window.open('https://wa.me/' + wa + '?text=' + text, '_blank');
+        };
     })();
     </script>
 </body>
