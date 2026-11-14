@@ -12018,6 +12018,115 @@
             var avgAvail = availMachines.length > 0 ? availMachines.reduce(function(s,m){return s+m.availSum/m.availCnt;},0)/availMachines.length : 0;
             var effCpm = totM > 0 ? (PM_DATA.reduce(function(s,p){return s+p.tot;},0) / totM) : 0;
 
+            // ── Coût réel au mètre par foreuse (coûts de la période répartis par heures) ──
+            // Le coût total du chantier est alloué à chaque machine au prorata de ses heures
+            // (une machine plus lente par mètre ressort avec un coût/m plus élevé).
+            var costCur = (companyInfo && companyInfo.currency) || 'XOF';
+            var totalPeriodCost = 0;
+            try {
+                var _dts = records.map(function(r){return r.date;}).filter(Boolean).sort();
+                if (_dts.length && typeof computeProfitabilityForRange === 'function') {
+                    var _pr = computeProfitabilityForRange(_dts[0], _dts[_dts.length-1], null);
+                    totalPeriodCost = _pr.totalCouts || 0;
+                    costCur = _pr.dispCur || costCur;
+                }
+            } catch (e) {}
+            machines.forEach(function(m){
+                var alloc = totH > 0 ? totalPeriodCost * (m.hours / totH) : 0;
+                m.costPerM = m.meters > 0 ? (alloc / m.meters) : null;
+            });
+            var avgCostPerM = totM > 0 ? (totalPeriodCost / totM) : null;
+
+            // ── Fiabilité & maintenance (interventions, MTTR, MTBF) ──
+            var siteDrillIds = {};
+            (typeof getDrillsForSite === 'function' ? getDrillsForSite() : (drills||[])).forEach(function(d){ siteDrillIds[String(d.id)] = true; });
+            var maintMap = {};
+            (typeof maintenanceHistory !== 'undefined' ? maintenanceHistory : []).forEach(function(h){
+                var mid = String(h.machineId || '');
+                if (!mid || !siteDrillIds[mid]) return;
+                if (!maintMap[mid]) maintMap[mid] = { count:0, durSum:0, cost:0 };
+                maintMap[mid].count += 1;
+                maintMap[mid].durSum += parseFloat(h.duration) || 0;
+                maintMap[mid].cost += parseFloat(h.cost) || 0;
+            });
+            var reliRows = machines.filter(function(m){ return maintMap[m.id]; }).map(function(m,i){
+                var mm = maintMap[m.id];
+                var mttr = mm.count>0 ? (mm.durSum/mm.count) : 0;
+                var mtbf = mm.count>0 && m.hours>0 ? (m.hours/mm.count) : null;
+                var bg = i%2?'background:rgba(0,0,0,0.02)':'';
+                return '<tr style="'+bg+';border-bottom:1px solid rgba(0,0,0,0.06)">'+
+                    '<td class="px-4 py-3 font-black font-mono" style="color:var(--ged-yellow);border-left:4px solid '+machCols[i%machCols.length]+'">'+m.id+'</td>'+
+                    '<td class="px-4 py-3 text-right font-mono">'+mm.count+'</td>'+
+                    '<td class="px-4 py-3 text-right font-mono">'+(mttr>0?mttr.toFixed(1)+' h':'—')+'</td>'+
+                    '<td class="px-4 py-3 text-right font-mono font-semibold">'+(mtbf!=null?mtbf.toFixed(0)+' h':'—')+'</td>'+
+                    '<td class="px-4 py-3 text-right font-mono text-xs">'+formatCurrency(mm.cost, costCur)+'</td>'+
+                    '</tr>';
+            }).join('');
+            // ── Planifié vs réalisé (plan de forage) ──
+            var planVsActualHtml = '';
+            try {
+                var fp = (typeof getFPData === 'function') ? getFPData() : { blocks: [] };
+                var pBlocks = (fp.blocks || []).map(function(b){
+                    var holes = b.holes || [];
+                    var plan = 0, act = 0, done = 0;
+                    holes.forEach(function(h){ plan += parseFloat(h.planDepth)||0; act += parseFloat(h.actDepth||h.finalDepth)||0; if (String(h.status||'').toUpperCase().indexOf('COMPLET')>=0) done++; });
+                    return { code: b.id || b.code || '—', holes: holes.length, done: done, plan: plan, act: act };
+                }).filter(function(b){ return b.holes>0; });
+                var totPlan = pBlocks.reduce(function(s,b){return s+b.plan;},0);
+                var totAct = pBlocks.reduce(function(s,b){return s+b.act;},0);
+                var totHoles = pBlocks.reduce(function(s,b){return s+b.holes;},0);
+                var totDone = pBlocks.reduce(function(s,b){return s+b.done;},0);
+                if (pBlocks.length) {
+                    var prog = totPlan>0 ? Math.min(100, totAct/totPlan*100) : 0;
+                    var progCol = prog>=90?'#28A745':prog>=50?'#F5B800':'#DC3545';
+                    var blkRows = pBlocks.sort(function(a,b){return b.plan-a.plan;}).map(function(b,i){
+                        var p = b.plan>0 ? Math.min(100, b.act/b.plan*100) : 0;
+                        var bg = i%2?'background:rgba(0,0,0,0.02)':'';
+                        return '<tr style="'+bg+';border-bottom:1px solid rgba(0,0,0,0.06)">'+
+                            '<td class="px-4 py-3 font-semibold" style="border-left:4px solid '+machCols[i%machCols.length]+'">'+String(b.code).replace(/</g,'&lt;')+'</td>'+
+                            '<td class="px-4 py-3 text-right font-mono">'+b.done+' / '+b.holes+'</td>'+
+                            '<td class="px-4 py-3 text-right font-mono">'+b.plan.toFixed(1)+' m</td>'+
+                            '<td class="px-4 py-3 text-right font-mono font-bold">'+b.act.toFixed(1)+' m</td>'+
+                            '<td class="px-4 py-3 text-right"><div style="display:flex;align-items:center;gap:6px;justify-content:flex-end"><div style="width:70px;height:7px;background:rgba(0,0,0,0.08);border-radius:4px;overflow:hidden"><div style="width:'+p.toFixed(0)+'%;height:100%;background:'+(p>=90?'#28A745':p>=50?'#F5B800':'#DC3545')+'"></div></div><span class="font-mono text-xs">'+p.toFixed(0)+'%</span></div></td>'+
+                            '</tr>';
+                    }).join('');
+                    planVsActualHtml =
+                        '<div class="ged-content-panel rounded-xl overflow-hidden mb-4">'+
+                        '<div class="px-5 py-3 border-b" style="border-color:rgba(0,0,0,0.08);background:rgba(245,184,0,0.06)">'+
+                        '<h3 class="font-bold text-sm" style="color:var(--ged-black)">Plan de forage — planifié vs réalisé</h3>'+
+                        '</div>'+
+                        '<div class="p-5">'+
+                        '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px"><span class="text-xs" style="color:#64748B">Avancement global · '+totDone+'/'+totHoles+' trous complétés</span><span class="font-black font-mono" style="color:'+progCol+'">'+prog.toFixed(1)+'%</span></div>'+
+                        '<div style="height:12px;background:rgba(0,0,0,0.08);border-radius:6px;overflow:hidden;margin-bottom:4px"><div style="width:'+prog.toFixed(1)+'%;height:100%;background:'+progCol+'"></div></div>'+
+                        '<div class="text-xs" style="color:#94A3B8">'+totAct.toFixed(1)+' m réalisés sur '+totPlan.toFixed(1)+' m planifiés</div>'+
+                        '</div>'+
+                        '<div style="overflow-x:auto"><table style="width:100%;font-size:13px;border-collapse:collapse">'+
+                        '<thead><tr style="border-bottom:1px solid rgba(0,0,0,0.08);font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:#64748B;background:rgba(0,0,0,0.02)">'+
+                        '<th class="px-4 py-2.5 text-left">Bloc</th>'+
+                        '<th class="px-4 py-2.5 text-right">Trous faits</th>'+
+                        '<th class="px-4 py-2.5 text-right">Planifié</th>'+
+                        '<th class="px-4 py-2.5 text-right">Réalisé</th>'+
+                        '<th class="px-4 py-2.5 text-right">Avancement</th>'+
+                        '</tr></thead><tbody>'+blkRows+'</tbody></table></div></div>';
+                }
+            } catch (e) {}
+
+            var reliabilityHtml = reliRows ?
+                '<div class="ged-content-panel rounded-xl overflow-hidden mb-4">'+
+                '<div class="px-5 py-3 border-b" style="border-color:rgba(0,0,0,0.08);background:rgba(245,184,0,0.06)">'+
+                '<h3 class="font-bold text-sm" style="color:var(--ged-black)">Fiabilité &amp; maintenance par machine</h3>'+
+                '<p class="text-xs mt-0.5" style="color:#64748B">MTTR = temps moyen d\'intervention · MTBF = heures machine entre deux interventions (plus c\'est élevé, plus la machine est fiable).</p>'+
+                '</div>'+
+                '<div style="overflow-x:auto"><table style="width:100%;font-size:13px;border-collapse:collapse">'+
+                '<thead><tr style="border-bottom:1px solid rgba(0,0,0,0.08);font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:#64748B;background:rgba(0,0,0,0.02)">'+
+                '<th class="px-4 py-2.5 text-left">Machine</th>'+
+                '<th class="px-4 py-2.5 text-right">Interventions</th>'+
+                '<th class="px-4 py-2.5 text-right">MTTR</th>'+
+                '<th class="px-4 py-2.5 text-right">MTBF</th>'+
+                '<th class="px-4 py-2.5 text-right">Coût maintenance</th>'+
+                '</tr></thead><tbody>'+reliRows+'</tbody></table></div></div>'
+                : '';
+
             if (machines.length === 0) {
                 el.innerHTML = '<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">'+
                     kpi('Mètres forés','— m','','')+kpi('ROP moyen','— m/h','','')+
@@ -12047,6 +12156,7 @@
                     '<td class="px-4 py-3 text-right font-mono font-semibold">'+rop+(rop!=='—'?' m/h':'')+'</td>'+
                     '<td class="px-4 py-3 text-right font-mono">'+m.fuel.toFixed(0)+' L</td>'+
                     '<td class="px-4 py-3 text-right font-mono text-xs">'+(fuelEff!=='—'?fuelEff+' L/h':'—')+'</td>'+
+                    '<td class="px-4 py-3 text-right font-mono text-xs font-semibold">'+(m.costPerM!=null?formatCurrency(m.costPerM, costCur)+'/m':'—')+'</td>'+
                     '<td class="px-4 py-3 text-right font-mono font-bold" style="'+avColor+'">'+av+'</td>'+
                     '<td class="px-4 py-3 text-right text-sm" style="color:#94A3B8">'+m.records+'</td>'+
                     '</tr>';
@@ -12058,6 +12168,7 @@
                 '<td class="px-4 py-3 text-right font-mono font-bold">'+avgROP.toFixed(2)+' m/h</td>'+
                 '<td class="px-4 py-3 text-right font-mono">'+totF.toFixed(0)+' L</td>'+
                 '<td class="px-4 py-3 text-right font-mono text-xs">'+(totH>0?(totF/totH).toFixed(1)+' L/h':'—')+'</td>'+
+                '<td class="px-4 py-3 text-right font-mono text-xs font-bold">'+(avgCostPerM!=null?formatCurrency(avgCostPerM, costCur)+'/m':'—')+'</td>'+
                 '<td class="px-4 py-3 text-right font-mono font-bold" style="color:#B45309">'+avgAvail.toFixed(1)+'%</td>'+
                 '<td class="px-4 py-3 text-right text-sm" style="color:#94A3B8">'+records.length+'</td>'+
                 '</tr>';
@@ -12124,9 +12235,13 @@
                 '<th class="px-4 py-2.5 text-right">ROP</th>'+
                 '<th class="px-4 py-2.5 text-right">Carburant</th>'+
                 '<th class="px-4 py-2.5 text-right">Efficacité</th>'+
+                '<th class="px-4 py-2.5 text-right">Coût/m</th>'+
                 '<th class="px-4 py-2.5 text-right">Dispo.</th>'+
                 '<th class="px-4 py-2.5 text-right">Saisies</th>'+
-                '</tr></thead><tbody>'+tblRows+'</tbody><tfoot>'+tblFoot+'</tfoot></table></div></div>';
+                '</tr></thead><tbody>'+tblRows+'</tbody><tfoot>'+tblFoot+'</tfoot></table></div>'+
+                '<div class="px-5 py-2 text-xs" style="color:#94A3B8;background:rgba(0,0,0,0.02)">Coût/m = coûts du chantier sur la période répartis par heures machine, divisés par les mètres (une machine plus lente ressort avec un coût/m plus élevé).</div></div>'+
+                planVsActualHtml+
+                reliabilityHtml;
 
             // ── Charts ────────────────────────────────────────────
             var chartDefaults = {
