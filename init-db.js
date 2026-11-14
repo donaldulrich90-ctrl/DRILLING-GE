@@ -916,6 +916,25 @@ db.serialize(() => {
         }
     );
 
+    // État de module générique (persistance serveur pour modules local-first : souterrain, HSE…)
+    db.run(
+        `
+        CREATE TABLE IF NOT EXISTS module_state (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            enterpriseId INTEGER NOT NULL DEFAULT 1,
+            moduleKey TEXT NOT NULL,
+            data TEXT,
+            updatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
+            updatedBy TEXT DEFAULT '',
+            UNIQUE(enterpriseId, moduleKey)
+        )
+    `,
+        (err) => {
+            if (err) console.error('Erreur module_state:', err);
+            else console.log('✅ Table module_state');
+        }
+    );
+
     // ── Phase 3 — Affûtage des bits ───────────────────────────────────────
     db.run(`
         CREATE TABLE IF NOT EXISTS bits (

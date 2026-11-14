@@ -8367,7 +8367,21 @@
             try { var raw = localStorage.getItem(_ugKey()); if (!raw) return { galleries: [], advances: [] }; var d = JSON.parse(raw); if (!Array.isArray(d.galleries)) d.galleries = []; if (!Array.isArray(d.advances)) d.advances = []; return d; }
             catch (e) { return { galleries: [], advances: [] }; }
         }
-        function saveUGData(d) { try { localStorage.setItem(_ugKey(), JSON.stringify(d)); } catch (e) {} }
+        function saveUGData(d) {
+            try { localStorage.setItem(_ugKey(), JSON.stringify(d)); } catch (e) {}
+            // Persistance serveur (multi-appareil, sauvegardes) — le cache local reste la source d'affichage immédiat.
+            try { if (window.API && window.API.ModuleState) window.API.ModuleState.set('underground', d).catch(function () {}); } catch (e) {}
+        }
+        function ugSyncFromServer() {
+            if (!(window.API && window.API.ModuleState && window.API.getAuthToken && window.API.getAuthToken())) return;
+            window.API.ModuleState.get('underground').then(function (res) {
+                if (res && res.data && Array.isArray(res.data.galleries)) {
+                    try { localStorage.setItem(_ugKey(), JSON.stringify(res.data)); } catch (e) {}
+                    renderSouterrain();
+                }
+            }).catch(function () {});
+        }
+        window.ugSyncFromServer = ugSyncFromServer;
         function _ugNextId(arr, prefix) { var m = 0; (arr || []).forEach(function (x) { var n = parseInt(String(x.id || '').replace(prefix + '-', ''), 10); if (!isNaN(n) && n > m) m = n; }); return prefix + '-' + String(m + 1).padStart(3, '0'); }
         function ugAdvancedMeters(data, galleryId) { return (data.advances || []).filter(function (a) { return a.galleryId === galleryId; }).reduce(function (s, a) { return s + (parseFloat(a.meters) || 0); }, 0); }
 
@@ -9433,6 +9447,7 @@
                 renderHSE();
             } else if (view === 'souterrain') {
                 renderSouterrain();
+                try { ugSyncFromServer(); } catch (e) {}
             } else if (view === 'bit_sharpening') {
                 renderBitSharpening();
             } else if (view === 'soustraitants') {

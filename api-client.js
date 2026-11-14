@@ -280,6 +280,14 @@ const DrillMonthBillingAPI = {
 };
 
 // ============================================
+// API - ÉTAT DE MODULE (persistance générique)
+// ============================================
+const ModuleStateAPI = {
+    get: (key) => apiRequest('/module-state/' + encodeURIComponent(key), 'GET'),
+    set: (key, data) => apiRequest('/module-state/' + encodeURIComponent(key), 'PUT', { data: data })
+};
+
+// ============================================
 // API - CLÔTURE MOIS MINIER
 // ============================================
 const MiningMonthClosureAPI = {
@@ -657,6 +665,7 @@ if (typeof window !== 'undefined') {
         Payments: PaymentsAPI,
         DrillMonthBilling: DrillMonthBillingAPI,
         MiningMonthClosure: MiningMonthClosureAPI,
+        ModuleState: ModuleStateAPI,
         Inventory: InventoryAPI,
         DailyData: DailyDataAPI,
         DrillingPlan: DrillingPlanAPI,
