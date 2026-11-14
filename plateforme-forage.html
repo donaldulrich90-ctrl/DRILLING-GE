@@ -1335,6 +1335,7 @@
                     <button type="button" onclick="showMainView('consumables')" class="ged-nav-item main-nav-btn" id="nav-consumables">◫ &nbsp;Consommables</button>
                     <button type="button" onclick="showMainView('inventory')" class="ged-nav-item main-nav-btn" id="nav-inventory">▣ &nbsp;Stocks</button>
                     <button type="button" onclick="showMainView('hse')" class="ged-nav-item main-nav-btn" id="nav-hse">✚ &nbsp;Santé &amp; sécurité</button>
+                    <button type="button" onclick="showMainView('souterrain')" class="ged-nav-item main-nav-btn" id="nav-souterrain">🕳️ &nbsp;Mine souterraine</button>
 
                     <p class="ged-nav-section ged-nav-toggle" onclick="gedToggleNavSection(this)"><span class="nav-caret">▾</span>Pilotage &amp; analyse</p>
                     <button type="button" onclick="showMainView('analytics')" class="ged-nav-item main-nav-btn" id="nav-analytics">◒ &nbsp;Performance</button>
@@ -1902,6 +1903,15 @@
                 <p class="text-slate-400 text-sm mt-1">Incidents · EPI · Formations HSE · Permis de travail</p>
             </div>
             <div id="hseContent"></div>
+        </div>
+
+        <!-- ═══ VUE MINE SOUTERRAINE ═══════════════════════════════════ -->
+        <div id="mainView-souterrain" class="main-view hidden">
+            <div class="mb-6 pb-4 border-b border-slate-700">
+                <h2 class="text-2xl font-extrabold tracking-tight" style="color:var(--ged-yellow)">🕳️ Mine souterraine</h2>
+                <p class="text-slate-400 text-sm mt-1">Galeries &amp; niveaux · avancement · soutènement</p>
+            </div>
+            <div id="souterrainContent"></div>
         </div>
 
         <!-- Modal Ajout/Modification Client -->
@@ -3431,6 +3441,7 @@
                                 <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictConsumables" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Consommables</span></label>
                                 <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictInventory" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Stocks</span></label>
                                 <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictHSE" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Santé & sécurité</span></label>
+                                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictSouterrain" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Mine souterraine</span></label>
                             </div>
                             <p class="text-[11px] font-bold tracking-wider text-slate-400 uppercase mt-1">Pilotage & analyse</p>
                             <div class="space-y-2 pl-1">
@@ -6099,6 +6110,7 @@
                 'nav-bit_sharpening': 'restrictBitSharpening',
                 'nav-consumables': 'restrictConsumables',
                 'nav-hse': 'restrictHSE',
+                'nav-souterrain': 'restrictSouterrain',
                 'nav-analytics': 'restrictAnalytics',
                 'nav-planification': 'restrictPlanification',
                 'nav-besoins': 'restrictBesoins',
@@ -6120,7 +6132,7 @@
                 'nav-company_info': 'restrictCompanyInfo',
                 'nav-accounts': 'restrictAccounts'
             };
-            var allNavButtons = ['nav-dashboard', 'nav-forage_plan', 'nav-connections', 'nav-assignments', 'nav-maintenance', 'nav-bit_sharpening', 'nav-consumables', 'nav-hse', 'nav-analytics', 'nav-planification', 'nav-besoins', 'nav-rentabilite', 'nav-depenses_pm', 'nav-payments', 'nav-soustraitants', 'nav-invoices', 'nav-contracts', 'nav-enterprises', 'nav-sites', 'nav-revenue', 'nav-site_meals', 'nav-reports', 'nav-project_overview', 'nav-rh', 'nav-inventory', 'nav-accounts', 'nav-clients', 'nav-translator', 'nav-team_chat', 'nav-company_info'];
+            var allNavButtons = ['nav-dashboard', 'nav-forage_plan', 'nav-connections', 'nav-assignments', 'nav-maintenance', 'nav-bit_sharpening', 'nav-consumables', 'nav-hse', 'nav-souterrain', 'nav-analytics', 'nav-planification', 'nav-besoins', 'nav-rentabilite', 'nav-depenses_pm', 'nav-payments', 'nav-soustraitants', 'nav-invoices', 'nav-contracts', 'nav-enterprises', 'nav-sites', 'nav-revenue', 'nav-site_meals', 'nav-reports', 'nav-project_overview', 'nav-rh', 'nav-inventory', 'nav-accounts', 'nav-clients', 'nav-translator', 'nav-team_chat', 'nav-company_info'];
 
             if (isPlatformBillingOnlyUser(currentUser)) {
                 allNavButtons.forEach(function(btnId) {
@@ -6166,7 +6178,7 @@
             // Onglets nouvellement gérés par l'accès explicite : jamais masqués par une
             // ancienne liste d'abonnement (qui ne les connaît pas), pour éviter de les
             // cacher à tort une fois ajoutés au contrôle d'accès.
-            var NEW_MANAGED_VIEWS = { forage_plan: 1, bit_sharpening: 1, consumables: 1, hse: 1, analytics: 1, planification: 1, besoins: 1, rentabilite: 1, depenses_pm: 1, payments: 1, soustraitants: 1 };
+            var NEW_MANAGED_VIEWS = { forage_plan: 1, bit_sharpening: 1, consumables: 1, hse: 1, souterrain: 1, analytics: 1, planification: 1, besoins: 1, rentabilite: 1, depenses_pm: 1, payments: 1, soustraitants: 1 };
             function allowedBySubscription(navId) {
                 if (navId === 'nav-enterprises') return true;
                 if (!subTabs || !subTabs.length) return true;
@@ -6251,6 +6263,7 @@
                 'nav-bit_sharpening': true,
                 'nav-consumables': true,
                 'nav-hse': true,
+                'nav-souterrain': true,
                 'nav-analytics': true,
                 'nav-planification': true,
                 'nav-besoins': true,
@@ -6356,7 +6369,7 @@
                 view !== 'enterprises' && subNav.indexOf(view) < 0) {
                 view = 'dashboard';
             }
-            var views = ['consumables', 'dashboard', 'connections', 'assignments', 'maintenance', 'bit_sharpening', 'invoices', 'payments', 'contracts', 'sites', 'enterprises', 'revenue', 'site_meals', 'reports', 'project_overview', 'planification', 'besoins', 'rh', 'inventory', 'accounts', 'clients', 'translator', 'team_chat', 'company_info', 'forage_plan', 'rentabilite', 'depenses_pm', 'analytics', 'hse', 'soustraitants'];
+            var views = ['consumables', 'dashboard', 'connections', 'assignments', 'maintenance', 'bit_sharpening', 'invoices', 'payments', 'contracts', 'sites', 'enterprises', 'revenue', 'site_meals', 'reports', 'project_overview', 'planification', 'besoins', 'rh', 'inventory', 'accounts', 'clients', 'translator', 'team_chat', 'company_info', 'forage_plan', 'rentabilite', 'depenses_pm', 'analytics', 'hse', 'souterrain', 'soustraitants'];
             views.forEach(function(v) {
                 var el = document.getElementById('mainView-' + v);
                 if (el) el.classList.add('hidden');
@@ -8346,6 +8359,137 @@
             return prefix + '-' + String(max + 1).padStart(3, '0');
         }
 
+        // ============================================================
+        // MINE SOUTERRAINE (v1 — galeries & avancement, stockage local)
+        // ============================================================
+        function _ugKey() { return 'ged_ug_data_' + (window.API && window.API.getEnterpriseId ? (window.API.getEnterpriseId() || '0') : '0'); }
+        function getUGData() {
+            try { var raw = localStorage.getItem(_ugKey()); if (!raw) return { galleries: [], advances: [] }; var d = JSON.parse(raw); if (!Array.isArray(d.galleries)) d.galleries = []; if (!Array.isArray(d.advances)) d.advances = []; return d; }
+            catch (e) { return { galleries: [], advances: [] }; }
+        }
+        function saveUGData(d) { try { localStorage.setItem(_ugKey(), JSON.stringify(d)); } catch (e) {} }
+        function _ugNextId(arr, prefix) { var m = 0; (arr || []).forEach(function (x) { var n = parseInt(String(x.id || '').replace(prefix + '-', ''), 10); if (!isNaN(n) && n > m) m = n; }); return prefix + '-' + String(m + 1).padStart(3, '0'); }
+        function ugAdvancedMeters(data, galleryId) { return (data.advances || []).filter(function (a) { return a.galleryId === galleryId; }).reduce(function (s, a) { return s + (parseFloat(a.meters) || 0); }, 0); }
+
+        window.ugAddGallery = function () {
+            var data = getUGData();
+            var level = (document.getElementById('ugLevel') || {}).value || '';
+            var name = ((document.getElementById('ugName') || {}).value || '').trim();
+            var section = (document.getElementById('ugSection') || {}).value || '';
+            var planned = parseFloat((document.getElementById('ugPlanned') || {}).value) || 0;
+            var support = (document.getElementById('ugSupport') || {}).value || '';
+            if (!name) { alert('Nom de la galerie requis.'); return; }
+            data.galleries.push({ id: _ugNextId(data.galleries, 'GAL'), level: level, name: name, section: section, plannedLength: planned, supportType: support, status: 'EN COURS' });
+            saveUGData(data);
+            renderSouterrain();
+        };
+        window.ugDeleteGallery = function (id) {
+            if (!confirm('Supprimer cette galerie et son avancement ?')) return;
+            var data = getUGData();
+            data.galleries = data.galleries.filter(function (g) { return g.id !== id; });
+            data.advances = data.advances.filter(function (a) { return a.galleryId !== id; });
+            saveUGData(data); renderSouterrain();
+        };
+        window.ugAddAdvance = function () {
+            var data = getUGData();
+            var gid = (document.getElementById('ugAdvGallery') || {}).value || '';
+            var date = (document.getElementById('ugAdvDate') || {}).value || '';
+            var meters = parseFloat((document.getElementById('ugAdvMeters') || {}).value) || 0;
+            var rounds = parseInt((document.getElementById('ugAdvRounds') || {}).value, 10) || 0;
+            var support = (document.getElementById('ugAdvSupport') || {}).value || '';
+            var notes = ((document.getElementById('ugAdvNotes') || {}).value || '').trim();
+            if (!gid) { alert('Choisissez une galerie.'); return; }
+            if (!date) { alert('Date requise.'); return; }
+            if (meters <= 0) { alert('Mètres avancés requis.'); return; }
+            data.advances.unshift({ id: _ugNextId(data.advances, 'ADV'), galleryId: gid, date: date, meters: meters, rounds: rounds, support: support, notes: notes });
+            // Clôture auto si la galerie atteint sa longueur planifiée
+            var g = data.galleries.find(function (x) { return x.id === gid; });
+            if (g && g.plannedLength > 0 && ugAdvancedMeters(data, gid) >= g.plannedLength - 0.05) g.status = 'TERMINÉE';
+            saveUGData(data); renderSouterrain();
+        };
+        window.ugDeleteAdvance = function (id) {
+            var data = getUGData();
+            data.advances = data.advances.filter(function (a) { return a.id !== id; });
+            saveUGData(data); renderSouterrain();
+        };
+
+        function renderSouterrain() {
+            var el = document.getElementById('souterrainContent');
+            if (!el) return;
+            var data = getUGData();
+            var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); };
+            var totPlan = data.galleries.reduce(function (s, g) { return s + (parseFloat(g.plannedLength) || 0); }, 0);
+            var totAdv = data.advances.reduce(function (s, a) { return s + (parseFloat(a.meters) || 0); }, 0);
+            var active = data.galleries.filter(function (g) { return g.status !== 'TERMINÉE'; }).length;
+            var prog = totPlan > 0 ? Math.min(100, totAdv / totPlan * 100) : 0;
+            var kpi = function (l, v, c) { return '<div class="ged-content-panel rounded-xl px-5 py-4"><p class="text-[10px] uppercase tracking-widest font-semibold mb-1" style="color:#64748B">' + l + '</p><p class="text-2xl font-black font-mono" style="color:' + (c || 'var(--ged-black)') + '">' + v + '</p></div>'; };
+            var sections = ['', '2.5×2.5 m', '3×3 m', '4×4 m', '5×5 m', '4×4.5 m', 'Autre'];
+            var supports = ['', 'Boulonnage', 'Béton projeté', 'Cintres', 'Treillis', 'Boulonnage + treillis', 'Non soutenu'];
+
+            var galForm =
+                '<div class="ged-content-panel rounded-xl p-5 mb-5">' +
+                '<h3 class="font-bold text-sm mb-3" style="color:var(--ged-black)">➕ Ajouter une galerie / un chantier</h3>' +
+                '<div class="grid grid-cols-2 md:grid-cols-5 gap-3">' +
+                '<div><label class="block text-xs text-slate-500 mb-1">Niveau</label><input id="ugLevel" placeholder="Ex. N-120" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                '<div><label class="block text-xs text-slate-500 mb-1">Nom *</label><input id="ugName" placeholder="Galerie / travers-banc / chantier" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                '<div><label class="block text-xs text-slate-500 mb-1">Section</label><select id="ugSection" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm">' + sections.map(function (s) { return '<option value="' + s + '">' + (s || '—') + '</option>'; }).join('') + '</select></div>' +
+                '<div><label class="block text-xs text-slate-500 mb-1">Longueur planifiée (m)</label><input id="ugPlanned" type="number" min="0" step="0.5" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                '<div><label class="block text-xs text-slate-500 mb-1">Soutènement</label><select id="ugSupport" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm">' + supports.map(function (s) { return '<option value="' + s + '">' + (s || '—') + '</option>'; }).join('') + '</select></div>' +
+                '</div>' +
+                '<button onclick="ugAddGallery()" class="mt-3 bg-amber-600 hover:bg-amber-700 px-4 py-2 rounded-lg font-semibold text-sm">Ajouter</button>' +
+                '</div>';
+
+            var galRows = data.galleries.map(function (g, i) {
+                var adv = ugAdvancedMeters(data, g.id);
+                var p = (parseFloat(g.plannedLength) || 0) > 0 ? Math.min(100, adv / g.plannedLength * 100) : 0;
+                var pc = p >= 90 ? '#28A745' : p >= 50 ? '#F5B800' : '#DC3545';
+                var statusPill = g.status === 'TERMINÉE' ? '<span style="background:rgba(40,167,69,.15);color:#28A745;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700">Terminée</span>' : '<span style="background:rgba(245,184,0,.15);color:#B45309;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700">En cours</span>';
+                return '<tr style="border-bottom:1px solid rgba(255,255,255,0.06)">' +
+                    '<td class="px-3 py-3"><div class="font-bold" style="color:var(--ged-yellow)">' + esc(g.name) + '</div><div class="text-[11px] text-slate-500">' + esc(g.level || '—') + ' · ' + esc(g.section || '—') + ' · ' + esc(g.supportType || 'soutènement n.c.') + '</div></td>' +
+                    '<td class="px-3 py-3 text-right font-mono text-sm">' + adv.toFixed(1) + ' / ' + (parseFloat(g.plannedLength) || 0).toFixed(1) + ' m</td>' +
+                    '<td class="px-3 py-3" style="min-width:120px"><div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:8px;background:rgba(255,255,255,0.1);border-radius:4px;overflow:hidden"><div style="width:' + p.toFixed(0) + '%;height:100%;background:' + pc + '"></div></div><span class="font-mono text-xs" style="color:' + pc + '">' + p.toFixed(0) + '%</span></div></td>' +
+                    '<td class="px-3 py-3 text-center">' + statusPill + '</td>' +
+                    '<td class="px-3 py-3 text-right"><button onclick="ugDeleteGallery(\'' + g.id + '\')" class="text-red-400 hover:text-red-300 text-xs">Supprimer</button></td>' +
+                    '</tr>';
+            }).join('');
+
+            var galTable = data.galleries.length ?
+                '<div class="ged-content-panel rounded-xl overflow-hidden mb-5"><div class="px-5 py-3 border-b border-slate-700"><h3 class="font-bold text-sm" style="color:var(--ged-black)">Galeries &amp; avancement</h3></div>' +
+                '<div style="overflow-x:auto"><table style="width:100%;font-size:13px;border-collapse:collapse"><thead><tr style="font-size:11px;text-transform:uppercase;color:#64748B;background:rgba(0,0,0,0.15)"><th class="px-3 py-2 text-left">Galerie</th><th class="px-3 py-2 text-right">Avancé / planifié</th><th class="px-3 py-2 text-left">Avancement</th><th class="px-3 py-2 text-center">Statut</th><th class="px-3 py-2"></th></tr></thead><tbody>' + galRows + '</tbody></table></div></div>'
+                : '<div class="ged-content-panel rounded-xl p-8 text-center mb-5"><p style="font-size:40px">🕳️</p><p class="font-bold mt-2" style="color:var(--ged-black)">Aucune galerie</p><p class="text-sm text-slate-500 mt-1">Ajoutez une galerie ci-dessus pour suivre son avancement.</p></div>';
+
+            var advForm = data.galleries.length ?
+                '<div class="ged-content-panel rounded-xl p-5 mb-5">' +
+                '<h3 class="font-bold text-sm mb-3" style="color:var(--ged-black)">📏 Saisir un avancement</h3>' +
+                '<div class="grid grid-cols-2 md:grid-cols-6 gap-3">' +
+                '<div class="col-span-2"><label class="block text-xs text-slate-500 mb-1">Galerie *</label><select id="ugAdvGallery" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm">' + data.galleries.map(function (g) { return '<option value="' + g.id + '">' + esc(g.name) + '</option>'; }).join('') + '</select></div>' +
+                '<div><label class="block text-xs text-slate-500 mb-1">Date *</label><input id="ugAdvDate" type="date" value="' + new Date().toISOString().slice(0, 10) + '" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                '<div><label class="block text-xs text-slate-500 mb-1">Mètres avancés *</label><input id="ugAdvMeters" type="number" min="0" step="0.1" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                '<div><label class="block text-xs text-slate-500 mb-1">Volées</label><input id="ugAdvRounds" type="number" min="0" step="1" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                '<div><label class="block text-xs text-slate-500 mb-1">Soutènement posé</label><input id="ugAdvSupport" placeholder="Ex. 12 boulons" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                '<div class="col-span-2 md:col-span-6"><label class="block text-xs text-slate-500 mb-1">Notes</label><input id="ugAdvNotes" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                '</div><button onclick="ugAddAdvance()" class="mt-3 bg-emerald-600 hover:bg-emerald-700 px-4 py-2 rounded-lg font-semibold text-sm">Enregistrer l\'avancement</button></div>'
+                : '';
+
+            var advRows = (data.advances || []).slice(0, 25).map(function (a) {
+                var g = data.galleries.find(function (x) { return x.id === a.galleryId; });
+                return '<tr style="border-bottom:1px solid rgba(255,255,255,0.06)"><td class="px-3 py-2 text-slate-300">' + esc(a.date) + '</td><td class="px-3 py-2 text-slate-300">' + esc(g ? g.name : a.galleryId) + '</td><td class="px-3 py-2 text-right font-mono">' + (parseFloat(a.meters) || 0).toFixed(1) + ' m</td><td class="px-3 py-2 text-right font-mono text-slate-400">' + (a.rounds || 0) + '</td><td class="px-3 py-2 text-slate-400 text-xs">' + esc(a.support || '') + (a.notes ? ' · ' + esc(a.notes) : '') + '</td><td class="px-3 py-2 text-right"><button onclick="ugDeleteAdvance(\'' + a.id + '\')" class="text-red-400 hover:text-red-300 text-xs">×</button></td></tr>';
+            }).join('');
+            var advHist = (data.advances || []).length ?
+                '<div class="ged-content-panel rounded-xl overflow-hidden"><div class="px-5 py-3 border-b border-slate-700"><h3 class="font-bold text-sm" style="color:var(--ged-black)">Historique des avancements</h3></div><div style="overflow-x:auto"><table style="width:100%;font-size:13px;border-collapse:collapse"><thead><tr style="font-size:11px;text-transform:uppercase;color:#64748B;background:rgba(0,0,0,0.15)"><th class="px-3 py-2 text-left">Date</th><th class="px-3 py-2 text-left">Galerie</th><th class="px-3 py-2 text-right">Mètres</th><th class="px-3 py-2 text-right">Volées</th><th class="px-3 py-2 text-left">Soutènement / notes</th><th class="px-3 py-2"></th></tr></thead><tbody>' + advRows + '</tbody></table></div></div>'
+                : '';
+
+            el.innerHTML =
+                '<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">' +
+                kpi('Galeries actives', active, '#F5B800') +
+                kpi('Mètres planifiés', totPlan.toFixed(0) + ' m', '') +
+                kpi('Mètres avancés', totAdv.toFixed(0) + ' m', '#28A745') +
+                kpi('Avancement global', prog.toFixed(1) + ' %', prog >= 90 ? '#28A745' : prog >= 50 ? '#F5B800' : '#DC3545') +
+                '</div>' + galForm + galTable + advForm + advHist +
+                '<p class="text-xs text-slate-500 mt-3">Module Mine souterraine v1 — données enregistrées localement sur cet appareil (comme le module HSE). La persistance serveur et la ventilation/sécurité du fond viendront ensuite.</p>';
+        }
+        window.renderSouterrain = renderSouterrain;
+
         function renderHSE() {
             var el = document.getElementById('hseContent');
             if (!el) return;
@@ -9287,6 +9431,8 @@
                 renderAnalytics();
             } else if (view === 'hse') {
                 renderHSE();
+            } else if (view === 'souterrain') {
+                renderSouterrain();
             } else if (view === 'bit_sharpening') {
                 renderBitSharpening();
             } else if (view === 'soustraitants') {
@@ -26040,7 +26186,7 @@
             ['restrictConnections', 'connections'], ['restrictAssignments', 'assignments'],
             ['restrictMaintenance', 'maintenance'],
             ['restrictBitSharpening', 'bit_sharpening'], ['restrictConsumables', 'consumables'],
-            ['restrictHSE', 'hse'], ['restrictAnalytics', 'analytics'],
+            ['restrictHSE', 'hse'], ['restrictSouterrain', 'souterrain'], ['restrictAnalytics', 'analytics'],
             ['restrictPlanification', 'planification'], ['restrictBesoins', 'besoins'],
             ['restrictRentabilite', 'rentabilite'], ['restrictDepensesPM', 'depenses_pm'],
             ['restrictInvoices', 'invoices'], ['restrictPayments', 'payments'],
@@ -26078,7 +26224,7 @@
             // Onglets historiquement visibles de tous : pré-cochés pour tout rôle lors de
             // l'édition d'un compte existant (préserve son accès actuel ; l'admin ajuste ensuite).
             var ALL_ROLES_HIST = ['foreur', 'aideforeur', 'superviseur', 'ingenieur', 'gestionnaire', 'gestionnaire_site', 'santesecurite', 'administratif', 'visiteur'];
-            ['forage_plan', 'bit_sharpening', 'consumables', 'hse', 'analytics', 'planification', 'besoins', 'rentabilite', 'depenses_pm', 'payments', 'soustraitants'].forEach(function(v) { P[v] = ALL_ROLES_HIST; });
+            ['forage_plan', 'bit_sharpening', 'consumables', 'hse', 'souterrain', 'analytics', 'planification', 'besoins', 'rentabilite', 'depenses_pm', 'payments', 'soustraitants'].forEach(function(v) { P[v] = ALL_ROLES_HIST; });
             var out = [];
             Object.keys(P).forEach(function(v) { if (P[v].indexOf(role) >= 0) out.push(v); });
             return out;
