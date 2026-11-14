@@ -244,6 +244,25 @@ const InvoicesAPI = {
     delete: (id) => apiRequest(`/invoices/${encodeURIComponent(id)}`, 'DELETE')
 };
 
+const PaymentsAPI = {
+    getAll: (params) => {
+        var q = [];
+        if (params) {
+            if (params.invoiceId) q.push('invoiceId=' + encodeURIComponent(params.invoiceId));
+            if (params.clientId) q.push('clientId=' + encodeURIComponent(params.clientId));
+            if (params.from) q.push('from=' + encodeURIComponent(params.from));
+            if (params.to) q.push('to=' + encodeURIComponent(params.to));
+            if (params.method) q.push('method=' + encodeURIComponent(params.method));
+        }
+        return apiRequest('/payments' + (q.length ? '?' + q.join('&') : ''));
+    },
+    getByInvoice: (invoiceId) => apiRequest('/payments/invoice/' + encodeURIComponent(invoiceId)),
+    getStats: () => apiRequest('/payments/stats'),
+    create: (payment) => apiRequest('/payments', 'POST', payment),
+    update: (id, payment) => apiRequest('/payments/' + encodeURIComponent(id), 'PUT', payment),
+    delete: (id) => apiRequest('/payments/' + encodeURIComponent(id), 'DELETE')
+};
+
 const DrillMonthBillingAPI = {
     getAll: (params) => {
         var q = '';
@@ -256,6 +275,32 @@ const DrillMonthBillingAPI = {
     remove: (drillId, yearMonth) =>
         apiRequest(
             '/drill-month-billing/' + encodeURIComponent(String(drillId)) + '/' + encodeURIComponent(String(yearMonth).slice(0, 7)),
+            'DELETE'
+        )
+};
+
+// ============================================
+// API - ÉTAT DE MODULE (persistance générique)
+// ============================================
+const ModuleStateAPI = {
+    get: (key) => apiRequest('/module-state/' + encodeURIComponent(key), 'GET'),
+    set: (key, data) => apiRequest('/module-state/' + encodeURIComponent(key), 'PUT', { data: data })
+};
+
+// ============================================
+// API - CLÔTURE MOIS MINIER
+// ============================================
+const MiningMonthClosureAPI = {
+    getAll: (params) => {
+        var qp = [];
+        if (params && params.siteId != null && params.siteId !== '') qp.push('siteId=' + encodeURIComponent(String(params.siteId)));
+        if (params && params.yearMonth != null && params.yearMonth !== '') qp.push('yearMonth=' + encodeURIComponent(String(params.yearMonth).slice(0, 7)));
+        return apiRequest('/mining-month-closures' + (qp.length ? '?' + qp.join('&') : ''), 'GET');
+    },
+    close: (row) => apiRequest('/mining-month-closures', 'POST', row),
+    reopen: (siteId, yearMonth) =>
+        apiRequest(
+            '/mining-month-closures/' + encodeURIComponent(siteId != null && siteId !== '' ? String(siteId) : '_') + '/' + encodeURIComponent(String(yearMonth).slice(0, 7)),
             'DELETE'
         )
 };
@@ -300,6 +345,30 @@ const DailyDataAPI = {
 const DrillingPlanAPI = {
     get: () => apiRequest('/drilling-plan'),
     save: (plan) => apiRequest('/drilling-plan', 'PUT', plan)
+};
+
+// Plans de forage (patterns) + photos de patterns — passent par apiRequest
+// (cookie de session + en-tête entreprise gérés automatiquement).
+const DrillPlansAPI = {
+    list: () => apiRequest('/drill-plans'),
+    full: (id) => apiRequest(`/drill-plans/${encodeURIComponent(id)}/full`)
+};
+
+const PatternPhotosAPI = {
+    list: (date, siteId) => {
+        let q = `/pattern-photos?date=${encodeURIComponent(date)}`;
+        if (siteId !== undefined && siteId !== null && siteId !== '') q += `&siteId=${encodeURIComponent(siteId)}`;
+        return apiRequest(q, 'GET');
+    },
+    get: (id) => apiRequest(`/pattern-photos/${encodeURIComponent(id)}`, 'GET'),
+    // Dernier plan photo de la fosse avant la date donnée (ou null).
+    previous: (zone, before, siteId) => {
+        let q = `/pattern-photos/previous?zone=${encodeURIComponent(zone)}&before=${encodeURIComponent(before)}`;
+        if (siteId !== undefined && siteId !== null && siteId !== '') q += `&siteId=${encodeURIComponent(siteId)}`;
+        return apiRequest(q, 'GET');
+    },
+    save: (payload) => apiRequest('/pattern-photos', 'POST', payload),
+    remove: (id) => apiRequest(`/pattern-photos/${encodeURIComponent(id)}`, 'DELETE')
 };
 
 // ============================================
@@ -371,7 +440,8 @@ async function loadAllData() {
             invoicesData,
             inventoryData,
             companyData,
-            drillMonthBillingData
+            drillMonthBillingData,
+            paymentsData
         ] = await Promise.all([
             UsersAPI.getAll().catch((err) => {
                 console.warn('API users:', err && err.message);
@@ -413,6 +483,10 @@ async function loadAllData() {
             DrillMonthBillingAPI.getAll().catch((err) => {
                 console.warn('API drill-month-billing:', err && err.message);
                 return null;
+            }),
+            PaymentsAPI.getAll().catch((err) => {
+                console.warn('API payments:', err && err.message);
+                return null;
             })
         ]);
         
@@ -427,7 +501,8 @@ async function loadAllData() {
             invoices: invoicesData,
             inventory: inventoryData,
             companyInfo: companyData,
-            drillMonthBilling: drillMonthBillingData
+            drillMonthBilling: drillMonthBillingData,
+            payments: paymentsData
         };
     } catch (error) {
         console.error('❌ Erreur lors du chargement des données:', error);
@@ -470,17 +545,23 @@ async function saveAllData(data) {
             }
         }
         
+        // Sites : ne jamais enchaîner create si update échoue — cela dupliquait des sites
+        // (ex. plusieurs « BOMBORE ») et faisait « réapparaître » un site supprimé.
         if (data.sites) {
             for (const site of data.sites) {
-                if (site.id) {
+                const sid = site && site.id;
+                const hasServerId = sid != null && sid !== '' && !Number.isNaN(Number(sid));
+                if (hasServerId) {
                     promises.push(
-                        SitesAPI.update(site.id, site).catch(() =>
-                            SitesAPI.create(site).catch(console.error)
-                        )
+                        SitesAPI.update(sid, site).catch((err) => {
+                            console.warn('Sync site : mise à jour ignorée id=', sid, err && err.message);
+                        })
                     );
                 } else {
                     promises.push(
-                        SitesAPI.create(site).catch(console.error)
+                        SitesAPI.create(site).catch((err) => {
+                            console.warn('Sync site : création ignorée', err && err.message);
+                        })
                     );
                 }
             }
@@ -596,11 +677,16 @@ if (typeof window !== 'undefined') {
         Employees: EmployeesAPI,
         Assignments: AssignmentsAPI,
         Invoices: InvoicesAPI,
+        Payments: PaymentsAPI,
         DrillMonthBilling: DrillMonthBillingAPI,
+        MiningMonthClosure: MiningMonthClosureAPI,
+        ModuleState: ModuleStateAPI,
         Inventory: InventoryAPI,
         DailyData: DailyDataAPI,
         DrillingPlan: DrillingPlanAPI,
         Company: CompanyAPI,
+        DrillPlans: DrillPlansAPI,
+        PatternPhotos: PatternPhotosAPI,
         Translate: TranslateAPI,
         WorkerChat: WorkerChatAPI,
         CompanyInfo: CompanyInfoAPI,

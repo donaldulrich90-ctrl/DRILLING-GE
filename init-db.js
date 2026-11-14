@@ -97,12 +97,33 @@ db.serialize(() => {
         if (aerr && !String(aerr.message || '').includes('duplicate column')) {
             console.warn('Migration subscription_plan_catalog.defaultAllowedTabs:', aerr.message);
         }
+        // Onglets opérationnels forage ajoutés après la v1. Les anciennes bases ont
+        // des lignes de catalogue figées sur l'ancienne liste : sans eux, la politique
+        // d'abonnement excluait ces onglets et showMainView renvoyait au tableau de bord.
+        const NEW_OPERATIONAL_TABS = ['bit_sharpening', 'consumables', 'forage_plan', 'planification', 'besoins', 'rentabilite', 'depenses_pm', 'analytics', 'hse'];
         Object.keys(planRoles.DEFAULT_TABS_BY_PLAN).forEach((p) => {
-            const json = JSON.stringify(planRoles.DEFAULT_TABS_BY_PLAN[p]);
+            const planDefault = planRoles.DEFAULT_TABS_BY_PLAN[p] || [];
+            const json = JSON.stringify(planDefault);
+            // 1) Lignes vides : on pose le défaut du plan.
             db.run(
                 'UPDATE subscription_plan_catalog SET defaultAllowedTabs = ? WHERE plan = ? AND (defaultAllowedTabs IS NULL OR TRIM(COALESCE(defaultAllowedTabs,\'\')) = \'\')',
                 [json, p]
             );
+            // 2) Lignes existantes : on AJOUTE (union) uniquement les nouveaux onglets
+            //    prévus pour ce plan, sans retirer d'éventuelles personnalisations.
+            const toAdd = NEW_OPERATIONAL_TABS.filter((t) => planDefault.includes(t));
+            if (!toAdd.length) return;
+            db.get('SELECT defaultAllowedTabs FROM subscription_plan_catalog WHERE plan = ?', [p], (gErr, row) => {
+                if (gErr || !row || !row.defaultAllowedTabs) return;
+                let current;
+                try { current = JSON.parse(row.defaultAllowedTabs); } catch (e) { return; }
+                if (!Array.isArray(current)) return;
+                const missing = toAdd.filter((t) => !current.includes(t));
+                if (!missing.length) return;
+                const merged = current.concat(missing);
+                db.run('UPDATE subscription_plan_catalog SET defaultAllowedTabs = ? WHERE plan = ?',
+                    [JSON.stringify(merged), p]);
+            });
         });
     });
 
@@ -171,6 +192,7 @@ db.serialize(() => {
             clientId INTEGER NOT NULL,
             coordinates TEXT DEFAULT '',
             notes TEXT DEFAULT '',
+            miningCutoffDay INTEGER DEFAULT 1,
             createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (enterpriseId) REFERENCES enterprises(id),
             FOREIGN KEY (clientId) REFERENCES clients(id)
@@ -199,6 +221,8 @@ db.serialize(() => {
             fuelPrice REAL DEFAULT 1.20,
             fuelPriceCurrency TEXT DEFAULT NULL,
             rates TEXT DEFAULT '[]',
+            fgm TEXT DEFAULT '[]',
+            billRedrill INTEGER DEFAULT 0,
             createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (enterpriseId) REFERENCES enterprises(id),
             FOREIGN KEY (clientId) REFERENCES clients(id),
@@ -264,6 +288,63 @@ db.serialize(() => {
         else console.log('✅ Table employees');
     });
 
+    // Table des pointages de présence (entrées/sorties)
+    db.run(`
+        CREATE TABLE IF NOT EXISTS attendance (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            enterpriseId INTEGER NOT NULL DEFAULT 1,
+            employeeId INTEGER NOT NULL,
+            type TEXT NOT NULL DEFAULT 'in',
+            ts TEXT NOT NULL,
+            method TEXT DEFAULT 'fingerprint',
+            deviceId TEXT DEFAULT '',
+            source TEXT DEFAULT 'kiosk',
+            siteId INTEGER,
+            note TEXT DEFAULT '',
+            createdBy TEXT DEFAULT '',
+            createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (enterpriseId) REFERENCES enterprises(id),
+            FOREIGN KEY (employeeId) REFERENCES employees(id)
+        )
+    `, (err) => {
+        if (err) console.error('Erreur table attendance:', err);
+        else console.log('✅ Table attendance');
+    });
+    db.run('CREATE INDEX IF NOT EXISTS idx_attendance_ent_ts ON attendance(enterpriseId, ts)');
+    db.run('CREATE INDEX IF NOT EXISTS idx_attendance_emp ON attendance(enterpriseId, employeeId)');
+    // Anti-doublon d'un même pointage ré-importé par l'agent (device + employé + horodatage)
+    db.run('CREATE UNIQUE INDEX IF NOT EXISTS idx_attendance_dedup ON attendance(enterpriseId, employeeId, ts, type)');
+
+    // Table des empreintes biométriques enrôlées (gabarits par employé)
+    db.run(`
+        CREATE TABLE IF NOT EXISTS employee_biometrics (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            enterpriseId INTEGER NOT NULL DEFAULT 1,
+            employeeId INTEGER NOT NULL,
+            finger TEXT DEFAULT '',
+            template TEXT NOT NULL,
+            format TEXT DEFAULT 'zk',
+            publicKey TEXT DEFAULT '',
+            deviceUserId TEXT DEFAULT '',
+            quality INTEGER DEFAULT 0,
+            createdBy TEXT DEFAULT '',
+            createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+            updatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (enterpriseId) REFERENCES enterprises(id),
+            FOREIGN KEY (employeeId) REFERENCES employees(id)
+        )
+    `, (err) => {
+        if (err) console.error('Erreur table employee_biometrics:', err);
+        else console.log('✅ Table employee_biometrics');
+    });
+    db.run('CREATE INDEX IF NOT EXISTS idx_biometrics_emp ON employee_biometrics(enterpriseId, employeeId)');
+    // Colonne clé publique (empreinte de l'appareil / WebAuthn) — ajout rétro-compatible.
+    db.run('ALTER TABLE employee_biometrics ADD COLUMN publicKey TEXT DEFAULT \'\'', (aerr) => {
+        if (aerr && !String(aerr.message || '').includes('duplicate column')) {
+            console.warn('Migration employee_biometrics.publicKey:', aerr.message);
+        }
+    });
+
     // Table des assignations
     db.run(`
         CREATE TABLE IF NOT EXISTS assignments (
@@ -311,6 +392,8 @@ db.serialize(() => {
             currency TEXT DEFAULT 'EUR',
             status TEXT DEFAULT 'pending',
             notes TEXT DEFAULT '',
+            contractId TEXT DEFAULT NULL,
+            site TEXT DEFAULT '',
             createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (enterpriseId) REFERENCES enterprises(id),
             FOREIGN KEY (clientId) REFERENCES clients(id),
@@ -319,6 +402,28 @@ db.serialize(() => {
     `, (err) => {
         if (err) console.error('Erreur table invoices:', err);
         else console.log('✅ Table invoices');
+    });
+
+    // Table des paiements (suivi des encaissements contre factures)
+    db.run(`
+        CREATE TABLE IF NOT EXISTS payments (
+            id TEXT PRIMARY KEY,
+            enterpriseId INTEGER NOT NULL DEFAULT 1,
+            invoiceId TEXT NOT NULL,
+            date TEXT NOT NULL,
+            amount REAL NOT NULL DEFAULT 0,
+            currency TEXT DEFAULT 'XOF',
+            method TEXT DEFAULT 'cash',
+            reference TEXT DEFAULT '',
+            notes TEXT DEFAULT '',
+            receivedBy TEXT DEFAULT '',
+            createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (enterpriseId) REFERENCES enterprises(id),
+            FOREIGN KEY (invoiceId) REFERENCES invoices(id)
+        )
+    `, (err) => {
+        if (err) console.error('Erreur table payments:', err);
+        else console.log('✅ Table payments');
     });
 
     // Table de l'inventaire
@@ -334,6 +439,7 @@ db.serialize(() => {
             price REAL DEFAULT 0,
             alert INTEGER DEFAULT 0,
             averagePrice REAL DEFAULT 0,
+            priceCurrency TEXT DEFAULT 'XOF',
             createdAt TEXT DEFAULT CURRENT_TIMESTAMP
         )
     `, (err) => {
@@ -427,6 +533,45 @@ db.serialize(() => {
     db.run('CREATE INDEX IF NOT EXISTS idx_drilling_blocks_enterprise ON drilling_blocks(enterpriseId)');
     db.run('CREATE INDEX IF NOT EXISTS idx_drilling_holes_enterprise_block ON drilling_holes(enterpriseId, blockId)');
 
+
+    // Table des expressions de besoin (demandes partagées + workflow)
+    db.run(`
+        CREATE TABLE IF NOT EXISTS besoins (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            enterpriseId INTEGER NOT NULL,
+            numero TEXT DEFAULT '',
+            createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+            createdBy TEXT DEFAULT '',
+            site TEXT DEFAULT '',
+            type TEXT DEFAULT 'Matériel',
+            designation TEXT DEFAULT '',
+            quantite REAL DEFAULT 0,
+            unite TEXT DEFAULT '',
+            priorite TEXT DEFAULT 'normal',
+            justification TEXT DEFAULT '',
+            statut TEXT NOT NULL DEFAULT 'nouveau',
+            assignee TEXT DEFAULT '',
+            verificateur TEXT DEFAULT '',
+            validateur TEXT DEFAULT '',
+            attachments TEXT DEFAULT '[]',
+            history TEXT DEFAULT '[]',
+            updatedAt TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    `);
+    db.run('CREATE INDEX IF NOT EXISTS idx_besoins_enterprise ON besoins(enterpriseId)');
+
+    // Table de planification & suivi (plan court/long terme par entreprise)
+    db.run(`
+        CREATE TABLE IF NOT EXISTS planification (
+            enterpriseId INTEGER PRIMARY KEY,
+            data TEXT DEFAULT '{}',
+            version INTEGER NOT NULL DEFAULT 0,
+            updatedByUsername TEXT DEFAULT '',
+            updatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (enterpriseId) REFERENCES enterprises(id) ON DELETE CASCADE
+        )
+    `);
+
     // Table des informations de l'entreprise
     db.run(`
         CREATE TABLE IF NOT EXISTS companyInfo (
@@ -453,6 +598,7 @@ db.serialize(() => {
             retenueSourceRate REAL DEFAULT 5,
             currency TEXT DEFAULT 'XOF',
             logo TEXT DEFAULT '',
+            fosses TEXT DEFAULT '[]',
             updatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (enterpriseId) REFERENCES enterprises(id)
         )
@@ -494,6 +640,7 @@ db.serialize(() => {
             articleId INTEGER NOT NULL,
             quantity INTEGER NOT NULL,
             unitPrice REAL DEFAULT 0,
+            priceCurrency TEXT DEFAULT 'XOF',
             total REAL DEFAULT 0,
             date TEXT NOT NULL,
             supplier TEXT DEFAULT '',
@@ -603,6 +750,28 @@ db.serialize(() => {
         if (err) console.error('Erreur table siteMealExpenses:', err);
         else console.log('✅ Table siteMealExpenses');
     });
+    // Repas par shift : nombre de plats, prix unitaire, poste et saisisseur (ajouts rétro-compatibles).
+    [
+        "ALTER TABLE siteMealExpenses ADD COLUMN shift TEXT DEFAULT ''",
+        'ALTER TABLE siteMealExpenses ADD COLUMN plates INTEGER DEFAULT NULL',
+        'ALTER TABLE siteMealExpenses ADD COLUMN unitPrice REAL DEFAULT NULL',
+        "ALTER TABLE siteMealExpenses ADD COLUMN filledBy TEXT DEFAULT ''"
+    ].forEach((sql) => db.run(sql, (e) => {
+        if (e && !String(e.message || '').includes('duplicate column')) console.warn('Migration siteMealExpenses:', e.message);
+    }));
+    // Réglage du prix par plat (par entreprise), pré-rempli à la saisie.
+    db.run(`
+        CREATE TABLE IF NOT EXISTS site_meal_settings (
+            enterpriseId INTEGER PRIMARY KEY,
+            unitPrice REAL DEFAULT 0,
+            currency TEXT DEFAULT 'XOF',
+            updatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (enterpriseId) REFERENCES enterprises(id)
+        )
+    `, (err) => {
+        if (err) console.error('Erreur table site_meal_settings:', err);
+        else console.log('✅ Table site_meal_settings');
+    });
 
     db.run(`
         CREATE TABLE IF NOT EXISTS worker_chat_messages (
@@ -682,7 +851,10 @@ db.serialize(() => {
     migrateIgnoreDup("ALTER TABLE invoices ADD COLUMN billingMonth TEXT DEFAULT ''", 'invoices.billingMonth');
     migrateIgnoreDup("ALTER TABLE invoices ADD COLUMN signProviderJson TEXT DEFAULT ''", 'invoices.signProviderJson');
     migrateIgnoreDup("ALTER TABLE invoices ADD COLUMN signClientJson TEXT DEFAULT ''", 'invoices.signClientJson');
+    migrateIgnoreDup("ALTER TABLE invoices ADD COLUMN contractId TEXT DEFAULT NULL", 'invoices.contractId');
+    migrateIgnoreDup("ALTER TABLE invoices ADD COLUMN site TEXT DEFAULT ''", 'invoices.site');
     migrateIgnoreDup("ALTER TABLE contracts ADD COLUMN billingMonthDefinition TEXT DEFAULT ''", 'contracts.billingMonthDefinition');
+    migrateIgnoreDup("ALTER TABLE contracts ADD COLUMN fgm TEXT DEFAULT '[]'", 'contracts.fgm');
     migrateIgnoreDup("ALTER TABLE maintenanceSchedules ADD COLUMN enterpriseId INTEGER NOT NULL DEFAULT 1", 'maintenanceSchedules.enterpriseId');
     migrateIgnoreDup("ALTER TABLE maintenanceHistory ADD COLUMN enterpriseId INTEGER NOT NULL DEFAULT 1", 'maintenanceHistory.enterpriseId');
     // stockMovements.enterpriseId — backfill via inventory JOIN after column creation
@@ -720,6 +892,46 @@ db.serialize(() => {
         (err) => {
             if (err) console.error('Erreur drill_month_billing:', err);
             else console.log('✅ Table drill_month_billing');
+        }
+    );
+
+    // Clôture d'un mois minier complet (archive figée des totaux du mois, par site)
+    db.run(
+        `
+        CREATE TABLE IF NOT EXISTS mining_month_closures (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            enterpriseId INTEGER NOT NULL DEFAULT 1,
+            siteId TEXT DEFAULT '',
+            yearMonth TEXT NOT NULL,
+            snapshot TEXT DEFAULT '',
+            closedAt TEXT DEFAULT CURRENT_TIMESTAMP,
+            closedBy TEXT DEFAULT '',
+            UNIQUE(enterpriseId, siteId, yearMonth),
+            FOREIGN KEY (enterpriseId) REFERENCES enterprises(id)
+        )
+    `,
+        (err) => {
+            if (err) console.error('Erreur mining_month_closures:', err);
+            else console.log('✅ Table mining_month_closures');
+        }
+    );
+
+    // État de module générique (persistance serveur pour modules local-first : souterrain, HSE…)
+    db.run(
+        `
+        CREATE TABLE IF NOT EXISTS module_state (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            enterpriseId INTEGER NOT NULL DEFAULT 1,
+            moduleKey TEXT NOT NULL,
+            data TEXT,
+            updatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
+            updatedBy TEXT DEFAULT '',
+            UNIQUE(enterpriseId, moduleKey)
+        )
+    `,
+        (err) => {
+            if (err) console.error('Erreur module_state:', err);
+            else console.log('✅ Table module_state');
         }
     );
 

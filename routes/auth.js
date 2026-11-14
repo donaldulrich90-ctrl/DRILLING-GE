@@ -106,6 +106,16 @@ module.exports = function registerAuthRoutes(app, options) {
             }
             if (!passwordOk) return res.status(401).json({ error: 'Identifiants incorrects' });
 
+            // Recopie automatique vers le Portail (et la Mine) au moment de la connexion :
+            // seul instant où le mot de passe en clair est disponible pour un compte
+            // existant. Permet à un compte créé dans Forage de fonctionner au Portail
+            // dès sa prochaine connexion ici, sans ressaisir le mot de passe. Best-effort.
+            try {
+                if (user.enterpriseId != null) {
+                    require('../portal-sync').propagateUserToPortal(user.enterpriseId, user.username, password, user.role);
+                }
+            } catch (syncErr) { /* best-effort */ }
+
             const token = signUserToken(
                 {
                     id: user.id,

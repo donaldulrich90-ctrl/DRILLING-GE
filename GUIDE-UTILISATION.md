@@ -292,6 +292,25 @@ Génération de rapports exportables :
 - Rapport de maintenance
 - Export vers PDF ou impression directe
 
+**Graphiques dans les rapports journaliers.** Les trois rapports journaliers (synthèse management,
+synthèse exécutive, rapport opérationnel détaillé) et les deux exports PowerPoint contiennent une
+section « Graphiques de la journée » : mètres forés par machine, production des 14 derniers jours
+avec l'objectif, carburant et L/m, disponibilité mécanique (seuil 85 %), jour vs nuit, arrêts par
+machine et cumul du mois minier. La synthèse exécutive garde des graphiques sans détail machine.
+
+**Plan hachuré des patterns (une photo par fosse et par jour).** Dans *Rapports › Plan hachuré* :
+
+1. Choisissez la date et la fosse, puis **📷 Importer la photo du pattern**.
+2. L'éditeur s'ouvre : touchez chaque trou foré pour le hachurer (touchez-le à nouveau pour l'effacer).
+   Choisissez le type (foré ce jour, antérieur, reforé, abandonné, à forer), le numéro du trou
+   (les trous saisis ce jour sont proposés), la taille et le zoom, puis **Enregistrer**.
+3. Le lendemain, **♻️ Reprendre la veille** réutilise la photo et les trous déjà placés : ils passent
+   en gris (antérieurs) et les trous saisis ce jour sont hachurés automatiquement s'ils sont déjà positionnés.
+4. Le plan hachuré apparaît dans tous les rapports journaliers (PDF et PowerPoint), avec la légende
+   et le résumé des trous du jour de la fosse.
+
+Si les trous du plan portent des coordonnées (x/y), **🎨 Générer auto** dessine le pattern sans photo.
+
 ### 5.19 Repas chantier
 
 Gestion des repas sur site :

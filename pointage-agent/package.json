@@ -1,0 +1,19 @@
+{
+  "name": "ge-pointage-agent",
+  "version": "1.0.0",
+  "description": "Agent local GOOD ENGINEERS — relaie un lecteur d'empreinte USB (ZKTeco) vers le kiosque de pointage via WebSocket localhost.",
+  "main": "agent.js",
+  "scripts": {
+    "start": "node agent.js",
+    "start:sim": "GE_AGENT_DRIVER=simulator node agent.js"
+  },
+  "bin": {
+    "ge-pointage-agent": "agent.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "engines": {
+    "node": ">=16"
+  }
+}

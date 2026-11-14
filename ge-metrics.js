@@ -1,0 +1,405 @@
+/*
+ * ADAPTATEUR FORAGE (DRILLING-GE) — API de service pour le portail.
+ *
+ * Monté dans server.js AVANT le gardien « JWT requis pour /api ». Routes
+ * protégées par la clé de service SERVICE_API_KEY (en-tête X-Service-Key) :
+ *
+ *   GET  /api/service/metrics?enterpriseId=..&start=YYYY-MM-DD&end=YYYY-MM-DD
+ *        -> métriques forage de l'entreprise sur la période.
+ *   POST /api/service/enterprise    { name, slug?, plan? }
+ *        -> crée (ou retrouve par slug) l'entreprise, renvoie son id. Idempotent.
+ *   POST /api/service/user          { enterpriseId, username, password, role, name }
+ *        -> crée le compte, ou le met à jour s'il appartient DÉJÀ à cette
+ *           entreprise. Un identifiant pris par une autre entreprise ou par
+ *           un compte plateforme est refusé (409) : jamais d'écrasement.
+ *   POST /api/service/module-state  { enterpriseId, active }
+ *        -> active / désactive l'entreprise (case « module Forage » du portail).
+ *
+ * Les données de forage sont rattachées à l'entreprise VIA LA FOREUSE :
+ * dailyDataRecords.machineId / dailyConsumables.machineId -> drills.id -> drills.enterpriseId.
+ *
+ * NB : db.js expose des fonctions à promesses (get/all/run sans callback) ;
+ * on utilise donc la connexion sqlite3 brute de getDb(), comme server.js.
+ */
+const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
+const { getDb } = require('./db');
+const { ALL_TENANT_ROLES, PLATFORM_ROLES } = require('./plan-roles');
+
+const SERVICE_API_KEY = process.env.SERVICE_API_KEY || '';
+
+function keyMatches(given) {
+    const a = Buffer.from(String(given || ''), 'utf8');
+    const b = Buffer.from(SERVICE_API_KEY, 'utf8');
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+function requireServiceKey(req, res, next) {
+    if (!SERVICE_API_KEY) return res.status(500).json({ error: 'SERVICE_API_KEY non configurée' });
+    if (!keyMatches(req.headers['x-service-key'])) {
+        return res.status(401).json({ error: 'Clé de service invalide' });
+    }
+    next();
+}
+
+function registerMetrics(app) {
+    // ---- Plan de planification + réel par date (pour le suivi consolidé portail) ----
+    app.get('/api/service/plan', requireServiceKey, (req, res) => {
+        const enterpriseId = parseInt(req.query.enterpriseId, 10);
+        if (!enterpriseId) return res.status(400).json({ error: 'enterpriseId requis' });
+        const db = getDb();
+        db.get('SELECT data FROM planification WHERE enterpriseId = ?', [enterpriseId], (err, row) => {
+            if (err) return res.status(500).json({ error: err.message });
+            let plan = null;
+            if (row) { try { plan = JSON.parse(row.data || '{}'); } catch (e) { plan = null; } }
+            if (!plan) return res.json({ module: 'forage', plan: null, actualsByDate: {} });
+            const sql = `
+                SELECT d.date AS date,
+                       COALESCE(SUM(CAST(json_extract(d.data,'$.metersDrilled') AS REAL)),0) AS m
+                FROM dailyDataRecords d
+                JOIN drills dr ON dr.id = d.machineId
+                WHERE dr.enterpriseId = ?
+                  AND COALESCE(json_extract(d.data, '$.entryStage'), 'complete') <> 'draft'
+                GROUP BY d.date`;
+            db.all(sql, [enterpriseId], (e2, rows) => {
+                const byDate = {};
+                if (!e2) for (const r of rows || []) { const k = String(r.date || '').slice(0, 10); if (k) byDate[k] = round(r.m, 1); }
+                return res.json({ module: 'forage', plan: plan, actualsByDate: byDate });
+            });
+        });
+    });
+
+    // ---- Expressions de besoin (pour le portail consolidé) --------------
+    app.get('/api/service/besoins', requireServiceKey, (req, res) => {
+        const enterpriseId = parseInt(req.query.enterpriseId, 10);
+        if (!enterpriseId) return res.status(400).json({ error: 'enterpriseId requis' });
+        const db = getDb();
+        db.all('SELECT * FROM besoins WHERE enterpriseId = ? ORDER BY id DESC', [enterpriseId], (err, rows) => {
+            if (err) return res.status(500).json({ error: err.message });
+            const out = (rows || []).map((r) => {
+                let att = [], hist = [];
+                try { att = JSON.parse(r.attachments || '[]'); } catch (e) {}
+                try { hist = JSON.parse(r.history || '[]'); } catch (e) {}
+                return Object.assign({}, r, { attachments: att, history: hist });
+            });
+            return res.json({ module: 'forage', besoins: out });
+        });
+    });
+
+    // ---- Sous-traitants : état de paiement du mois (portail consolidé) --
+    app.get('/api/service/soustraitants', requireServiceKey, (req, res) => {
+        const enterpriseId = parseInt(req.query.enterpriseId, 10);
+        const period = /^\d{4}-\d{2}$/.test(String(req.query.period || '')) ? String(req.query.period) : '';
+        if (!enterpriseId || !period) return res.status(400).json({ error: 'enterpriseId et period requis' });
+        const db = getDb();
+        const q = (sql, params) => new Promise((resolve) => db.all(sql, params, (e, r) => resolve(e ? [] : (r || []))));
+        Promise.all([
+            q('SELECT * FROM subcontractors WHERE enterpriseId = ? ORDER BY name', [enterpriseId]),
+            q('SELECT * FROM rented_machines WHERE enterpriseId = ?', [enterpriseId]),
+            q('SELECT * FROM machine_usage WHERE enterpriseId = ? AND period = ?', [enterpriseId, period]),
+            q('SELECT * FROM back_charges WHERE enterpriseId = ? AND period = ?', [enterpriseId, period]),
+        ]).then(([subs, machines, usage, charges]) => {
+            const uByM = {}; usage.forEach((u) => { uByM[u.machineId] = u; });
+            const cBySub = {}; let entBack = 0;
+            charges.forEach((c) => {
+                if (c.scope === 'enterprise') entBack += Number(c.amount) || 0;
+                else (cBySub[c.subcontractorId] = cBySub[c.subcontractorId] || []).push(c);
+            });
+            let gross = 0, subBack = 0, net = 0;
+            const out = subs.map((s) => {
+                let g = 0;
+                machines.filter((m) => Number(m.subcontractorId) === Number(s.id)).forEach((m) => {
+                    const u = uByM[m.id]; const qty = u ? (Number(u.quantity) || 0) : 0;
+                    g += m.unit === 'forfait' ? (Number(m.rate) || 0) : (Number(m.rate) || 0) * qty;
+                });
+                const bch = cBySub[s.id] || [];
+                const back = bch.reduce((a, c) => a + (Number(c.amount) || 0), 0);
+                gross += g; subBack += back; net += (g - back);
+                return { name: s.name, gross: g, backCharges: back, net: g - back };
+            });
+            return res.json({
+                module: 'forage', period, subcontractors: out,
+                totals: { gross, subcontractorBackCharges: subBack, netToPay: net, enterpriseBackCharges: entBack, totalCosts: net + entBack },
+            });
+        }).catch((err) => res.status(500).json({ error: err.message }));
+    });
+
+    // ---- Métriques ------------------------------------------------------
+    app.get('/api/service/metrics', requireServiceKey, (req, res) => {
+        const enterpriseId = parseInt(req.query.enterpriseId, 10);
+        const start = String(req.query.start || '');
+        const end = String(req.query.end || '');
+        if (!enterpriseId || !start || !end) {
+            return res.status(400).json({ error: 'enterpriseId, start et end requis' });
+        }
+        const db = getDb();
+
+        const sqlProd = `
+            SELECT d.machineId AS engin,
+                   COALESCE(SUM(CAST(json_extract(d.data,'$.metersDrilled') AS REAL)),0) AS metres,
+                   AVG(CAST(json_extract(d.data,'$.rop') AS REAL)) AS rop,
+                   COUNT(*) AS saisies
+            FROM dailyDataRecords d
+            JOIN drills dr ON dr.id = d.machineId
+            WHERE dr.enterpriseId = ? AND d.date >= ? AND d.date <= ?
+              AND COALESCE(json_extract(d.data, '$.entryStage'), 'complete') <> 'draft'
+            GROUP BY d.machineId`;
+
+        db.all(sqlProd, [enterpriseId, start, end], (err, prodRows) => {
+            if (err) return res.status(500).json({ error: err.message });
+
+            consommablesParEngin(db, enterpriseId, start, end, (conso) => {
+                db.get(
+                    "SELECT COUNT(*) AS n FROM employees WHERE enterpriseId = ? AND COALESCE(status,'active') = 'active'",
+                    [enterpriseId],
+                    (e2, r2) => {
+                        const effectif = (!e2 && r2 && r2.n) || 0;
+
+                        // Arrêts par engin + motif, et disponibilité moyenne.
+                        const sqlStop = `
+                            SELECT d.machineId AS engin,
+                                   json_extract(s.value,'$.reason') AS reason,
+                                   json_extract(s.value,'$.detail') AS detail,
+                                   COALESCE(SUM(CAST(json_extract(s.value,'$.hours') AS REAL)),0) AS heures
+                            FROM dailyDataRecords d
+                            JOIN drills dr ON dr.id = d.machineId
+                            JOIN json_each(d.data, '$.stoppages') s
+                            WHERE dr.enterpriseId = ? AND d.date >= ? AND d.date <= ?
+                              AND COALESCE(json_extract(d.data, '$.entryStage'), 'complete') <> 'draft'
+                            GROUP BY d.machineId, reason`;
+                        const sqlDispo = `
+                            SELECT d.machineId AS engin,
+                                   AVG(CAST(json_extract(d.data,'$.availabilityPct') AS REAL)) AS dispo
+                            FROM dailyDataRecords d JOIN drills dr ON dr.id = d.machineId
+                            WHERE dr.enterpriseId = ? AND d.date >= ? AND d.date <= ?
+                              AND COALESCE(json_extract(d.data, '$.entryStage'), 'complete') <> 'draft'
+                            GROUP BY d.machineId`;
+                        const sqlMaint = `
+                            SELECT machineId AS engin, date, type, description, duration, technician
+                            FROM maintenanceHistory
+                            WHERE enterpriseId = ? AND date >= ? AND date <= ?
+                            ORDER BY date DESC, id DESC LIMIT 200`;
+
+                        db.all(sqlStop, [enterpriseId, start, end], (eS, stopRowsRaw) => {
+                            const stopRows = eS ? [] : (stopRowsRaw || []);
+                            db.all(sqlDispo, [enterpriseId, start, end], (eD, dispoRowsRaw) => {
+                                const dispoRows = eD ? [] : (dispoRowsRaw || []);
+                                db.all(sqlMaint, [enterpriseId, start, end], (eM, maintRowsRaw) => {
+                                    const maintRows = eM ? [] : (maintRowsRaw || []);
+                                    const dispoByEngin = new Map();
+                                    for (const r of dispoRows || []) dispoByEngin.set(r.engin, r.dispo);
+
+                                    // Agrégation des arrêts par engin et global par motif.
+                                    const CAT = { bdn: 'Panne', stb: 'Attente', gsa: 'Délai' };
+                                    const motifLabel = (code) => {
+                                        if (!code) return 'Autre';
+                                        const parts = String(code).split('-');
+                                        const last = parts[parts.length - 1];
+                                        const cat = CAT[last] || null;
+                                        const base = (cat ? parts.slice(0, -1) : parts).join(' ');
+                                        const lib = base.replace(/\b\w/g, (c) => c.toUpperCase());
+                                        return cat ? (lib + ' (' + cat + ')') : lib;
+                                    };
+                                    const motifCat = (code) => {
+                                        const last = String(code || '').split('-').pop();
+                                        return CAT[last] || 'Autre';
+                                    };
+                                    const arretsParEnginMap = new Map();
+                                    const arretsGlobal = new Map();
+                                    for (const r of stopRows || []) {
+                                        const h = round(r.heures, 1);
+                                        if (!arretsParEnginMap.has(r.engin)) arretsParEnginMap.set(r.engin, { total: 0, motifs: [] });
+                                        const ae = arretsParEnginMap.get(r.engin);
+                                        ae.total += h;
+                                        ae.motifs.push({ motif: motifLabel(r.reason), categorie: motifCat(r.reason), heures: h, detail: (r.detail || '') });
+                                        const key = motifLabel(r.reason);
+                                        const g = arretsGlobal.get(key) || { motif: key, categorie: motifCat(r.reason), heures: 0 };
+                                        g.heures = round(g.heures + h, 1);
+                                        arretsGlobal.set(key, g);
+                                    }
+
+                                    // Fusion production + consommables + arrêts + dispo, par foreuse.
+                                    const parEnginMap = new Map();
+                                    for (const r of prodRows || []) {
+                                        parEnginMap.set(r.engin, {
+                                            engin: r.engin,
+                                            metres: round(r.metres, 1),
+                                            rop: round(r.rop, 2),
+                                            arrets_h: 0,
+                                            arrets_motifs: [],
+                                            metres_perdus_est: 0,
+                                            dispo_pct: dispoByEngin.has(r.engin) ? round(dispoByEngin.get(r.engin), 1) : null,
+                                            consommables_cout: 0,
+                                        });
+                                    }
+                                    for (const [engin, cout] of conso) {
+                                        const row = parEnginMap.get(engin)
+                                            || { engin, metres: 0, rop: 0, arrets_h: 0, arrets_motifs: [], metres_perdus_est: 0, dispo_pct: null, consommables_cout: 0 };
+                                        row.consommables_cout = round(cout, 2);
+                                        parEnginMap.set(engin, row);
+                                    }
+                                    for (const [engin, ae] of arretsParEnginMap) {
+                                        const row = parEnginMap.get(engin)
+                                            || { engin, metres: 0, rop: 0, arrets_h: 0, arrets_motifs: [], metres_perdus_est: 0, dispo_pct: dispoByEngin.has(engin) ? round(dispoByEngin.get(engin), 1) : null, consommables_cout: 0 };
+                                        row.arrets_h = round(ae.total, 1);
+                                        row.arrets_motifs = ae.motifs.sort((a, b) => b.heures - a.heures);
+                                        row.metres_perdus_est = round((ae.total || 0) * (row.rop || 0), 0);
+                                        parEnginMap.set(engin, row);
+                                    }
+                                    const parEngin = [...parEnginMap.values()].sort((a, b) => b.metres - a.metres);
+                                    const metresTotal = parEngin.reduce((s, r) => s + (r.metres || 0), 0);
+                                    const coutConso = parEngin.reduce((s, r) => s + (r.consommables_cout || 0), 0);
+                                    const arretsHTotal = parEngin.reduce((s, r) => s + (r.arrets_h || 0), 0);
+                                    const metresPerdusTotal = parEngin.reduce((s, r) => s + (r.metres_perdus_est || 0), 0);
+                                    const dispoVals = parEngin.filter((r) => r.dispo_pct != null).map((r) => r.dispo_pct);
+                                    const dispoMoy = dispoVals.length ? round(dispoVals.reduce((s, v) => s + v, 0) / dispoVals.length, 1) : null;
+
+                                    res.json({
+                                        module: 'forage',
+                                        periode: { start, end },
+                                        par_engin: parEngin,
+                                        metres_total: round(metresTotal, 1),
+                                        arrets_h_total: round(arretsHTotal, 1),
+                                        metres_perdus_est_total: round(metresPerdusTotal, 0),
+                                        dispo_moyenne_pct: dispoMoy,
+                                        arrets_par_motif: [...arretsGlobal.values()].sort((a, b) => b.heures - a.heures),
+                                        maintenance: (maintRows || []).map((m) => ({
+                                            engin: m.engin, date: m.date, type: m.type || '',
+                                            description: m.description || '', duration: m.duration || 0,
+                                            technician: m.technician || '',
+                                        })),
+                                        consommables_cout: round(coutConso, 2),
+                                        carburant_litres: 0,
+                                        cout_total: round(coutConso, 2),
+                                        effectif: effectif,
+                                    });
+                                });
+                            });
+                        });
+                    }
+                );
+            });
+        });
+    });
+
+    // ---- Création d'une entreprise (pilotée par le portail) -------------
+    app.post('/api/service/enterprise', requireServiceKey, (req, res) => {
+        const b = req.body || {};
+        const name = String(b.name || '').trim();
+        const slug = (String(b.slug || '').trim()
+            || name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''));
+        const plan = String(b.plan || 'enterprise');
+        if (!name) return res.status(400).json({ error: 'name requis' });
+        const db = getDb();
+        db.get('SELECT id FROM enterprises WHERE slug = ?', [slug], (err, row) => {
+            if (err) return res.status(500).json({ error: err.message });
+            if (row) return res.json({ ok: true, existing: true, id: row.id, slug });
+            db.run(
+                'INSERT INTO enterprises (name, slug, currency, plan, maxUsers, maxDrills, maxSites) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                [name, slug, 'XOF', plan, 50, 50, 20],
+                function (e2) {
+                    if (e2) return res.status(500).json({ error: e2.message });
+                    res.json({ ok: true, created: true, id: this.lastID, slug });
+                }
+            );
+        });
+    });
+
+    // ---- Création / mise à jour d'un compte (pilotée par le portail) ---
+    app.post('/api/service/user', requireServiceKey, (req, res) => {
+        const b = req.body || {};
+        const enterpriseId = parseInt(b.enterpriseId, 10);
+        const username = String(b.username || '').trim();
+        const password = String(b.password || '');
+        const role = String(b.role || 'foreur').trim();
+        const name = String(b.name || username).trim() || username;
+        if (!enterpriseId || !username || !password) {
+            return res.status(400).json({ error: 'enterpriseId, username et password requis' });
+        }
+        if (!ALL_TENANT_ROLES.includes(role)) {
+            return res.status(400).json({
+                error: `Rôle Forage non autorisé : « ${role} ». Rôles possibles : ${ALL_TENANT_ROLES.join(', ')}`,
+            });
+        }
+        const db = getDb();
+
+        db.get('SELECT id FROM enterprises WHERE id = ?', [enterpriseId], (e0, ent) => {
+            if (e0) return res.status(500).json({ error: e0.message });
+            if (!ent) return res.status(404).json({ error: `Entreprise Forage n°${enterpriseId} introuvable` });
+
+            db.get(
+                'SELECT id, role, enterpriseId FROM users WHERE LOWER(TRIM(username)) = LOWER(?)',
+                [username],
+                (err, row) => {
+                    if (err) return res.status(500).json({ error: err.message });
+                    const hash = bcrypt.hashSync(password, 10);
+
+                    if (row) {
+                        // Jamais d'écrasement d'un compte d'une autre entreprise
+                        // ou d'un compte plateforme (super_admin / platform_owner).
+                        if (PLATFORM_ROLES.includes(row.role) || parseInt(row.enterpriseId, 10) !== enterpriseId) {
+                            return res.status(409).json({
+                                error: `L'identifiant « ${username} » est déjà utilisé dans Forage par un autre compte. Choisis un autre identifiant.`,
+                            });
+                        }
+                        return db.run(
+                            'UPDATE users SET password = ?, passwordHash = ?, role = ? WHERE id = ?',
+                            ['', hash, role, row.id],
+                            (e2) => (e2
+                                ? res.status(500).json({ error: e2.message })
+                                : res.json({ ok: true, updated: true, username }))
+                        );
+                    }
+
+                    db.run(
+                        'INSERT INTO users (username, password, passwordHash, role, name, enterpriseId, restrictions, notes, email, siteIds) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                        [username, '', hash, role, name, enterpriseId, '{}', '', '', '[]'],
+                        function (e2) {
+                            if (e2) return res.status(500).json({ error: e2.message });
+                            res.json({ ok: true, created: true, id: this.lastID, username });
+                        }
+                    );
+                }
+            );
+        });
+    });
+
+    // ---- (Dé)activation de l'entreprise --------------------------------
+    app.post('/api/service/module-state', requireServiceKey, (req, res) => {
+        const enterpriseId = parseInt((req.body || {}).enterpriseId, 10);
+        const active = (req.body || {}).active ? 1 : 0;
+        if (!enterpriseId) return res.status(400).json({ error: 'enterpriseId requis' });
+        getDb().run(
+            "UPDATE enterprises SET isActive = ?, subscriptionStatus = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?",
+            [active, active ? 'active' : 'suspended', enterpriseId],
+            function (err) {
+                if (err) return res.status(500).json({ error: err.message });
+                if (!this.changes) return res.status(404).json({ error: `Entreprise Forage n°${enterpriseId} introuvable` });
+                res.json({ ok: true, enterpriseId, active: !!active });
+            }
+        );
+    });
+}
+
+/** Coût des consommables par foreuse (Map engin -> coût). Tolérant : erreur => vide. */
+function consommablesParEngin(db, enterpriseId, start, end, cb) {
+    const sql = `
+        SELECT dc.machineId AS engin, COALESCE(SUM(CAST(dc.totalCost AS REAL)),0) AS cout
+        FROM dailyConsumables dc
+        JOIN drills dr ON dr.id = dc.machineId
+        WHERE dr.enterpriseId = ? AND dc.date >= ? AND dc.date <= ?
+        GROUP BY dc.machineId`;
+    db.all(sql, [enterpriseId, start, end], (err, rows) => {
+        const m = new Map();
+        if (!err) for (const r of rows || []) m.set(r.engin, r.cout || 0);
+        cb(m);
+    });
+}
+
+function round(v, n) {
+    if (v == null || isNaN(v)) return 0;
+    const p = Math.pow(10, n);
+    return Math.round(v * p) / p;
+}
+
+module.exports = { registerMetrics };

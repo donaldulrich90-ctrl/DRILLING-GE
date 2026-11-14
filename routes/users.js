@@ -17,6 +17,10 @@ module.exports = function registerUserRoutes(app, options) {
         );
     }
 
+    // Recopie automatique d'un compte créé/modifié dans Forage vers le Portail
+    // (qui le propage aussi à la Mine). Best-effort, module partagé avec la connexion.
+    const { propagateUserToPortal } = require('../portal-sync');
+
     app.get('/api/users', requireUserManagementRole, (req, res) => {
         const isPlatform = isPlatformUser(req);
         const requestedEnterprise = req.query.enterpriseId;
@@ -80,6 +84,7 @@ module.exports = function registerUserRoutes(app, options) {
                 [username, '', bcrypt.hashSync(password, 10), role, name, enterpriseId, restrictionsJson, notes || '', emailValue, siteIdsJson],
                 function insertUser(insertError) {
                     if (insertError) return res.status(500).json({ error: insertError.message });
+                    propagateUserToPortal(enterpriseId, username, password, role);
                     return res.json({ id: this.lastID, username, role, name, enterpriseId });
                 }
             );
@@ -169,6 +174,10 @@ module.exports = function registerUserRoutes(app, options) {
                         values.concat([canonicalUsername]),
                         function updateUser(updateError) {
                             if (updateError) return res.status(500).json({ error: updateError.message });
+                            // Si le mot de passe a changé, recopier vers le Portail (plaintext dispo ici).
+                            if (password) {
+                                propagateUserToPortal(row.enterpriseId, (newUsernameValue || canonicalUsername), password, (role || row.role));
+                            }
                             return res.json({ message: 'Utilisateur mis à jour', changes: this.changes });
                         }
                     );
