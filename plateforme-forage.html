@@ -8914,11 +8914,11 @@
         // ============================================================
         function _cqKey() { return 'ged_cq_data_' + (window.API && window.API.getEnterpriseId ? (window.API.getEnterpriseId() || '0') : '0'); }
         function getCQData() {
-            var def = { fronts: [], tirs: [] };
+            var def = { fronts: [], tirs: [], concassages: [], stocks: [] };
             try {
                 var raw = localStorage.getItem(_cqKey()); if (!raw) return def;
                 var d = JSON.parse(raw);
-                ['fronts', 'tirs'].forEach(function (k) { if (!Array.isArray(d[k])) d[k] = []; });
+                ['fronts', 'tirs', 'concassages', 'stocks'].forEach(function (k) { if (!Array.isArray(d[k])) d[k] = []; });
                 return d;
             } catch (e) { return def; }
         }
@@ -8986,23 +8986,97 @@
             saveCQData(data); renderCarriere();
         };
 
+        window._cqTab = window._cqTab || 'extraction';
+        window.cqSetTab = function (t) { window._cqTab = t; renderCarriere(); };
+
+        // ── Traitement (concassage) ──
+        window.cqAddConcassage = function () {
+            var data = getCQData();
+            var date = (document.getElementById('cqCDate') || {}).value || '';
+            var engin = ((document.getElementById('cqCEngin') || {}).value || '').trim();
+            var tBrut = parseFloat((document.getElementById('cqCBrut') || {}).value) || 0;
+            var tProd = parseFloat((document.getElementById('cqCProd') || {}).value) || 0;
+            var grade = (document.getElementById('cqCGrade') || {}).value || '';
+            var notes = ((document.getElementById('cqCNotes') || {}).value || '').trim();
+            if (!date) { alert('Date requise.'); return; }
+            if (tBrut <= 0) { alert('Tonnage brut traité requis.'); return; }
+            data.concassages.unshift({ id: _cqNextId(data.concassages, 'CNC'), date: date, engin: engin, tonneBrut: tBrut, tonneProduite: tProd, grade: grade, notes: notes });
+            saveCQData(data); renderCarriere();
+        };
+        window.cqDeleteConcassage = function (id) {
+            var data = getCQData();
+            data.concassages = data.concassages.filter(function (c) { return c.id !== id; });
+            saveCQData(data); renderCarriere();
+        };
+
+        // ── Stocks granulats ──
+        window.cqAddStock = function () {
+            var data = getCQData();
+            var grade = (document.getElementById('cqSGrade') || {}).value || '';
+            var desig = ((document.getElementById('cqSDesig') || {}).value || '').trim();
+            var qte = parseFloat((document.getElementById('cqSQte') || {}).value) || 0;
+            var notes = ((document.getElementById('cqSNotes') || {}).value || '').trim();
+            if (!grade) { alert('Grade requis.'); return; }
+            var existing = data.stocks.find(function (s) { return s.grade === grade && s.designation === desig; });
+            if (existing) { alert('Ce grade existe déjà dans les stocks.'); return; }
+            data.stocks.push({ id: _cqNextId(data.stocks, 'STK'), grade: grade, designation: desig, qteDisponible: qte, notes: notes });
+            saveCQData(data); renderCarriere();
+        };
+        window.cqAjusterStock = function (id, delta) {
+            var data = getCQData();
+            var s = data.stocks.find(function (x) { return x.id === id; });
+            if (!s) return;
+            var input = document.getElementById('cqSAjust_' + id);
+            var val = input ? parseFloat(input.value) || 0 : 0;
+            if (val <= 0) { alert('Quantité > 0 requise.'); return; }
+            s.qteDisponible = Math.max(0, (s.qteDisponible || 0) + (delta > 0 ? val : -val));
+            saveCQData(data); renderCarriere();
+        };
+        window.cqDeleteStock = function (id) {
+            if (!confirm('Supprimer ce stock ?')) return;
+            var data = getCQData();
+            data.stocks = data.stocks.filter(function (s) { return s.id !== id; });
+            saveCQData(data); renderCarriere();
+        };
+
         function renderCarriere() {
             var el = document.getElementById('carriereContent');
             if (!el) return;
             var data = getCQData();
             var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); };
             var kpi = function (l, v, c) { return '<div class="ged-content-panel rounded-xl px-5 py-4"><p class="text-[10px] uppercase tracking-widest font-semibold mb-1" style="color:#64748B">' + l + '</p><p class="text-2xl font-black font-mono" style="color:' + (c || 'var(--ged-black)') + '">' + v + '</p></div>'; };
+            var grades = ['0/4', '4/10', '10/20', '20/40', '40/80', 'Tout-venant', 'Autre'];
+            var today = new Date().toISOString().slice(0, 10);
+            var tab = window._cqTab || 'extraction';
 
-            var activeFronts = data.fronts.filter(function (f) { return f.status !== 'TERMINÉ'; }).length;
-            var totVolume = data.tirs.reduce(function (s, t) { return s + (parseFloat(t.volumeBCM) || 0); }, 0);
-            var totCharge = data.tirs.reduce(function (s, t) { return s + (parseFloat(t.chargeKg) || 0); }, 0);
+            // ── KPIs par onglet ──
+            var kpiRow;
+            if (tab === 'traitement') {
+                var totBrut = data.concassages.reduce(function (s, c) { return s + (parseFloat(c.tonneBrut) || 0); }, 0);
+                var totProd = data.concassages.reduce(function (s, c) { return s + (parseFloat(c.tonneProduite) || 0); }, 0);
+                var rendMoy = totBrut > 0 ? (totProd / totBrut * 100).toFixed(1) : null;
+                kpiRow = kpi('Sessions concassage', data.concassages.length || '—', '') +
+                    kpi('Tonnage brut traité', totBrut > 0 ? totBrut.toFixed(0) + ' t' : '—', '#F5B800') +
+                    kpi('Granulats produits', totProd > 0 ? totProd.toFixed(0) + ' t' : '—', '#28A745') +
+                    kpi('Rendement moyen', rendMoy ? rendMoy + ' %' : '—', rendMoy >= 85 ? '#28A745' : rendMoy >= 70 ? '#F5B800' : '#DC3545');
+            } else if (tab === 'stocks') {
+                var totDispo = data.stocks.reduce(function (s, x) { return s + (parseFloat(x.qteDisponible) || 0); }, 0);
+                var gradesActifs = data.stocks.length;
+                kpiRow = kpi('Grades enregistrés', gradesActifs || '—', '') +
+                    kpi('Stock total disponible', totDispo > 0 ? totDispo.toFixed(0) + ' t' : '—', '#28A745') +
+                    kpi('Stocks à zéro', data.stocks.filter(function (s) { return (parseFloat(s.qteDisponible) || 0) === 0; }).length || '—', '#DC3545') +
+                    kpi('', '', '');
+            } else {
+                var activeFronts = data.fronts.filter(function (f) { return f.status !== 'TERMINÉ'; }).length;
+                var totVolume = data.tirs.reduce(function (s, t) { return s + (parseFloat(t.volumeBCM) || 0); }, 0);
+                var totCharge = data.tirs.reduce(function (s, t) { return s + (parseFloat(t.chargeKg) || 0); }, 0);
+                kpiRow = kpi('Fronts actifs', activeFronts || '—', '#F5B800') +
+                    kpi('Volume extrait (BCM)', totVolume > 0 ? totVolume.toFixed(0) + ' m³' : '—', '#28A745') +
+                    kpi('Charge totale', totCharge > 0 ? totCharge.toFixed(0) + ' kg' : '—', '') +
+                    kpi('Tirs enregistrés', data.tirs.length || '—', '');
+            }
 
-            var kpiRow = kpi('Fronts actifs', activeFronts || '—', '#F5B800') +
-                kpi('Volume extrait (BCM)', totVolume > 0 ? totVolume.toFixed(0) + ' m³' : '—', '#28A745') +
-                kpi('Charge totale', totCharge > 0 ? totCharge.toFixed(0) + ' kg' : '—', '') +
-                kpi('Tirs enregistrés', data.tirs.length || '—', '');
-
-            // ── Formulaire ajout front ──
+            // ── Onglet Extraction ──
             var frontForm =
                 '<div class="ged-content-panel rounded-xl p-5 mb-5">' +
                 '<h3 class="font-bold text-sm mb-3" style="color:var(--ged-black)">➕ Ajouter un front / gradin</h3>' +
@@ -9014,7 +9088,6 @@
                 '</div>' +
                 '<button onclick="cqAddFront()" class="mt-3 bg-amber-600 hover:bg-amber-700 px-4 py-2 rounded-lg font-semibold text-sm">Ajouter le front</button>' +
                 '</div>';
-
             var frontRows = data.fronts.map(function (f) {
                 var tirsFront = data.tirs.filter(function (t) { return t.frontId === f.id; });
                 var volFront = tirsFront.reduce(function (s, t) { return s + (parseFloat(t.volumeBCM) || 0); }, 0);
@@ -9035,27 +9108,22 @@
             var frontTable = data.fronts.length
                 ? '<div class="ged-content-panel rounded-xl overflow-hidden mb-5"><div class="px-5 py-3 border-b border-slate-700"><h3 class="font-bold text-sm" style="color:var(--ged-black)">Fronts &amp; gradins</h3></div><div style="overflow-x:auto"><table style="width:100%;font-size:13px;border-collapse:collapse"><thead><tr style="font-size:11px;text-transform:uppercase;color:#64748B;background:rgba(0,0,0,0.15)"><th class="px-3 py-2 text-left">Front / Gradin</th><th class="px-3 py-2 text-center">Statut</th><th class="px-3 py-2 text-right">Volume BCM</th><th class="px-3 py-2 text-right">Tirs</th><th class="px-3 py-2"></th></tr></thead><tbody>' + frontRows + '</tbody></table></div></div>'
                 : '<div class="ged-content-panel rounded-xl p-8 text-center mb-5"><p style="font-size:40px">⛰️</p><p class="font-bold mt-2" style="color:var(--ged-black)">Aucun front enregistré</p><p class="text-sm text-slate-500 mt-1">Ajoutez un front ci-dessus pour commencer le suivi des tirs.</p></div>';
-
-            // ── Formulaire tir de mine ──
             var tirForm = data.fronts.length
                 ? '<div class="ged-content-panel rounded-xl p-5 mb-5">' +
                   '<h3 class="font-bold text-sm mb-3" style="color:var(--ged-black)">💥 Enregistrer un tir de mine</h3>' +
                   '<div class="grid grid-cols-2 md:grid-cols-6 gap-3">' +
                   '<div class="col-span-2"><label class="block text-xs text-slate-500 mb-1">Front *</label><select id="cqTirFront" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm">' +
-                  data.fronts.map(function (f) { return '<option value="' + f.id + '">' + esc(f.name) + '</option>'; }).join('') +
-                  '</select></div>' +
-                  '<div><label class="block text-xs text-slate-500 mb-1">Date *</label><input id="cqTirDate" type="date" value="' + new Date().toISOString().slice(0, 10) + '" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                  data.fronts.map(function (f) { return '<option value="' + f.id + '">' + esc(f.name) + '</option>'; }).join('') + '</select></div>' +
+                  '<div><label class="block text-xs text-slate-500 mb-1">Date *</label><input id="cqTirDate" type="date" value="' + today + '" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
                   '<div><label class="block text-xs text-slate-500 mb-1">Nb trous</label><input id="cqTirTrous" type="number" min="0" step="1" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
                   '<div><label class="block text-xs text-slate-500 mb-1">Espacement (m)</label><input id="cqTirEspacement" type="number" min="0" step="0.1" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
                   '<div><label class="block text-xs text-slate-500 mb-1">Charge totale (kg) *</label><input id="cqTirCharge" type="number" min="0" step="1" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
                   '<div><label class="block text-xs text-slate-500 mb-1">Explosif</label><select id="cqTirExplosif" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm">' +
-                  ['', 'ANFO', 'Emulsion', 'ANFO + Emulsion', 'TNT', 'Dynamite', 'Autre'].map(function (e) { return '<option value="' + e + '">' + (e || '—') + '</option>'; }).join('') +
-                  '</select></div>' +
+                  ['', 'ANFO', 'Emulsion', 'ANFO + Emulsion', 'TNT', 'Dynamite', 'Autre'].map(function (e) { return '<option value="' + e + '">' + (e || '—') + '</option>'; }).join('') + '</select></div>' +
                   '<div><label class="block text-xs text-slate-500 mb-1">Volume abattu (BCM m³)</label><input id="cqTirVolume" type="number" min="0" step="1" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
                   '<div class="col-span-2 md:col-span-5"><label class="block text-xs text-slate-500 mb-1">Notes</label><input id="cqTirNotes" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
                   '</div><button onclick="cqAddTir()" class="mt-3 bg-emerald-600 hover:bg-emerald-700 px-4 py-2 rounded-lg font-semibold text-sm">Enregistrer le tir</button></div>'
                 : '';
-
             var tirRows = (data.tirs || []).slice(0, 30).map(function (t) {
                 var fr = data.fronts.find(function (x) { return x.id === t.frontId; });
                 return '<tr style="border-bottom:1px solid rgba(255,255,255,0.06)">' +
@@ -9072,10 +9140,80 @@
             var tirHist = data.tirs.length
                 ? '<div class="ged-content-panel rounded-xl overflow-hidden"><div class="px-5 py-3 border-b border-slate-700"><h3 class="font-bold text-sm" style="color:var(--ged-black)">Historique des tirs</h3></div><div style="overflow-x:auto"><table style="width:100%;font-size:13px;border-collapse:collapse"><thead><tr style="font-size:11px;text-transform:uppercase;color:#64748B;background:rgba(0,0,0,0.15)"><th class="px-3 py-2 text-left">Date</th><th class="px-3 py-2 text-left">Front</th><th class="px-3 py-2 text-right">Trous</th><th class="px-3 py-2 text-right">Charge</th><th class="px-3 py-2 text-left">Explosif</th><th class="px-3 py-2 text-right">Volume BCM</th><th class="px-3 py-2 text-left">Notes</th><th class="px-3 py-2"></th></tr></thead><tbody>' + tirRows + '</tbody></table></div></div>'
                 : '';
+            var extractionTab = frontForm + frontTable + tirForm + tirHist;
 
-            el.innerHTML =
+            // ── Onglet Traitement (concassage) ──
+            var cForm =
+                '<div class="ged-content-panel rounded-xl p-5 mb-5">' +
+                '<h3 class="font-bold text-sm mb-3" style="color:var(--ged-black)">🪨 Enregistrer une session de concassage</h3>' +
+                '<div class="grid grid-cols-2 md:grid-cols-6 gap-3">' +
+                '<div><label class="block text-xs text-slate-500 mb-1">Date *</label><input id="cqCDate" type="date" value="' + today + '" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                '<div class="col-span-2"><label class="block text-xs text-slate-500 mb-1">Engin / concasseur</label><input id="cqCEngin" placeholder="Ex. Metso C120" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                '<div><label class="block text-xs text-slate-500 mb-1">Tonnage brut (t) *</label><input id="cqCBrut" type="number" min="0" step="0.5" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                '<div><label class="block text-xs text-slate-500 mb-1">Granulats produits (t)</label><input id="cqCProd" type="number" min="0" step="0.5" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                '<div><label class="block text-xs text-slate-500 mb-1">Grade produit</label><select id="cqCGrade" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm">' +
+                ['', ...grades].map(function (g) { return '<option value="' + g + '">' + (g || '—') + '</option>'; }).join('') + '</select></div>' +
+                '<div class="col-span-2 md:col-span-6"><label class="block text-xs text-slate-500 mb-1">Notes</label><input id="cqCNotes" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                '</div><button onclick="cqAddConcassage()" class="mt-3 bg-amber-600 hover:bg-amber-700 px-4 py-2 rounded-lg font-semibold text-sm">Enregistrer</button></div>';
+            var cRows = (data.concassages || []).slice(0, 30).map(function (c) {
+                var rend = c.tonneBrut > 0 ? (c.tonneProduite / c.tonneBrut * 100).toFixed(1) : null;
+                return '<tr style="border-bottom:1px solid rgba(255,255,255,0.06)">' +
+                    '<td class="px-3 py-2 text-slate-300">' + esc(c.date) + '</td>' +
+                    '<td class="px-3 py-2 text-slate-300">' + esc(c.engin || '—') + '</td>' +
+                    '<td class="px-3 py-2 text-right font-mono">' + (c.tonneBrut ? c.tonneBrut.toFixed(0) + ' t' : '—') + '</td>' +
+                    '<td class="px-3 py-2 text-right font-mono">' + (c.tonneProduite ? c.tonneProduite.toFixed(0) + ' t' : '—') + '</td>' +
+                    '<td class="px-3 py-2 text-center"><span style="background:rgba(99,102,241,.15);color:#818CF8;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:700">' + esc(c.grade || '—') + '</span></td>' +
+                    '<td class="px-3 py-2 text-right font-mono text-sm" style="color:' + (rend ? (rend >= 85 ? '#28A745' : rend >= 70 ? '#F5B800' : '#DC3545') : '#94A3B8') + '">' + (rend ? rend + ' %' : '—') + '</td>' +
+                    '<td class="px-3 py-2 text-slate-400 text-xs">' + esc(c.notes || '') + '</td>' +
+                    '<td class="px-3 py-2 text-right"><button onclick="cqDeleteConcassage(\'' + c.id + '\')" class="text-red-400 hover:text-red-300 text-xs">×</button></td>' +
+                    '</tr>';
+            }).join('');
+            var cTable = data.concassages.length
+                ? '<div class="ged-content-panel rounded-xl overflow-hidden"><div class="px-5 py-3 border-b border-slate-700"><h3 class="font-bold text-sm" style="color:var(--ged-black)">Historique des sessions de concassage</h3></div><div style="overflow-x:auto"><table style="width:100%;font-size:13px;border-collapse:collapse"><thead><tr style="font-size:11px;text-transform:uppercase;color:#64748B;background:rgba(0,0,0,0.15)"><th class="px-3 py-2 text-left">Date</th><th class="px-3 py-2 text-left">Engin</th><th class="px-3 py-2 text-right">Brut traité</th><th class="px-3 py-2 text-right">Granulats</th><th class="px-3 py-2 text-center">Grade</th><th class="px-3 py-2 text-right">Rendement</th><th class="px-3 py-2 text-left">Notes</th><th class="px-3 py-2"></th></tr></thead><tbody>' + cRows + '</tbody></table></div></div>'
+                : '<div class="ged-content-panel rounded-xl p-8 text-center"><p style="font-size:40px">🪨</p><p class="font-bold mt-2" style="color:var(--ged-black)">Aucune session enregistrée</p><p class="text-sm text-slate-500 mt-1">Enregistrez vos sessions de concassage ci-dessus.</p></div>';
+            var traitementTab = cForm + cTable;
+
+            // ── Onglet Stocks granulats ──
+            var sForm =
+                '<div class="ged-content-panel rounded-xl p-5 mb-5">' +
+                '<h3 class="font-bold text-sm mb-3" style="color:var(--ged-black)">📦 Ajouter un stock granulats</h3>' +
+                '<div class="grid grid-cols-2 md:grid-cols-4 gap-3">' +
+                '<div><label class="block text-xs text-slate-500 mb-1">Grade *</label><select id="cqSGrade" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm">' +
+                ['', ...grades].map(function (g) { return '<option value="' + g + '">' + (g || '—') + '</option>'; }).join('') + '</select></div>' +
+                '<div><label class="block text-xs text-slate-500 mb-1">Désignation commerciale</label><input id="cqSDesig" placeholder="Ex. Gravier concassé 10/20" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                '<div><label class="block text-xs text-slate-500 mb-1">Stock initial (t)</label><input id="cqSQte" type="number" min="0" step="0.5" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                '<div><label class="block text-xs text-slate-500 mb-1">Notes</label><input id="cqSNotes" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                '</div><button onclick="cqAddStock()" class="mt-3 bg-amber-600 hover:bg-amber-700 px-4 py-2 rounded-lg font-semibold text-sm">Ajouter</button></div>';
+            var sCards = data.stocks.map(function (s) {
+                var qte = parseFloat(s.qteDisponible) || 0;
+                var qteColor = qte === 0 ? '#DC3545' : qte < 50 ? '#F5B800' : '#28A745';
+                return '<div class="ged-content-panel rounded-xl p-5">' +
+                    '<div class="flex justify-between items-start mb-3">' +
+                    '<div><p class="font-bold text-sm" style="color:var(--ged-yellow)">' + esc(s.grade) + '</p>' +
+                    (s.designation ? '<p class="text-xs text-slate-400">' + esc(s.designation) + '</p>' : '') +
+                    (s.notes ? '<p class="text-xs text-slate-500 mt-1">' + esc(s.notes) + '</p>' : '') + '</div>' +
+                    '<button onclick="cqDeleteStock(\'' + s.id + '\')" class="text-red-400 hover:text-red-300 text-xs">Supprimer</button>' +
+                    '</div>' +
+                    '<p class="text-3xl font-black font-mono mb-3" style="color:' + qteColor + '">' + qte.toFixed(1) + ' <span class="text-base font-normal text-slate-400">t</span></p>' +
+                    '<div class="flex gap-2 items-center">' +
+                    '<input id="cqSAjust_' + s.id + '" type="number" min="0.5" step="0.5" placeholder="Qté (t)" class="w-24 bg-slate-800 border border-slate-600 rounded px-2 py-1 text-white text-sm">' +
+                    '<button onclick="cqAjusterStock(\'' + s.id + '\', 1)" class="bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1 rounded text-xs font-bold">+ Entrée</button>' +
+                    '<button onclick="cqAjusterStock(\'' + s.id + '\', -1)" class="bg-slate-600 hover:bg-slate-500 text-white px-3 py-1 rounded text-xs font-bold">− Sortie</button>' +
+                    '</div></div>';
+            }).join('');
+            var stocksTab = sForm +
+                (data.stocks.length
+                    ? '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">' + sCards + '</div>'
+                    : '<div class="ged-content-panel rounded-xl p-8 text-center"><p style="font-size:40px">📦</p><p class="font-bold mt-2" style="color:var(--ged-black)">Aucun stock enregistré</p><p class="text-sm text-slate-500 mt-1">Ajoutez vos grades de granulats ci-dessus.</p></div>');
+
+            // ── Barre d'onglets ──
+            function tabBtn(id, label) { var on = tab === id; return '<button onclick="cqSetTab(\'' + id + '\')" style="padding:8px 16px;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;' + (on ? 'background:var(--ged-yellow);color:#1a1200' : 'background:rgba(255,255,255,0.06);color:#A7B6C9') + '">' + label + '</button>'; }
+            var tabBar = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px">' + tabBtn('extraction', '⛰️ Extraction') + tabBtn('traitement', '🪨 Traitement') + tabBtn('stocks', '📦 Stocks') + '</div>';
+            var content = tab === 'traitement' ? traitementTab : (tab === 'stocks' ? stocksTab : extractionTab);
+
+            el.innerHTML = tabBar +
                 '<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">' + kpiRow + '</div>' +
-                frontForm + frontTable + tirForm + tirHist +
+                content +
                 '<p class="text-xs text-slate-500 mt-3">Module Carrière — données enregistrées sur le serveur (accessibles sur tous vos appareils).</p>';
         }
         window.renderCarriere = renderCarriere;
