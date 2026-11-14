@@ -7164,7 +7164,9 @@
         // ====================================================================
         var GED_DIGEST_DEFAULTS = {
             sections: { production: true, finance: true, equipment: true, stock: true, rh: false },
-            thresholds: { weeklyMetersTarget: 0, marginMinPct: 10, maintenanceLeadDays: 7 }
+            thresholds: { weeklyMetersTarget: 0, marginMinPct: 10, maintenanceLeadDays: 7 },
+            autoReminder: false,
+            recipients: ''
         };
         function _digestKey() { return 'ged_digest_cfg_' + (window.API && window.API.getEnterpriseId ? (window.API.getEnterpriseId() || '0') : '0'); }
         function geLoadDigestConfig() {
@@ -7172,7 +7174,7 @@
                 var raw = localStorage.getItem(_digestKey());
                 if (!raw) return JSON.parse(JSON.stringify(GED_DIGEST_DEFAULTS));
                 var c = JSON.parse(raw);
-                return { sections: Object.assign({}, GED_DIGEST_DEFAULTS.sections, c.sections || {}), thresholds: Object.assign({}, GED_DIGEST_DEFAULTS.thresholds, c.thresholds || {}) };
+                return { sections: Object.assign({}, GED_DIGEST_DEFAULTS.sections, c.sections || {}), thresholds: Object.assign({}, GED_DIGEST_DEFAULTS.thresholds, c.thresholds || {}), autoReminder: !!c.autoReminder, recipients: c.recipients || '' };
             } catch (e) { return JSON.parse(JSON.stringify(GED_DIGEST_DEFAULTS)); }
         }
         function geSaveDigestConfig(cfg) { try { localStorage.setItem(_digestKey(), JSON.stringify(cfg)); } catch (e) {} }
@@ -7187,15 +7189,22 @@
                 + '<div class="text-[11px] uppercase tracking-wide text-slate-500 mt-3 mb-1">Seuils d\'alerte</div>'
                 + num('digThMeters', 'Objectif mètres / semaine', t.weeklyMetersTarget, 'm')
                 + num('digThMargin', 'Marge minimale', t.marginMinPct, '%')
-                + num('digThMaint', 'Révision à venir sous', t.maintenanceLeadDays, 'jours');
+                + num('digThMaint', 'Révision à venir sous', t.maintenanceLeadDays, 'jours')
+                + '<div class="text-[11px] uppercase tracking-wide text-slate-500 mt-3 mb-1">Automatisation</div>'
+                + chk('digAutoRem', '📅 Rappel hebdomadaire automatique (à la connexion)', cfg.autoReminder)
+                + '<label class="block text-slate-300 text-sm py-1">Destinataires (e-mails, séparés par des virgules)'
+                + '<input type="text" id="digRecipients" value="' + String(cfg.recipients || '').replace(/"/g, '&quot;') + '" onchange="geSaveDigestConfigFromDom()" placeholder="chef@…, direction@…" class="w-full mt-1 bg-slate-900 border border-slate-600 rounded px-2 py-1 text-white text-sm"></label>';
         }
         window.geSaveDigestConfigFromDom = function() {
             function b(id) { var e = document.getElementById(id); return e ? !!e.checked : false; }
             function n(id, d) { var e = document.getElementById(id); var v = e ? parseFloat(e.value) : NaN; return isFinite(v) ? v : d; }
             if (!document.getElementById('digSecProd')) return;
+            var recEl = document.getElementById('digRecipients');
             geSaveDigestConfig({
                 sections: { production: b('digSecProd'), finance: b('digSecFin'), equipment: b('digSecEquip'), stock: b('digSecStock'), rh: b('digSecRh') },
-                thresholds: { weeklyMetersTarget: n('digThMeters', 0), marginMinPct: n('digThMargin', 10), maintenanceLeadDays: n('digThMaint', 7) }
+                thresholds: { weeklyMetersTarget: n('digThMeters', 0), marginMinPct: n('digThMargin', 10), maintenanceLeadDays: n('digThMaint', 7) },
+                autoReminder: b('digAutoRem'),
+                recipients: recEl ? recEl.value.trim() : ''
             });
         };
         function _digestAddDays(dateStr, n) { var p = String(dateStr).slice(0, 10).split('-'); var d = new Date(Date.UTC(+p[0], +p[1] - 1, +p[2])); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
@@ -7265,6 +7274,8 @@
                 var wk = _currentWeekRange();
                 computeOperationalAlerts(wk.from, wk.to).forEach(function(a) { alerts.push({ level: a.level, msg: a.cat + ' — ' + a.msg }); });
             } catch (e) {}
+            // Rappel hebdomadaire (une fois par session, après chargement des données)
+            try { setTimeout(function() { try { geCheckWeeklyDigestReminder(); } catch (e) {} }, 1200); } catch (e) {}
             if (alerts.length === 0) {
                 el.innerHTML = '<div style="text-align:center;padding:24px 0;color:#a7b4c0;font-size:12px">' +
                                '<div style="font-size:22px;margin-bottom:8px">✓</div>Aucune alerte active</div>';
@@ -7360,10 +7371,99 @@
                 + '</body></html>';
 
             try { if (window.geAiStashReport) window.geAiStashReport('Bilan hebdomadaire S' + week + ' ' + year, html); } catch (e) {}
+            window._lastReportShare = { type: 'weekly-digest', year: year, week: week, from: from, to: to, title: 'Bilan hebdomadaire S' + week + ' ' + year, alerts: alerts.length };
             var w = window.open('', '_blank');
             if (w) { w.document.open(); w.document.write(html); w.document.close(); }
             else alert('Autorisez les fenêtres pop-up pour afficher le bilan.');
         };
+
+        // Résumé texte lisible d'un bilan hebdomadaire (pour la distribution en interne).
+        function geBuildDigestSummaryText(from, to, cfg) {
+            cfg = cfg || geLoadDigestConfig();
+            var recs = (dailyDataRecords || []).filter(function(r) { return r && r.date && r.date >= from && r.date <= to; });
+            var cur = (typeof getRevenueViewDisplayCurrency === 'function') ? getRevenueViewDisplayCurrency() : ((companyInfo && companyInfo.currency) || 'XOF');
+            var lines = [];
+            if (cfg.sections.production) {
+                var m = recs.reduce(function(s, r) { return s + (parseFloat(_rpData(r).metersDrilled) || 0); }, 0);
+                var h = recs.reduce(function(s, r) { return s + (parseFloat(_rpData(r).hours) || 0); }, 0);
+                lines.push('⛏️ Production : ' + m.toFixed(1) + ' m, ' + h.toFixed(1) + ' h, ROP ' + (h > 0 ? (m / h).toFixed(1) : '—') + ' m/h (' + recs.length + ' postes)');
+            }
+            if (cfg.sections.finance && typeof computeProfitabilityForRange === 'function') {
+                try { var r = computeProfitabilityForRange(from, to, null); lines.push('💰 Finance : revenu ' + formatCurrency(r.revenue, cur) + ', profit ' + formatCurrency(r.profit, cur) + ', marge ' + (r.margePct != null ? r.margePct.toFixed(1) + '%' : '—')); } catch (e) {}
+            }
+            var alerts = computeOperationalAlerts(from, to, cfg);
+            if (alerts.length) { lines.push('🔔 ' + alerts.length + ' alerte(s) :'); alerts.slice(0, 8).forEach(function(a) { lines.push('   • [' + a.cat + '] ' + a.msg); }); }
+            else lines.push('🔔 Aucune alerte — seuils respectés.');
+            return lines.join('\n');
+        }
+        window.geDistributeWeeklyDigest = function(year, week, from, to) {
+            var cfg = geLoadDigestConfig();
+            var recips = String(cfg.recipients || '').split(/[,;\s]+/).filter(Boolean);
+            if (!recips.length) { alert('Ajoutez au moins un destinataire dans la configuration du bilan.'); return; }
+            if (!(window.API && window.API.ReportDist)) { alert('Distribution indisponible.'); return; }
+            if (typeof canPublishCompanyInfo === 'function' && !canPublishCompanyInfo()) { alert('Vous n\'avez pas le droit de distribuer des rapports.'); return; }
+            var summary = geBuildDigestSummaryText(from, to, cfg);
+            if (!confirm('Distribuer le bilan hebdomadaire S' + week + ' ' + year + ' à :\n' + recips.join(', ') + ' ?')) return;
+            window.API.ReportDist.create({
+                title: 'Bilan hebdomadaire S' + week + ' ' + year,
+                body: summary,
+                reportData: { type: 'weekly-digest', year: year, week: week, from: from, to: to },
+                emails: recips
+            }).then(function() {
+                try { localStorage.setItem('ged_digest_last_week', year + '-W' + week); } catch (e) {}
+                geRemoveDigestBanner();
+                alert('Bilan distribué à l\'équipe (' + recips.length + ' destinataire(s)).');
+            }).catch(function(e) { alert('Erreur : ' + (e && e.message ? e.message : e)); });
+        };
+
+        // Rappel hebdomadaire : propose, à la connexion, de générer/distribuer le bilan
+        // de la SEMAINE PRÉCÉDENTE (complète), une fois par semaine. Jamais d'envoi silencieux.
+        var _digestReminderChecked = false;
+        function geRemoveDigestBanner() { var b = document.getElementById('gedDigestBanner'); if (b && b.parentNode) b.parentNode.removeChild(b); }
+        function geCheckWeeklyDigestReminder() {
+            if (_digestReminderChecked) return;
+            _digestReminderChecked = true;
+            var cfg = geLoadDigestConfig();
+            if (!cfg.autoReminder) return;
+            // Semaine précédente (ISO)
+            var now = new Date();
+            var prev = new Date(now); prev.setDate(now.getDate() - 7);
+            var iso = _isoYearWeek(prev);
+            var key = iso.year + '-W' + iso.week;
+            var last = '';
+            try { last = localStorage.getItem('ged_digest_last_week') || ''; } catch (e) {}
+            if (last === key) return; // déjà traité
+            var start = getDateOfISOWeek(iso.year, iso.week);
+            var from = getLocalDateYYYYMMDD(start), to = _digestAddDays(from, 6);
+            var alerts = computeOperationalAlerts(from, to, cfg);
+            geShowDigestBanner(iso.year, iso.week, from, to, alerts.length);
+        }
+        function _isoYearWeek(d) {
+            var date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+            var day = date.getUTCDay() || 7;
+            date.setUTCDate(date.getUTCDate() + 4 - day);
+            var yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+            var week = Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
+            return { year: date.getUTCFullYear(), week: week };
+        }
+        function geShowDigestBanner(year, week, from, to, alertCount) {
+            geRemoveDigestBanner();
+            var b = document.createElement('div');
+            b.id = 'gedDigestBanner';
+            b.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:20px;z-index:9999;background:#111A2B;border:1px solid #F5B80055;border-left:4px solid #F5B800;border-radius:12px;padding:14px 16px;max-width:520px;width:calc(100% - 32px);box-shadow:0 10px 30px rgba(0,0,0,.4);color:#E8EEF6;font-family:inherit';
+            b.innerHTML = '<div style="display:flex;gap:10px;align-items:flex-start">'
+                + '<div style="font-size:20px">📅</div>'
+                + '<div style="flex:1">'
+                + '<div style="font-weight:700;margin-bottom:2px">Bilan hebdomadaire — Semaine ' + week + ' / ' + year + '</div>'
+                + '<div style="font-size:12px;color:#A7B6C9">La semaine est terminée' + (alertCount ? ' · <b style="color:#F5B800">' + alertCount + ' alerte(s)</b>' : ' · aucune alerte') + '. Générez le bilan ou distribuez-le à l\'équipe.</div>'
+                + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">'
+                + '<button onclick="document.getElementById(\'digestWeek\')&&(document.getElementById(\'digestWeek\').value=\'' + year + '-W' + String(week).padStart(2, '0') + '\');geGenerateWeeklyDigest&&geGenerateWeeklyDigest()" style="background:#1E293B;border:1px solid #334155;color:#E8EEF6;border-radius:8px;padding:7px 12px;font-size:12px;cursor:pointer">👁️ Générer</button>'
+                + '<button onclick="geDistributeWeeklyDigest(' + year + ',' + week + ',\'' + from + '\',\'' + to + '\')" style="background:#F5B800;border:none;color:#2A1D00;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">📤 Distribuer à l\'équipe</button>'
+                + '<button onclick="geRemoveDigestBanner()" style="background:none;border:none;color:#6E8099;font-size:12px;cursor:pointer">Plus tard</button>'
+                + '</div></div></div>';
+            document.body.appendChild(b);
+        }
+        window.geCheckWeeklyDigestReminder = geCheckWeeklyDigestReminder;
 
         function initDashProductionChart() {
             var canvas = document.getElementById('dashProductionChart');
