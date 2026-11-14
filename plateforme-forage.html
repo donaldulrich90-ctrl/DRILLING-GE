@@ -11985,6 +11985,18 @@
             });
             var machines = Object.values(machineMap).sort(function(a,b){return b.meters-a.meters;});
 
+            // ── Aggregate by rock type / formation (ROP par formation) ──
+            var rockMap = {};
+            records.forEach(function(r){
+                var d = r.data || {};
+                var rt = String(d.materialType || d.formation || '').trim() || 'Non précisé';
+                if (!rockMap[rt]) rockMap[rt] = {type:rt, meters:0, hours:0, records:0};
+                rockMap[rt].meters  += parseFloat(d.metersDrilled) || 0;
+                rockMap[rt].hours   += parseFloat(d.hours) || 0;
+                rockMap[rt].records += 1;
+            });
+            var rocks = Object.values(rockMap).filter(function(x){return x.meters>0 || x.hours>0;}).sort(function(a,b){return (b.meters)-(a.meters);});
+
             // ── Daily trend (last 14 days) ────────────────────────
             var dateMap = {};
             records.forEach(function(r){
@@ -12069,6 +12081,37 @@
                 (machines.filter(function(m){return m.fuel>0;}).length>0?'<canvas id="chartFuel" height="200"></canvas>':'<p class="text-sm py-8 text-center" style="color:#94A3B8">Aucune donnée carburant enregistrée</p>')+
                 '</div>'+
                 '</div>'+
+                (rocks.length ?
+                  '<div class="ged-content-panel rounded-xl overflow-hidden mb-5">'+
+                  '<div class="px-5 py-3 border-b" style="border-color:rgba(0,0,0,0.08);background:rgba(245,184,0,0.06)">'+
+                  '<h3 class="font-bold text-sm" style="color:var(--ged-black)">Performance par type de roche / formation</h3>'+
+                  '<p class="text-xs mt-0.5" style="color:#64748B">Vitesse d\'avancement (ROP) selon la formation forée — pour anticiper les cadences et les coûts.</p>'+
+                  '</div>'+
+                  '<div class="p-5"><canvas id="chartRockROP" height="200"></canvas></div>'+
+                  '<div style="overflow-x:auto"><table style="width:100%;font-size:13px;border-collapse:collapse">'+
+                  '<thead><tr style="border-bottom:1px solid rgba(0,0,0,0.08);font-size:11px;text-transform:uppercase;letter-spacing:0.06em;color:#64748B;background:rgba(0,0,0,0.02)">'+
+                  '<th class="px-4 py-2.5 text-left">Type de roche</th>'+
+                  '<th class="px-4 py-2.5 text-right">Mètres</th>'+
+                  '<th class="px-4 py-2.5 text-right">Heures</th>'+
+                  '<th class="px-4 py-2.5 text-right">ROP</th>'+
+                  '<th class="px-4 py-2.5 text-right">% métrage</th>'+
+                  '<th class="px-4 py-2.5 text-right">Saisies</th>'+
+                  '</tr></thead><tbody>'+
+                  rocks.map(function(rk,i){
+                    var rop = rk.hours>0?(rk.meters/rk.hours).toFixed(2):'—';
+                    var pct = totM>0?(rk.meters/totM*100).toFixed(1):'0';
+                    var bg = i%2?'background:rgba(0,0,0,0.02)':'';
+                    return '<tr style="'+bg+';border-bottom:1px solid rgba(0,0,0,0.06)">'+
+                      '<td class="px-4 py-3 font-semibold" style="border-left:4px solid '+machCols[i%machCols.length]+'">'+String(rk.type).replace(/</g,'&lt;')+'</td>'+
+                      '<td class="px-4 py-3 text-right font-mono font-bold">'+rk.meters.toFixed(1)+' m</td>'+
+                      '<td class="px-4 py-3 text-right font-mono">'+rk.hours.toFixed(1)+' h</td>'+
+                      '<td class="px-4 py-3 text-right font-mono font-semibold">'+rop+(rop!=='—'?' m/h':'')+'</td>'+
+                      '<td class="px-4 py-3 text-right font-mono text-xs" style="color:#94A3B8">'+pct+'%</td>'+
+                      '<td class="px-4 py-3 text-right text-sm" style="color:#94A3B8">'+rk.records+'</td>'+
+                      '</tr>';
+                  }).join('')+
+                  '</tbody></table></div></div>'
+                  : '')+
                 '<div class="ged-content-panel rounded-xl overflow-hidden mb-4">'+
                 '<div class="px-5 py-3 border-b" style="border-color:rgba(0,0,0,0.08);background:rgba(245,184,0,0.06)">'+
                 '<h3 class="font-bold text-sm" style="color:var(--ged-black)">Récapitulatif performance par machine</h3>'+
@@ -12111,6 +12154,25 @@
                 options: Object.assign({},chartDefaults,{plugins:{legend:{display:false},tooltip:{callbacks:{label:function(ctx){return ctx.raw+' m';}}}}})
             });
             _analyticsCharts.push(c1);
+
+            // Chart: ROP par type de roche
+            if (rocks.length && document.getElementById('chartRockROP')) {
+                var cRock = new Chart(document.getElementById('chartRockROP'), {
+                    type:'bar',
+                    data:{
+                        labels: rocks.map(function(rk){return rk.type;}),
+                        datasets:[{
+                            label:'ROP (m/h)',
+                            data: rocks.map(function(rk){return rk.hours>0?parseFloat((rk.meters/rk.hours).toFixed(2)):0;}),
+                            backgroundColor: rocks.map(function(_,i){return machCols[i%machCols.length]+'CC';}),
+                            borderColor: rocks.map(function(_,i){return machCols[i%machCols.length];}),
+                            borderWidth:1.5, borderRadius:4
+                        }]
+                    },
+                    options: Object.assign({},chartDefaults,{plugins:{legend:{display:false},tooltip:{callbacks:{label:function(ctx){return ctx.raw+' m/h';}}}}})
+                });
+                _analyticsCharts.push(cRock);
+            }
 
             // Chart 2: Daily trend
             if (trendLabels.length > 0) {
