@@ -1502,6 +1502,11 @@
                 </div>
             </div>
             <div id="dashStatusBar" class="flex flex-wrap gap-3 mb-5"></div>
+            <!-- Vue direction : synthèse finance/production, visible uniquement pour admin/gestionnaire -->
+            <div id="directionDashboard" class="hidden mb-5 p-4 rounded-xl border border-amber-500/30" style="background:rgba(245,184,0,0.04)">
+                <p class="text-[10px] font-bold tracking-[0.15em] uppercase mb-3" style="color:#F5B800">Vue Direction — Synthèse 30 derniers jours</p>
+                <div id="directionKPIs" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3"></div>
+            </div>
             <div class="mb-4 flex flex-wrap justify-between items-center gap-2">
                 <p class="text-slate-400 text-sm" data-i18n="dashboard.filter_hint">Foreuses rattachées à votre entreprise. Filtrez par site avec le menu en haut à droite.</p>
                 <div class="flex flex-wrap gap-2">
@@ -7008,6 +7013,8 @@
 
             updateGlobalStats();
             renderDashboardExtras();
+            renderRoleDashboard();
+            fillDashboardPanels();
         }
 
         function showAddDrillModal() {
@@ -7259,6 +7266,164 @@
         function renderDashboardExtras() {
             renderDashAlerts();
             initDashProductionChart();
+        }
+
+        function isManagementRole(role) {
+            return !role || ['admin','super_admin','gestionnaire','gestionnaire_site'].indexOf(role) >= 0;
+        }
+
+        function renderRoleDashboard() {
+            var role = (typeof currentUser !== 'undefined' && currentUser) ? (currentUser.role || '') : '';
+            var box = document.getElementById('directionDashboard');
+            if (!box) return;
+            if (isManagementRole(role)) {
+                box.classList.remove('hidden');
+                renderDirectionKPIs();
+            } else {
+                box.classList.add('hidden');
+            }
+        }
+
+        function renderDirectionKPIs() {
+            var el = document.getElementById('directionKPIs');
+            if (!el) return;
+            el.innerHTML = '<p class="text-slate-500 text-sm col-span-full text-center py-3">Chargement…</p>';
+
+            var now = new Date(), today = now.toISOString().slice(0,10);
+            var from30 = new Date(now - 30*86400000).toISOString().slice(0,10);
+
+            var invFilt = (invoices||[]).filter(function(inv){ return inv.date && inv.date >= from30 && inv.date <= today; });
+            var invTotal = invFilt.reduce(function(s,i){ return s+(parseFloat(i.total)||0); }, 0);
+            var payFilt = (payments||[]).filter(function(p){ return p.date && p.date >= from30 && p.date <= today; });
+            var payTotal = payFilt.reduce(function(s,p){ return s+(parseFloat(p.amount)||0); }, 0);
+            var overdueInv = (invoices||[]).filter(function(i){ return i.status==='pending' && i.dueDate && i.dueDate < today; });
+            var activeCt = (contracts||[]).filter(function(c){ return c.status==='active' || c.status==='en_cours'; }).length;
+            var currency = (invFilt.length > 0 ? invFilt[0].currency : null) || (payFilt.length > 0 ? payFilt[0].currency : null) || 'XOF';
+            var recsFilt = (dailyDataRecords||[]).filter(function(r){ return r.date && r.date >= from30 && r.date <= today; });
+            var totM30 = recsFilt.reduce(function(s,r){ return s+(parseFloat(_rpData(r).metersDrilled)||0); }, 0);
+
+            function dkpi(label, val, sub, color) {
+                return '<div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px 14px">' +
+                    '<p style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#94A3B8;margin-bottom:6px">'+label+'</p>' +
+                    '<p style="font-size:20px;font-weight:900;font-family:monospace;color:'+(color||'#F5B800')+'">'+val+'</p>' +
+                    (sub ? '<p style="font-size:10px;color:#64748B;margin-top:3px">'+sub+'</p>' : '') +
+                    '</div>';
+            }
+            function fmtAmt(v) {
+                if (v >= 1000000) return (v/1000000).toFixed(1)+'M';
+                if (v >= 1000)    return (v/1000).toFixed(0)+'k';
+                return Math.round(v)+'';
+            }
+
+            function paint(f, p, cur) {
+                el.innerHTML =
+                    dkpi('Facturé (30j)',   fmtAmt(f.invoicedAmount  != null ? f.invoicedAmount  : invTotal)  +' '+cur, invFilt.length+' factures',   '#F5B800') +
+                    dkpi('Encaissé (30j)',  fmtAmt(f.collectedAmount != null ? f.collectedAmount : payTotal)  +' '+cur, payFilt.length+' paiements',  '#28A745') +
+                    dkpi('Impayés', (f.overdueCount != null ? f.overdueCount : overdueInv.length)+' factures',
+                        fmtAmt(f.overdueAmount != null ? f.overdueAmount : overdueInv.reduce(function(s,i){return s+(parseFloat(i.total)||0);},0))+' '+cur,
+                        (f.overdueCount||overdueInv.length) > 0 ? '#DC3545' : '#28A745') +
+                    dkpi('Contrats actifs', activeCt, '', '#3b82f6') +
+                    dkpi('Mètres (30j)',    (p.totalMeters != null ? p.totalMeters : totM30).toFixed(0)+' m',
+                        p.avgROP ? 'ROP '+p.avgROP+' m/h' : '', '#a78bfa');
+            }
+
+            paint({ invoicedAmount: invTotal, collectedAmount: payTotal, overdueCount: overdueInv.length,
+                    overdueAmount: overdueInv.reduce(function(s,i){return s+(parseFloat(i.total)||0);},0) },
+                  { totalMeters: totM30 }, currency);
+
+            if (window.API && window.API.Analytics) {
+                window.API.Analytics.getSummary(from30, today).then(function(d) {
+                    if (!d) return;
+                    paint(d.finance || {}, d.production || {}, (d.finance && d.finance.currency) || currency);
+                }).catch(function(){});
+            }
+        }
+
+        function fillDashboardPanels() {
+            // Disponibilité & Utilisation
+            var dispoEl = document.getElementById('dashDispoContent');
+            if (dispoEl) {
+                var drills = getDrillsForSite();
+                var sc = { 'EN FORAGE': 0, 'EN PAUSE': 0, 'EN MAINTENANCE': 0, 'HORS SERVICE': 0 };
+                drills.forEach(function(d){ if (sc.hasOwnProperty(d.status)) sc[d.status]++; });
+                var total = drills.length;
+                var pct = total > 0 ? Math.round(sc['EN FORAGE'] / total * 100) : 0;
+                var rows = [
+                    { label:'En forage',    n:sc['EN FORAGE'],      color:'#28A745' },
+                    { label:'En pause',     n:sc['EN PAUSE'],       color:'#F5B800' },
+                    { label:'Maintenance',  n:sc['EN MAINTENANCE'], color:'#3b82f6' },
+                    { label:'Hors service', n:sc['HORS SERVICE'],   color:'#DC3545' }
+                ];
+                dispoEl.innerHTML = '<div style="margin-bottom:8px;text-align:center">' +
+                    '<span style="font-size:28px;font-weight:900;font-family:monospace;color:#28A745">'+pct+'%</span>' +
+                    '<span style="font-size:11px;color:#64748B;margin-left:5px">disponibilité</span></div>' +
+                    rows.filter(function(r){return r.n>0;}).map(function(r){
+                        return '<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:12px">' +
+                            '<span style="color:#94A3B8">'+r.label+'</span>' +
+                            '<span style="font-weight:700;color:'+r.color+'">'+r.n+' foreuse'+(r.n>1?'s':'')+'</span></div>';
+                    }).join('');
+            }
+
+            // Interventions maintenance
+            var maintEl = document.getElementById('dashMaintenanceContent');
+            if (maintEl) {
+                var todayM = new Date().toISOString().slice(0,10);
+                var in7 = new Date(Date.now()+7*86400000).toISOString().slice(0,10);
+                var overdueM = (maintenanceSchedules||[]).filter(function(m){ return m.scheduledDate && m.scheduledDate < todayM && m.status !== 'completed'; });
+                var upcoming = (maintenanceSchedules||[]).filter(function(m){ return m.scheduledDate && m.scheduledDate >= todayM && m.scheduledDate <= in7 && m.status !== 'completed'; });
+                if (overdueM.length === 0 && upcoming.length === 0) {
+                    maintEl.innerHTML = '<p style="color:#64748B;font-size:12px;text-align:center;padding:10px 0">Aucune intervention planifiée</p>';
+                } else {
+                    var html = '';
+                    if (overdueM.length > 0) {
+                        html += '<p style="font-size:10px;color:#DC3545;font-weight:700;text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px">En retard ('+overdueM.length+')</p>' +
+                            overdueM.slice(0,3).map(function(m){
+                                return '<div style="font-size:11px;padding:3px 0;color:#94A3B8">🔴 '+String(m.machineId||m.drillId||'').slice(0,15)+'&nbsp;—&nbsp;'+String(m.type||m.maintenanceType||'').slice(0,20)+'</div>';
+                            }).join('');
+                    }
+                    if (upcoming.length > 0) {
+                        html += '<p style="font-size:10px;color:#F5B800;font-weight:700;text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px;margin-top:6px">7 jours ('+upcoming.length+')</p>' +
+                            upcoming.slice(0,3).map(function(m){
+                                return '<div style="font-size:11px;padding:3px 0;color:#94A3B8">🟡 '+String(m.machineId||m.drillId||'').slice(0,15)+'&nbsp;—&nbsp;'+String(m.scheduledDate||'').slice(5)+'</div>';
+                            }).join('');
+                    }
+                    maintEl.innerHTML = html;
+                }
+            }
+
+            // Coût par mètre
+            var costEl = document.getElementById('dashCostContent');
+            if (costEl) {
+                var from30c = new Date(Date.now()-30*86400000).toISOString().slice(0,10);
+                var recs30c = (dailyDataRecords||[]).filter(function(r){ return r.date && r.date >= from30c; });
+                var m30c = recs30c.reduce(function(s,r){ return s+(parseFloat(_rpData(r).metersDrilled)||0); }, 0);
+                var maintCost = (maintenanceHistory||[]).filter(function(h){ return h.date && h.date >= from30c; })
+                    .reduce(function(s,h){ return s+(parseFloat(h.cost)||0); }, 0);
+                var cpm = m30c > 0 ? (maintCost/m30c).toFixed(2) : null;
+                costEl.innerHTML = '<div style="text-align:center;padding:6px 0">' +
+                    '<p style="font-size:28px;font-weight:900;font-family:monospace;color:#F5B800">'+(cpm?cpm+'<span style="font-size:12px;font-weight:400;color:#64748B"> $/m</span>':'—')+'</p>' +
+                    '<p style="font-size:10px;color:#64748B;margin-top:4px">30 derniers jours</p>' +
+                    '<div style="margin-top:8px;display:flex;justify-content:space-between;font-size:11px;color:#94A3B8">' +
+                    '<span>'+m30c.toFixed(0)+' m</span><span>'+maintCost.toFixed(0)+' maint.</span></div></div>';
+            }
+
+            // Consommation carburant
+            var fuelEl = document.getElementById('dashFuelContent');
+            if (fuelEl) {
+                var from30f = new Date(Date.now()-30*86400000).toISOString().slice(0,10);
+                var recs30f = (dailyDataRecords||[]).filter(function(r){ return r.date && r.date >= from30f; });
+                var totalFuel = recs30f.reduce(function(s,r){
+                    var d = _rpData(r);
+                    return s+(parseFloat(d.fuelConsumptionEffective||d.fuelConsumed)||0);
+                }, 0);
+                var totHf = recs30f.reduce(function(s,r){ return s+(parseFloat(_rpData(r).hours)||0); }, 0);
+                var fuelPerH = totHf > 0 ? (totalFuel/totHf).toFixed(1) : null;
+                fuelEl.innerHTML = '<div style="text-align:center;padding:6px 0">' +
+                    '<p style="font-size:28px;font-weight:900;font-family:monospace;color:#3b82f6">'+totalFuel.toFixed(0)+'<span style="font-size:12px;font-weight:400;color:#64748B"> L</span></p>' +
+                    '<p style="font-size:10px;color:#64748B;margin-top:4px">30 derniers jours</p>' +
+                    (fuelPerH ? '<p style="font-size:12px;color:#94A3B8;margin-top:6px">'+fuelPerH+' L/h en moyenne</p>' : '') +
+                    '</div>';
+            }
         }
 
         // ====================================================================
@@ -12633,7 +12798,7 @@
             var machCols = ['#F5B800','#FF6B00','#1E3A5F','#28A745','#6366F1','#EC4899','#14B8A6','#F97316'];
             var machIds = machines.map(function(m){return m.id;});
             var _role = (typeof currentUser !== 'undefined' && currentUser) ? (currentUser.role || '') : '';
-            var _showFinance = !_role || ['admin','super_admin','direction','gestionnaire'].indexOf(_role) >= 0;
+            var _showFinance = isManagementRole(_role);
 
             // ── Detail table ──────────────────────────────────────
             var tblRows = machines.map(function(m,i){
