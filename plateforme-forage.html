@@ -1115,6 +1115,13 @@
             border-radius: 12px; padding: 8px 10px; text-align: center; box-shadow: 0 6px 18px rgba(0,0,0,.25); }
         .gedm-sb-logo img { width: 100%; max-width: 200px; height: auto; display: inline-block; }
         @media print { .gedm-masthead, .gedm-marquee { display: none !important; } }
+        .ap-btn { background: rgba(255,255,255,0.05); color: #94A3B8; border: 1px solid rgba(255,255,255,0.1); }
+        @media print {
+            #ged-sidebar, #ged-nav, .gedm-sidebar, [id^="nav-"],
+            #analyticsPeriodBar, .ap-btn, button[onclick*="printAnalytics"], button[onclick*="shareAnalytics"] { display: none !important; }
+            #mainView-analytics { display: block !important; }
+            body { background: #fff !important; }
+        }
  </style>
     <link rel="stylesheet" href="/gedrilling-login.css">
     <link rel="stylesheet" href="/gedrilling-platform-theme.css">
@@ -1919,9 +1926,29 @@
 
         <!-- ═══ VUE PERFORMANCE ANALYTICS ══════════════════════════════ -->
         <div id="mainView-analytics" class="main-view hidden">
-            <div class="mb-6 pb-4 border-b border-slate-700">
-                <h2 class="text-2xl font-extrabold tracking-tight" style="color:var(--ged-yellow)">📊 Tableau de Performance</h2>
-                <p class="text-slate-400 text-sm mt-1">KPIs globaux · production par machine · tendances · disponibilité</p>
+            <div class="mb-5 pb-4 border-b border-slate-700">
+                <div class="flex flex-wrap items-start justify-between gap-3 mb-4">
+                    <div>
+                        <h2 class="text-2xl font-extrabold tracking-tight" style="color:var(--ged-yellow)">📊 Tableau de Performance</h2>
+                        <p class="text-slate-400 text-sm mt-1">KPIs opérationnels · production · maintenance · disponibilité</p>
+                    </div>
+                    <div class="flex gap-2 flex-shrink-0">
+                        <button onclick="printAnalytics()" class="px-3 py-1.5 rounded-lg text-xs font-semibold border" style="background:rgba(255,255,255,0.05);color:#94A3B8;border-color:rgba(255,255,255,0.1)">🖨️ Imprimer</button>
+                        <button onclick="shareAnalyticsWhatsApp()" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-white" style="background:#25D366">📱 WhatsApp</button>
+                    </div>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                    <span class="text-xs font-medium" style="color:#64748B">Période :</span>
+                    <button onclick="setAnalyticsPeriod('7d')"  id="ap-7d"  class="ap-btn px-3 py-1 rounded-full text-xs font-semibold transition-colors">7 jours</button>
+                    <button onclick="setAnalyticsPeriod('30d')" id="ap-30d" class="ap-btn px-3 py-1 rounded-full text-xs font-semibold transition-colors">30 jours</button>
+                    <button onclick="setAnalyticsPeriod('90d')" id="ap-90d" class="ap-btn px-3 py-1 rounded-full text-xs font-semibold transition-colors">90 jours</button>
+                    <button onclick="setAnalyticsPeriod('ytd')" id="ap-ytd" class="ap-btn px-3 py-1 rounded-full text-xs font-semibold transition-colors">Cette année</button>
+                    <button onclick="setAnalyticsPeriod('all')" id="ap-all" class="ap-btn px-3 py-1 rounded-full text-xs font-semibold transition-colors" style="background:#F5B800;color:#111;border-color:#F5B800">Tout</button>
+                    <span class="text-xs mx-1" style="color:#475569">|</span>
+                    <input type="date" id="apFrom" class="text-xs px-2 py-1 rounded focus:outline-none" style="background:#1e293b;color:#cbd5e1;border:1px solid #334155" onchange="setAnalyticsPeriod('custom')">
+                    <span class="text-xs" style="color:#64748B">→</span>
+                    <input type="date" id="apTo"   class="text-xs px-2 py-1 rounded focus:outline-none" style="background:#1e293b;color:#cbd5e1;border:1px solid #334155" onchange="setAnalyticsPeriod('custom')">
+                </div>
             </div>
             <div id="analyticsContent"></div>
         </div>
@@ -12349,6 +12376,67 @@
         // TABLEAU DE PERFORMANCE ANALYTIQUE
         // ============================================
         var _analyticsCharts = [];
+        var _analyticsPeriod = { preset: 'all', from: null, to: null };
+
+        function setAnalyticsPeriod(preset) {
+            var now = new Date(), today = now.toISOString().slice(0,10);
+            _analyticsPeriod.preset = preset;
+            var fromMap = {
+                '7d':  new Date(now - 7  * 86400000).toISOString().slice(0,10),
+                '30d': new Date(now - 30 * 86400000).toISOString().slice(0,10),
+                '90d': new Date(now - 90 * 86400000).toISOString().slice(0,10),
+                'ytd': now.getFullYear() + '-01-01'
+            };
+            if (preset === 'custom') {
+                var fi = document.getElementById('apFrom'), ti = document.getElementById('apTo');
+                _analyticsPeriod.from = (fi && fi.value) || null;
+                _analyticsPeriod.to   = (ti && ti.value) || today;
+            } else {
+                _analyticsPeriod.from = fromMap[preset] || null;
+                _analyticsPeriod.to   = preset === 'all' ? null : today;
+                var fi2 = document.getElementById('apFrom'); if (fi2) fi2.value = _analyticsPeriod.from || '';
+                var ti2 = document.getElementById('apTo');   if (ti2) ti2.value = _analyticsPeriod.to   || '';
+            }
+            ['7d','30d','90d','ytd','all'].forEach(function(p) {
+                var btn = document.getElementById('ap-'+p);
+                if (!btn) return;
+                if (p === preset) { btn.style.background='#F5B800'; btn.style.color='#111'; btn.style.borderColor='#F5B800'; }
+                else              { btn.style.background='rgba(255,255,255,0.05)'; btn.style.color='#94A3B8'; btn.style.borderColor='rgba(255,255,255,0.1)'; }
+            });
+            renderAnalytics();
+        }
+
+        function printAnalytics() {
+            window.print();
+        }
+
+        function shareAnalyticsWhatsApp() {
+            var s = window._analyticsSummary;
+            var lines = ['📊 *Tableau de Performance GEDRILLING*'];
+            if (s && s.period && (s.period.from || s.period.to)) {
+                lines.push('Période : ' + (s.period.from||'…') + ' → ' + (s.period.to||'…'));
+            }
+            if (s && s.production) {
+                lines.push('', '⛏ *Production*');
+                lines.push('• Mètres forés : ' + (s.production.totalMeters||0) + ' m');
+                lines.push('• Heures machine : ' + (s.production.totalHours||0) + ' h');
+                if (s.production.avgROP != null) lines.push('• ROP moyen : ' + s.production.avgROP + ' m/h');
+                lines.push('• Foreuses actives : ' + (s.production.drillCount||0));
+            }
+            if (s && s.maintenance) {
+                lines.push('', '🔧 *Maintenance*');
+                lines.push('• Interventions : ' + (s.maintenance.totalInterventions||0));
+            }
+            if (s && s.stock) {
+                lines.push('', '📦 *Stock*');
+                lines.push('• Épuisés : ' + (s.stock.emptyItems||0) + '  Critique : ' + (s.stock.criticalItems||0));
+            }
+            var wa = '';
+            try { wa = String((typeof companyInfo !== 'undefined' && companyInfo && companyInfo.whatsapp) || ''); } catch(e) {}
+            var text = encodeURIComponent(lines.join('\n'));
+            window.open((wa ? 'https://wa.me/' + wa.replace(/[^\d+]/g,'') + '?text=' + text : 'https://wa.me/?text=' + text), '_blank');
+        }
+
         function renderAnalytics() {
             var el = document.getElementById('analyticsContent');
             if (!el) return;
@@ -12357,6 +12445,13 @@
             _analyticsCharts = [];
 
             var records = getDailyDataForSite();
+            // Apply date range filter from period selector
+            (function(){
+                var af = _analyticsPeriod.from, at = _analyticsPeriod.to;
+                if (af || at) records = records.filter(function(r){
+                    return r.date && (!af || r.date >= af) && (!at || r.date <= at);
+                });
+            })();
             var fC = function(v){ return Number(v).toLocaleString('fr-CA',{style:'currency',currency:'CAD',minimumFractionDigits:0}); };
             var kpi = function(lbl,val,cls,sub){
                 return '<div class="ged-content-panel rounded-xl px-5 py-4"><p class="text-[10px] uppercase tracking-widest font-semibold mb-1" style="color:#64748B">'+lbl+'</p>'+
@@ -12537,6 +12632,8 @@
 
             var machCols = ['#F5B800','#FF6B00','#1E3A5F','#28A745','#6366F1','#EC4899','#14B8A6','#F97316'];
             var machIds = machines.map(function(m){return m.id;});
+            var _role = (typeof currentUser !== 'undefined' && currentUser) ? (currentUser.role || '') : '';
+            var _showFinance = !_role || ['admin','super_admin','direction','gestionnaire'].indexOf(_role) >= 0;
 
             // ── Detail table ──────────────────────────────────────
             var tblRows = machines.map(function(m,i){
@@ -12576,7 +12673,7 @@
                 kpi('Carburant total',totF.toFixed(0)+' L','',totH>0?(totF/totH).toFixed(1)+' L/h moy.':'')+
                 kpi('Disponibilité',avgAvail.toFixed(1)+'%',avgAvail>=80?'text-green-600':avgAvail>=60?'text-amber-600':'text-red-600',availMachines.length+' machines')+
                 kpi('Machines actives',machines.length,'',drills.filter(function(d){return d.status==='EN FORAGE';}).length+' en forage')+
-                kpi('Coût PM/mètre',totM>0?effCpm.toFixed(2)+' $/m':'—','',totM>0?'maintenance directe':'')+
+                (_showFinance ? kpi('Coût PM/mètre',totM>0?effCpm.toFixed(2)+' $/m':'—','',totM>0?'maintenance directe':'') : '')+
                 '</div>'+
                 '<div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">'+
                 '<div class="ged-content-panel rounded-xl p-5"><p class="text-[11px] uppercase tracking-widest font-semibold mb-3" style="color:#64748B">Mètres forés par machine</p><canvas id="chartMachineMeters" height="220"></canvas></div>'+
@@ -12638,6 +12735,20 @@
                 '<div class="px-5 py-2 text-xs" style="color:#94A3B8;background:rgba(0,0,0,0.02)">Coût/m = coûts du chantier sur la période répartis par heures machine, divisés par les mètres (une machine plus lente ressort avec un coût/m plus élevé).</div></div>'+
                 planVsActualHtml+
                 reliabilityHtml;
+
+            // Store computed summary for WhatsApp share
+            window._analyticsSummary = {
+                period: { from: _analyticsPeriod.from || (sortedDates[0]||'—'), to: _analyticsPeriod.to || (sortedDates[sortedDates.length-1]||'—') },
+                production: { totalMeters: totM, totalHours: totH, avgROP: totH>0?(totM/totH).toFixed(2):null, drillCount: machines.length },
+                maintenance: { totalInterventions: Object.values(maintMap).reduce(function(s,m){return s+m.count;},0) },
+                stock: null
+            };
+            // Enrich summary from server analytics API (async, background)
+            if (window.API && window.API.Analytics) {
+                window.API.Analytics.getSummary(_analyticsPeriod.from, _analyticsPeriod.to)
+                    .then(function(d){ window._analyticsSummary = d; })
+                    .catch(function(){});
+            }
 
             // ── Charts ────────────────────────────────────────────
             var chartDefaults = {

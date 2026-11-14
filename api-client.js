@@ -698,6 +698,17 @@ const WeeklyReportAPI = {
     }
 };
 
+const AnalyticsAPI = {
+    async getSummary(from, to) {
+        const params = new URLSearchParams();
+        if (from) params.set('from', from);
+        if (to)   params.set('to',   to);
+        const r = await wrFetch(`/analytics/summary?${params}`);
+        if (!r.ok) throw new Error(`Analytics : ${r.status}`);
+        return r.json();
+    }
+};
+
 // Exporter pour utilisation globale
 if (typeof window !== 'undefined') {
     window.API = {
@@ -736,6 +747,7 @@ if (typeof window !== 'undefined') {
         ReportDist: ReportDistAPI,
         Alerts: AlertsAPI,
         WeeklyReport: WeeklyReportAPI,
+        Analytics: AnalyticsAPI,
         loadAllData,
         saveAllData
     };
