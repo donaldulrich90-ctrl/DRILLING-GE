@@ -1360,6 +1360,7 @@ require('./routes/users')(app, {
 
 require('./routes/drilling-plan')(app, { db, getEnterpriseId });
 require('./routes/alerts')(app, { db, getEnterpriseId });
+require('./routes/weekly-report')(app, { db, getEnterpriseId });
 require('./routes/planification')(app, { db, getEnterpriseId });
 require('./routes/besoins')(app, { db, getEnterpriseId });
 require('./routes/soustraitants')(app, { db, getEnterpriseId });
