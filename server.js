@@ -3918,6 +3918,42 @@ app.get('/api/company', (req, res) => {
     });
 });
 
+// État de module générique (persistance serveur des modules local-first)
+app.get('/api/module-state/:key', (req, res) => {
+    const enterpriseId = getEnterpriseId(req);
+    if (enterpriseId == null) return res.status(400).json({ error: 'Contexte entreprise requis' });
+    const key = String(req.params.key || '').slice(0, 64);
+    if (!key) return res.status(400).json({ error: 'Clé requise' });
+    db.get('SELECT data, updatedAt, updatedBy FROM module_state WHERE enterpriseId = ? AND moduleKey = ?', [enterpriseId, key], (err, row) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!row) return res.json({ data: null });
+        let parsed = null;
+        try { parsed = row.data ? JSON.parse(row.data) : null; } catch (e) { parsed = null; }
+        res.json({ data: parsed, updatedAt: row.updatedAt, updatedBy: row.updatedBy });
+    });
+});
+
+app.put('/api/module-state/:key', (req, res) => {
+    const enterpriseId = getEnterpriseId(req);
+    if (enterpriseId == null) return res.status(400).json({ error: 'Contexte entreprise requis' });
+    const key = String(req.params.key || '').slice(0, 64);
+    if (!key) return res.status(400).json({ error: 'Clé requise' });
+    let dataStr = '';
+    try { dataStr = JSON.stringify(req.body && req.body.data !== undefined ? req.body.data : req.body); } catch (e) { return res.status(400).json({ error: 'Données invalides' }); }
+    const by = (req.auth && (req.auth.name || req.auth.username)) ? String(req.auth.name || req.auth.username) : '';
+    db.run(
+        `INSERT INTO module_state (enterpriseId, moduleKey, data, updatedAt, updatedBy)
+         VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?)
+         ON CONFLICT(enterpriseId, moduleKey)
+         DO UPDATE SET data = excluded.data, updatedAt = CURRENT_TIMESTAMP, updatedBy = excluded.updatedBy`,
+        [enterpriseId, key, dataStr, by],
+        function (err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ ok: true, updatedAt: new Date().toISOString() });
+        }
+    );
+});
+
 app.post('/api/company', (req, res) => {
     const company = req.body;
     const entId = resolveCreateEnterpriseId(req, company);
