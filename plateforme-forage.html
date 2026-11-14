@@ -8914,11 +8914,11 @@
         // ============================================================
         function _cqKey() { return 'ged_cq_data_' + (window.API && window.API.getEnterpriseId ? (window.API.getEnterpriseId() || '0') : '0'); }
         function getCQData() {
-            var def = { fronts: [], tirs: [], concassages: [], stocks: [] };
+            var def = { fronts: [], tirs: [], concassages: [], stocks: [], pesees: [] };
             try {
                 var raw = localStorage.getItem(_cqKey()); if (!raw) return def;
                 var d = JSON.parse(raw);
-                ['fronts', 'tirs', 'concassages', 'stocks'].forEach(function (k) { if (!Array.isArray(d[k])) d[k] = []; });
+                ['fronts', 'tirs', 'concassages', 'stocks', 'pesees'].forEach(function (k) { if (!Array.isArray(d[k])) d[k] = []; });
                 return d;
             } catch (e) { return def; }
         }
@@ -9039,6 +9039,32 @@
             saveCQData(data); renderCarriere();
         };
 
+        // ── Pesée / Bascule ──
+        window.cqAddPesee = function () {
+            var data = getCQData();
+            var date     = (document.getElementById('cqPDate')   || {}).value || '';
+            var heure    = ((document.getElementById('cqPHeure')  || {}).value || '').trim();
+            var type     = (document.getElementById('cqPType')   || {}).value || 'sortie';
+            var grade    = (document.getElementById('cqPGrade')  || {}).value || '';
+            var client   = ((document.getElementById('cqPClient') || {}).value || '').trim();
+            var numBL    = ((document.getElementById('cqPBL')     || {}).value || '').trim();
+            var poidsBrut = parseFloat((document.getElementById('cqPBrut') || {}).value) || 0;
+            var tare      = parseFloat((document.getElementById('cqPTare') || {}).value) || 0;
+            var prixUnit  = parseFloat((document.getElementById('cqPPrix') || {}).value) || 0;
+            var notes    = ((document.getElementById('cqPNotes')  || {}).value || '').trim();
+            if (!date)       { alert('Date requise.'); return; }
+            if (poidsBrut <= 0) { alert('Poids brut requis (> 0).'); return; }
+            if (tare < 0 || tare >= poidsBrut) { alert('La tare doit être ≥ 0 et inférieure au poids brut.'); return; }
+            data.pesees.unshift({ id: _cqNextId(data.pesees, 'PES'), date: date, heure: heure, type: type, grade: grade, client: client, numBL: numBL, poidsBrut: poidsBrut, tare: tare, prixUnitaire: prixUnit, notes: notes });
+            saveCQData(data); renderCarriere();
+        };
+        window.cqDeletePesee = function (id) {
+            if (!confirm('Supprimer cette pesée ?')) return;
+            var data = getCQData();
+            data.pesees = data.pesees.filter(function (p) { return p.id !== id; });
+            saveCQData(data); renderCarriere();
+        };
+
         function renderCarriere() {
             var el = document.getElementById('carriereContent');
             if (!el) return;
@@ -9048,6 +9074,7 @@
             var grades = ['0/4', '4/10', '10/20', '20/40', '40/80', 'Tout-venant', 'Autre'];
             var today = new Date().toISOString().slice(0, 10);
             var tab = window._cqTab || 'extraction';
+            var fmt = function (n) { return Number(n).toLocaleString('fr-FR'); };
 
             // ── KPIs par onglet ──
             var kpiRow;
@@ -9061,11 +9088,32 @@
                     kpi('Rendement moyen', rendMoy ? rendMoy + ' %' : '—', rendMoy >= 85 ? '#28A745' : rendMoy >= 70 ? '#F5B800' : '#DC3545');
             } else if (tab === 'stocks') {
                 var totDispo = data.stocks.reduce(function (s, x) { return s + (parseFloat(x.qteDisponible) || 0); }, 0);
-                var gradesActifs = data.stocks.length;
-                kpiRow = kpi('Grades enregistrés', gradesActifs || '—', '') +
+                kpiRow = kpi('Grades enregistrés', data.stocks.length || '—', '') +
                     kpi('Stock total disponible', totDispo > 0 ? totDispo.toFixed(0) + ' t' : '—', '#28A745') +
                     kpi('Stocks à zéro', data.stocks.filter(function (s) { return (parseFloat(s.qteDisponible) || 0) === 0; }).length || '—', '#DC3545') +
                     kpi('', '', '');
+            } else if (tab === 'pesee') {
+                var peseesSortie = data.pesees.filter(function (p) { return p.type === 'sortie'; });
+                var pesesEntree  = data.pesees.filter(function (p) { return p.type === 'entree'; });
+                var totLivre = peseesSortie.reduce(function (s, p) { return s + ((parseFloat(p.poidsBrut) || 0) - (parseFloat(p.tare) || 0)); }, 0);
+                var totRecette = peseesSortie.reduce(function (s, p) { var pn = (parseFloat(p.poidsBrut) || 0) - (parseFloat(p.tare) || 0); return s + pn * (parseFloat(p.prixUnitaire) || 0); }, 0);
+                kpiRow = kpi('Pesées sortie', peseesSortie.length || '—', '#28A745') +
+                    kpi('Tonnage livré', totLivre > 0 ? totLivre.toFixed(1) + ' t' : '—', '#F5B800') +
+                    kpi('Recette FCFA', totRecette > 0 ? fmt(Math.round(totRecette)) + ' FCFA' : '—', '#28A745') +
+                    kpi('Pesées entrée', pesesEntree.length || '—', '');
+            } else if (tab === 'pilotage') {
+                var totChargePil = data.tirs.reduce(function (s, t) { return s + (parseFloat(t.chargeKg) || 0); }, 0);
+                var totVolumePil = data.tirs.reduce(function (s, t) { return s + (parseFloat(t.volumeBCM) || 0); }, 0);
+                var fpoudre = totVolumePil > 0 ? (totChargePil / totVolumePil).toFixed(3) : null;
+                var totBrutPil = data.concassages.reduce(function (s, c) { return s + (parseFloat(c.tonneBrut) || 0); }, 0);
+                var totProdPil = data.concassages.reduce(function (s, c) { return s + (parseFloat(c.tonneProduite) || 0); }, 0);
+                var rendPil = totBrutPil > 0 ? (totProdPil / totBrutPil * 100).toFixed(1) : null;
+                var totLivrePil = data.pesees.filter(function (p) { return p.type === 'sortie'; }).reduce(function (s, p) { return s + ((parseFloat(p.poidsBrut) || 0) - (parseFloat(p.tare) || 0)); }, 0);
+                var totRecettePil = data.pesees.filter(function (p) { return p.type === 'sortie'; }).reduce(function (s, p) { var pn = (parseFloat(p.poidsBrut) || 0) - (parseFloat(p.tare) || 0); return s + pn * (parseFloat(p.prixUnitaire) || 0); }, 0);
+                kpiRow = kpi('Facteur de poudre', fpoudre ? fpoudre + ' kg/m³' : '—', '') +
+                    kpi('Rendement concassage', rendPil ? rendPil + ' %' : '—', rendPil >= 85 ? '#28A745' : rendPil >= 70 ? '#F5B800' : '#DC3545') +
+                    kpi('Tonnage livré', totLivrePil > 0 ? totLivrePil.toFixed(1) + ' t' : '—', '#F5B800') +
+                    kpi('Recette FCFA', totRecettePil > 0 ? fmt(Math.round(totRecettePil)) + ' FCFA' : '—', '#28A745');
             } else {
                 var activeFronts = data.fronts.filter(function (f) { return f.status !== 'TERMINÉ'; }).length;
                 var totVolume = data.tirs.reduce(function (s, t) { return s + (parseFloat(t.volumeBCM) || 0); }, 0);
@@ -9206,13 +9254,115 @@
                     ? '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">' + sCards + '</div>'
                     : '<div class="ged-content-panel rounded-xl p-8 text-center"><p style="font-size:40px">📦</p><p class="font-bold mt-2" style="color:var(--ged-black)">Aucun stock enregistré</p><p class="text-sm text-slate-500 mt-1">Ajoutez vos grades de granulats ci-dessus.</p></div>');
 
+            // ── Onglet Pesée / Bascule ──
+            var pForm =
+                '<div class="ged-content-panel rounded-xl p-5 mb-4">' +
+                '<h3 class="font-bold text-sm mb-3" style="color:var(--ged-black)">⚖️ Enregistrer une pesée</h3>' +
+                '<div class="grid grid-cols-2 md:grid-cols-6 gap-3">' +
+                '<div><label class="block text-xs text-slate-500 mb-1">Date *</label><input id="cqPDate" type="date" value="' + today + '" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                '<div><label class="block text-xs text-slate-500 mb-1">Heure</label><input id="cqPHeure" type="time" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                '<div><label class="block text-xs text-slate-500 mb-1">Type</label><select id="cqPType" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"><option value="sortie">Sortie (vente)</option><option value="entree">Entrée (retour)</option></select></div>' +
+                '<div><label class="block text-xs text-slate-500 mb-1">Grade</label><select id="cqPGrade" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm">' +
+                ['', ...grades].map(function (g) { return '<option value="' + g + '">' + (g || '—') + '</option>'; }).join('') + '</select></div>' +
+                '<div class="col-span-2"><label class="block text-xs text-slate-500 mb-1">Client</label><input id="cqPClient" placeholder="Nom du client / transporteur" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                '<div><label class="block text-xs text-slate-500 mb-1">N° Bon de livraison</label><input id="cqPBL" placeholder="Ex. BL-2026-001" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                '<div><label class="block text-xs text-slate-500 mb-1">Poids brut (t) *</label><input id="cqPBrut" type="number" min="0.1" step="0.01" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                '<div><label class="block text-xs text-slate-500 mb-1">Tare (t)</label><input id="cqPTare" type="number" min="0" step="0.01" value="0" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                '<div><label class="block text-xs text-slate-500 mb-1">Prix unitaire (FCFA/t)</label><input id="cqPPrix" type="number" min="0" step="100" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                '<div class="col-span-2 md:col-span-6"><label class="block text-xs text-slate-500 mb-1">Notes</label><input id="cqPNotes" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white text-sm"></div>' +
+                '</div>' +
+                '<div class="flex items-center gap-4 mt-3">' +
+                '<button onclick="cqAddPesee()" class="bg-amber-600 hover:bg-amber-700 px-4 py-2 rounded-lg font-semibold text-sm">Enregistrer la pesée</button>' +
+                '<p class="text-xs text-slate-500">⚠️ Pensez à ajuster le stock correspondant via l\'onglet <strong>Stocks</strong>.</p>' +
+                '</div></div>';
+            var pRows = (data.pesees || []).slice(0, 50).map(function (p) {
+                var net = (parseFloat(p.poidsBrut) || 0) - (parseFloat(p.tare) || 0);
+                var montant = net * (parseFloat(p.prixUnitaire) || 0);
+                var typePill = p.type === 'sortie'
+                    ? '<span style="background:rgba(220,53,69,.12);color:#DC3545;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:700">Sortie</span>'
+                    : '<span style="background:rgba(40,167,69,.12);color:#28A745;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:700">Entrée</span>';
+                return '<tr style="border-bottom:1px solid rgba(255,255,255,0.06)">' +
+                    '<td class="px-3 py-2 text-slate-300 whitespace-nowrap">' + esc(p.date) + (p.heure ? ' ' + esc(p.heure) : '') + '</td>' +
+                    '<td class="px-3 py-2 text-center">' + typePill + '</td>' +
+                    '<td class="px-3 py-2 text-center"><span style="background:rgba(99,102,241,.12);color:#818CF8;padding:2px 6px;border-radius:6px;font-size:11px">' + esc(p.grade || '—') + '</span></td>' +
+                    '<td class="px-3 py-2 text-slate-300">' + esc(p.client || '—') + '</td>' +
+                    '<td class="px-3 py-2 text-slate-400 text-xs font-mono">' + esc(p.numBL || '—') + '</td>' +
+                    '<td class="px-3 py-2 text-right font-mono text-sm">' + (parseFloat(p.poidsBrut) || 0).toFixed(2) + '</td>' +
+                    '<td class="px-3 py-2 text-right font-mono text-sm text-slate-400">' + (parseFloat(p.tare) || 0).toFixed(2) + '</td>' +
+                    '<td class="px-3 py-2 text-right font-mono text-sm font-bold" style="color:#F5B800">' + net.toFixed(2) + '</td>' +
+                    '<td class="px-3 py-2 text-right font-mono text-sm">' + (parseFloat(p.prixUnitaire) > 0 ? fmt(Math.round(parseFloat(p.prixUnitaire))) : '—') + '</td>' +
+                    '<td class="px-3 py-2 text-right font-mono text-sm" style="color:#28A745">' + (montant > 0 ? fmt(Math.round(montant)) + ' FCFA' : '—') + '</td>' +
+                    '<td class="px-3 py-2 text-slate-400 text-xs">' + esc(p.notes || '') + '</td>' +
+                    '<td class="px-3 py-2 text-right"><button onclick="cqDeletePesee(\'' + p.id + '\')" class="text-red-400 hover:text-red-300 text-xs">×</button></td>' +
+                    '</tr>';
+            }).join('');
+            var pTable = data.pesees.length
+                ? '<div class="ged-content-panel rounded-xl overflow-hidden"><div class="px-5 py-3 border-b border-slate-700"><h3 class="font-bold text-sm" style="color:var(--ged-black)">Registre des pesées</h3></div><div style="overflow-x:auto"><table style="width:100%;font-size:13px;border-collapse:collapse"><thead><tr style="font-size:11px;text-transform:uppercase;color:#64748B;background:rgba(0,0,0,0.15)"><th class="px-3 py-2 text-left">Date / Heure</th><th class="px-3 py-2 text-center">Type</th><th class="px-3 py-2 text-center">Grade</th><th class="px-3 py-2 text-left">Client</th><th class="px-3 py-2 text-left">N° BL</th><th class="px-3 py-2 text-right">Brut (t)</th><th class="px-3 py-2 text-right">Tare (t)</th><th class="px-3 py-2 text-right">Net (t)</th><th class="px-3 py-2 text-right">Prix/t</th><th class="px-3 py-2 text-right">Montant</th><th class="px-3 py-2 text-left">Notes</th><th class="px-3 py-2"></th></tr></thead><tbody>' + pRows + '</tbody></table></div></div>'
+                : '<div class="ged-content-panel rounded-xl p-8 text-center"><p style="font-size:40px">⚖️</p><p class="font-bold mt-2" style="color:var(--ged-black)">Aucune pesée enregistrée</p><p class="text-sm text-slate-500 mt-1">Enregistrez vos pesées ci-dessus.</p></div>';
+            var peseeTab = pForm + pTable;
+
+            // ── Onglet Pilotage ──
+            var totChargePilot = data.tirs.reduce(function (s, t) { return s + (parseFloat(t.chargeKg) || 0); }, 0);
+            var totVolumePilot = data.tirs.reduce(function (s, t) { return s + (parseFloat(t.volumeBCM) || 0); }, 0);
+            var fpoudrePilot = totVolumePilot > 0 ? (totChargePilot / totVolumePilot) : null;
+            var totBrutPilot = data.concassages.reduce(function (s, c) { return s + (parseFloat(c.tonneBrut) || 0); }, 0);
+            var totProdPilot = data.concassages.reduce(function (s, c) { return s + (parseFloat(c.tonneProduite) || 0); }, 0);
+            var rendPilot = totBrutPilot > 0 ? (totProdPilot / totBrutPilot * 100) : null;
+            var sortiesPilot = data.pesees.filter(function (p) { return p.type === 'sortie'; });
+            var totLivrePilot = sortiesPilot.reduce(function (s, p) { return s + ((parseFloat(p.poidsBrut) || 0) - (parseFloat(p.tare) || 0)); }, 0);
+            var totRecettePilot = sortiesPilot.reduce(function (s, p) { var pn = (parseFloat(p.poidsBrut) || 0) - (parseFloat(p.tare) || 0); return s + pn * (parseFloat(p.prixUnitaire) || 0); }, 0);
+            var stocksZero = data.stocks.filter(function (s) { return (parseFloat(s.qteDisponible) || 0) === 0; });
+            var ecartProdVente = totProdPilot > 0 && totLivrePilot > 0 ? totProdPilot - totLivrePilot : null;
+            var pilKpis =
+                '<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">' +
+                kpi('Facteur de poudre', fpoudrePilot !== null ? fpoudrePilot.toFixed(3) + ' kg/m³' : '—', '') +
+                kpi('Rendement concassage', rendPilot !== null ? rendPilot.toFixed(1) + ' %' : '—', rendPilot !== null ? (rendPilot >= 85 ? '#28A745' : rendPilot >= 70 ? '#F5B800' : '#DC3545') : '') +
+                kpi('Tonnage livré', totLivrePilot > 0 ? totLivrePilot.toFixed(1) + ' t' : '—', '#F5B800') +
+                kpi('Recette FCFA', totRecettePilot > 0 ? fmt(Math.round(totRecettePilot)) + ' FCFA' : '—', '#28A745') +
+                '</div>';
+            var pilAlerts = '';
+            if (stocksZero.length > 0) {
+                pilAlerts += '<div style="background:rgba(220,53,69,.08);border:1px solid rgba(220,53,69,.3);border-radius:12px;padding:14px 18px;margin-bottom:12px;display:flex;align-items:center;gap:12px"><span style="font-size:22px">🔴</span><div><p class="font-bold text-sm" style="color:#DC3545">' + stocksZero.length + ' grade' + (stocksZero.length > 1 ? 's' : '') + ' en rupture de stock</p><p class="text-xs text-slate-400 mt-1">' + stocksZero.map(function (s) { return esc(s.grade); }).join(', ') + '</p></div></div>';
+            }
+            if (ecartProdVente !== null) {
+                var ecartAbs = Math.abs(ecartProdVente);
+                if (ecartAbs > 1) {
+                    var ecartSign = ecartProdVente > 0 ? '+ ' : '− ';
+                    var ecartColor = ecartProdVente > 0 ? '#F5B800' : '#DC3545';
+                    var ecartMsg = ecartProdVente > 0 ? 'Surplus produit non livré' : 'Livraisons supérieures à la production enregistrée';
+                    pilAlerts += '<div style="background:rgba(245,184,0,.08);border:1px solid rgba(245,184,0,.3);border-radius:12px;padding:14px 18px;margin-bottom:12px;display:flex;align-items:center;gap:12px"><span style="font-size:22px">⚠️</span><div><p class="font-bold text-sm" style="color:' + ecartColor + '">' + ecartMsg + ' — écart ' + ecartSign + ecartAbs.toFixed(1) + ' t</p><p class="text-xs text-slate-400 mt-1">Produit concassé : ' + totProdPilot.toFixed(1) + ' t · Livré (pesées sortie) : ' + totLivrePilot.toFixed(1) + ' t</p></div></div>';
+                }
+            }
+            var gradesAll = Array.from(new Set(
+                data.concassages.map(function (c) { return c.grade || ''; })
+                    .concat(data.pesees.map(function (p) { return p.grade || ''; }))
+                    .filter(function (g) { return g; })
+            ));
+            var byGradeRows = gradesAll.map(function (g) {
+                var prodG = data.concassages.filter(function (c) { return c.grade === g; }).reduce(function (s, c) { return s + (parseFloat(c.tonneProduite) || 0); }, 0);
+                var livrG = data.pesees.filter(function (p) { return p.type === 'sortie' && p.grade === g; }).reduce(function (s, p) { return s + ((parseFloat(p.poidsBrut) || 0) - (parseFloat(p.tare) || 0)); }, 0);
+                var stk = (data.stocks.find(function (s) { return s.grade === g; }) || {}).qteDisponible || 0;
+                var ecG = prodG > 0 ? prodG - livrG : null;
+                return '<tr style="border-bottom:1px solid rgba(255,255,255,0.06)">' +
+                    '<td class="px-3 py-2"><span style="background:rgba(99,102,241,.12);color:#818CF8;padding:2px 8px;border-radius:6px;font-size:12px">' + esc(g) + '</span></td>' +
+                    '<td class="px-3 py-2 text-right font-mono text-sm">' + (prodG > 0 ? prodG.toFixed(1) + ' t' : '—') + '</td>' +
+                    '<td class="px-3 py-2 text-right font-mono text-sm">' + (livrG > 0 ? livrG.toFixed(1) + ' t' : '—') + '</td>' +
+                    '<td class="px-3 py-2 text-right font-mono text-sm" style="color:' + (parseFloat(stk) > 0 ? '#28A745' : '#DC3545') + '">' + (parseFloat(stk) > 0 ? parseFloat(stk).toFixed(1) + ' t' : '0 t') + '</td>' +
+                    '<td class="px-3 py-2 text-right font-mono text-sm" style="color:' + (ecG !== null ? (ecG < 0 ? '#DC3545' : '#28A745') : '#94A3B8') + '">' + (ecG !== null ? (ecG >= 0 ? '+' : '') + ecG.toFixed(1) + ' t' : '—') + '</td>' +
+                    '</tr>';
+            }).join('');
+            var byGradeTable = gradesAll.length
+                ? '<div class="ged-content-panel rounded-xl overflow-hidden"><div class="px-5 py-3 border-b border-slate-700"><h3 class="font-bold text-sm" style="color:var(--ged-black)">Production vs. Livraison par grade</h3></div><div style="overflow-x:auto"><table style="width:100%;font-size:13px;border-collapse:collapse"><thead><tr style="font-size:11px;text-transform:uppercase;color:#64748B;background:rgba(0,0,0,0.15)"><th class="px-3 py-2 text-left">Grade</th><th class="px-3 py-2 text-right">Produit (t)</th><th class="px-3 py-2 text-right">Livré (t)</th><th class="px-3 py-2 text-right">Stock</th><th class="px-3 py-2 text-right">Écart</th></tr></thead><tbody>' + byGradeRows + '</tbody></table></div></div>'
+                : '<div class="ged-content-panel rounded-xl p-6 text-center text-slate-500 text-sm">Aucune donnée de production ou de pesée — ajoutez des sessions de concassage et des pesées pour voir le tableau de bord.</div>';
+            var pilotageTab = pilKpis + (pilAlerts || '') + byGradeTable;
+
             // ── Barre d'onglets ──
             function tabBtn(id, label) { var on = tab === id; return '<button onclick="cqSetTab(\'' + id + '\')" style="padding:8px 16px;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;' + (on ? 'background:var(--ged-yellow);color:#1a1200' : 'background:rgba(255,255,255,0.06);color:#A7B6C9') + '">' + label + '</button>'; }
-            var tabBar = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px">' + tabBtn('extraction', '⛰️ Extraction') + tabBtn('traitement', '🪨 Traitement') + tabBtn('stocks', '📦 Stocks') + '</div>';
-            var content = tab === 'traitement' ? traitementTab : (tab === 'stocks' ? stocksTab : extractionTab);
+            var tabBar = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px">' + tabBtn('extraction', '⛰️ Extraction') + tabBtn('traitement', '🪨 Traitement') + tabBtn('stocks', '📦 Stocks') + tabBtn('pesee', '⚖️ Pesée / BL') + tabBtn('pilotage', '📊 Pilotage') + '</div>';
+            var content = tab === 'traitement' ? traitementTab : (tab === 'stocks' ? stocksTab : (tab === 'pesee' ? peseeTab : (tab === 'pilotage' ? pilotageTab : extractionTab)));
 
             el.innerHTML = tabBar +
-                '<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">' + kpiRow + '</div>' +
+                (tab !== 'pilotage' ? '<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">' + kpiRow + '</div>' : '') +
                 content +
                 '<p class="text-xs text-slate-500 mt-3">Module Carrière — données enregistrées sur le serveur (accessibles sur tous vos appareils).</p>';
         }
