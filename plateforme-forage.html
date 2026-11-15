@@ -7529,12 +7529,12 @@
             if (unpaid.length) out.push({ level: 'warning', cat: 'Factures', msg: unpaid.length + ' facture(s) impayée(s)' });
             return out;
         }
-        // Semaine courante (lundi→dimanche) en chaînes AAAA-MM-JJ
+        // Semaine courante (dimanche→samedi) en chaînes AAAA-MM-JJ
         function _currentWeekRange() {
-            var d = new Date(); var wd = d.getDay(); var diff = (wd === 0 ? 6 : wd - 1);
-            var mon = new Date(d); mon.setDate(d.getDate() - diff);
-            var monStr = getLocalDateYYYYMMDD(mon);
-            return { from: monStr, to: _digestAddDays(monStr, 6) };
+            var d = new Date(); var wd = d.getDay(); // 0 = dimanche … 6 = samedi
+            var sun = new Date(d); sun.setDate(d.getDate() - wd);
+            var sunStr = getLocalDateYYYYMMDD(sun);
+            return { from: sunStr, to: _digestAddDays(sunStr, 6) };
         }
 
         function renderDashAlerts() {
@@ -7577,7 +7577,8 @@
             var cfg = geLoadDigestConfig();
             var parts = val.split('-W'); var year = parseInt(parts[0], 10), week = parseInt(parts[1], 10);
             var start = getDateOfISOWeek(year, week);
-            var from = getLocalDateYYYYMMDD(start), to = _digestAddDays(from, 6);
+            // Semaine dimanche→samedi : on démarre le dimanche qui précède le lundi ISO de la semaine choisie.
+            var from = _digestAddDays(getLocalDateYYYYMMDD(start), -1), to = _digestAddDays(from, 6);
             var recs = (dailyDataRecords || []).filter(function(r) { return r && r.date && r.date >= from && r.date <= to; });
             var cur = (typeof getRevenueViewDisplayCurrency === 'function') ? getRevenueViewDisplayCurrency() : ((companyInfo && companyInfo.currency) || 'XOF');
             var esc = function(s) { return String(s == null ? '' : s).replace(/[&<>]/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); };
@@ -7714,7 +7715,8 @@
             try { last = localStorage.getItem('ged_digest_last_week') || ''; } catch (e) {}
             if (last === key) return; // déjà traité
             var start = getDateOfISOWeek(iso.year, iso.week);
-            var from = getLocalDateYYYYMMDD(start), to = _digestAddDays(from, 6);
+            // semaine dimanche→samedi : on démarre le dimanche qui précède le lundi ISO.
+            var from = _digestAddDays(getLocalDateYYYYMMDD(start), -1), to = _digestAddDays(from, 6);
             var alerts = computeOperationalAlerts(from, to, cfg);
             geShowDigestBanner(iso.year, iso.week, from, to, alerts.length);
         }
@@ -20738,6 +20740,7 @@
                 var ys = parseInt(wp[0], 10);
                 var wk = parseInt(wp[1], 10);
                 var sdRaw = getDateOfISOWeek(ys, wk);
+                sdRaw.setDate(sdRaw.getDate() - 1); // semaine dimanche→samedi
                 var startW = getLocalDateYYYYMMDD(sdRaw);
                 var edRaw = new Date(sdRaw.getFullYear(), sdRaw.getMonth(), sdRaw.getDate() + 6);
                 return { start: startW, end: getLocalDateYYYYMMDD(edRaw), label: tUi('project_overview.week') + ' ' + wv };
@@ -23015,9 +23018,10 @@
             var week = parseInt(weekParts[1]);
             
             var startDate = getDateOfISOWeek(year, week);
+            startDate.setDate(startDate.getDate() - 1); // semaine dimanche→samedi
             var endDate = new Date(startDate);
             endDate.setDate(startDate.getDate() + 6);
-            
+
             var records = getDailyDataForSite().filter(function(r) {
                 var recordDate = new Date(r.date);
                 return recordDate >= startDate && recordDate <= endDate;
