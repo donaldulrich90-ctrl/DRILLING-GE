@@ -19312,8 +19312,18 @@
                 try {
                     await window.API.Sites.delete(id);
                 } catch (e) {
+                    // IMPORTANT : si le serveur refuse, NE PAS retirer le site localement.
+                    // Sinon il « revient » au rechargement et on ne comprend pas pourquoi.
+                    // On affiche la vraie raison renvoyée par le serveur.
                     console.warn('Suppression site (API):', e);
-                    alert('La suppression sur le serveur a échoué. Vérifiez la console ou votre connexion. Les données locales seront quand même mises à jour.');
+                    var msg = (e && e.message) ? String(e.message) : 'erreur inconnue';
+                    var statusTxt = (e && e.status) ? (' [code ' + e.status + ']') : '';
+                    alert('Suppression impossible' + statusTxt + ' : ' + msg +
+                        '\n\nLe site n’a PAS été supprimé. Causes possibles :\n' +
+                        '• votre compte n’est pas « Administrateur » ou « Gestionnaire de site » ;\n' +
+                        '• ce site appartient à une autre entreprise ;\n' +
+                        '• le site n’existe plus côté serveur (rafraîchissez la page).');
+                    return;
                 }
             }
             sites = (sites || []).filter(function(s) { return String(s.id) !== String(id); });
