@@ -21055,7 +21055,8 @@
                 '<div class="border-t border-slate-600 mt-4 pt-4">' +
                 '<p class="text-purple-300 text-sm font-semibold mb-2">🗓️ Rapport mensuel de production</p>' +
                 '<input type="month" id="monthlyReportMonth" value="' + (new Date().toISOString().slice(0, 7)) + '" class="w-full bg-slate-800 border border-slate-600 rounded px-3 py-2 text-white mb-3 text-sm">' +
-                '<button type="button" onclick="generateMonthlyReport()" class="w-full bg-purple-700 hover:bg-purple-600 text-white px-4 py-2 rounded-lg font-semibold">🗓️ Générer le rapport mensuel</button>' +
+                '<button type="button" onclick="generateMonthlyReport()" class="w-full bg-purple-700 hover:bg-purple-600 text-white px-4 py-2 rounded-lg font-semibold">🗓️ Générer le rapport mensuel (PDF)</button>' +
+                '<button type="button" onclick="generateMonthlyReportPptx()" class="mt-3 w-full bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg font-semibold">📊 Rapport mensuel — PowerPoint</button>' +
                 '<p class="text-slate-400 text-xs mt-2">Bilan du mois minier : production vs objectif du mois, par machine, dispo/UoA, arrêts.</p>' +
                 '</div>' +
                 '<div class="border-t border-slate-600 mt-4 pt-4">' +
@@ -21094,12 +21095,14 @@
                 '</div>' +
                 '</div>' +
                 '<div class="ged-content-panel p-6 rounded-xl">' +
-                '<h4 class="text-lg font-bold mb-4">📆 Rapport Hebdomadaire</h4>' +
+                '<h4 class="text-lg font-bold mb-4">📆 Rapport Hebdomadaire (format mensuel)</h4>' +
                 '<div class="mb-4">' +
-                '<label class="block text-slate-400 mb-2">Semaine</label>' +
-                '<input type="week" id="reportWeeklyWeek" class="w-full bg-slate-800 border border-slate-600 rounded px-4 py-2 text-white" value="' + currentWeek + '">' +
+                '<label class="block text-slate-400 mb-2">Semaine minière (dimanche → samedi)</label>' +
+                '<input type="week" id="weeklyProdReportWeek" class="w-full bg-slate-800 border border-slate-600 rounded px-4 py-2 text-white" value="' + currentWeek + '">' +
                 '</div>' +
-                '<button onclick="generateWeeklyReport()" class="w-full bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg font-semibold">📄 Générer Rapport Hebdomadaire</button>' +
+                '<button onclick="generateWeeklyProductionReport()" class="w-full bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg font-semibold">📄 Rapport hebdomadaire (PDF)</button>' +
+                '<button type="button" onclick="generateWeeklyReportPptx()" class="mt-3 w-full bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg font-semibold">📊 Rapport hebdomadaire — PowerPoint</button>' +
+                '<p class="text-slate-400 text-xs mt-2">Même format que le mensuel : production vs objectif de la semaine, par machine, dispo/UoA, arrêts. Objectif = target/jour × nombre de jours.</p>' +
                 '</div>' +
                 '<div class="ged-content-panel p-6 rounded-xl">' +
                 '<h4 class="text-lg font-bold mb-2">🧭 Bilan hebdomadaire configurable + alertes</h4>' +
@@ -24270,6 +24273,253 @@
                 sec('Visa et signatures', '<div class="daily-signatures">' + signatures + '</div>') +
                 '<footer class="daily-footer"><span>' + escapeHtmlReportCell(companyName) + '<br>Rapport mensuel de production · ' + escapeHtmlReportCell(monthLabel) + '</span><span>Document généré le ' + escapeHtmlReportCell(generatedAt) + '</span></footer>' +
                 '</main></body></html>';
+        }
+
+        // ============================================================
+        // RAPPORT DE PÉRIODE (hebdomadaire au même format que le mensuel)
+        //  - Agrégats partagés (mêmes règles que le mensuel ; aucune valeur inventée).
+        // ============================================================
+        function geCollectPeriodReportData(startISO, endISO) {
+            var all = (typeof getDailyDataForSite === 'function') ? getDailyDataForSite() : (typeof dailyDataRecords !== 'undefined' ? dailyDataRecords : []);
+            var records = (all || []).filter(function (r) { return r && r.date && !isDailyRecordIncompleteDraft(r) && r.date >= startISO && r.date <= endISO; });
+            var tot = { prod: 0, reforeH: 0, reforeM: 0, flush: 0, fuel: 0, sched: 0, used: 0, prodH: 0, bdn: 0, stb: 0, gsa: 0, prd: 0, other: 0 };
+            var wMech = 0, sMech = 0, wUoa = 0, sUoa = 0;
+            var byDay = {}, byMachine = {}, holeSet = {}, holesManual = 0, daysSet = {};
+            records.forEach(function (r) {
+                var d = _rpData(r), m = computeOperationalReportMetrics(d);
+                tot.prod += m.production || 0; tot.reforeH += parseFloat(m.redrillH) || 0; tot.reforeM += parseFloat(m.redrillM) || 0; tot.flush += parseFloat(m.flushM) || 0;
+                tot.fuel += m.fuel || 0; tot.sched += m.scheduled || 0; tot.used += m.usedHours || 0; tot.prodH += m.productiveHours || 0;
+                tot.bdn += m.bdn || 0; tot.stb += m.stb || 0; tot.gsa += m.gsa || 0; tot.prd += m.prd || 0; tot.other += m.other || 0;
+                if (m.scheduled > 0 && m.mechAvail != null && !isNaN(m.mechAvail)) { wMech += m.mechAvail * m.scheduled; sMech += m.scheduled; }
+                if (m.scheduled > 0 && m.uoa != null && !isNaN(m.uoa)) { wUoa += m.uoa * m.scheduled; sUoa += m.scheduled; }
+                daysSet[r.date] = 1; byDay[r.date] = (byDay[r.date] || 0) + (m.production || 0);
+                var mid = _rpMachineName(r) || r.machineId || '?';
+                if (!byMachine[mid]) byMachine[mid] = { prod: 0, used: 0, sched: 0, wMech: 0, sMech: 0, wUoa: 0, sUoa: 0 };
+                var bm = byMachine[mid]; bm.prod += m.production || 0; bm.used += m.usedHours || 0; bm.sched += m.scheduled || 0;
+                if (m.scheduled > 0 && m.mechAvail != null && !isNaN(m.mechAvail)) { bm.wMech += m.mechAvail * m.scheduled; bm.sMech += m.scheduled; }
+                if (m.scheduled > 0 && m.uoa != null && !isNaN(m.uoa)) { bm.wUoa += m.uoa * m.scheduled; bm.sUoa += m.scheduled; }
+                var hc = parseFloat(d.holesCount);
+                if (isFinite(hc) && hc >= 0) holesManual += Math.round(hc);
+                else (d.holesWorked || []).forEach(function (h) { if (h && h.holeId != null && String(h.holeId).trim() !== '') holeSet[String(h.holeId).trim()] = true; });
+            });
+            return { records: records, tot: tot, byDay: byDay, byMachine: byMachine, nbDays: Object.keys(daysSet).length,
+                holeCount: holesManual + Object.keys(holeSet).length,
+                mMech: sMech > 0 ? wMech / sMech : null, mUoa: sUoa > 0 ? wUoa / sUoa : null,
+                rend: tot.used > 0 ? tot.prod / tot.used : null };
+        }
+
+        // Rapport hebdomadaire au MÊME format que le mensuel (objectif = target/jour × jours de la semaine).
+        function buildWeeklyReportDocumentHtml(startISO, endISO) {
+            var fmtFr = function (s) { var p = String(s).split('-'); return p[2] + '/' + p[1] + '/' + p[0]; };
+            var periodLabel = 'semaine du ' + fmtFr(startISO) + ' au ' + fmtFr(endISO);
+            var data = geCollectPeriodReportData(startISO, endISO);
+            var records = data.records, tot = data.tot, byMachine = data.byMachine, byDay = data.byDay;
+            var nbDays = data.nbDays, holeCount = data.holeCount, mMech = data.mMech, mUoa = data.mUoa, rend = data.rend;
+            var companyName = getReportBrandSubscriberName();
+            var projectLabel = getReportProjectLabel(records);
+            var mt = (typeof getMonthlyTargetForDate === 'function') ? getMonthlyTargetForDate(startISO) : null;
+            var dec = function (v, dd) { if (v == null || !isFinite(Number(v))) return 'N/A'; return Number(v).toLocaleString('fr-FR', { minimumFractionDigits: dd == null ? 0 : dd, maximumFractionDigits: dd == null ? 2 : dd }); };
+            var nbCalDays = Math.round((new Date(endISO + 'T00:00:00') - new Date(startISO + 'T00:00:00')) / 86400000) + 1;
+            var goalDay = (mt && mt.metersDay != null && isFinite(parseFloat(mt.metersDay))) ? parseFloat(mt.metersDay) : ((typeof companyInfo !== 'undefined' && companyInfo && parseFloat(companyInfo.dailyMetersObjective) > 0) ? parseFloat(companyInfo.dailyMetersObjective) : null);
+            var goalWeek = goalDay != null ? goalDay * nbCalDays : null;
+            var varW = goalWeek != null ? tot.prod - goalWeek : null;
+            var varWPct = (goalWeek != null && goalWeek > 0) ? (varW / goalWeek * 100) : null;
+            function card(label, value, color, sub) {
+                return '<div class="report-kpi-card"><div class="report-kpi-label">' + escapeHtmlReportCell(label) + '</div>' +
+                    '<div class="report-kpi-value" style="color:' + (color || '#0f172a') + ';">' + escapeHtmlReportCell(value) + '</div>' +
+                    (sub ? '<div class="report-kpi-sub">' + escapeHtmlReportCell(sub) + '</div>' : '') + '</div>';
+            }
+            var fmtM = function (v) { return v == null ? 'N/A' : dec(v) + ' m'; };
+            var pctCmp = function (v, target) { if (v == null) return 'Non renseigné'; var s = dec(v) + ' %'; if (target != null) s += ' / cible ' + dec(target) + ' %'; return s; };
+            var bandeau = '<div class="report-kpi-grid">' +
+                card('Production réalisée', fmtM(tot.prod), '#1e40af', 'mètres nouveaux (semaine)') +
+                card('Objectif de la semaine', goalWeek != null ? fmtM(goalWeek) : 'Non renseigné', '#b45309', goalDay != null ? dec(goalDay) + ' m/jour × ' + nbCalDays + ' j' : 'target mine') +
+                card('Variance (réel − objectif)', varWPct != null ? ((varWPct > 0 ? '+' : '') + dec(varWPct) + ' %') : 'N/A', varW == null ? '#0f172a' : (varW >= 0 ? '#166534' : '#b91c1c'), 'sur la semaine') +
+                card('Jours avec production', String(nbDays), '#0f172a', 'moy. ' + (nbDays > 0 ? dec(tot.prod / nbDays) : 'N/A') + ' m/jour') +
+                card('Rendement moyen', rend != null ? dec(rend, 2) + ' m/h' : 'N/A', '#1e40af', 'mètres / heure utilisée') +
+                card('Dispo. mécanique', pctCmp(mMech, mt ? mt.availPct : null), '#1e40af', '') +
+                card('UoA', pctCmp(mUoa, mt ? mt.uoaPct : null), '#1e40af', '') +
+                card('Reforage', dec(tot.reforeH) + ' h', '#7c3aed', tot.reforeM > 0 ? dec(tot.reforeM) + ' m' : 'facturé à l\'heure') +
+                card('Trous forés', String(holeCount), '#0f766e', 'sur la semaine') +
+                '</div>';
+            var labels = [], realArr = [], planArr = [];
+            var dstart = new Date(startISO + 'T00:00:00'), dend = new Date(endISO + 'T00:00:00');
+            if (!isNaN(dstart.getTime()) && !isNaN(dend.getTime())) {
+                for (var dd = new Date(dstart.getTime()); dd <= dend; dd.setDate(dd.getDate() + 1)) {
+                    var ds = dd.toISOString().slice(0, 10);
+                    labels.push(ds.slice(8, 10) + '/' + ds.slice(5, 7));
+                    realArr.push(parseFloat((byDay[ds] || 0).toFixed(1)));
+                    planArr.push(goalDay != null ? goalDay : null);
+                }
+            }
+            var chartHtml = '';
+            if (typeof reportChartToImg === 'function' && typeof Chart !== 'undefined' && labels.length) {
+                var ds2 = [{ type: 'bar', label: 'Réalisé/jour', data: realArr, backgroundColor: '#1e40af', borderRadius: 2, order: 2 }];
+                if (goalDay != null) ds2.push({ type: 'line', label: 'Objectif/jour', data: planArr, borderColor: '#ea580c', backgroundColor: '#ea580c', borderWidth: 2, pointRadius: 0, order: 1 });
+                var img = reportChartToImg({ type: 'bar', data: { labels: labels, datasets: ds2 }, options: { plugins: { legend: { display: true, labels: { color: '#334155', font: { size: 11 } } } }, scales: { y: { beginAtZero: true, ticks: { color: '#334155' }, grid: { color: 'rgba(0,0,0,0.06)' } }, x: { ticks: { color: '#334155', font: { size: 10 } }, grid: { display: false } } } } }, 1300, 320);
+                if (img) chartHtml = '<div style="border:1px solid #e2e8f0;border-radius:6px;padding:10px;"><img src="' + img + '" alt="" style="width:100%;height:auto;display:block;"></div>';
+            }
+            var machKeys = Object.keys(byMachine).sort(function (a, b) { return byMachine[b].prod - byMachine[a].prod; });
+            var machRows = machKeys.map(function (k) {
+                var bm = byMachine[k]; var rr = bm.used > 0 ? bm.prod / bm.used : null;
+                var mm = bm.sMech > 0 ? bm.wMech / bm.sMech : null, mu = bm.sUoa > 0 ? bm.wUoa / bm.sUoa : null;
+                return '<tr><td class="machine-cell">' + escapeHtmlReportCell(k) + '</td><td class="r-num">' + dec(bm.prod) + '</td><td class="r-num">' + dec(bm.used) + '</td><td class="r-num">' + (rr != null ? dec(rr, 2) : 'N/A') + '</td><td class="r-num">' + (mm != null ? dec(mm) + ' %' : 'N/A') + '</td><td class="r-num">' + (mu != null ? dec(mu) + ' %' : 'N/A') + '</td></tr>';
+            }).join('');
+            var machTable = '<table class="daily-table"><thead><tr><th class="machine-cell">Machine</th><th class="r-num">Nouveau (m)</th><th class="r-num">Heures util.</th><th class="r-num">Rendement (m/h)</th><th class="r-num">Dispo. méca (%)</th><th class="r-num">UoA (%)</th></tr></thead><tbody>' +
+                (machRows || '<tr><td class="daily-empty" colspan="6">Aucune donnée sur la semaine.</td></tr>') +
+                '<tr class="total"><td class="r-txt"><strong>Ensemble</strong></td><td class="r-num"><strong>' + dec(tot.prod) + '</strong></td><td class="r-num"><strong>' + dec(tot.used) + '</strong></td><td class="r-num"><strong>' + (rend != null ? dec(rend, 2) : 'N/A') + '</strong></td><td class="r-num"><strong>' + (mMech != null ? dec(mMech) + ' %' : 'N/A') + '</strong></td><td class="r-num"><strong>' + (mUoa != null ? dec(mUoa) + ' %' : 'N/A') + '</strong></td></tr></tbody></table>';
+            var totStops = tot.bdn + tot.stb + tot.gsa + tot.prd + tot.other;
+            var stopPct = function (v) { return totStops > 0 ? dec(v / totStops * 100) + ' %' : '—'; };
+            var stopTable = '<table class="daily-table"><thead><tr><th>Type d\'arrêt</th><th class="r-num">Heures</th><th class="r-num">% du total</th></tr></thead><tbody>' +
+                '<tr><td class="r-txt">Pannes mécaniques (BDN)</td><td class="r-num">' + dec(tot.bdn) + '</td><td class="r-num">' + stopPct(tot.bdn) + '</td></tr>' +
+                '<tr><td class="r-txt">Standby (STB)</td><td class="r-num">' + dec(tot.stb) + '</td><td class="r-num">' + stopPct(tot.stb) + '</td></tr>' +
+                '<tr><td class="r-txt">Services / délais (GSA)</td><td class="r-num">' + dec(tot.gsa) + '</td><td class="r-num">' + stopPct(tot.gsa) + '</td></tr>' +
+                '<tr><td class="r-txt">Production / autres</td><td class="r-num">' + dec(tot.prd + tot.other) + '</td><td class="r-num">' + stopPct(tot.prd + tot.other) + '</td></tr>' +
+                '<tr class="total"><td class="r-txt"><strong>Total arrêts</strong></td><td class="r-num"><strong>' + dec(totStops) + '</strong></td><td class="r-num"><strong>' + (totStops > 0 ? '100 %' : '—') + '</strong></td></tr></tbody></table>';
+            var signatures = ['Établi par', 'Contrôlé par', 'Visé par'].map(function (label) {
+                return '<div class="daily-signature"><div class="daily-signature-title">' + label + '</div><div class="daily-signature-field">Nom / fonction : <span class="daily-signature-line"></span></div><div class="daily-signature-field">Date : <span class="daily-signature-line"></span></div><div class="daily-signature-field">Signature / cachet :</div><div class="daily-signature-space"></div></div>';
+            }).join('');
+            var metaRows = [[{ label: 'Projet / site :', value: projectLabel }, { label: 'Semaine :', value: periodLabel }, { label: 'Jours produits :', value: String(nbDays) }],
+                [{ label: 'Foreuses planifiées :', value: (mt && mt.rigs != null) ? String(mt.rigs) : 'N/A' }, { label: 'Target heures/jour :', value: (mt && mt.workingHours != null) ? dec(mt.workingHours) + ' h' : 'N/A' }]];
+            var generatedAt = new Date().toLocaleString('fr-FR');
+            var sectionN = 0;
+            function sec(title, body) { sectionN += 1; var n = (sectionN < 10 ? '0' : '') + sectionN; return '<section class="daily-section"><h2><span class="daily-section-number">' + n + '</span>' + title + '</h2>' + body + '</section>'; }
+            return '<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rapport hebdomadaire de production — ' + escapeHtmlReportCell(periodLabel) + '</title><style>' +
+                REPORT_PRINT_ENTETE_CSS + DAILY_REPORT_PRINT_CSS + '</style></head><body>' +
+                '<div class="ge-brand-bottom"><img src="' + resolveStaticAssetUrl('ge-logo.png') + '" alt="GOOD ENGINEERS" class="ge-brand-logo"></div>' +
+                '<nav class="print-tools" aria-label="Actions du rapport"><button type="button" onclick="window.print()">Imprimer / Enregistrer en PDF</button><button type="button" onclick="window.close()">Fermer</button></nav>' +
+                '<main class="daily-sheet">' +
+                '<header>' + buildReportStandardEnteteHtml('RAPPORT HEBDOMADAIRE DE PRODUCTION', records, metaRows) + '<p class="daily-report-audience">BILAN DE LA SEMAINE — ' + escapeHtmlReportCell(periodLabel) + '</p></header>' +
+                sec('INDICATEURS CLÉS DE LA SEMAINE', bandeau + (mt ? '' : '<p class="daily-table-note">Aucun target saisi — renseignez le target mensuel via « 🎯 Targets mensuels » pour comparer à l\'objectif.</p>')) +
+                (chartHtml ? sec('Production journalière vs objectif', chartHtml) : '') +
+                sec('Production &amp; performance par machine', machTable) +
+                sec('Répartition des arrêts de la semaine', stopTable) +
+                sec('Visa et signatures', '<div class="daily-signatures">' + signatures + '</div>') +
+                '<footer class="daily-footer"><span>' + escapeHtmlReportCell(companyName) + '<br>Rapport hebdomadaire de production · ' + escapeHtmlReportCell(periodLabel) + '</span><span>Document généré le ' + escapeHtmlReportCell(generatedAt) + '</span></footer>' +
+                '</main></body></html>';
+        }
+
+        // Semaine dimanche→samedi depuis le sélecteur, puis ouverture du rapport (format mensuel).
+        function geWeeklyRangeFromPicker(pickerId) {
+            var el = document.getElementById(pickerId);
+            var val = el && el.value;
+            if (!val || val.indexOf('-W') < 0) return null;
+            var parts = val.split('-W'); var year = parseInt(parts[0], 10), week = parseInt(parts[1], 10);
+            var start = getDateOfISOWeek(year, week); start.setDate(start.getDate() - 1); // dimanche
+            var startISO = getLocalDateYYYYMMDD(start);
+            return { startISO: startISO, endISO: _digestAddDays(startISO, 6) };
+        }
+        function generateWeeklyProductionReport() {
+            var rg = geWeeklyRangeFromPicker('weeklyProdReportWeek') || geWeeklyRangeFromPicker('reportWeeklyWeek');
+            if (!rg) { alert('Choisissez une semaine.'); return; }
+            var reportWindow = window.open('', '_blank');
+            if (!reportWindow) { alert('Autorisez l’ouverture de la fenêtre du rapport.'); return; }
+            try {
+                ensureReportPlanLoaded(function () { printDailyReport(null, [], reportWindow, buildWeeklyReportDocumentHtml(rg.startISO, rg.endISO)); }, function () { if (!reportWindow.closed) reportWindow.close(); });
+            } catch (e) {
+                try { printDailyReport(null, [], reportWindow, buildWeeklyReportDocumentHtml(rg.startISO, rg.endISO)); } catch (e2) { if (!reportWindow.closed) reportWindow.close(); alert('Rapport hebdomadaire impossible : ' + (e2 && e2.message)); }
+            }
+        }
+
+        // ---- Export PowerPoint d'un rapport de PÉRIODE (mensuel ou hebdo) ----
+        function geBuildPeriodReportPptx(opts) {
+            var data = geCollectPeriodReportData(opts.startISO, opts.endISO);
+            var records = data.records, tot = data.tot, byMachine = data.byMachine;
+            var pptx = new PptxGenJS(); pptx.layout = 'LAYOUT_WIDE';
+            var BLACK = '141414', CAT = 'FFCD11', LIGHT = 'F5F5F2', LINE = 'E4E2DA';
+            var company = getReportBrandSubscriberName();
+            var projectLabel = getReportProjectLabel(records);
+            var dec = function (v, d) { if (v == null || !isFinite(Number(v))) return 'N/A'; return Number(v).toLocaleString('fr-FR', { minimumFractionDigits: d == null ? 0 : d, maximumFractionDigits: d == null ? 2 : d }); };
+            var goalPeriod = opts.goalPeriod, goalDay = opts.goalDay, mt = opts.mt;
+            var varP = goalPeriod != null ? tot.prod - goalPeriod : null;
+            var varPPct = (goalPeriod != null && goalPeriod > 0) ? (varP / goalPeriod * 100) : null;
+            function slideTitle(s, t) { s.addText(t, { x: 0.5, y: 0.35, w: 12.3, h: 0.7, fontSize: 22, bold: true, color: BLACK }); s.addShape(pptx.ShapeType.line, { x: 0.5, y: 1.15, w: 12.3, h: 0, line: { color: CAT, width: 3 } }); s.addText('GOOD ENGINEERS', { x: 0.5, y: 7.0, w: 6, h: 0.3, fontSize: 9, color: '9A9A9A' }); }
+            function colW(n) { var total = 12.3, first = 3.2, rest = (total - first) / (n - 1), a = [first]; for (var i = 1; i < n; i++) a.push(rest); return a; }
+            function table(s, head, rows, totalRow) {
+                var tr = [];
+                tr.push(head.map(function (h, ci) { return { text: h, options: { bold: true, color: CAT, fill: { color: BLACK }, align: ci ? 'right' : 'left', fontSize: 11 } }; }));
+                rows.forEach(function (r, ri) { tr.push(r.map(function (cell, ci) { return { text: String(cell), options: { align: ci ? 'right' : 'left', fontSize: 11, color: '222222', fill: { color: ri % 2 ? LIGHT : 'FFFFFF' } } }; })); });
+                if (totalRow) tr.push(totalRow.map(function (cell, ci) { return { text: String(cell), options: { bold: true, align: ci ? 'right' : 'left', fontSize: 11, color: BLACK, fill: { color: 'F4EFDC' } } }; }));
+                s.addTable(tr, { x: 0.5, y: 1.45, w: 12.3, colW: colW(head.length), border: { type: 'solid', color: LINE, pt: 0.5 }, valign: 'middle' });
+            }
+            // 1 — Couverture
+            var s1 = pptx.addSlide(); s1.background = { color: BLACK };
+            s1.addText(opts.titleText, { x: 0.6, y: 2.2, w: 12.1, h: 1, fontSize: 32, bold: true, color: 'FFFFFF', align: 'center' });
+            s1.addText(opts.periodLabel, { x: 0.6, y: 3.3, w: 12.1, h: 0.6, fontSize: 18, color: 'FFCD11', align: 'center' });
+            s1.addText(company + (projectLabel ? '  ·  ' + projectLabel : ''), { x: 0.6, y: 4.1, w: 12.1, h: 0.5, fontSize: 14, color: 'DDDDDD', align: 'center' });
+            s1.addText('Généré le ' + new Date().toLocaleString('fr-FR'), { x: 0.6, y: 6.8, w: 12.1, h: 0.4, fontSize: 10, color: '9A9A9A', align: 'center' });
+            // 2 — Indicateurs clés
+            var s2 = pptx.addSlide(); slideTitle(s2, 'Indicateurs clés — ' + opts.periodWord);
+            var kpiRows = [
+                ['Production réalisée', dec(tot.prod) + ' m'],
+                ['Objectif ' + opts.periodWord, goalPeriod != null ? dec(goalPeriod) + ' m' : 'Non renseigné'],
+                ['Variance (réel − objectif)', varPPct != null ? ((varPPct > 0 ? '+' : '') + dec(varPPct) + ' %') : 'N/A'],
+                ['Jours avec production', String(data.nbDays)],
+                ['Rendement moyen', data.rend != null ? dec(data.rend, 2) + ' m/h' : 'N/A'],
+                ['Dispo. mécanique', data.mMech != null ? dec(data.mMech) + ' %' + (mt && mt.availPct != null ? ' / cible ' + dec(mt.availPct) + ' %' : '') : 'N/A'],
+                ['UoA', data.mUoa != null ? dec(data.mUoa) + ' %' + (mt && mt.uoaPct != null ? ' / cible ' + dec(mt.uoaPct) + ' %' : '') : 'N/A'],
+                ['Reforage', dec(tot.reforeH) + ' h' + (tot.reforeM > 0 ? ' (' + dec(tot.reforeM) + ' m)' : '')],
+                ['Trous forés', String(data.holeCount)]
+            ];
+            table(s2, ['Indicateur', 'Valeur'], kpiRows);
+            // 3 — Par machine
+            var s3 = pptx.addSlide(); slideTitle(s3, 'Production & performance par machine');
+            var machKeys = Object.keys(byMachine).sort(function (a, b) { return byMachine[b].prod - byMachine[a].prod; });
+            var mrows = machKeys.map(function (k) {
+                var bm = byMachine[k]; var rr = bm.used > 0 ? bm.prod / bm.used : null;
+                var mm = bm.sMech > 0 ? bm.wMech / bm.sMech : null, mu = bm.sUoa > 0 ? bm.wUoa / bm.sUoa : null;
+                return [k, dec(bm.prod), dec(bm.used), rr != null ? dec(rr, 2) : 'N/A', mm != null ? dec(mm) + ' %' : 'N/A', mu != null ? dec(mu) + ' %' : 'N/A'];
+            });
+            table(s3, ['Machine', 'Nouveau (m)', 'Heures util.', 'Rdt (m/h)', 'Dispo. méca', 'UoA'], mrows, ['Ensemble', dec(tot.prod), dec(tot.used), data.rend != null ? dec(data.rend, 2) : 'N/A', data.mMech != null ? dec(data.mMech) + ' %' : 'N/A', data.mUoa != null ? dec(data.mUoa) + ' %' : 'N/A']);
+            // 4 — Arrêts
+            var s4 = pptx.addSlide(); slideTitle(s4, 'Répartition des arrêts — ' + opts.periodWord);
+            var totStops = tot.bdn + tot.stb + tot.gsa + tot.prd + tot.other;
+            var sp = function (v) { return totStops > 0 ? dec(v / totStops * 100) + ' %' : '—'; };
+            table(s4, ['Type d\'arrêt', 'Heures', '% du total'], [
+                ['Pannes mécaniques (BDN)', dec(tot.bdn), sp(tot.bdn)],
+                ['Standby (STB)', dec(tot.stb), sp(tot.stb)],
+                ['Services / délais (GSA)', dec(tot.gsa), sp(tot.gsa)],
+                ['Production / autres', dec(tot.prd + tot.other), sp(tot.prd + tot.other)]
+            ], ['Total arrêts', dec(totStops), totStops > 0 ? '100 %' : '—']);
+            pptx.writeFile({ fileName: opts.fileName });
+        }
+        function geResolveMonthlyPptxOpts() {
+            var el = document.getElementById('monthlyReportMonth');
+            var monthKey = el && el.value ? el.value : (new Date().toISOString().slice(0, 7));
+            var sid = (typeof currentSiteId !== 'undefined') ? currentSiteId : null;
+            if (sid == null && typeof sites !== 'undefined' && Array.isArray(sites) && typeof miningCutoffDayForSite === 'function') {
+                try { var cs = sites.filter(function (s) { return miningCutoffDayForSite(s.id) > 1; }); if (cs.length === 1) sid = cs[0].id; } catch (e) {}
+            }
+            var range = (typeof miningMonthRange === 'function') ? miningMonthRange(monthKey, sid) : { start: monthKey + '-01', end: monthKey + '-28' };
+            var label = (typeof miningMonthLabelFr === 'function') ? miningMonthLabelFr(monthKey, sid) : monthKey;
+            var mt = (typeof getMonthlyTargetForDate === 'function') ? getMonthlyTargetForDate(range.start) : null;
+            var goalDay = (mt && mt.metersDay != null) ? parseFloat(mt.metersDay) : null;
+            var goalMonth = (mt && mt.metersMonth != null) ? parseFloat(mt.metersMonth) : null;
+            return { startISO: range.start, endISO: range.end, titleText: 'RAPPORT MENSUEL DE PRODUCTION', periodLabel: label, periodWord: 'du mois', goalPeriod: goalMonth, goalDay: goalDay, mt: mt, fileName: 'rapport-mensuel-' + monthKey + '.pptx' };
+        }
+        function generateMonthlyReportPptx() {
+            var opts;
+            try { opts = geResolveMonthlyPptxOpts(); } catch (e) { alert('Rapport mensuel impossible : ' + (e && e.message)); return; }
+            ensureReportPlanLoaded(function () {
+                loadVendorScript('vendor/pptxgen.bundle.js', 'https://cdnjs.cloudflare.com/ajax/libs/pptxgenjs/3.12.0/pptxgen.bundle.js').then(function () {
+                    try { geBuildPeriodReportPptx(opts); } catch (e) { alert('Export PowerPoint impossible : ' + (e && e.message ? e.message : e)); }
+                }).catch(function () { alert('Impossible de charger la librairie PowerPoint (connexion internet requise).'); });
+            }, function () { });
+        }
+        function generateWeeklyReportPptx() {
+            var rg = geWeeklyRangeFromPicker('weeklyProdReportWeek') || geWeeklyRangeFromPicker('reportWeeklyWeek');
+            if (!rg) { alert('Choisissez une semaine.'); return; }
+            var fmtFr = function (s) { var p = String(s).split('-'); return p[2] + '/' + p[1] + '/' + p[0]; };
+            var periodLabel = 'semaine du ' + fmtFr(rg.startISO) + ' au ' + fmtFr(rg.endISO);
+            var mt = (typeof getMonthlyTargetForDate === 'function') ? getMonthlyTargetForDate(rg.startISO) : null;
+            var goalDay = (mt && mt.metersDay != null) ? parseFloat(mt.metersDay) : ((typeof companyInfo !== 'undefined' && companyInfo && parseFloat(companyInfo.dailyMetersObjective) > 0) ? parseFloat(companyInfo.dailyMetersObjective) : null);
+            var nbCalDays = Math.round((new Date(rg.endISO + 'T00:00:00') - new Date(rg.startISO + 'T00:00:00')) / 86400000) + 1;
+            var opts = { startISO: rg.startISO, endISO: rg.endISO, titleText: 'RAPPORT HEBDOMADAIRE DE PRODUCTION', periodLabel: periodLabel, periodWord: 'de la semaine', goalPeriod: goalDay != null ? goalDay * nbCalDays : null, goalDay: goalDay, mt: mt, fileName: 'rapport-hebdomadaire-' + rg.startISO + '.pptx' };
+            ensureReportPlanLoaded(function () {
+                loadVendorScript('vendor/pptxgen.bundle.js', 'https://cdnjs.cloudflare.com/ajax/libs/pptxgenjs/3.12.0/pptxgen.bundle.js').then(function () {
+                    try { geBuildPeriodReportPptx(opts); } catch (e) { alert('Export PowerPoint impossible : ' + (e && e.message ? e.message : e)); }
+                }).catch(function () { alert('Impossible de charger la librairie PowerPoint (connexion internet requise).'); });
+            }, function () { });
         }
 
         function buildDailyReportDocumentHtml(date, records, detailed) {
