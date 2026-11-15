@@ -24425,62 +24425,129 @@
         function geBuildPeriodReportPptx(opts) {
             var data = geCollectPeriodReportData(opts.startISO, opts.endISO);
             var records = data.records, tot = data.tot, byMachine = data.byMachine;
-            var pptx = new PptxGenJS(); pptx.layout = 'LAYOUT_WIDE';
-            var BLACK = '141414', CAT = 'FFCD11', LIGHT = 'F5F5F2', LINE = 'E4E2DA';
+            var pptx = new PptxGenJS(); pptx.layout = 'LAYOUT_WIDE'; // 13.33 x 7.5 in
+            // Charte GOOD ENGINEERS
+            var NAVY = '0B2447', BLUE = '1D4ED8', AMBER = 'F59E0B', GREEN = '16A34A', RED = 'DC2626',
+                INK = '0F172A', SUB = '64748B', LIGHT = 'F1F5F9', LINE = 'E2E8F0', WHITE = 'FFFFFF';
             var company = getReportBrandSubscriberName();
             var projectLabel = getReportProjectLabel(records);
             var dec = function (v, d) { if (v == null || !isFinite(Number(v))) return 'N/A'; return Number(v).toLocaleString('fr-FR', { minimumFractionDigits: d == null ? 0 : d, maximumFractionDigits: d == null ? 2 : d }); };
             var goalPeriod = opts.goalPeriod, goalDay = opts.goalDay, mt = opts.mt;
             var varP = goalPeriod != null ? tot.prod - goalPeriod : null;
-            var varPPct = (goalPeriod != null && goalPeriod > 0) ? (varP / goalPeriod * 100) : null;
-            function slideTitle(s, t) { s.addText(t, { x: 0.5, y: 0.35, w: 12.3, h: 0.7, fontSize: 22, bold: true, color: BLACK }); s.addShape(pptx.ShapeType.line, { x: 0.5, y: 1.15, w: 12.3, h: 0, line: { color: CAT, width: 3 } }); s.addText('GOOD ENGINEERS', { x: 0.5, y: 7.0, w: 6, h: 0.3, fontSize: 9, color: '9A9A9A' }); }
-            function colW(n) { var total = 12.3, first = 3.2, rest = (total - first) / (n - 1), a = [first]; for (var i = 1; i < n; i++) a.push(rest); return a; }
-            function table(s, head, rows, totalRow) {
-                var tr = [];
-                tr.push(head.map(function (h, ci) { return { text: h, options: { bold: true, color: CAT, fill: { color: BLACK }, align: ci ? 'right' : 'left', fontSize: 11 } }; }));
-                rows.forEach(function (r, ri) { tr.push(r.map(function (cell, ci) { return { text: String(cell), options: { align: ci ? 'right' : 'left', fontSize: 11, color: '222222', fill: { color: ri % 2 ? LIGHT : 'FFFFFF' } } }; })); });
-                if (totalRow) tr.push(totalRow.map(function (cell, ci) { return { text: String(cell), options: { bold: true, align: ci ? 'right' : 'left', fontSize: 11, color: BLACK, fill: { color: 'F4EFDC' } } }; }));
-                s.addTable(tr, { x: 0.5, y: 1.45, w: 12.3, colW: colW(head.length), border: { type: 'solid', color: LINE, pt: 0.5 }, valign: 'middle' });
-            }
-            // 1 — Couverture
-            var s1 = pptx.addSlide(); s1.background = { color: BLACK };
-            s1.addText(opts.titleText, { x: 0.6, y: 2.2, w: 12.1, h: 1, fontSize: 32, bold: true, color: 'FFFFFF', align: 'center' });
-            s1.addText(opts.periodLabel, { x: 0.6, y: 3.3, w: 12.1, h: 0.6, fontSize: 18, color: 'FFCD11', align: 'center' });
-            s1.addText(company + (projectLabel ? '  ·  ' + projectLabel : ''), { x: 0.6, y: 4.1, w: 12.1, h: 0.5, fontSize: 14, color: 'DDDDDD', align: 'center' });
-            s1.addText('Généré le ' + new Date().toLocaleString('fr-FR'), { x: 0.6, y: 6.8, w: 12.1, h: 0.4, fontSize: 10, color: '9A9A9A', align: 'center' });
-            // 2 — Indicateurs clés
-            var s2 = pptx.addSlide(); slideTitle(s2, 'Indicateurs clés — ' + opts.periodWord);
-            var kpiRows = [
-                ['Production réalisée', dec(tot.prod) + ' m'],
-                ['Objectif ' + opts.periodWord, goalPeriod != null ? dec(goalPeriod) + ' m' : 'Non renseigné'],
-                ['Variance (réel − objectif)', varPPct != null ? ((varPPct > 0 ? '+' : '') + dec(varPPct) + ' %') : 'N/A'],
-                ['Jours avec production', String(data.nbDays)],
-                ['Rendement moyen', data.rend != null ? dec(data.rend, 2) + ' m/h' : 'N/A'],
-                ['Dispo. mécanique', data.mMech != null ? dec(data.mMech) + ' %' + (mt && mt.availPct != null ? ' / cible ' + dec(mt.availPct) + ' %' : '') : 'N/A'],
-                ['UoA', data.mUoa != null ? dec(data.mUoa) + ' %' + (mt && mt.uoaPct != null ? ' / cible ' + dec(mt.uoaPct) + ' %' : '') : 'N/A'],
-                ['Reforage', dec(tot.reforeH) + ' h' + (tot.reforeM > 0 ? ' (' + dec(tot.reforeM) + ' m)' : '')],
-                ['Trous forés', String(data.holeCount)]
-            ];
-            table(s2, ['Indicateur', 'Valeur'], kpiRows);
-            // 3 — Par machine
-            var s3 = pptx.addSlide(); slideTitle(s3, 'Production & performance par machine');
+            var taux = (goalPeriod != null && goalPeriod > 0) ? (tot.prod / goalPeriod * 100) : null;
             var machKeys = Object.keys(byMachine).sort(function (a, b) { return byMachine[b].prod - byMachine[a].prod; });
-            var mrows = machKeys.map(function (k) {
-                var bm = byMachine[k]; var rr = bm.used > 0 ? bm.prod / bm.used : null;
-                var mm = bm.sMech > 0 ? bm.wMech / bm.sMech : null, mu = bm.sUoa > 0 ? bm.wUoa / bm.sUoa : null;
-                return [k, dec(bm.prod), dec(bm.used), rr != null ? dec(rr, 2) : 'N/A', mm != null ? dec(mm) + ' %' : 'N/A', mu != null ? dec(mu) + ' %' : 'N/A'];
-            });
-            table(s3, ['Machine', 'Nouveau (m)', 'Heures util.', 'Rdt (m/h)', 'Dispo. méca', 'UoA'], mrows, ['Ensemble', dec(tot.prod), dec(tot.used), data.rend != null ? dec(data.rend, 2) : 'N/A', data.mMech != null ? dec(data.mMech) + ' %' : 'N/A', data.mUoa != null ? dec(data.mUoa) + ' %' : 'N/A']);
-            // 4 — Arrêts
-            var s4 = pptx.addSlide(); slideTitle(s4, 'Répartition des arrêts — ' + opts.periodWord);
             var totStops = tot.bdn + tot.stb + tot.gsa + tot.prd + tot.other;
+            // Jours de la période
+            var labels = [], realArr = [], planArr = [];
+            var dstart = new Date(opts.startISO + 'T00:00:00'), dend = new Date(opts.endISO + 'T00:00:00');
+            if (!isNaN(dstart.getTime()) && !isNaN(dend.getTime())) {
+                for (var dd = new Date(dstart.getTime()); dd <= dend; dd.setDate(dd.getDate() + 1)) {
+                    var ds = dd.toISOString().slice(0, 10);
+                    labels.push(ds.slice(8, 10) + '/' + ds.slice(5, 7));
+                    realArr.push(parseFloat((data.byDay[ds] || 0).toFixed(1)));
+                    planArr.push(goalDay != null ? goalDay : null);
+                }
+            }
+            function img(cfg, w, h) { try { return (typeof reportChartToImg === 'function') ? reportChartToImg(cfg, w, h) : ''; } catch (e) { return ''; } }
+            // ---- helpers de mise en page ----
+            function band(s, title, sub) {
+                s.background = { color: WHITE };
+                s.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 13.33, h: 1.0, fill: { color: NAVY } });
+                s.addShape(pptx.ShapeType.rect, { x: 0, y: 1.0, w: 13.33, h: 0.06, fill: { color: AMBER } });
+                s.addText(title, { x: 0.55, y: 0.14, w: 10.5, h: 0.5, fontSize: 21, bold: true, color: WHITE });
+                if (sub) s.addText(sub, { x: 0.57, y: 0.63, w: 10.5, h: 0.32, fontSize: 12, color: 'C7D2FE' });
+                s.addText(company, { x: 9.0, y: 0.3, w: 3.8, h: 0.5, fontSize: 12, bold: true, color: AMBER, align: 'right' });
+                s.addText('GOOD ENGINEERS · Operations Control', { x: 0.55, y: 7.12, w: 8, h: 0.3, fontSize: 8.5, color: SUB });
+                s.addText(opts.periodLabel, { x: 7.5, y: 7.12, w: 5.3, h: 0.3, fontSize: 8.5, color: SUB, align: 'right' });
+            }
+            function tile(s, x, y, w, h, label, value, sub, accent) {
+                s.addShape(pptx.ShapeType.roundRect, { x: x, y: y, w: w, h: h, rectRadius: 0.08, fill: { color: LIGHT }, line: { color: LINE, width: 1 } });
+                s.addShape(pptx.ShapeType.rect, { x: x, y: y, w: 0.08, h: h, fill: { color: accent || BLUE } });
+                s.addText(String(label).toUpperCase(), { x: x + 0.2, y: y + 0.13, w: w - 0.35, h: 0.3, fontSize: 10, bold: true, color: SUB, charSpacing: 1 });
+                s.addText(value, { x: x + 0.2, y: y + 0.42, w: w - 0.35, h: 0.55, fontSize: 23, bold: true, color: accent || INK });
+                if (sub) s.addText(sub, { x: x + 0.2, y: y + h - 0.38, w: w - 0.35, h: 0.3, fontSize: 9.5, color: SUB });
+            }
+            // ===== 1 — COUVERTURE =====
+            var s1 = pptx.addSlide(); s1.background = { color: NAVY };
+            s1.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 0.22, h: 7.5, fill: { color: AMBER } });
+            try {
+                var subLogo = (typeof getSubscriberLogoSrcForReport === 'function') ? getSubscriberLogoSrcForReport() : null;
+                if (subLogo) { s1.addShape(pptx.ShapeType.roundRect, { x: 0.7, y: 0.5, w: 3.3, h: 1.3, rectRadius: 0.06, fill: { color: WHITE } }); s1.addImage({ data: String(subLogo).slice(0, 5) === 'data:' ? subLogo : undefined, path: String(subLogo).slice(0, 5) === 'data:' ? undefined : subLogo, x: 0.85, y: 0.6, w: 3.0, h: 1.1, sizing: { type: 'contain', w: 3.0, h: 1.1 } }); }
+            } catch (e) {}
+            s1.addText(opts.titleText, { x: 0.7, y: 2.55, w: 12.0, h: 1.1, fontSize: 36, bold: true, color: WHITE });
+            s1.addShape(pptx.ShapeType.line, { x: 0.75, y: 3.75, w: 4.5, h: 0, line: { color: AMBER, width: 3 } });
+            s1.addText(opts.periodLabel, { x: 0.72, y: 3.95, w: 12, h: 0.5, fontSize: 18, color: AMBER });
+            s1.addText((projectLabel || '') , { x: 0.72, y: 4.5, w: 12, h: 0.4, fontSize: 14, color: 'C7D2FE' });
+            // bandeau KPI hero
+            var hero = [
+                ['PRODUCTION RÉALISÉE', dec(tot.prod) + ' m'],
+                ['OBJECTIF', goalPeriod != null ? dec(goalPeriod) + ' m' : 'N/R'],
+                ['TAUX D\'ATTEINTE', taux != null ? dec(taux) + ' %' : 'N/A']
+            ];
+            hero.forEach(function (c, i) {
+                var x = 0.7 + i * 4.05;
+                s1.addShape(pptx.ShapeType.roundRect, { x: x, y: 5.35, w: 3.8, h: 1.35, rectRadius: 0.08, fill: { color: '13315C' }, line: { color: '21406E', width: 1 } });
+                s1.addText(c[0], { x: x + 0.22, y: 5.52, w: 3.4, h: 0.3, fontSize: 10, bold: true, color: '93C5FD', charSpacing: 1 });
+                s1.addText(c[1], { x: x + 0.22, y: 5.85, w: 3.4, h: 0.7, fontSize: 26, bold: true, color: i === 2 && taux != null ? (taux >= 100 ? '86EFAC' : 'FBBF24') : WHITE });
+            });
+            s1.addText('Généré le ' + new Date().toLocaleString('fr-FR'), { x: 0.72, y: 7.0, w: 12, h: 0.35, fontSize: 10, color: '8AA0C8' });
+            // ===== 2 — SYNTHÈSE EXÉCUTIVE =====
+            var s2 = pptx.addSlide(); band(s2, 'Synthèse exécutive', 'Bilan ' + opts.periodWord + ' · ' + opts.periodLabel);
+            tile(s2, 0.55, 1.35, 2.95, 1.35, 'Production', dec(tot.prod) + ' m', data.nbDays + ' j produits', BLUE);
+            tile(s2, 3.62, 1.35, 2.95, 1.35, 'Objectif', goalPeriod != null ? dec(goalPeriod) + ' m' : 'Non renseigné', goalDay != null ? dec(goalDay) + ' m/jour' : '', AMBER);
+            tile(s2, 6.69, 1.35, 2.95, 1.35, 'Taux d\'atteinte', taux != null ? dec(taux) + ' %' : 'N/A', varP != null ? ((varP >= 0 ? '+' : '') + dec(varP) + ' m') : '', taux == null ? INK : (taux >= 100 ? GREEN : RED));
+            tile(s2, 9.76, 1.35, 3.02, 1.35, 'Rendement', data.rend != null ? dec(data.rend, 2) + ' m/h' : 'N/A', data.holeCount + ' trous', '7C3AED');
+            // mini-graphe production vs objectif
+            var miniImg = img({ type: 'bar', data: { labels: labels, datasets: [{ type: 'bar', label: 'Réalisé/jour', data: realArr, backgroundColor: BLUE === '1D4ED8' ? '#1D4ED8' : BLUE, borderRadius: 3, order: 2 }].concat(goalDay != null ? [{ type: 'line', label: 'Objectif/jour', data: planArr, borderColor: '#F59E0B', backgroundColor: '#F59E0B', borderWidth: 3, pointRadius: 0, order: 1 }] : []) }, options: { plugins: { legend: { display: true, labels: { color: '#334155', font: { size: 13 } } } }, scales: { y: { beginAtZero: true, ticks: { color: '#334155', font: { size: 11 } }, grid: { color: 'rgba(0,0,0,0.06)' } }, x: { ticks: { color: '#334155', font: { size: 10 } }, grid: { display: false } } } } }, 1500, 470);
+            if (miniImg) { s2.addText('Production journalière vs objectif', { x: 0.55, y: 2.95, w: 8, h: 0.3, fontSize: 12, bold: true, color: INK }); s2.addImage({ data: miniImg, x: 0.55, y: 3.3, w: 8.0, h: 3.5 }); }
+            // bullets synthèse auto
+            var bullets = [];
+            if (taux != null) bullets.push({ text: (taux >= 100 ? '✅ ' : '⚠️ ') + 'Objectif atteint à ' + dec(taux) + ' % (' + dec(tot.prod) + ' m / ' + dec(goalPeriod) + ' m).', options: { color: taux >= 100 ? GREEN : RED, bold: true } });
+            if (machKeys.length) bullets.push({ text: '🥇 Meilleure foreuse : ' + machKeys[0] + ' — ' + dec(byMachine[machKeys[0]].prod) + ' m.', options: { color: INK } });
+            if (machKeys.length > 1) bullets.push({ text: '🔻 Plus faible : ' + machKeys[machKeys.length - 1] + ' — ' + dec(byMachine[machKeys[machKeys.length - 1]].prod) + ' m.', options: { color: INK } });
+            if (data.mMech != null) bullets.push({ text: '🔧 Disponibilité mécanique : ' + dec(data.mMech) + ' %' + (mt && mt.availPct != null ? ' (cible ' + dec(mt.availPct) + ' %).' : '.'), options: { color: INK } });
+            var stopCats = [['Pannes (BDN)', tot.bdn], ['Standby', tot.stb], ['Services/délais', tot.gsa], ['Prod./autres', tot.prd + tot.other]].sort(function (a, b) { return b[1] - a[1]; });
+            if (totStops > 0) bullets.push({ text: '⏱️ Arrêts dominés par « ' + stopCats[0][0] + ' » : ' + dec(stopCats[0][1]) + ' h sur ' + dec(totStops) + ' h.', options: { color: INK } });
+            s2.addText('Points clés', { x: 8.9, y: 2.95, w: 4, h: 0.3, fontSize: 12, bold: true, color: INK });
+            s2.addText(bullets.map(function (b) { return { text: b.text, options: Object.assign({ bullet: { indent: 12 }, fontSize: 12.5, paraSpaceAfter: 10 }, b.options) }; }), { x: 8.9, y: 3.3, w: 3.9, h: 3.5, valign: 'top' });
+            // ===== 3 — PRODUCTION JOURNALIÈRE =====
+            var s3 = pptx.addSlide(); band(s3, 'Production journalière vs objectif', opts.periodLabel);
+            var bigImg = img({ type: 'bar', data: { labels: labels, datasets: [{ type: 'bar', label: 'Réalisé/jour', data: realArr, backgroundColor: '#1D4ED8', borderRadius: 4, order: 2 }].concat(goalDay != null ? [{ type: 'line', label: 'Objectif/jour', data: planArr, borderColor: '#F59E0B', backgroundColor: '#F59E0B', borderWidth: 3, pointRadius: 0, order: 1 }] : []) }, options: { plugins: { legend: { display: true, labels: { color: '#334155', font: { size: 15 } } } }, scales: { y: { beginAtZero: true, ticks: { color: '#334155', font: { size: 13 } }, grid: { color: 'rgba(0,0,0,0.06)' } }, x: { ticks: { color: '#334155', font: { size: 12 } }, grid: { display: false } } } } }, 1900, 760);
+            if (bigImg) s3.addImage({ data: bigImg, x: 0.6, y: 1.4, w: 12.1, h: 4.85 });
+            else s3.addText('Graphique indisponible.', { x: 0.6, y: 3, w: 12, h: 0.5, fontSize: 14, color: SUB });
+            s3.addText('Barres = mètres forés par jour · Ligne = objectif journalier (' + (goalDay != null ? dec(goalDay) + ' m' : 'non renseigné') + ')', { x: 0.6, y: 6.4, w: 12.1, h: 0.4, fontSize: 11, italic: true, color: SUB });
+            // ===== 4 — PERFORMANCE PAR MACHINE =====
+            var s4 = pptx.addSlide(); band(s4, 'Performance par machine', 'Classement par métrage · ' + opts.periodLabel);
+            var machImg = img({ type: 'bar', data: { labels: machKeys, datasets: [{ label: 'Mètres', data: machKeys.map(function (k) { return Math.round(byMachine[k].prod * 10) / 10; }), backgroundColor: '#1D4ED8', borderRadius: 4 }] }, options: { indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { color: '#334155', font: { size: 12 } }, grid: { color: 'rgba(0,0,0,0.06)' } }, y: { ticks: { color: '#334155', font: { size: 12 } }, grid: { display: false } } } } }, 900, 950);
+            if (machImg) s4.addImage({ data: machImg, x: 0.55, y: 1.35, w: 5.3, h: 5.6 });
+            var mrows = machKeys.map(function (k) { var bm = byMachine[k]; var rr = bm.used > 0 ? bm.prod / bm.used : null; var mm = bm.sMech > 0 ? bm.wMech / bm.sMech : null; return [k, dec(bm.prod), dec(bm.used), rr != null ? dec(rr, 2) : 'N/A', mm != null ? dec(mm) + '%' : 'N/A']; });
+            var trh = [['Machine', 'Nouv. (m)', 'H. util.', 'Rdt', 'Dispo'].map(function (h, ci) { return { text: h, options: { bold: true, color: WHITE, fill: { color: NAVY }, align: ci ? 'right' : 'left', fontSize: 11 } }; })];
+            mrows.forEach(function (r, ri) { trh.push(r.map(function (c, ci) { return { text: String(c), options: { align: ci ? 'right' : 'left', fontSize: 11, color: '222222', fill: { color: ri % 2 ? LIGHT : WHITE } } }; })); });
+            trh.push(['Ensemble', dec(tot.prod), dec(tot.used), data.rend != null ? dec(data.rend, 2) : 'N/A', data.mMech != null ? dec(data.mMech) + '%' : 'N/A'].map(function (c, ci) { return { text: String(c), options: { bold: true, align: ci ? 'right' : 'left', fontSize: 11, color: NAVY, fill: { color: 'FEF3C7' } } }; }));
+            s4.addTable(trh, { x: 6.1, y: 1.35, w: 6.7, colW: [1.9, 1.3, 1.1, 1.1, 1.3], border: { type: 'solid', color: LINE, pt: 0.5 }, valign: 'middle' });
+            // ===== 5 — DISPONIBILITÉ & ARRÊTS =====
+            var s5 = pptx.addSlide(); band(s5, 'Disponibilité & arrêts', opts.periodLabel);
+            var donutImg = img({ type: 'doughnut', data: { labels: ['Pannes (BDN)', 'Standby', 'Services (GSA)', 'Prod./autres'], datasets: [{ data: [tot.bdn, tot.stb, tot.gsa, tot.prd + tot.other].map(function (v) { return Math.round(v * 10) / 10; }), backgroundColor: ['#DC2626', '#F59E0B', '#3B82F6', '#10B981'], borderColor: '#FFFFFF', borderWidth: 2 }] }, options: { plugins: { legend: { position: 'bottom', labels: { color: '#334155', font: { size: 14 }, padding: 14 } } }, cutout: '58%' } }, 850, 850);
+            if (donutImg) s5.addImage({ data: donutImg, x: 0.7, y: 1.5, w: 5.2, h: 5.2 });
+            tile(s5, 6.3, 1.5, 3.0, 1.5, 'Dispo. mécanique', data.mMech != null ? dec(data.mMech) + ' %' : 'N/A', mt && mt.availPct != null ? 'cible ' + dec(mt.availPct) + ' %' : '', GREEN);
+            tile(s5, 9.5, 1.5, 3.25, 1.5, 'UoA', data.mUoa != null ? dec(data.mUoa) + ' %' : 'N/A', mt && mt.uoaPct != null ? 'cible ' + dec(mt.uoaPct) + ' %' : '', BLUE);
             var sp = function (v) { return totStops > 0 ? dec(v / totStops * 100) + ' %' : '—'; };
-            table(s4, ['Type d\'arrêt', 'Heures', '% du total'], [
-                ['Pannes mécaniques (BDN)', dec(tot.bdn), sp(tot.bdn)],
-                ['Standby (STB)', dec(tot.stb), sp(tot.stb)],
-                ['Services / délais (GSA)', dec(tot.gsa), sp(tot.gsa)],
-                ['Production / autres', dec(tot.prd + tot.other), sp(tot.prd + tot.other)]
-            ], ['Total arrêts', dec(totStops), totStops > 0 ? '100 %' : '—']);
+            var str = [['Type d\'arrêt', 'Heures', '%'].map(function (h, ci) { return { text: h, options: { bold: true, color: WHITE, fill: { color: NAVY }, align: ci ? 'right' : 'left', fontSize: 12 } }; })];
+            [['Pannes mécaniques (BDN)', tot.bdn], ['Standby (STB)', tot.stb], ['Services / délais (GSA)', tot.gsa], ['Production / autres', tot.prd + tot.other]].forEach(function (rw, ri) { str.push([{ text: rw[0], options: { fontSize: 12, color: '222222', fill: { color: ri % 2 ? LIGHT : WHITE } } }, { text: dec(rw[1]), options: { align: 'right', fontSize: 12, color: '222222', fill: { color: ri % 2 ? LIGHT : WHITE } } }, { text: sp(rw[1]), options: { align: 'right', fontSize: 12, color: '222222', fill: { color: ri % 2 ? LIGHT : WHITE } } }]); });
+            str.push([{ text: 'Total arrêts', options: { bold: true, color: NAVY, fill: { color: 'FEF3C7' }, fontSize: 12 } }, { text: dec(totStops), options: { bold: true, align: 'right', color: NAVY, fill: { color: 'FEF3C7' }, fontSize: 12 } }, { text: totStops > 0 ? '100 %' : '—', options: { bold: true, align: 'right', color: NAVY, fill: { color: 'FEF3C7' }, fontSize: 12 } }]);
+            s5.addTable(str, { x: 6.3, y: 3.35, w: 6.45, colW: [3.65, 1.4, 1.4], border: { type: 'solid', color: LINE, pt: 0.5 }, valign: 'middle' });
+            // ===== 6 — VISA =====
+            var s6 = pptx.addSlide(); band(s6, 'Visa & signatures', opts.periodLabel);
+            ['Établi par', 'Contrôlé par', 'Visé par'].forEach(function (lab, i) {
+                var x = 0.8 + i * 4.05, y = 2.2;
+                s6.addShape(pptx.ShapeType.roundRect, { x: x, y: y, w: 3.7, h: 2.4, rectRadius: 0.06, fill: { color: WHITE }, line: { color: LINE, width: 1 } });
+                s6.addShape(pptx.ShapeType.rect, { x: x, y: y, w: 3.7, h: 0.5, fill: { color: NAVY } });
+                s6.addText(lab, { x: x + 0.15, y: y + 0.08, w: 3.4, h: 0.35, fontSize: 13, bold: true, color: WHITE });
+                s6.addText('Nom / fonction :', { x: x + 0.15, y: y + 0.75, w: 3.4, h: 0.3, fontSize: 11, color: SUB });
+                s6.addText('Date :', { x: x + 0.15, y: y + 1.35, w: 3.4, h: 0.3, fontSize: 11, color: SUB });
+                s6.addText('Signature / cachet :', { x: x + 0.15, y: y + 1.9, w: 3.4, h: 0.3, fontSize: 11, color: SUB });
+            });
+            s6.addText('Document généré automatiquement par GOOD ENGINEERS — Operations Control. Données issues des saisies journalières validées ; aucune valeur n\'est estimée.', { x: 0.8, y: 5.2, w: 11.7, h: 0.8, fontSize: 11, italic: true, color: SUB });
             pptx.writeFile({ fileName: opts.fileName });
         }
         function geResolveMonthlyPptxOpts() {
