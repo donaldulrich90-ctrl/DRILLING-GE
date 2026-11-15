@@ -24132,10 +24132,27 @@
             }
         }
         function buildMonthlyReportDocumentHtml(monthKey) {
+            var all = (typeof getDailyDataForSite === 'function') ? getDailyDataForSite() : (typeof dailyDataRecords !== 'undefined' ? dailyDataRecords : []);
             var sid = (typeof currentSiteId !== 'undefined') ? currentSiteId : null;
+            // « Tous les sites » (sid null) : si toutes les saisies relèvent de sites partageant
+            // une même coupure minière (>1), on l'applique au lieu de retomber en mois calendaire.
+            // Évite qu'un rapport « Tous les sites » reparte au 1er alors qu'une seule coupure réelle existe.
+            if (sid == null && typeof _siteIdForDrill === 'function' && typeof miningCutoffDayForSite === 'function') {
+                try {
+                    var cutCount = {}, repBySid = {};
+                    (all || []).forEach(function (r) {
+                        if (!r || !r.date) return;
+                        var s = _siteIdForDrill(r.machineId);
+                        var c = miningCutoffDayForSite(s);
+                        cutCount[c] = (cutCount[c] || 0) + 1;
+                        if (repBySid[c] == null) repBySid[c] = s;
+                    });
+                    var cuts = Object.keys(cutCount);
+                    if (cuts.length === 1 && parseInt(cuts[0], 10) > 1) sid = repBySid[cuts[0]];
+                } catch (e) {}
+            }
             var range = (typeof miningMonthRange === 'function') ? miningMonthRange(monthKey, sid) : { start: monthKey + '-01', end: monthKey + '-28' };
             var monthLabel = (typeof miningMonthLabelFr === 'function') ? miningMonthLabelFr(monthKey, sid) : monthKey;
-            var all = (typeof getDailyDataForSite === 'function') ? getDailyDataForSite() : (typeof dailyDataRecords !== 'undefined' ? dailyDataRecords : []);
             var records = (all || []).filter(function (r) {
                 if (!r || !r.date || isDailyRecordIncompleteDraft(r)) return false;
                 var k = (typeof miningMonthKey === 'function') ? miningMonthKey(r.date, sid) : r.date.slice(0, 7);
