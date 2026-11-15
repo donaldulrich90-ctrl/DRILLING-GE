@@ -30406,6 +30406,15 @@
                 if (typeof companyInfo === 'undefined' || !companyInfo || !companyInfo.monthlyTargets) return null;
                 var mts = companyInfo.monthlyTargets;
                 var sid = (typeof currentSiteId !== 'undefined') ? currentSiteId : null;
+                // « Tous les sites » (sid null) : si un seul site réel a une coupure minière (>1),
+                // l'utiliser pour résoudre le mois minier du target (sinon on retombe en calendaire
+                // et le target 29→28 n'est pas trouvé, d'où « objectif non renseigné »).
+                if (sid == null && typeof sites !== 'undefined' && Array.isArray(sites) && typeof miningCutoffDayForSite === 'function') {
+                    try {
+                        var cutSites = sites.filter(function(s) { return miningCutoffDayForSite(s.id) > 1; });
+                        if (cutSites.length === 1) sid = cutSites[0].id;
+                    } catch (e) {}
+                }
                 var ym = (typeof miningMonthKey === 'function') ? miningMonthKey(dateStr, sid) : String(dateStr).slice(0, 7);
                 // 1) Correspondance exacte par clé de mois minier.
                 if (mts[ym]) return Object.assign({ ym: ym }, mts[ym]);
