@@ -1351,6 +1351,7 @@
                     <p class="ged-nav-section ged-nav-toggle" onclick="gedToggleNavSection(this)"><span class="nav-caret">▾</span>Opérations</p>
                     <button type="button" onclick="showMainView('dashboard')" class="ged-nav-item main-nav-btn active" id="nav-dashboard">▦ &nbsp;Centre de pilotage</button>
                     <button type="button" onclick="showMainView('forage_plan')" class="ged-nav-item main-nav-btn" id="nav-forage_plan">◎ &nbsp;Plan de forage</button>
+                    <button type="button" onclick="showMainView('import_plan')" class="ged-nav-item main-nav-btn" id="nav-import_plan">⬇ &nbsp;Import plan</button>
                     <button type="button" onclick="showMainView('connections')" class="ged-nav-item main-nav-btn" id="nav-connections">⌁ &nbsp;Connexions machines</button>
                     <button type="button" onclick="showMainView('assignments')" class="ged-nav-item main-nav-btn" id="nav-assignments">◉ &nbsp;Affectations terrain</button>
                     <button type="button" onclick="showMainView('maintenance')" class="ged-nav-item main-nav-btn" id="nav-maintenance">◆ &nbsp;Maintenance</button>
@@ -1854,6 +1855,10 @@
                 </div>
 
         <!-- ═══ VUE PLAN DE FORAGE ══════════════════════════════════════ -->
+        <div id="mainView-import_plan" class="main-view hidden">
+            <div id="importPlanRoot"></div>
+        </div>
+
         <div id="mainView-forage_plan" class="main-view hidden">
             <div class="mb-6 pb-4 border-b border-slate-700">
                 <h2 class="text-2xl font-extrabold tracking-tight" style="color:var(--ged-yellow)">🎯 Plan de Forage</h2>
@@ -3506,6 +3511,7 @@
                             <div class="space-y-2 pl-1">
                                 <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictDashboard" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Tableau de bord</span></label>
                                 <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictForagePlan" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Plan de forage</span></label>
+                                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictImportPlan" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Import plan</span></label>
                                 <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictConnections" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Connexions</span></label>
                                 <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictAssignments" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Assignations</span></label>
                                 <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictMaintenance" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Maintenance</span></label>
@@ -6177,6 +6183,7 @@
             var navMapping = {
                 'nav-dashboard': 'restrictDashboard',
                 'nav-forage_plan': 'restrictForagePlan',
+                'nav-import_plan': 'restrictImportPlan',
                 'nav-connections': 'restrictConnections',
                 'nav-assignments': 'restrictAssignments',
                 'nav-maintenance': 'restrictMaintenance',
@@ -6206,7 +6213,7 @@
                 'nav-company_info': 'restrictCompanyInfo',
                 'nav-accounts': 'restrictAccounts'
             };
-            var allNavButtons = ['nav-dashboard', 'nav-forage_plan', 'nav-connections', 'nav-assignments', 'nav-maintenance', 'nav-bit_sharpening', 'nav-consumables', 'nav-hse', 'nav-souterrain', 'nav-carriere', 'nav-analytics', 'nav-planification', 'nav-besoins', 'nav-rentabilite', 'nav-depenses_pm', 'nav-payments', 'nav-soustraitants', 'nav-invoices', 'nav-contracts', 'nav-enterprises', 'nav-sites', 'nav-revenue', 'nav-site_meals', 'nav-reports', 'nav-project_overview', 'nav-rh', 'nav-inventory', 'nav-accounts', 'nav-clients', 'nav-translator', 'nav-team_chat', 'nav-company_info'];
+            var allNavButtons = ['nav-dashboard', 'nav-forage_plan', 'nav-import_plan', 'nav-connections', 'nav-assignments', 'nav-maintenance', 'nav-bit_sharpening', 'nav-consumables', 'nav-hse', 'nav-souterrain', 'nav-carriere', 'nav-analytics', 'nav-planification', 'nav-besoins', 'nav-rentabilite', 'nav-depenses_pm', 'nav-payments', 'nav-soustraitants', 'nav-invoices', 'nav-contracts', 'nav-enterprises', 'nav-sites', 'nav-revenue', 'nav-site_meals', 'nav-reports', 'nav-project_overview', 'nav-rh', 'nav-inventory', 'nav-accounts', 'nav-clients', 'nav-translator', 'nav-team_chat', 'nav-company_info'];
 
             if (isPlatformBillingOnlyUser(currentUser)) {
                 allNavButtons.forEach(function(btnId) {
@@ -6444,7 +6451,7 @@
                 view !== 'enterprises' && subNav.indexOf(view) < 0) {
                 view = 'dashboard';
             }
-            var views = ['consumables', 'dashboard', 'connections', 'assignments', 'maintenance', 'bit_sharpening', 'invoices', 'payments', 'contracts', 'sites', 'enterprises', 'revenue', 'site_meals', 'reports', 'project_overview', 'planification', 'besoins', 'rh', 'inventory', 'accounts', 'clients', 'translator', 'team_chat', 'company_info', 'forage_plan', 'rentabilite', 'depenses_pm', 'analytics', 'hse', 'souterrain', 'soustraitants', 'weekly_report'];
+            var views = ['consumables', 'dashboard', 'connections', 'assignments', 'maintenance', 'bit_sharpening', 'invoices', 'payments', 'contracts', 'sites', 'enterprises', 'revenue', 'site_meals', 'reports', 'project_overview', 'planification', 'besoins', 'rh', 'inventory', 'accounts', 'clients', 'translator', 'team_chat', 'company_info', 'forage_plan', 'import_plan', 'rentabilite', 'depenses_pm', 'analytics', 'hse', 'souterrain', 'soustraitants', 'weekly_report'];
             views.forEach(function(v) {
                 var el = document.getElementById('mainView-' + v);
                 if (el) el.classList.add('hidden');
@@ -10299,6 +10306,9 @@
                 renderClients();
             } else if (view === 'forage_plan') {
                 renderForagePlan();
+            } else if (view === 'import_plan') {
+                renderImportPlan();
+                try { importPlanSyncFromServer(); } catch (e) {}
             } else if (view === 'planification') {
                 renderPlanification();
             } else if (view === 'besoins') {
@@ -27499,7 +27509,7 @@
         // comportement (défauts du rôle) pour ne pas bloquer les comptes existants.
         var ACCOUNT_VIEW_CHECKBOXES = [
             ['restrictDashboard', 'dashboard'], ['restrictProjectOverview', 'project_overview'],
-            ['restrictForagePlan', 'forage_plan'],
+            ['restrictForagePlan', 'forage_plan'], ['restrictImportPlan', 'import_plan'],
             ['restrictConnections', 'connections'], ['restrictAssignments', 'assignments'],
             ['restrictMaintenance', 'maintenance'],
             ['restrictBitSharpening', 'bit_sharpening'], ['restrictConsumables', 'consumables'],
@@ -27541,7 +27551,7 @@
             // Onglets historiquement visibles de tous : pré-cochés pour tout rôle lors de
             // l'édition d'un compte existant (préserve son accès actuel ; l'admin ajuste ensuite).
             var ALL_ROLES_HIST = ['foreur', 'aideforeur', 'superviseur', 'ingenieur', 'gestionnaire', 'gestionnaire_site', 'santesecurite', 'administratif', 'visiteur'];
-            ['forage_plan', 'bit_sharpening', 'consumables', 'hse', 'souterrain', 'analytics', 'planification', 'besoins', 'rentabilite', 'depenses_pm', 'payments', 'soustraitants'].forEach(function(v) { P[v] = ALL_ROLES_HIST; });
+            ['forage_plan', 'import_plan', 'bit_sharpening', 'consumables', 'hse', 'souterrain', 'analytics', 'planification', 'besoins', 'rentabilite', 'depenses_pm', 'payments', 'soustraitants'].forEach(function(v) { P[v] = ALL_ROLES_HIST; });
             var out = [];
             Object.keys(P).forEach(function(v) { if (P[v].indexOf(role) >= 0) out.push(v); });
             return out;
@@ -31272,6 +31282,266 @@
         window.setFosseObjective = setFosseObjective;
         window.getFosseObjective = getFosseObjective;
         window._fosseRealizedMeters = _fosseRealizedMeters;
+
+        // ================= Import plan de forage (.str / .csv — interop Surpac/Deswik/Datamine) =================
+        // Stockage module_state 'importPlan' : { patterns: { <KEY>: { name, siteId, files:{<filename>:{holes,meters,holeCount,importedAt,type}}, objective, holeCount, updatedAt } } }
+        function _ipKey() { return 'ged_import_plan_' + (window.API && window.API.getEnterpriseId ? (window.API.getEnterpriseId() || '0') : '0'); }
+        function getImportPlanData() {
+            var def = { patterns: {} };
+            try {
+                var raw = localStorage.getItem(_ipKey()); if (!raw) return def;
+                var d = JSON.parse(raw);
+                if (!d || typeof d !== 'object') return def;
+                if (!d.patterns || typeof d.patterns !== 'object') d.patterns = {};
+                return d;
+            } catch (e) { return def; }
+        }
+        function saveImportPlanData(d) {
+            try { localStorage.setItem(_ipKey(), JSON.stringify(d)); } catch (e) {}
+            try { if (window.API && window.API.ModuleState) window.API.ModuleState.set('importPlan', d).catch(function () {}); } catch (e) {}
+        }
+        function importPlanSyncFromServer() {
+            if (!(window.API && window.API.ModuleState && window.API.getAuthToken && window.API.getAuthToken())) return;
+            window.API.ModuleState.get('importPlan').then(function (res) {
+                if (res && res.data && res.data.patterns) {
+                    try { localStorage.setItem(_ipKey(), JSON.stringify(res.data)); } catch (e) {}
+                    if (typeof currentMainView !== 'undefined' && currentMainView === 'import_plan') renderImportPlan();
+                }
+            }).catch(function () {});
+        }
+        window.importPlanSyncFromServer = importPlanSyncFromServer;
+
+        function ipNormalizePatternName(raw) {
+            var s = String(raw == null ? '' : raw).trim();
+            s = s.replace(/\.(str|csv)$/i, '');
+            s = s.replace(/_survey.*$/i, '');
+            s = s.replace(/[-_ ]*(ext|extension|buffer|prod|production|design)?[-_ ]*holes?$/i, '');
+            s = s.replace(/[-_ ]+$/, '');
+            return s.toUpperCase();
+        }
+        function ipFmt(v) { return (Math.round((parseFloat(v) || 0) * 10) / 10).toLocaleString('fr-FR'); }
+
+        // Parse .str (chaîne Surpac/Deswik) : trous = collet (ligne avec id) + fond (ligne suivante sans id)
+        function ipParseStr(text, filename) {
+            var lines = String(text || '').split(/\r?\n/);
+            var header = (lines[0] || '').split(',');
+            var patRaw = (header[0] || filename || '').trim();
+            var holes = [], cur = null;
+            for (var i = 1; i < lines.length; i++) {
+                var parts = lines[i].split(',').map(function (p) { return p.trim(); });
+                if (!parts.length || parts[0] === '') continue;
+                if (parts[0] !== '1') continue;
+                var x = parseFloat(parts[1]), y = parseFloat(parts[2]), z = parseFloat(parts[3]);
+                if (!isFinite(x) || !isFinite(y) || !isFinite(z)) continue;
+                var id = (parts.length > 6 && /^[A-Za-z]/.test(parts[6] || '')) ? parts[6] : null;
+                var designed = (parts.length > 7) ? parseFloat(parts[7]) : NaN;
+                if (id) { cur = { id: id, x: x, y: y, collar: z, toe: null, designed: isFinite(designed) ? designed : null }; holes.push(cur); }
+                else if (cur && cur.toe == null) { cur.toe = z; }
+            }
+            var meters = 0;
+            holes.forEach(function (h) {
+                var d = (h.collar != null && h.toe != null) ? Math.abs(h.collar - h.toe) : (h.designed || 0);
+                h.depth = Math.round(d * 1000) / 1000; meters += h.depth;
+            });
+            return { pattern: ipNormalizePatternName(patRaw), rawName: patRaw, holes: holes, meters: Math.round(meters * 10) / 10, holeCount: holes.length, type: 'str' };
+        }
+        // Parse CSV Survey Stake-Out "id,x,y,z" (z = fond). Profondeur via defaultDepth (m/trou) si fournie.
+        function ipParseCsv(text, filename, defaultDepth) {
+            var lines = String(text || '').split(/\r?\n/).filter(function (l) { return l.trim(); });
+            var holes = [];
+            lines.forEach(function (l) {
+                var p = l.split(',').map(function (s) { return s.trim(); });
+                if (p.length < 3) return;
+                if (!/^[A-Za-z0-9]/.test(p[0] || '')) return;
+                var x = parseFloat(p[1]), y = parseFloat(p[2]), z = parseFloat(p[3]);
+                if (!isFinite(x) || !isFinite(y)) return;
+                var dep = (defaultDepth && defaultDepth > 0) ? defaultDepth : 0;
+                holes.push({ id: p[0], x: x, y: y, collar: null, toe: isFinite(z) ? z : null, depth: dep });
+            });
+            var meters = holes.reduce(function (s, h) { return s + (h.depth || 0); }, 0);
+            return { pattern: ipNormalizePatternName(filename), rawName: filename, holes: holes, meters: Math.round(meters * 10) / 10, holeCount: holes.length, type: 'csv' };
+        }
+
+        window._ipPending = window._ipPending || [];
+        function ipHandleFiles(input) {
+            var files = input && input.files ? Array.prototype.slice.call(input.files) : [];
+            if (!files.length) return;
+            var remaining = files.length;
+            files.forEach(function (file) {
+                var reader = new FileReader();
+                reader.onload = function (ev) {
+                    try {
+                        var text = ev.target.result;
+                        var isCsv = /\.csv$/i.test(file.name);
+                        var parsed = isCsv ? ipParseCsv(text, file.name, 0) : ipParseStr(text, file.name);
+                        parsed.filename = file.name;
+                        parsed.siteId = (typeof currentSiteId !== 'undefined' && currentSiteId != null) ? currentSiteId : null;
+                        parsed._uid = 'ip' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+                        window._ipPending.push(parsed);
+                    } catch (e) {}
+                    remaining--;
+                    if (remaining <= 0) renderImportPlan();
+                };
+                reader.onerror = function () { remaining--; if (remaining <= 0) renderImportPlan(); };
+                reader.readAsText(file);
+            });
+            try { input.value = ''; } catch (e) {}
+        }
+        window.ipHandleFiles = ipHandleFiles;
+        window.ipUpdatePending = function (uid, field, value) {
+            var p = window._ipPending.find(function (x) { return x._uid === uid; });
+            if (!p) return;
+            if (field === 'pattern') p.pattern = String(value || '').trim().toUpperCase();
+            else if (field === 'siteId') p.siteId = (value !== '' ? value : null);
+            else if (field === 'depth') {
+                var d = parseFloat(value) || 0;
+                p.holes.forEach(function (h) { if (h.type !== 'str') h.depth = d; else if (h.collar == null) h.depth = d; });
+                if (p.type === 'csv') { p.holes.forEach(function (h) { h.depth = d; }); p.meters = Math.round(d * p.holeCount * 10) / 10; }
+            }
+            renderImportPlan();
+        };
+        window.ipCancelPending = function (uid) {
+            if (uid) window._ipPending = window._ipPending.filter(function (x) { return x._uid !== uid; });
+            else window._ipPending = [];
+            renderImportPlan();
+        };
+        function ipRecomputePattern(pat) {
+            var meters = 0, holes = 0;
+            Object.keys(pat.files || {}).forEach(function (fn) { meters += (parseFloat(pat.files[fn].meters) || 0); holes += (parseInt(pat.files[fn].holeCount, 10) || 0); });
+            pat.objective = Math.round(meters * 10) / 10; pat.holeCount = holes;
+        }
+        function ipSyncFosseObjective(patternKey, siteId, objective) {
+            var raw = getFossesRaw();
+            var f = raw.find(function (x) { return x.name.toUpperCase() === String(patternKey).toUpperCase() && (siteId == null || x.siteId == null || String(x.siteId) === String(siteId)); });
+            if (f) { f.objective = objective; if (f.siteId == null && siteId != null) f.siteId = siteId; }
+            else { raw.push({ name: patternKey, siteId: (siteId != null && siteId !== '') ? siteId : null, objective: objective }); }
+            companyInfo.fosses = raw;
+            try { saveData(); } catch (e) {}
+            try { renderFossesDatalist(currentSiteId); } catch (e) {}
+        }
+        window.ipConfirmImport = function () {
+            if (!window._ipPending.length) return;
+            var data = getImportPlanData();
+            window._ipPending.forEach(function (p) {
+                var key = String(p.pattern || '').trim().toUpperCase();
+                if (!key) return;
+                if (!data.patterns[key]) data.patterns[key] = { name: key, siteId: p.siteId, files: {}, objective: 0, holeCount: 0 };
+                data.patterns[key].siteId = (p.siteId != null && p.siteId !== '') ? p.siteId : data.patterns[key].siteId;
+                data.patterns[key].files[p.filename] = { holes: p.holes, meters: p.meters, holeCount: p.holeCount, importedAt: new Date().toISOString(), type: p.type };
+                ipRecomputePattern(data.patterns[key]);
+                data.patterns[key].updatedAt = new Date().toISOString();
+            });
+            saveImportPlanData(data);
+            // Synchronise l'objectif (cumulé) vers la fosse/pattern
+            var touched = {};
+            window._ipPending.forEach(function (p) { touched[String(p.pattern || '').trim().toUpperCase()] = 1; });
+            Object.keys(touched).forEach(function (key) { if (key && data.patterns[key]) ipSyncFosseObjective(key, data.patterns[key].siteId, data.patterns[key].objective); });
+            var n = window._ipPending.length;
+            window._ipPending = [];
+            renderImportPlan();
+            try { alert(n + ' fichier(s) importé(s). Objectifs des patterns mis à jour (cumulés).'); } catch (e) {}
+        };
+        window.ipDeletePattern = function (key) {
+            if (!confirm('Supprimer le pattern importé « ' + key +' » et ses trous ? (L\'objectif de la fosse n\'est pas effacé.)')) return;
+            var data = getImportPlanData();
+            delete data.patterns[key];
+            saveImportPlanData(data);
+            renderImportPlan();
+        };
+        window.ipDeleteFile = function (key, filename) {
+            var data = getImportPlanData();
+            var pat = data.patterns[key]; if (!pat || !pat.files[filename]) return;
+            if (!confirm('Retirer le fichier « ' + filename + ' » du pattern ' + key + ' ?')) return;
+            delete pat.files[filename];
+            if (!Object.keys(pat.files).length) { delete data.patterns[key]; }
+            else { ipRecomputePattern(pat); ipSyncFosseObjective(key, pat.siteId, pat.objective); }
+            saveImportPlanData(data);
+            renderImportPlan();
+        };
+        function ipSiteOptions(sel) {
+            var opts = '<option value="">Tous les sites</option>';
+            (typeof sites !== 'undefined' ? sites : []).forEach(function (s) {
+                opts += '<option value="' + escapeHtmlForAttr(String(s.id)) + '"' + (String(sel) === String(s.id) ? ' selected' : '') + '>' + escapeHtml(s.name || s.code || ('Site ' + s.id)) + '</option>';
+            });
+            return opts;
+        }
+        function renderImportPlan() {
+            var root = document.getElementById('importPlanRoot'); if (!root) return;
+            var html = '';
+            html += '<div class="mb-4"><h2 class="text-2xl font-bold">⬇ Import plan de forage</h2>'
+                + '<p class="text-slate-400 text-sm mt-1">Importez les fichiers de trous envoyés par la mine (<b>.str</b> Surpac/Deswik, ou <b>.csv</b> d\'implantation). Chaque fichier crée ou complète le pattern correspondant et met à jour son <b>objectif (m)</b> = somme des profondeurs des trous (cumulé entre fichiers).</p></div>';
+            // Zone d'import
+            html += '<div class="bg-slate-800 border border-slate-700 rounded-xl p-4 mb-5">'
+                + '<label class="inline-block bg-yellow-600 hover:bg-yellow-500 text-black px-4 py-2 rounded-lg font-semibold cursor-pointer">📂 Choisir des fichiers .str / .csv'
+                + '<input type="file" accept=".str,.csv" multiple onchange="ipHandleFiles(this)" class="hidden"></label>'
+                + '<span class="text-slate-500 text-sm ml-3">Plusieurs fichiers possibles (buffer + production du même pattern se cumulent).</span></div>';
+            // Prévisualisation des fichiers en attente
+            if (window._ipPending && window._ipPending.length) {
+                html += '<div class="bg-slate-900 border border-amber-600 rounded-xl p-4 mb-5"><h3 class="font-bold text-amber-300 mb-3">À importer (' + window._ipPending.length + ')</h3>';
+                window._ipPending.forEach(function (p) {
+                    var depthHint = (p.type === 'csv') ? '<div class="mt-2 text-xs text-amber-300">CSV sans profondeur : saisissez la profondeur par trou (m) → <input type="number" min="0" step="0.1" value="' + (p.holes[0] && p.holes[0].depth ? p.holes[0].depth : '') + '" onchange="ipUpdatePending(\'' + p._uid + '\',\'depth\',this.value)" class="bg-slate-700 border border-slate-600 rounded px-2 py-1 w-20 text-white"></div>' : '';
+                    html += '<div class="border-b border-slate-700 py-3">'
+                        + '<div class="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2 items-center">'
+                        + '<div><label class="block text-slate-400 text-xs mb-0.5">Pattern détecté (modifiable)</label>'
+                        + '<input type="text" value="' + escapeHtmlForAttr(p.pattern) + '" onchange="ipUpdatePending(\'' + p._uid + '\',\'pattern\',this.value)" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white"></div>'
+                        + '<div><label class="block text-slate-400 text-xs mb-0.5">Site</label>'
+                        + '<select onchange="ipUpdatePending(\'' + p._uid + '\',\'siteId\',this.value)" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white">' + ipSiteOptions(p.siteId) + '</select></div>'
+                        + '<button type="button" onclick="ipCancelPending(\'' + p._uid + '\')" class="text-red-400 hover:text-red-300 text-sm">Retirer</button></div>'
+                        + '<div class="text-sm text-slate-300 mt-2">📄 ' + escapeHtml(p.filename) + ' — <b>' + p.holeCount + '</b> trous · objectif <b>' + ipFmt(p.meters) + ' m</b>' + (p.holeCount ? ' · ' + ipFmt(p.meters / p.holeCount) + ' m/trou' : '') + '</div>'
+                        + depthHint + '</div>';
+                });
+                html += '<div class="flex gap-2 mt-3"><button type="button" onclick="ipConfirmImport()" class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg font-semibold">✓ Importer tout</button>'
+                    + '<button type="button" onclick="ipCancelPending()" class="bg-slate-600 hover:bg-slate-500 px-4 py-2 rounded-lg">Annuler</button></div></div>';
+            }
+            // Patterns importés
+            var data = getImportPlanData();
+            var keys = Object.keys(data.patterns || {}).sort();
+            html += '<h3 class="font-bold text-lg mb-2">Patterns importés (' + keys.length + ')</h3>';
+            if (!keys.length) { html += '<p class="text-slate-500 text-sm">Aucun pattern importé pour le moment.</p>'; }
+            else {
+                html += '<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-slate-400 border-b border-slate-700">'
+                    + '<th class="text-left py-2">Pattern</th><th class="text-left">Site</th><th class="text-right">Fichiers</th><th class="text-right">Trous</th><th class="text-right">Objectif</th><th class="text-right">Réalisé</th><th class="text-left px-3">Avancement</th><th></th></tr></thead><tbody>';
+                keys.forEach(function (key) {
+                    var pat = data.patterns[key];
+                    var done = (typeof _fosseRealizedMeters === 'function') ? _fosseRealizedMeters(key) : 0;
+                    var pct = (pat.objective > 0) ? Math.round(done / pat.objective * 100) : null;
+                    var barCls = pct == null ? 'bg-slate-600' : (pct >= 100 ? 'bg-green-500' : (pct >= 60 ? 'bg-amber-400' : 'bg-red-400'));
+                    var w = pct == null ? 0 : Math.max(0, Math.min(100, pct));
+                    var nf = Object.keys(pat.files || {}).length;
+                    html += '<tr class="border-b border-slate-800">'
+                        + '<td class="py-2 font-semibold">' + escapeHtml(key) + '</td>'
+                        + '<td class="text-slate-400">' + escapeHtml(fossesSiteName(pat.siteId)) + '</td>'
+                        + '<td class="text-right">' + nf + '</td>'
+                        + '<td class="text-right">' + (pat.holeCount || 0) + '</td>'
+                        + '<td class="text-right font-semibold">' + ipFmt(pat.objective) + ' m</td>'
+                        + '<td class="text-right">' + ipFmt(done) + ' m</td>'
+                        + '<td class="px-3"><div class="flex items-center gap-2"><div class="flex-1 h-2 bg-slate-700 rounded min-w-[90px]"><div class="h-2 rounded ' + barCls + '" style="width:' + w + '%"></div></div><span class="text-xs ' + (pct == null ? 'text-slate-500' : (pct >= 100 ? 'text-green-400' : 'text-amber-300')) + '">' + (pct == null ? '—' : pct + ' %') + '</span></div></td>'
+                        + '<td class="text-right whitespace-nowrap"><button type="button" onclick="ipShowPatternDetail(\'' + escapeHtmlForAttr(key) + '\')" class="text-blue-400 hover:text-blue-300 mr-2" title="Détail fichiers/trous">👁</button>'
+                        + '<button type="button" onclick="ipDeletePattern(\'' + escapeHtmlForAttr(key) + '\')" class="text-red-400 hover:text-red-300" title="Supprimer">🗑</button></td></tr>';
+                });
+                html += '</tbody></table></div>';
+            }
+            root.innerHTML = html;
+        }
+        window.renderImportPlan = renderImportPlan;
+        window.ipShowPatternDetail = function (key) {
+            var data = getImportPlanData(); var pat = data.patterns[key]; if (!pat) return;
+            var ex = document.getElementById('ipDetailModal'); if (ex) ex.remove();
+            var modal = document.createElement('div');
+            modal.id = 'ipDetailModal';
+            modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[120] p-4';
+            var body = '<div class="flex justify-between items-center mb-3"><h2 class="text-xl font-bold">Pattern ' + escapeHtml(key) + '</h2>'
+                + '<button type="button" onclick="document.getElementById(\'ipDetailModal\').remove()" class="text-slate-400 hover:text-white text-2xl">&times;</button></div>';
+            body += '<p class="text-slate-400 text-sm mb-3">Objectif cumulé <b>' + ipFmt(pat.objective) + ' m</b> · ' + (pat.holeCount || 0) + ' trous · ' + Object.keys(pat.files || {}).length + ' fichier(s).</p>';
+            Object.keys(pat.files || {}).forEach(function (fn) {
+                var f = pat.files[fn];
+                body += '<div class="border border-slate-700 rounded-lg p-3 mb-2"><div class="flex justify-between items-center"><span class="font-semibold text-sm">📄 ' + escapeHtml(fn) + '</span>'
+                    + '<button type="button" onclick="ipDeleteFile(\'' + escapeHtmlForAttr(key) + '\',\'' + escapeHtmlForAttr(fn) + '\')" class="text-red-400 hover:text-red-300 text-xs">Retirer</button></div>'
+                    + '<div class="text-xs text-slate-400 mt-1">' + f.holeCount + ' trous · ' + ipFmt(f.meters) + ' m' + (f.holeCount ? ' · ' + ipFmt(f.meters / f.holeCount) + ' m/trou' : '') + ' · type ' + (f.type || 'str') + '</div></div>';
+            });
+            modal.innerHTML = '<div class="ged-modal-panel p-6 rounded-xl w-full max-w-lg max-h-[85vh] overflow-y-auto">' + body + '</div>';
+            document.body.appendChild(modal);
+        };
 
         function showDailyEntryModal(machineId) {
             if (!canEnterDailyData()) {
