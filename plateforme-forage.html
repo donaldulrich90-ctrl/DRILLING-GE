@@ -22409,13 +22409,17 @@
             if (!date) { alert('Veuillez sélectionner une date.'); return; }
             var records = getDailyDataForSite().filter(function (r) { return r.date === date && !isDailyRecordIncompleteDraft(r); });
             if (!records.length) { alert('Aucune saisie terminée pour cette date.'); return; }
+            // Même gabarit de présentation que l'hebdo/mensuel, sur une période d'un seul jour.
+            var fmtFr = function (s) { var p = String(s).split('-'); return p[2] + '/' + p[1] + '/' + p[0]; };
+            var mt = (typeof getMonthlyTargetForDate === 'function') ? getMonthlyTargetForDate(date) : null;
+            var goalDay = (mt && mt.metersDay != null && isFinite(parseFloat(mt.metersDay))) ? parseFloat(mt.metersDay)
+                : ((typeof companyInfo !== 'undefined' && companyInfo && parseFloat(companyInfo.dailyMetersObjective) > 0) ? parseFloat(companyInfo.dailyMetersObjective) : null);
+            var opts = { startISO: date, endISO: date, titleText: 'RAPPORT JOURNALIER DE PRODUCTION', periodLabel: fmtFr(date), periodWord: 'du jour', goalPeriod: goalDay, goalDay: goalDay, mt: mt, fileName: 'rapport-journalier-' + date + '.pptx' };
             ensureReportPlanLoaded(function () {
-                loadReportPatterns(date, function () {
-                    loadVendorScript('vendor/pptxgen.bundle.js', 'https://cdnjs.cloudflare.com/ajax/libs/pptxgenjs/3.12.0/pptxgen.bundle.js').then(function () {
-                        try { buildDailyReportPptx(date, records); }
-                        catch (e) { alert('Export PowerPoint impossible : ' + (e && e.message ? e.message : e)); }
-                    }).catch(function () { alert('Impossible de charger la librairie PowerPoint (connexion internet requise).'); });
-                });
+                loadVendorScript('vendor/pptxgen.bundle.js', 'https://cdnjs.cloudflare.com/ajax/libs/pptxgenjs/3.12.0/pptxgen.bundle.js').then(function () {
+                    try { geBuildPeriodReportPptx(opts); }
+                    catch (e) { alert('Export PowerPoint impossible : ' + (e && e.message ? e.message : e)); }
+                }).catch(function () { alert('Impossible de charger la librairie PowerPoint (connexion internet requise).'); });
             }, function () { /* annulé */ });
         }
 
