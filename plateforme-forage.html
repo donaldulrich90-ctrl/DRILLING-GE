@@ -31420,7 +31420,8 @@
                 if (!isFinite(x) || !isFinite(y) || !isFinite(z)) continue;
                 var id = (parts.length > 6 && /^[A-Za-z]/.test(parts[6] || '')) ? parts[6] : null;
                 var designed = (parts.length > 7) ? parseFloat(parts[7]) : NaN;
-                if (id) { cur = { id: id, x: x, y: y, collar: z, toe: null, designed: isFinite(designed) ? designed : null }; holes.push(cur); }
+                var cat = (parts.length > 5) ? String(parts[5] || '').toLowerCase() : '';
+                if (id) { cur = { id: id, x: x, y: y, collar: z, toe: null, designed: isFinite(designed) ? designed : null, cat: cat }; holes.push(cur); }
                 else if (cur && cur.toe == null) { cur.toe = z; }
             }
             var meters = 0;
@@ -31605,7 +31606,8 @@
                         + '<td class="text-right font-semibold">' + ipFmt(pat.objective) + ' m</td>'
                         + '<td class="text-right">' + ipFmt(done) + ' m</td>'
                         + '<td class="px-3"><div class="flex items-center gap-2"><div class="flex-1 h-2 bg-slate-700 rounded min-w-[90px]"><div class="h-2 rounded ' + barCls + '" style="width:' + w + '%"></div></div><span class="text-xs ' + (pct == null ? 'text-slate-500' : (pct >= 100 ? 'text-green-400' : 'text-amber-300')) + '">' + (pct == null ? '—' : pct + ' %') + '</span></div></td>'
-                        + '<td class="text-right whitespace-nowrap"><button type="button" onclick="ipShowPatternDetail(\'' + escapeHtmlForAttr(key) + '\')" class="text-blue-400 hover:text-blue-300 mr-2" title="Détail fichiers/trous">👁</button>'
+                        + '<td class="text-right whitespace-nowrap"><button type="button" onclick="ipShowPatternPlan(\'' + escapeHtmlForAttr(key) + '\')" class="text-amber-400 hover:text-amber-300 mr-2" title="Plan des trous">🗺</button>'
+                        + '<button type="button" onclick="ipShowPatternDetail(\'' + escapeHtmlForAttr(key) + '\')" class="text-blue-400 hover:text-blue-300 mr-2" title="Détail fichiers/trous">👁</button>'
                         + '<button type="button" onclick="ipDeletePattern(\'' + escapeHtmlForAttr(key) + '\')" class="text-red-400 hover:text-red-300" title="Supprimer">🗑</button></td></tr>';
                 });
                 html += '</tbody></table></div>';
@@ -31630,6 +31632,66 @@
             });
             modal.innerHTML = '<div class="ged-modal-panel p-6 rounded-xl w-full max-w-lg max-h-[85vh] overflow-y-auto">' + body + '</div>';
             document.body.appendChild(modal);
+        };
+        // Plan des trous d'un pattern importé : trace les trous (X/Y) colorés par catégorie, taille ∝ profondeur.
+        function ipCatColor(cat) {
+            cat = String(cat || '').toLowerCase();
+            if (cat.indexOf('presplit') >= 0 || cat.indexOf('présplit') >= 0) return '#DC2626';
+            if (cat.indexOf('buffer') >= 0) return '#F59E0B';
+            if (cat.indexOf('prod') >= 0) return '#1D4ED8';
+            return '#64748B';
+        }
+        window.ipShowPatternPlan = function (key) {
+            var data = getImportPlanData(); var pat = data.patterns[key]; if (!pat) return;
+            var holes = [];
+            Object.keys(pat.files || {}).forEach(function (fn) { (pat.files[fn].holes || []).forEach(function (h) { if (isFinite(h.x) && isFinite(h.y)) holes.push(h); }); });
+            var ex = document.getElementById('ipPlanModal'); if (ex) ex.remove();
+            var modal = document.createElement('div');
+            modal.id = 'ipPlanModal';
+            modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[120] p-4';
+            if (!holes.length) {
+                modal.innerHTML = '<div class="ged-modal-panel p-6 rounded-xl w-full max-w-md"><div class="flex justify-between items-center mb-3"><h2 class="text-xl font-bold">Plan ' + escapeHtml(key) + '</h2><button type="button" onclick="document.getElementById(\'ipPlanModal\').remove()" class="text-slate-400 hover:text-white text-2xl">&times;</button></div><p class="text-slate-400 text-sm">Pas de coordonnées de trous pour ce pattern (fichier contour ou CSV sans X/Y exploitables).</p></div>';
+                document.body.appendChild(modal); return;
+            }
+            // catégories présentes
+            var catCount = {};
+            holes.forEach(function (h) { var c = String(h.cat || 'autre').toLowerCase(); catCount[c] = (catCount[c] || 0) + 1; });
+            var legend = Object.keys(catCount).sort().map(function (c) {
+                return '<span class="inline-flex items-center gap-1 mr-3 text-xs"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:' + ipCatColor(c) + '"></span>' + escapeHtml(c) + ' (' + catCount[c] + ')</span>';
+            }).join('');
+            modal.innerHTML = '<div class="ged-modal-panel p-5 rounded-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">'
+                + '<div class="flex justify-between items-center mb-2"><h2 class="text-xl font-bold">🗺 Plan ' + escapeHtml(key) + '</h2>'
+                + '<button type="button" onclick="document.getElementById(\'ipPlanModal\').remove()" class="text-slate-400 hover:text-white text-2xl">&times;</button></div>'
+                + '<p class="text-slate-400 text-xs mb-2">' + holes.length + ' trous · objectif ' + ipFmt(pat.objective) + ' m · taille du point ∝ profondeur. Vue schématique (X/Y terrain, Nord approximatif).</p>'
+                + '<div class="mb-2">' + legend + '</div>'
+                + '<div class="bg-white rounded-lg p-2"><canvas id="ipPlanCanvas" width="900" height="560" style="width:100%;height:auto;display:block;"></canvas></div></div>';
+            document.body.appendChild(modal);
+            // tracé
+            var cv = document.getElementById('ipPlanCanvas'); if (!cv) return;
+            var ctx = cv.getContext('2d'); var W = cv.width, H = cv.height, pad = 26;
+            var xs = holes.map(function (h) { return h.x; }), ys = holes.map(function (h) { return h.y; });
+            var minX = Math.min.apply(null, xs), maxX = Math.max.apply(null, xs), minY = Math.min.apply(null, ys), maxY = Math.max.apply(null, ys);
+            var spanX = (maxX - minX) || 1, spanY = (maxY - minY) || 1;
+            var sc = Math.min((W - 2 * pad) / spanX, (H - 2 * pad) / spanY);
+            var offX = (W - spanX * sc) / 2, offY = (H - spanY * sc) / 2;
+            var deps = holes.map(function (h) { return h.depth || 0; });
+            var maxD = Math.max.apply(null, deps) || 1;
+            function px(h) { return offX + (h.x - minX) * sc; }
+            function py(h) { return H - (offY + (h.y - minY) * sc); } // flip Y (Nord vers le haut)
+            ctx.clearRect(0, 0, W, H); ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, W, H);
+            // grille légère
+            ctx.strokeStyle = '#EEF2F7'; ctx.lineWidth = 1;
+            for (var gx = 0; gx <= 10; gx++) { var X = pad + gx * (W - 2 * pad) / 10; ctx.beginPath(); ctx.moveTo(X, pad); ctx.lineTo(X, H - pad); ctx.stroke(); }
+            for (var gy = 0; gy <= 6; gy++) { var Y = pad + gy * (H - 2 * pad) / 6; ctx.beginPath(); ctx.moveTo(pad, Y); ctx.lineTo(W - pad, Y); ctx.stroke(); }
+            holes.forEach(function (h) {
+                var r = 2.5 + 4.5 * ((h.depth || 0) / maxD);
+                ctx.beginPath(); ctx.arc(px(h), py(h), r, 0, 2 * Math.PI);
+                ctx.fillStyle = ipCatColor(h.cat); ctx.globalAlpha = 0.85; ctx.fill(); ctx.globalAlpha = 1;
+                ctx.lineWidth = 0.6; ctx.strokeStyle = '#0F172A'; ctx.stroke();
+            });
+            // flèche Nord
+            ctx.fillStyle = '#0F172A'; ctx.font = 'bold 12px sans-serif';
+            ctx.fillText('N ↑', W - pad - 24, pad + 4);
         };
 
         function showDailyEntryModal(machineId) {
