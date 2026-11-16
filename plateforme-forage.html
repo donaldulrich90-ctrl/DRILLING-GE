@@ -34171,7 +34171,7 @@
             </div>
             <!-- Zone de saisie -->
             <div style="padding:12px 16px;border-top:1px solid #1E293B;display:flex;gap:8px;flex-shrink:0;background:#0B1120;align-items:flex-end">
-                <input type="file" id="geAiFileInput" multiple style="display:none" accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.csv,.txt,.json,.md,.log,.xlsx,.xls" onchange="geAiOnFileChosen(this)">
+                <input type="file" id="geAiFileInput" multiple style="display:none" accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.csv,.txt,.json,.md,.log,.xlsx,.xls,.str" onchange="geAiOnFileChosen(this)">
                 <button onclick="geAiPickFile()" id="geAiAttachBtn" title="Joindre un ou plusieurs fichiers à analyser (PDF, image, Excel, CSV, texte)" style="background:#1E293B;border:1px solid #334155;color:#A78BFA;border-radius:10px;padding:10px 12px;cursor:pointer;font-size:15px;flex-shrink:0;transition:opacity .2s">📎</button>
                 <textarea id="geAiInput" placeholder="Posez votre question…" rows="1" style="flex:1;background:#1E293B;border:1px solid #334155;border-radius:10px;padding:10px 14px;color:white;font-size:13px;resize:none;font-family:inherit;outline:none;max-height:100px;line-height:1.4" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();geAiSend()}"></textarea>
                 <button onclick="geAiSend()" id="geAiSendBtn" style="background:linear-gradient(135deg,#7C3AED,#6D28D9);border:none;color:white;border-radius:10px;padding:10px 16px;cursor:pointer;font-size:14px;font-weight:600;flex-shrink:0;transition:opacity .2s" title="Envoyer">➤</button>
@@ -34272,11 +34272,41 @@
                 if (xtext.length > 60000) xtext = xtext.slice(0, 60000) + '\n[...tronqué...]';
                 blocks.push({ type: 'text', text: 'Contenu du classeur Excel « ' + name + ' » (converti en CSV) :\n\n' + xtext });
                 note = 'Excel';
+            } else if (ext === 'str') {
+                // Fichier de plan de forage (chaîne Surpac/Deswik) : on le parse et on le charge pour import.
+                var st = await _geAiReadText(file);
+                var parsed = (typeof ipParseStr === 'function') ? ipParseStr(st, name) : null;
+                if (parsed && parsed.holeCount > 0) {
+                    window._geAiDrillStaged = window._geAiDrillStaged || [];
+                    parsed.filename = name;
+                    parsed.siteId = (typeof currentSiteId !== 'undefined' && currentSiteId != null) ? currentSiteId : null;
+                    window._geAiDrillStaged.push(parsed);
+                    blocks.push({ type: 'text', text: 'Fichier de plan de forage « ' + name +' » chargé : pattern détecté « ' + parsed.pattern + ' », ' + parsed.holeCount + ' trous, objectif ' + (Math.round(parsed.meters * 10) / 10) + ' m. Les trous sont en mémoire. Pour enregistrer ce pattern et son objectif dans la plateforme (cumulé avec les éventuels fichiers déjà importés du même pattern), appelle l\'outil import_drilling_plan avec confirm=true.' });
+                    note = 'Plan forage';
+                } else {
+                    blocks.push({ type: 'text', text: 'Fichier « ' + name + ' » : aucun trou exploitable (fichier de contour, binaire, ou format non reconnu). Rien à importer.' });
+                    note = 'Forage (vide)';
+                }
             } else if (['csv', 'txt', 'json', 'md', 'log', 'tsv', 'yml', 'yaml'].indexOf(ext) >= 0 || mime.indexOf('text/') === 0) {
                 var t = await _geAiReadText(file);
                 if (t.length > 80000) t = t.slice(0, 80000) + '\n[...tronqué...]';
                 blocks.push({ type: 'text', text: 'Contenu du fichier « ' + name + ' » :\n\n```\n' + t + '\n```' });
                 note = 'Texte';
+                // CSV d'implantation de trous (ids B1/P12/A3…) : charge aussi pour import.
+                if (ext === 'csv' && typeof ipParseCsv === 'function') {
+                    try {
+                        var pc = ipParseCsv(t, name, 0);
+                        var idok = pc.holes.length >= 5 && pc.holes.filter(function (h) { return /^[A-Za-z]{1,3}\d+$/.test(String(h.id || '')); }).length >= pc.holes.length * 0.7;
+                        if (idok) {
+                            window._geAiDrillStaged = window._geAiDrillStaged || [];
+                            pc.filename = name;
+                            pc.siteId = (typeof currentSiteId !== 'undefined' && currentSiteId != null) ? currentSiteId : null;
+                            window._geAiDrillStaged.push(pc);
+                            blocks.push({ type: 'text', text: '(CSV d\'implantation détecté : pattern « ' + pc.pattern + ' », ' + pc.holeCount + ' trous' + (pc.meters > 0 ? (', objectif ' + pc.meters + ' m') : ', profondeur non fournie dans le CSV') + '. Chargé pour import via import_drilling_plan(confirm=true).)' });
+                            note = 'Plan forage';
+                        }
+                    } catch (e) {}
+                }
             } else {
                 throw new Error('__UNSUPPORTED__');
             }
@@ -34300,7 +34330,7 @@
                 }
             }
             input.value = '';
-            if (rejected.length) alert('Fichier(s) ignoré(s) :\n- ' + rejected.join('\n- ') + '\n\nFormats acceptés : PDF, images (PNG/JPG/WEBP/GIF), Excel (XLSX/XLS), CSV, TXT, JSON, MD.');
+            if (rejected.length) alert('Fichier(s) ignoré(s) :\n- ' + rejected.join('\n- ') + '\n\nFormats acceptés : PDF, images (PNG/JPG/WEBP/GIF), Excel (XLSX/XLS), CSV, TXT, JSON, MD, plans de forage (.str).');
         };
         // Joint un contenu texte déjà présent dans la plateforme (rapport, facture) à l'assistant.
         window.geAiAttachText = function(name, text, label) {
@@ -34492,7 +34522,8 @@
             { name: 'overtime_summary', description: 'Heures supplémentaires d\'un mois par employé (heures travaillées, heures sup, majorations +15%/+35%, montant). month au format AAAA-MM.', input_schema: { type: 'object', properties: { month: { type: 'string' } }, required: ['month'] } },
             { name: 'list_employees', description: 'Liste des employés : nom, rôle, statut, date d\'embauche, salaire mensuel.', input_schema: { type: 'object', properties: {} } },
             { name: 'maintenance_summary', description: 'État de la maintenance des foreuses : dernière et prochaine révision (date et heures), statut, et si une révision est en retard. drillId optionnel.', input_schema: { type: 'object', properties: { drillId: { type: 'string' } } } },
-            { name: 'drill_plan_progress', description: 'Avancement des plans de forage. Sans planId : liste des plans (nom, statut, nombre de trous). Avec planId : détail (trous planifiés/en cours/complétés, mètres planifiés vs forés, % avancement).', input_schema: { type: 'object', properties: { planId: { type: 'string' } } } }
+            { name: 'drill_plan_progress', description: 'Avancement des plans de forage. Sans planId : liste des plans (nom, statut, nombre de trous). Avec planId : détail (trous planifiés/en cours/complétés, mètres planifiés vs forés, % avancement).', input_schema: { type: 'object', properties: { planId: { type: 'string' } } } },
+            { name: 'import_drilling_plan', description: 'Enregistre dans la plateforme les fichiers de plan de forage (.str/.csv) que l\'utilisateur vient de joindre à la conversation : crée ou complète chaque pattern (fosse) avec son objectif (somme des profondeurs des trous, cumulé entre fichiers d\'un même pattern). À appeler quand l\'utilisateur joint un ou plusieurs fichiers de forage et demande de les importer / enregistrer / transmettre. Les patterns et objectifs détectés sont annoncés dans la conversation ; appelle d\'abord avec confirm=false pour lister ce qui sera importé, puis confirm=true pour exécuter.', input_schema: { type: 'object', properties: { confirm: { type: 'boolean', description: 'true pour exécuter l\'import des fichiers de forage en attente ; false pour seulement lister ce qui sera importé.' } }, required: ['confirm'] } }
         ];
         function _geAiMonthRange(ym) {
             var p = String(ym).split('-'); var y = +p[0], m = +p[1];
@@ -34506,6 +34537,34 @@
             var rp = (typeof _rpData === 'function') ? _rpData : function(r) { return r.data || {}; };
             if (name === 'list_drills') {
                 return (list || []).map(function(d) { return { id: d.id, location: d.location || '', status: d.status || '', type: d.type || '', contractId: d.contractId || null, depth: (d.telemetry && d.telemetry.depth) || d.currentDepth || null }; });
+            }
+            if (name === 'import_drilling_plan') {
+                var staged = window._geAiDrillStaged || [];
+                if (!staged.length) return { error: 'Aucun fichier de forage en attente. Demandez à l\'utilisateur de joindre un ou plusieurs fichiers .str (ou .csv d\'implantation), puis réessayez.' };
+                var pendingList = staged.map(function (p) { return { fichier: p.filename, pattern: p.pattern, trous: p.holeCount, objectif_m: p.meters, type: p.type }; });
+                if (!input.confirm) return { confirm_requis: true, a_importer: pendingList, message: 'Rappelez l\'outil avec confirm=true pour enregistrer ces patterns et leurs objectifs.' };
+                if (typeof getImportPlanData !== 'function') return { error: 'Module d\'import indisponible (rechargez la page après déploiement).' };
+                var ipd = getImportPlanData();
+                staged.forEach(function (p) {
+                    var key = String(p.pattern || '').trim().toUpperCase(); if (!key) return;
+                    if (!ipd.patterns[key]) ipd.patterns[key] = { name: key, siteId: p.siteId, files: {}, objective: 0, holeCount: 0 };
+                    ipd.patterns[key].siteId = (p.siteId != null && p.siteId !== '') ? p.siteId : ipd.patterns[key].siteId;
+                    ipd.patterns[key].files[p.filename] = { holes: p.holes, meters: p.meters, holeCount: p.holeCount, importedAt: new Date().toISOString(), type: p.type };
+                    ipRecomputePattern(ipd.patterns[key]);
+                    ipd.patterns[key].updatedAt = new Date().toISOString();
+                });
+                saveImportPlanData(ipd);
+                var touched = {}; staged.forEach(function (p) { touched[String(p.pattern || '').trim().toUpperCase()] = 1; });
+                var result = [];
+                Object.keys(touched).forEach(function (key) {
+                    if (!key || !ipd.patterns[key]) return;
+                    ipSyncFosseObjective(key, ipd.patterns[key].siteId, ipd.patterns[key].objective);
+                    result.push({ pattern: key, objectif_m: ipd.patterns[key].objective, trous: ipd.patterns[key].holeCount, fichiers: Object.keys(ipd.patterns[key].files).length });
+                });
+                var nf = staged.length;
+                window._geAiDrillStaged = [];
+                try { if (typeof currentMainView !== 'undefined' && currentMainView === 'import_plan') renderImportPlan(); } catch (e) {}
+                return { imported_files: nf, patterns: result, message: nf + ' fichier(s) importé(s). Objectifs des patterns créés/mis à jour (cumulés) et visibles dans « ⚙ Fosses » et dans les rapports (section Avancement par pattern).' };
             }
             if (name === 'production_summary') {
                 var ym = input.month; if (!ym) return { error: 'month (AAAA-MM) requis' };
