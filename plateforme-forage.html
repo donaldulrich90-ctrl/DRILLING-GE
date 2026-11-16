@@ -24279,6 +24279,7 @@
                 sec('INDICATEURS CLÉS DU MOIS', bandeau + (mt ? '' : '<p class="daily-table-note">Aucun target mensuel saisi pour ' + escapeHtmlReportCell(monthKey) + ' — renseignez-le via « 🎯 Targets mensuels » pour comparer au objectif.</p>')) +
                 (chartHtml ? sec('Production journalière vs objectif', chartHtml) : '') +
                 sec('Production &amp; performance par machine', machTable) +
+                (function () { var s = buildPatternAdvancementSection(records); return s ? sec('Avancement par pattern', s) : ''; })() +
                 sec('Répartition des arrêts du mois', stopTable) +
                 sec('Visa et signatures', '<div class="daily-signatures">' + signatures + '</div>') +
                 '<footer class="daily-footer"><span>' + escapeHtmlReportCell(companyName) + '<br>Rapport mensuel de production · ' + escapeHtmlReportCell(monthLabel) + '</span><span>Document généré le ' + escapeHtmlReportCell(generatedAt) + '</span></footer>' +
@@ -24403,6 +24404,7 @@
                 sec('INDICATEURS CLÉS DE LA SEMAINE', bandeau + (mt ? '' : '<p class="daily-table-note">Aucun target saisi — renseignez le target mensuel via « 🎯 Targets mensuels » pour comparer à l\'objectif.</p>')) +
                 (chartHtml ? sec('Production journalière vs objectif', chartHtml) : '') +
                 sec('Production &amp; performance par machine', machTable) +
+                (function () { var s = buildPatternAdvancementSection(records); return s ? sec('Avancement par pattern', s) : ''; })() +
                 sec('Répartition des arrêts de la semaine', stopTable) +
                 sec('Visa et signatures', '<div class="daily-signatures">' + signatures + '</div>') +
                 '<footer class="daily-footer"><span>' + escapeHtmlReportCell(companyName) + '<br>Rapport hebdomadaire de production · ' + escapeHtmlReportCell(periodLabel) + '</span><span>Document généré le ' + escapeHtmlReportCell(generatedAt) + '</span></footer>' +
@@ -24546,6 +24548,32 @@
             [['Pannes mécaniques (BDN)', tot.bdn], ['Standby (STB)', tot.stb], ['Services / délais (GSA)', tot.gsa], ['Production / autres', tot.prd + tot.other]].forEach(function (rw, ri) { str.push([{ text: rw[0], options: { fontSize: 12, color: '222222', fill: { color: ri % 2 ? LIGHT : WHITE } } }, { text: dec(rw[1]), options: { align: 'right', fontSize: 12, color: '222222', fill: { color: ri % 2 ? LIGHT : WHITE } } }, { text: sp(rw[1]), options: { align: 'right', fontSize: 12, color: '222222', fill: { color: ri % 2 ? LIGHT : WHITE } } }]); });
             str.push([{ text: 'Total arrêts', options: { bold: true, color: NAVY, fill: { color: 'FEF3C7' }, fontSize: 12 } }, { text: dec(totStops), options: { bold: true, align: 'right', color: NAVY, fill: { color: 'FEF3C7' }, fontSize: 12 } }, { text: totStops > 0 ? '100 %' : '—', options: { bold: true, align: 'right', color: NAVY, fill: { color: 'FEF3C7' }, fontSize: 12 } }]);
             s5.addTable(str, { x: 6.3, y: 3.35, w: 6.45, colW: [3.65, 1.4, 1.4], border: { type: 'solid', color: LINE, pt: 0.5 }, valign: 'middle' });
+            // ===== 5 bis — AVANCEMENT PAR PATTERN =====
+            try {
+                var byPat = {};
+                records.forEach(function (r) {
+                    var d = _rpData(r);
+                    var zl = (Array.isArray(d.zones) && d.zones.length >= 1)
+                        ? d.zones.map(function (z) { return { zone: (z.location || ''), m: parseFloat(z.metersDrilled) || 0 }; })
+                        : [{ zone: _rpZoneForRecord(r), m: parseFloat(d.metersDrilled) || 0 }];
+                    zl.forEach(function (z) { var k = String(z.zone == null ? '' : z.zone).trim(); if (!k) return; if (!byPat[k]) byPat[k] = { prod: 0 }; byPat[k].prod += z.m; });
+                });
+                var pk = Object.keys(byPat).sort(function (a, b) { return byPat[b].prod - byPat[a].prod; });
+                if (pk.length) {
+                    var sP = pptx.addSlide(); band(sP, 'Avancement par pattern', 'Cumul réalisé vs objectif · ' + opts.periodLabel);
+                    var ptr = [['Pattern', 'Prod. période', 'Cumul réalisé', 'Objectif', 'Avanc.'].map(function (h, ci) { return { text: h, options: { bold: true, color: WHITE, fill: { color: NAVY }, align: ci ? 'right' : 'left', fontSize: 11 } }; })];
+                    pk.slice(0, 14).forEach(function (k, ri) {
+                        var done = (typeof _fosseRealizedMeters === 'function') ? _fosseRealizedMeters(k) : 0;
+                        var obj = (typeof getFosseObjective === 'function') ? getFosseObjective(k) : null;
+                        var pct = (obj && obj > 0) ? Math.round(done / obj * 100) : null;
+                        var pcol = pct == null ? SUB : (pct >= 100 ? GREEN : (pct >= 60 ? AMBER : RED));
+                        var cells = [k, dec(byPat[k].prod) + ' m', dec(done, 1) + ' m', (obj && obj > 0 ? dec(obj, 1) + ' m' : '—'), (pct == null ? '—' : pct + ' %')];
+                        ptr.push(cells.map(function (c, ci) { return { text: String(c), options: { align: ci ? 'right' : 'left', fontSize: 11, bold: ci === 4, color: ci === 4 ? pcol : '222222', fill: { color: ri % 2 ? LIGHT : WHITE } } }; }));
+                    });
+                    sP.addTable(ptr, { x: 0.55, y: 1.4, w: 12.25, colW: [4.4, 2.0, 2.15, 1.9, 1.8], border: { type: 'solid', color: LINE, pt: 0.5 }, valign: 'middle' });
+                    sP.addText('Avancement = cumul réalisé (toutes dates) ÷ objectif du pattern (défini dans « Fosses » ou importé via « Import plan »). Objectif « — » : non renseigné.', { x: 0.55, y: 6.7, w: 12.2, h: 0.4, fontSize: 10, italic: true, color: SUB });
+                }
+            } catch (e) {}
             // ===== 6 — VISA =====
             var s6 = pptx.addSlide(); band(s6, 'Visa & signatures', opts.periodLabel);
             ['Établi par', 'Contrôlé par', 'Visé par'].forEach(function (lab, i) {
@@ -24695,6 +24723,7 @@
                 // production par zone & trous, plans hachurés, pannes, standby, signatures).
                 section('01', 'INDICATEURS CLÉS — KPI ET PRODUCTION', buildReportKpiBandeau(records, date) + buildPlanVsRealSection(records, date), 'daily-kpi-section') +
                 existingSection('03', 'Production par zone / pattern et trous travaillés', buildProductionZoneSection(records) + buildDailyHoleTraceability(records)) +
+                optionalSection('Avancement par pattern (objectifs)', buildPatternAdvancementSection(records)) +
                 section('', 'Productivité et métrage par bit', buildProductivitySection(records, date) + buildBitsBreakdownSection(records)) +
                 optionalSection('Plan hachuré des patterns forés', buildPatternPlansSection(records, date), 'daily-pattern-section') +
                 existingSection('04', 'Pannes mécaniques et observations', buildPannesSection(records)) +
@@ -24704,6 +24733,7 @@
                 section('', 'Production de la journée', buildDailyProductionChart(records, date, false), 'daily-management-charts') +
                 optionalSection('Graphiques de la journée', buildDailyReportChartsSection(date, records, 'management'), 'daily-charts-section') +
                 existingSection('03', 'Zones forées et trous travaillés', buildProductionZoneSection(records) + buildDailyHoleTraceability(records)) +
+                optionalSection('Avancement par pattern (objectifs)', buildPatternAdvancementSection(records)) +
                 optionalSection('Plan hachuré des patterns forés', buildPatternPlansSection(records, date), 'daily-pattern-section') +
                 existingSection('04', 'Faits marquants et observations', buildCommentGeneralSection(records)) +
                 section('', 'Machines garées — état du parc', renderParkedMachinesTableHtml()) +
@@ -29575,6 +29605,54 @@
                 '<td class="r-num"><strong>' + tN.toLocaleString('fr-FR', { maximumFractionDigits: 2 }) + ' m</strong></td><td class="r-num"><strong>' + tRH.toFixed(1).replace('.', ',') + ' h</strong></td><td class="r-num"><strong>' + tR.toLocaleString('fr-FR', { maximumFractionDigits: 2 }) + ' m</strong></td><td class="r-num"><strong>' + tF.toLocaleString('fr-FR', { maximumFractionDigits: 2 }) + ' m</strong></td></tr>' +
                 '</tbody></table>' +
                 '<p style="font-size:10px;color:#475569;margin:5px 0 0;">Objectif = <b>mètres nouveaux uniquement</b>. Le <b>reforage est facturé à l\'heure</b> (colonne « Reforage (h) ») ; flushing suivi séparément.</p>';
+        }
+
+        // Avancement par pattern : production de la période + cumul réalisé (toutes dates) vs objectif (fosse / import).
+        function buildPatternAdvancementSection(records) {
+            var byPat = {};
+            (records || []).forEach(function (r) {
+                var d = _rpData(r);
+                var zoneList;
+                if (Array.isArray(d.zones) && d.zones.length >= 1) {
+                    zoneList = d.zones.map(function (z) { return { zone: (z.location || ''), m: parseFloat(z.metersDrilled) || 0 }; });
+                } else {
+                    zoneList = [{ zone: _rpZoneForRecord(r), m: parseFloat(d.metersDrilled) || 0 }];
+                }
+                zoneList.forEach(function (zl) {
+                    var k = String(zl.zone == null ? '' : zl.zone).trim();
+                    if (!k) return;
+                    if (!byPat[k]) byPat[k] = { prod: 0 };
+                    byPat[k].prod += zl.m;
+                });
+            });
+            var keys = Object.keys(byPat);
+            if (!keys.length) return '';
+            keys.sort(function (a, b) { return byPat[b].prod - byPat[a].prod; });
+            var anyObj = false, rows = '';
+            keys.forEach(function (k) {
+                var periodProd = byPat[k].prod;
+                var done = (typeof _fosseRealizedMeters === 'function') ? _fosseRealizedMeters(k) : 0;
+                var obj = (typeof getFosseObjective === 'function') ? getFosseObjective(k) : null;
+                var pct = (obj && obj > 0) ? Math.round(done / obj * 100) : null;
+                if (obj && obj > 0) anyObj = true;
+                var bar;
+                if (pct == null) { bar = '<span style="color:#94a3b8;">objectif non défini</span>'; }
+                else {
+                    var col = pct >= 100 ? '#16a34a' : (pct >= 60 ? '#f59e0b' : '#dc2626');
+                    bar = '<div style="display:flex;align-items:center;gap:6px;"><div style="flex:1;height:7px;background:#e2e8f0;border-radius:4px;min-width:60px;"><div style="height:7px;border-radius:4px;width:' + Math.max(0, Math.min(100, pct)) + '%;background:' + col + ';"></div></div><span style="font-size:10px;color:' + col + ';font-weight:600;">' + pct + ' %</span></div>';
+                }
+                rows += '<tr><td class="r-txt">' + escapeHtmlReportCell(k) + '</td>'
+                    + '<td class="r-num">' + periodProd.toLocaleString('fr-FR', { maximumFractionDigits: 2 }) + ' m</td>'
+                    + '<td class="r-num">' + done.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' m</td>'
+                    + '<td class="r-num">' + (obj && obj > 0 ? obj.toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' m' : '—') + '</td>'
+                    + '<td class="r-txt">' + bar + '</td></tr>';
+            });
+            var note = anyObj
+                ? 'Avancement = cumul réalisé (toutes dates) ÷ objectif du pattern (défini dans « ⚙ Fosses » ou importé via « Import plan »).'
+                : 'Objectifs des patterns non renseignés — définissez-les dans « ⚙ Fosses » ou importez-les via l\'onglet « Import plan » pour afficher l\'avancement.';
+            return '<table class="pro2"><thead><tr><th>Pattern</th><th class="num">Prod. période</th><th class="num">Cumul réalisé</th><th class="num">Objectif</th><th>Avancement</th></tr></thead><tbody>'
+                + rows
+                + '</tbody></table><p style="font-size:10px;color:#475569;margin:5px 0 0;">' + note + '</p>';
         }
 
         function buildPannesSection(records) {
