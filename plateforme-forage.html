@@ -24221,7 +24221,7 @@
             var bandeau = '<div class="report-kpi-grid">' +
                 card('Production réalisée', fmtM(tot.prod), '#1e40af', 'mètres nouveaux (mois)') +
                 card('Objectif du mois', goalMonth != null ? fmtM(goalMonth) : 'Non renseigné', '#b45309', 'target mine') +
-                card('Variance (réel − objectif)', varMPct != null ? ((varMPct > 0 ? '+' : '') + dec(varMPct) + ' %') : 'N/A', varM == null ? '#0f172a' : (varM >= 0 ? '#166534' : '#b91c1c'), 'sur le mois') +
+                card('Écart (réel − objectif)', varM != null ? ((varM >= 0 ? '+' : '−') + dec(Math.abs(varM)) + ' m') : 'N/A', varM == null ? '#0f172a' : (varM >= 0 ? '#166534' : '#b91c1c'), 'sur le mois') +
                 card('Jours avec production', String(nbDays), '#0f172a', 'moy. ' + (nbDays > 0 ? dec(tot.prod / nbDays) : 'N/A') + ' m/jour') +
                 card('Rendement moyen', rend != null ? dec(rend, 2) + ' m/h' : 'N/A', '#1e40af', 'mètres / heure utilisée') +
                 card('Dispo. mécanique', pctCmp(mMech, mt ? mt.availPct : null), '#1e40af', '') +
@@ -24349,7 +24349,7 @@
             var bandeau = '<div class="report-kpi-grid">' +
                 card('Production réalisée', fmtM(tot.prod), '#1e40af', 'mètres nouveaux (semaine)') +
                 card('Objectif de la semaine', goalWeek != null ? fmtM(goalWeek) : 'Non renseigné', '#b45309', goalDay != null ? dec(goalDay) + ' m/jour × ' + nbCalDays + ' j' : 'target mine') +
-                card('Variance (réel − objectif)', varWPct != null ? ((varWPct > 0 ? '+' : '') + dec(varWPct) + ' %') : 'N/A', varW == null ? '#0f172a' : (varW >= 0 ? '#166534' : '#b91c1c'), 'sur la semaine') +
+                card('Écart (réel − objectif)', varW != null ? ((varW >= 0 ? '+' : '−') + dec(Math.abs(varW)) + ' m') : 'N/A', varW == null ? '#0f172a' : (varW >= 0 ? '#166534' : '#b91c1c'), 'sur la semaine') +
                 card('Jours avec production', String(nbDays), '#0f172a', 'moy. ' + (nbDays > 0 ? dec(tot.prod / nbDays) : 'N/A') + ' m/jour') +
                 card('Rendement moyen', rend != null ? dec(rend, 2) + ' m/h' : 'N/A', '#1e40af', 'mètres / heure utilisée') +
                 card('Dispo. mécanique', pctCmp(mMech, mt ? mt.availPct : null), '#1e40af', '') +
@@ -24498,27 +24498,27 @@
             var hero = [
                 ['PRODUCTION RÉALISÉE', dec(tot.prod) + ' m'],
                 ['OBJECTIF', goalPeriod != null ? dec(goalPeriod) + ' m' : 'N/R'],
-                ['TAUX D\'ATTEINTE', taux != null ? dec(taux) + ' %' : 'N/A']
+                ['ÉCART / OBJECTIF', varP != null ? ((varP >= 0 ? '+' : '−') + dec(Math.abs(varP)) + ' m') : 'N/A']
             ];
             hero.forEach(function (c, i) {
                 var x = 0.7 + i * 4.05;
                 s1.addShape(pptx.ShapeType.roundRect, { x: x, y: 5.35, w: 3.8, h: 1.35, rectRadius: 0.08, fill: { color: '13315C' }, line: { color: '21406E', width: 1 } });
                 s1.addText(c[0], { x: x + 0.22, y: 5.52, w: 3.4, h: 0.3, fontSize: 10, bold: true, color: '93C5FD', charSpacing: 1 });
-                s1.addText(c[1], { x: x + 0.22, y: 5.85, w: 3.4, h: 0.7, fontSize: 26, bold: true, color: i === 2 && taux != null ? (taux >= 100 ? '86EFAC' : 'FBBF24') : WHITE });
+                s1.addText(c[1], { x: x + 0.22, y: 5.85, w: 3.4, h: 0.7, fontSize: 26, bold: true, color: i === 2 && varP != null ? (varP >= 0 ? '86EFAC' : 'FBBF24') : WHITE });
             });
             s1.addText('Généré le ' + new Date().toLocaleString('fr-FR'), { x: 0.72, y: 7.0, w: 12, h: 0.35, fontSize: 10, color: '8AA0C8' });
             // ===== 2 — SYNTHÈSE EXÉCUTIVE =====
             var s2 = pptx.addSlide(); band(s2, 'Synthèse exécutive', 'Bilan ' + opts.periodWord + ' · ' + opts.periodLabel);
             tile(s2, 0.55, 1.35, 2.95, 1.35, 'Production', dec(tot.prod) + ' m', data.nbDays + ' j produits', BLUE);
             tile(s2, 3.62, 1.35, 2.95, 1.35, 'Objectif', goalPeriod != null ? dec(goalPeriod) + ' m' : 'Non renseigné', goalDay != null ? dec(goalDay) + ' m/jour' : '', AMBER);
-            tile(s2, 6.69, 1.35, 2.95, 1.35, 'Taux d\'atteinte', taux != null ? dec(taux) + ' %' : 'N/A', varP != null ? ((varP >= 0 ? '+' : '') + dec(varP) + ' m') : '', taux == null ? INK : (taux >= 100 ? GREEN : RED));
+            tile(s2, 6.69, 1.35, 2.95, 1.35, 'Écart objectif', varP != null ? ((varP >= 0 ? '+' : '−') + dec(Math.abs(varP)) + ' m') : 'N/A', goalPeriod != null ? ('objectif ' + dec(goalPeriod) + ' m') : 'production − objectif', varP == null ? INK : (varP >= 0 ? GREEN : RED));
             tile(s2, 9.76, 1.35, 3.02, 1.35, 'Rendement', data.rend != null ? dec(data.rend, 2) + ' m/h' : 'N/A', data.holeCount + ' trous', '7C3AED');
             // mini-graphe production vs objectif
             var miniImg = img({ type: 'bar', data: { labels: labels, datasets: [{ type: 'bar', label: 'Réalisé/jour', data: realArr, backgroundColor: BLUE === '1D4ED8' ? '#1D4ED8' : BLUE, borderRadius: 3, order: 2 }].concat(goalDay != null ? [{ type: 'line', label: 'Objectif/jour', data: planArr, borderColor: '#F59E0B', backgroundColor: '#F59E0B', borderWidth: 3, pointRadius: 0, order: 1 }] : []) }, options: { plugins: { legend: { display: true, labels: { color: '#334155', font: { size: 13 } } } }, scales: { y: { beginAtZero: true, ticks: { color: '#334155', font: { size: 11 } }, grid: { color: 'rgba(0,0,0,0.06)' } }, x: { ticks: { color: '#334155', font: { size: 10 } }, grid: { display: false } } } } }, 1500, 470);
             if (miniImg) { s2.addText('Production journalière vs objectif', { x: 0.55, y: 2.95, w: 8, h: 0.3, fontSize: 12, bold: true, color: INK }); s2.addImage({ data: miniImg, x: 0.55, y: 3.3, w: 8.0, h: 3.5 }); }
             // bullets synthèse auto
             var bullets = [];
-            if (taux != null) bullets.push({ text: (taux >= 100 ? '✅ ' : '⚠️ ') + 'Objectif atteint à ' + dec(taux) + ' % (' + dec(tot.prod) + ' m / ' + dec(goalPeriod) + ' m).', options: { color: taux >= 100 ? GREEN : RED, bold: true } });
+            if (varP != null) bullets.push({ text: (varP >= 0 ? '✅ ' : '⚠️ ') + 'Écart objectif : ' + (varP >= 0 ? '+' : '−') + dec(Math.abs(varP)) + ' m (' + dec(tot.prod) + ' m / ' + dec(goalPeriod) + ' m).', options: { color: varP >= 0 ? GREEN : RED, bold: true } });
             if (machKeys.length) bullets.push({ text: '🥇 Meilleure foreuse : ' + machKeys[0] + ' — ' + dec(byMachine[machKeys[0]].prod) + ' m.', options: { color: INK } });
             if (machKeys.length > 1) bullets.push({ text: '🔻 Plus faible : ' + machKeys[machKeys.length - 1] + ' — ' + dec(byMachine[machKeys[machKeys.length - 1]].prod) + ' m.', options: { color: INK } });
             if (data.mMech != null) bullets.push({ text: '🔧 Disponibilité mécanique : ' + dec(data.mMech) + ' %' + (mt && mt.availPct != null ? ' (cible ' + dec(mt.availPct) + ' %).' : '.'), options: { color: INK } });
@@ -29791,7 +29791,7 @@
                 card('Production réalisée', fmtM(agg.prod), '#1e40af', 'mètres nouveaux') +
                 card('Trous travaillés', String(holeCount), '#0f766e', holeCount > 0 ? 'nombre de trous forés' : 'aucun trou renseigné') +
                 card('Production planifiée', goal != null ? fmtM(goal) : 'Non renseigné', '#b45309', 'objectif journalier collectif') +
-                card('Écart (% objectif)', (goal != null && goal > 0) ? ((variance / goal * 100 > 0 ? '+' : '') + (variance / goal * 100).toLocaleString('fr-FR', { maximumFractionDigits: 2 }) + ' %') : 'N/A', (goal != null && goal > 0) ? (variance >= 0 ? '#166534' : '#b91c1c') : '#0f172a', 'écart sur l\'objectif') +
+                card('Écart (réel − objectif)', (goal != null && goal > 0) ? ((variance >= 0 ? '+' : '−') + fmtM(Math.abs(variance))) : 'N/A', (goal != null && goal > 0) ? (variance >= 0 ? '#166534' : '#b91c1c') : '#0f172a', 'écart sur l\'objectif') +
                 card('Disponibilité méca.', dispo != null ? dispo.toFixed(1).replace('.', ',') + ' %' : 'Non renseigné', '#1e40af', '') +
                 card('Heures de panne', agg.bdn.toFixed(1).replace('.', ',') + ' h', '#b91c1c', 'arrêt mécanique') +
                 card('Heures de standby', agg.stb.toFixed(1).replace('.', ',') + ' h', '#b45309', 'immobilisation') +
