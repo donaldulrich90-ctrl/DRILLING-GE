@@ -31398,6 +31398,7 @@
             s = s.replace(/\.(str|csv)$/i, '');
             s = s.replace(/_survey.*$/i, '');
             s = s.replace(/[-_ ]*(ext|extension|buffer|prod|production|design)?[-_ ]*holes?$/i, '');
+            s = s.replace(/[-_ ]+(ext|extension|buffer|design)$/i, '');
             s = s.replace(/[-_ ]+$/, '');
             return s.toUpperCase();
         }
@@ -31407,12 +31408,14 @@
         function ipParseStr(text, filename) {
             var lines = String(text || '').split(/\r?\n/);
             var header = (lines[0] || '').split(',');
-            var patRaw = (header[0] || filename || '').trim();
+            // Le nom de fichier est plus fiable que l'en-tête (en-têtes parfois erronés, ex. « ss2-251-245-10 »).
+            var patRaw = String((filename && filename.trim()) ? filename : (header[0] || '')).trim();
             var holes = [], cur = null;
             for (var i = 1; i < lines.length; i++) {
                 var parts = lines[i].split(',').map(function (p) { return p.trim(); });
                 if (!parts.length || parts[0] === '') continue;
-                if (parts[0] !== '1') continue;
+                // Un sommet de trou peut être codé 1 OU 2 (2 = buffer/présplit selon les styles Surpac/Deswik).
+                if (parts[0] !== '1' && parts[0] !== '2') continue;
                 var x = parseFloat(parts[1]), y = parseFloat(parts[2]), z = parseFloat(parts[3]);
                 if (!isFinite(x) || !isFinite(y) || !isFinite(z)) continue;
                 var id = (parts.length > 6 && /^[A-Za-z]/.test(parts[6] || '')) ? parts[6] : null;
@@ -31434,11 +31437,14 @@
             lines.forEach(function (l) {
                 var p = l.split(',').map(function (s) { return s.trim(); });
                 if (p.length < 3) return;
-                if (!/^[A-Za-z0-9]/.test(p[0] || '')) return;
-                var x = parseFloat(p[1]), y = parseFloat(p[2]), z = parseFloat(p[3]);
-                if (!isFinite(x) || !isFinite(y)) return;
-                var dep = (defaultDepth && defaultDepth > 0) ? defaultDepth : 0;
-                holes.push({ id: p[0], x: x, y: y, collar: null, toe: isFinite(z) ? z : null, depth: dep });
+                var id = p[0];
+                var a = parseFloat(p[1]), b = parseFloat(p[2]), v = parseFloat(p[3]);
+                if (!isFinite(a) || !isFinite(b)) return; // ignore la ligne d'en-tête (ID,Y,X,…)
+                // 4e colonne : petite valeur = profondeur (m) ; grande valeur = cote de fond (profondeur inconnue).
+                var dep;
+                if (isFinite(v)) { dep = (Math.abs(v) < 50) ? Math.abs(v) : ((defaultDepth && defaultDepth > 0) ? defaultDepth : 0); }
+                else { dep = (defaultDepth && defaultDepth > 0) ? defaultDepth : 0; }
+                holes.push({ id: id, x: a, y: b, collar: null, toe: (isFinite(v) && Math.abs(v) >= 50) ? v : null, depth: dep });
             });
             var meters = holes.reduce(function (s, h) { return s + (h.depth || 0); }, 0);
             return { pattern: ipNormalizePatternName(filename), rawName: filename, holes: holes, meters: Math.round(meters * 10) / 10, holeCount: holes.length, type: 'csv' };
@@ -31477,8 +31483,9 @@
             else if (field === 'siteId') p.siteId = (value !== '' ? value : null);
             else if (field === 'depth') {
                 var d = parseFloat(value) || 0;
-                p.holes.forEach(function (h) { if (h.type !== 'str') h.depth = d; else if (h.collar == null) h.depth = d; });
-                if (p.type === 'csv') { p.holes.forEach(function (h) { h.depth = d; }); p.meters = Math.round(d * p.holeCount * 10) / 10; }
+                // Profondeur uniforme saisie (CSV sans profondeur) : applique à tous les trous et recalcule l'objectif.
+                p.holes.forEach(function (h) { h.depth = d; });
+                p.meters = Math.round(d * p.holeCount * 10) / 10;
             }
             renderImportPlan();
         };
