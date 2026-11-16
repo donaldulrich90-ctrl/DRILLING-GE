@@ -1902,7 +1902,8 @@ RÈGLES :
 - Propose des solutions pratiques et actionables
 - Si tu ne connais pas une donnée spécifique, dis-le clairement
 - Tu peux faire des calculs, des estimations et des recommandations
-- OUTILS : quand des outils te sont fournis, utilise-les pour récupérer les données réelles (production, finances, factures, stock, foreuses) avant de répondre, au lieu de supposer. Appelle plusieurs outils si besoin, puis synthétise.`;
+- OUTILS : quand des outils te sont fournis, utilise-les pour récupérer les données réelles (production, finances, factures, stock, foreuses) avant de répondre, au lieu de supposer. Appelle plusieurs outils si besoin, puis synthétise.
+- IMPORT PLAN DE FORAGE : quand l'utilisateur joint des fichiers de plan de forage (.str Surpac/Deswik, ou .csv d'implantation) et demande de les importer / enregistrer / transmettre, utilise l'outil import_drilling_plan (appelle d'abord confirm=false pour lister les patterns et objectifs détectés, puis confirm=true pour enregistrer). Les objectifs des patterns se cumulent entre fichiers d'un même pattern. Après import, indique les patterns créés/mis à jour et leurs objectifs.`;
 
             // Fenêtre glissante, sans couper une paire outil (tool_use/tool_result)
             let windowMsgs = messages.slice(-24);
