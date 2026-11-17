@@ -29982,15 +29982,65 @@
         }
 
         // ---- Fosses (lieux de foration) : liste gérable, liée à un site, partagée dans l'entreprise ----
-        // Stockage : companyInfo.fosses = [{name, siteId}]. (Compat : anciennes entrées en chaîne = siteId null.)
+        // Stockage : companyInfo.fosses = [{name, siteId, penRate90?, penRate115?, patterns?: [{id, month?, holes, meters, explosives, status?, notes?}]}].
+        // (Compat : anciennes entrées en chaîne = siteId null, sans patterns.)
         function getFossesRaw() {
             var f = companyInfo && companyInfo.fosses;
             if (typeof f === 'string') { try { f = JSON.parse(f); } catch (e) { f = []; } }
             if (!Array.isArray(f)) f = [];
             return f.map(function (x) {
-                if (x && typeof x === 'object') return { name: String(x.name == null ? '' : x.name).trim(), siteId: (x.siteId != null && x.siteId !== '') ? x.siteId : null };
-                return { name: String(x == null ? '' : x).trim(), siteId: null };
+                if (x && typeof x === 'object') {
+                    return {
+                        name: String(x.name == null ? '' : x.name).trim(),
+                        siteId: (x.siteId != null && x.siteId !== '') ? x.siteId : null,
+                        penRate90: (x.penRate90 != null && x.penRate90 !== '') ? parseFloat(x.penRate90) : null,
+                        penRate115: (x.penRate115 != null && x.penRate115 !== '') ? parseFloat(x.penRate115) : null,
+                        patterns: Array.isArray(x.patterns) ? x.patterns.map(function (p) {
+                            return {
+                                id: String(p && p.id ? p.id : '').trim(),
+                                month: p && p.month ? String(p.month) : '',
+                                holes: Math.max(0, parseInt(p && p.holes, 10) || 0),
+                                meters: Math.max(0, parseFloat(p && p.meters) || 0),
+                                explosives: Math.max(0, parseFloat(p && p.explosives) || 0),
+                                status: (p && p.status) ? String(p.status) : 'PLANIFIE',
+                                notes: (p && p.notes) ? String(p.notes) : ''
+                            };
+                        }).filter(function (p) { return p.id; }) : []
+                    };
+                }
+                return { name: String(x == null ? '' : x).trim(), siteId: null, penRate90: null, penRate115: null, patterns: [] };
             }).filter(function (x) { return x.name; });
+        }
+        // Totaux des objectifs pour une liste de patterns.
+        function fossePatternTotals(patterns) {
+            var t = { holes: 0, meters: 0, explosives: 0, count: 0 };
+            (patterns || []).forEach(function (p) {
+                t.holes += (parseInt(p.holes, 10) || 0);
+                t.meters += (parseFloat(p.meters) || 0);
+                t.explosives += (parseFloat(p.explosives) || 0);
+                t.count++;
+            });
+            return t;
+        }
+        // Mois courant au format YYYY-MM.
+        function _fosseCurrentMonth() {
+            try {
+                var d = new Date();
+                return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+            } catch (e) { return ''; }
+        }
+        // Libellé mois en français : "Novembre 2026".
+        function _fosseMonthLabel(ym) {
+            if (!ym || !/^\d{4}-\d{2}$/.test(ym)) return ym || '—';
+            var names = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+            var parts = ym.split('-');
+            var mi = parseInt(parts[1], 10) - 1;
+            return (names[mi] || parts[1]) + ' ' + parts[0];
+        }
+        // Formatage court d'une valeur numérique (séparateurs d'espace).
+        function _fosseFmt(n) {
+            var x = Number(n) || 0;
+            try { return x.toLocaleString('fr-FR', { maximumFractionDigits: 1 }); } catch (e) { return String(x); }
         }
         function fossesSiteName(siteId) {
             if (siteId == null || siteId === '') return 'Tous les sites';
@@ -30022,20 +30072,24 @@
             });
             return opts;
         }
+        // État d'ouverture local des fosses expansées (idx -> true/false).
+        var _fosseExpanded = {};
         function openFosseManager() {
             var ex = document.getElementById('fosseManagerModal'); if (ex) ex.remove();
             var defSite = (typeof currentSiteId !== 'undefined' && currentSiteId != null) ? currentSiteId : '';
             var modal = document.createElement('div');
             modal.id = 'fosseManagerModal';
             modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[120] p-4';
-            modal.innerHTML = '<div class="ged-modal-panel p-6 rounded-xl w-full max-w-lg max-h-[85vh] overflow-y-auto">'
-                + '<div class="flex justify-between items-center mb-4"><h2 class="text-xl font-bold">Gérer les fosses</h2>'
+            modal.innerHTML = '<div class="ged-modal-panel p-6 rounded-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">'
+                + '<div class="flex justify-between items-center mb-4"><h2 class="text-xl font-bold">Gérer les fosses & patterns</h2>'
                 + '<button type="button" onclick="document.getElementById(\'fosseManagerModal\').remove()" class="text-slate-400 hover:text-white text-2xl">&times;</button></div>'
-                + '<p class="text-slate-400 text-sm mb-3">Chaque fosse est rattachée à un site. Dans la saisie, seules les fosses du site de la machine (plus celles « Tous les sites ») sont proposées.</p>'
-                + '<div class="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2 mb-4">'
+                + '<p class="text-slate-400 text-sm mb-3">Chaque fosse est rattachée à un site. Dans la saisie, seules les fosses du site de la machine (plus celles « Tous les sites ») sont proposées. Vous pouvez ajouter des <strong>patterns de forage & tir</strong> à chaque fosse avec leurs objectifs (trous, mètres, kg d\'explosif) — cliquez sur ▸ pour déplier.</p>'
+                + '<div class="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto_auto] gap-2 mb-4">'
                 + '<input type="text" id="fosseNewName" class="bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white" placeholder="Nom de la fosse (ex: P17)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();addFosse();}">'
                 + '<select id="fosseNewSite" class="bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white">' + fosseSiteOptions(defSite) + '</select>'
-                + '<button type="button" onclick="addFosse()" class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg font-semibold">Ajouter</button></div>'
+                + '<button type="button" onclick="addFosse()" class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg font-semibold">+ Fosse</button>'
+                + '<button type="button" onclick="loadOrezoneNov2026Example()" class="bg-amber-700 hover:bg-amber-600 px-3 py-2 rounded-lg font-semibold text-sm" title="Pré-remplir les 4 fosses (P17, SE1, H1, SS2) avec les 15 patterns du D&B BENCH PLAN novembre 2026">⚡ Exemple Orezone nov. 2026</button>'
+                + '</div>'
                 + '<div id="fosseListContainer"></div></div>';
             document.body.appendChild(modal);
             renderFosseManagerList();
@@ -30044,11 +30098,312 @@
         function renderFosseManagerList() {
             var c = document.getElementById('fosseListContainer'); if (!c) return;
             var list = getFossesRaw();
-            if (!list.length) { c.innerHTML = '<p class="text-slate-500 text-sm">Aucune fosse. Ajoutez-en ci-dessus.</p>'; return; }
+            if (!list.length) { c.innerHTML = '<p class="text-slate-500 text-sm">Aucune fosse. Ajoutez-en ci-dessus, ou cliquez sur « Exemple Orezone nov. 2026 » pour pré-remplir.</p>'; return; }
             c.innerHTML = list.map(function (f, idx) {
-                return '<div class="flex justify-between items-center border-b border-slate-700 py-2"><span>' + escapeHtml(f.name) + ' <span class="text-slate-500 text-xs">(' + escapeHtml(fossesSiteName(f.siteId)) + ')</span></span>'
-                    + '<button type="button" onclick="removeFosseAt(' + idx + ')" class="text-red-400 hover:text-red-300" title="Supprimer">🗑</button></div>';
+                var tot = fossePatternTotals(f.patterns || []);
+                var expanded = !!_fosseExpanded[idx];
+                var caret = expanded ? '▾' : '▸';
+                var penTxt = '';
+                if (f.penRate90 != null || f.penRate115 != null) {
+                    penTxt = ' · PEN ' + (f.penRate90 != null ? f.penRate90 + ' m/h@Ø90' : '—')
+                        + ' / ' + (f.penRate115 != null ? f.penRate115 + ' m/h@Ø115' : '—');
+                }
+                var totTxt = tot.count > 0
+                    ? '<span class="text-amber-300">' + tot.count + ' pattern(s) · ' + _fosseFmt(tot.holes) + ' trous · ' + _fosseFmt(tot.meters) + ' m · ' + _fosseFmt(tot.explosives) + ' kg expl.</span>'
+                    : '<span class="text-slate-500 italic">Aucun pattern</span>';
+                var header = '<div class="flex flex-wrap justify-between items-center gap-2 py-2">'
+                    + '<button type="button" onclick="toggleFosseRow(' + idx + ')" class="flex items-center gap-2 text-left flex-1 min-w-[200px] hover:text-yellow-400">'
+                    +   '<span class="text-slate-400 text-sm w-4">' + caret + '</span>'
+                    +   '<span class="font-semibold">' + escapeHtml(f.name) + '</span>'
+                    +   '<span class="text-slate-500 text-xs">(' + escapeHtml(fossesSiteName(f.siteId)) + ')' + escapeHtml(penTxt) + '</span>'
+                    + '</button>'
+                    + '<div class="flex items-center gap-2 text-xs">'
+                    +   totTxt
+                    +   '<button type="button" onclick="openFossePenRateEditor(' + idx + ')" class="bg-slate-700 hover:bg-slate-600 px-2 py-1 rounded" title="Vitesse de pénétration cible">⚙ PEN</button>'
+                    +   '<button type="button" onclick="removeFosseAt(' + idx + ')" class="text-red-400 hover:text-red-300" title="Supprimer la fosse (et ses patterns)">🗑</button>'
+                    + '</div></div>';
+                var panel = expanded ? ('<div class="bg-slate-900/60 border border-slate-700 rounded-lg p-3 mb-3" id="fossePanel-' + idx + '">' + renderFossePatternsPanelHtml(idx, f) + '</div>') : '';
+                return '<div class="border-b border-slate-700">' + header + panel + '</div>';
             }).join('');
+        }
+        function toggleFosseRow(idx) {
+            _fosseExpanded[idx] = !_fosseExpanded[idx];
+            renderFosseManagerList();
+        }
+        // Rendu HTML du panneau « patterns » d'une fosse (déjà expansée).
+        function renderFossePatternsPanelHtml(fosseIdx, f) {
+            var patterns = (f && Array.isArray(f.patterns)) ? f.patterns : [];
+            var tot = fossePatternTotals(patterns);
+            var head = '<div class="flex flex-wrap justify-between items-center gap-2 mb-2">'
+                + '<p class="text-xs text-slate-400 uppercase tracking-widest">Patterns & objectifs</p>'
+                + '<div class="flex gap-1">'
+                +   '<button type="button" onclick="openFossePatternForm(' + fosseIdx + ', -1)" class="bg-emerald-700 hover:bg-emerald-600 text-white px-2 py-1 rounded text-xs">+ Pattern</button>'
+                +   '<button type="button" onclick="openFossePatternsBulkImport(' + fosseIdx + ')" class="bg-indigo-700 hover:bg-indigo-600 text-white px-2 py-1 rounded text-xs" title="Coller plusieurs patterns en une fois (CSV / tableau)">📋 Importer</button>'
+                + '</div></div>';
+            var tbl = '<div style="overflow-x:auto"><table class="w-full text-xs" style="border-collapse:collapse">'
+                + '<thead><tr class="text-slate-500 uppercase tracking-widest" style="background:rgba(0,0,0,0.2)">'
+                +   '<th class="px-2 py-1 text-left">Pattern</th>'
+                +   '<th class="px-2 py-1 text-left">Mois</th>'
+                +   '<th class="px-2 py-1 text-right">Trous</th>'
+                +   '<th class="px-2 py-1 text-right">Mètres</th>'
+                +   '<th class="px-2 py-1 text-right">Explosif (kg)</th>'
+                +   '<th class="px-2 py-1 text-left">Statut</th>'
+                +   '<th class="px-2 py-1"></th>'
+                + '</tr></thead><tbody>';
+            if (!patterns.length) {
+                tbl += '<tr><td colspan="7" class="text-center text-slate-500 italic py-3">Aucun pattern — cliquez « + Pattern » ou « 📋 Importer ».</td></tr>';
+            } else {
+                patterns.forEach(function (p, pIdx) {
+                    var sc = 'text-slate-400';
+                    if (p.status === 'EN COURS') sc = 'text-yellow-400';
+                    else if (p.status === 'TIRE' || p.status === 'TIRÉ') sc = 'text-green-400';
+                    else if (p.status === 'ANNULE' || p.status === 'ANNULÉ') sc = 'text-red-400';
+                    tbl += '<tr class="border-t border-slate-800">'
+                        + '<td class="px-2 py-1 font-mono text-amber-300">' + escapeHtml(p.id) + '</td>'
+                        + '<td class="px-2 py-1 text-slate-400">' + escapeHtml(_fosseMonthLabel(p.month)) + '</td>'
+                        + '<td class="px-2 py-1 text-right font-mono">' + _fosseFmt(p.holes) + '</td>'
+                        + '<td class="px-2 py-1 text-right font-mono">' + _fosseFmt(p.meters) + '</td>'
+                        + '<td class="px-2 py-1 text-right font-mono">' + _fosseFmt(p.explosives) + '</td>'
+                        + '<td class="px-2 py-1 ' + sc + '">' + escapeHtml(p.status || '—') + '</td>'
+                        + '<td class="px-2 py-1 text-right whitespace-nowrap">'
+                        +   '<button type="button" onclick="openFossePatternForm(' + fosseIdx + ',' + pIdx + ')" class="bg-slate-700 hover:bg-slate-600 px-2 py-0.5 rounded text-xs mr-1" title="Modifier">✏</button>'
+                        +   '<button type="button" onclick="removeFossePattern(' + fosseIdx + ',' + pIdx + ')" class="text-red-400 hover:text-red-300" title="Supprimer">🗑</button>'
+                        + '</td></tr>';
+                });
+                tbl += '<tr class="border-t-2 border-amber-700/40 bg-slate-900/60 font-semibold">'
+                    + '<td class="px-2 py-1 text-slate-300">TOTAL (' + tot.count + ')</td>'
+                    + '<td class="px-2 py-1"></td>'
+                    + '<td class="px-2 py-1 text-right font-mono text-amber-300">' + _fosseFmt(tot.holes) + '</td>'
+                    + '<td class="px-2 py-1 text-right font-mono text-amber-300">' + _fosseFmt(tot.meters) + '</td>'
+                    + '<td class="px-2 py-1 text-right font-mono text-amber-300">' + _fosseFmt(tot.explosives) + '</td>'
+                    + '<td colspan="2"></td></tr>';
+            }
+            tbl += '</tbody></table></div>';
+            return head + tbl;
+        }
+        // ---- CRUD patterns ----
+        function openFossePatternForm(fosseIdx, patternIdx) {
+            var raw = getFossesRaw();
+            var f = raw[fosseIdx]; if (!f) return;
+            var editing = (patternIdx != null && patternIdx >= 0);
+            var p = editing ? (f.patterns[patternIdx] || {}) : { id: '', month: _fosseCurrentMonth(), holes: 0, meters: 0, explosives: 0, status: 'PLANIFIE', notes: '' };
+            var ex = document.getElementById('fossePatternFormModal'); if (ex) ex.remove();
+            var m = document.createElement('div');
+            m.id = 'fossePatternFormModal';
+            m.className = 'fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[130] p-4';
+            m.innerHTML = '<div class="ged-modal-panel p-6 rounded-xl w-full max-w-lg">'
+                + '<div class="flex justify-between items-center mb-3"><h3 class="text-lg font-bold">' + (editing ? 'Modifier pattern' : 'Nouveau pattern') + ' — Fosse ' + escapeHtml(f.name) + '</h3>'
+                + '<button type="button" onclick="document.getElementById(\'fossePatternFormModal\').remove()" class="text-slate-400 hover:text-white text-2xl">&times;</button></div>'
+                + '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">'
+                +   '<label class="sm:col-span-2 block"><span class="text-slate-400 text-xs">Identifiant du pattern *</span>'
+                +     '<input type="text" id="fppId" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white" value="' + escapeHtmlForAttr(p.id || '') + '" placeholder="Ex: P17-239-233-306"></label>'
+                +   '<label class="block"><span class="text-slate-400 text-xs">Mois (YYYY-MM)</span>'
+                +     '<input type="month" id="fppMonth" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white" value="' + escapeHtmlForAttr(p.month || _fosseCurrentMonth()) + '"></label>'
+                +   '<label class="block"><span class="text-slate-400 text-xs">Statut</span>'
+                +     '<select id="fppStatus" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white">'
+                +       ['PLANIFIE','EN COURS','TIRÉ','ANNULÉ'].map(function (s) { return '<option value="' + s + '"' + ((p.status || 'PLANIFIE') === s ? ' selected' : '') + '>' + s + '</option>'; }).join('')
+                +     '</select></label>'
+                +   '<label class="block"><span class="text-slate-400 text-xs">Trous (objectif)</span>'
+                +     '<input type="number" id="fppHoles" min="0" step="1" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white" value="' + escapeHtmlForAttr(String(p.holes || 0)) + '"></label>'
+                +   '<label class="block"><span class="text-slate-400 text-xs">Mètres (objectif)</span>'
+                +     '<input type="number" id="fppMeters" min="0" step="0.1" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white" value="' + escapeHtmlForAttr(String(p.meters || 0)) + '"></label>'
+                +   '<label class="sm:col-span-2 block"><span class="text-slate-400 text-xs">Explosif (kg — objectif)</span>'
+                +     '<input type="number" id="fppExpl" min="0" step="1" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white" value="' + escapeHtmlForAttr(String(p.explosives || 0)) + '"></label>'
+                +   '<label class="sm:col-span-2 block"><span class="text-slate-400 text-xs">Notes</span>'
+                +     '<textarea id="fppNotes" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white" rows="2">' + escapeHtml(p.notes || '') + '</textarea></label>'
+                + '</div>'
+                + '<div class="flex gap-2 justify-end mt-4">'
+                +   '<button type="button" onclick="document.getElementById(\'fossePatternFormModal\').remove()" class="bg-slate-600 hover:bg-slate-500 px-4 py-2 rounded-lg text-sm">Annuler</button>'
+                +   '<button type="button" onclick="submitFossePatternForm(' + fosseIdx + ',' + (editing ? patternIdx : -1) + ')" class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg text-sm font-semibold">Enregistrer</button>'
+                + '</div></div>';
+            document.body.appendChild(m);
+            var idEl = document.getElementById('fppId'); if (idEl) idEl.focus();
+        }
+        function submitFossePatternForm(fosseIdx, patternIdx) {
+            var raw = getFossesRaw();
+            var f = raw[fosseIdx]; if (!f) return;
+            var id = (document.getElementById('fppId') || {}).value || '';
+            id = id.trim();
+            if (!id) { alert('Identifiant du pattern requis.'); return; }
+            var month = (document.getElementById('fppMonth') || {}).value || '';
+            var status = (document.getElementById('fppStatus') || {}).value || 'PLANIFIE';
+            var holes = Math.max(0, parseInt((document.getElementById('fppHoles') || {}).value, 10) || 0);
+            var meters = Math.max(0, parseFloat((document.getElementById('fppMeters') || {}).value) || 0);
+            var explosives = Math.max(0, parseFloat((document.getElementById('fppExpl') || {}).value) || 0);
+            var notes = (document.getElementById('fppNotes') || {}).value || '';
+            if (!Array.isArray(f.patterns)) f.patterns = [];
+            // Évite les doublons d'identifiant (mois équivalent)
+            var dup = f.patterns.findIndex(function (q, i) { return i !== patternIdx && q.id.toLowerCase() === id.toLowerCase() && (q.month || '') === (month || ''); });
+            if (dup >= 0) { alert('Un pattern avec cet identifiant existe déjà pour ce mois.'); return; }
+            var payload = { id: id, month: month, holes: holes, meters: meters, explosives: explosives, status: status, notes: notes };
+            if (patternIdx != null && patternIdx >= 0) f.patterns[patternIdx] = payload;
+            else f.patterns.push(payload);
+            raw[fosseIdx] = f;
+            companyInfo.fosses = raw;
+            var ex = document.getElementById('fossePatternFormModal'); if (ex) ex.remove();
+            _fosseExpanded[fosseIdx] = true;
+            renderFosseManagerList();
+            try { saveData(); } catch (e) {}
+        }
+        function removeFossePattern(fosseIdx, patternIdx) {
+            var raw = getFossesRaw();
+            var f = raw[fosseIdx]; if (!f || !Array.isArray(f.patterns)) return;
+            if (!(patternIdx >= 0 && patternIdx < f.patterns.length)) return;
+            if (!confirm('Supprimer le pattern « ' + f.patterns[patternIdx].id + ' » ?')) return;
+            f.patterns.splice(patternIdx, 1);
+            raw[fosseIdx] = f;
+            companyInfo.fosses = raw;
+            renderFosseManagerList();
+            try { saveData(); } catch (e) {}
+        }
+        // ---- Import en masse (CSV / tabulation) ----
+        function openFossePatternsBulkImport(fosseIdx) {
+            var raw = getFossesRaw();
+            var f = raw[fosseIdx]; if (!f) return;
+            var ex = document.getElementById('fosseBulkImportModal'); if (ex) ex.remove();
+            var m = document.createElement('div');
+            m.id = 'fosseBulkImportModal';
+            m.className = 'fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[130] p-4';
+            m.innerHTML = '<div class="ged-modal-panel p-6 rounded-xl w-full max-w-2xl">'
+                + '<div class="flex justify-between items-center mb-3"><h3 class="text-lg font-bold">Importer des patterns — Fosse ' + escapeHtml(f.name) + '</h3>'
+                + '<button type="button" onclick="document.getElementById(\'fosseBulkImportModal\').remove()" class="text-slate-400 hover:text-white text-2xl">&times;</button></div>'
+                + '<p class="text-slate-400 text-xs mb-2">Collez une ligne par pattern. Séparateurs acceptés : <code>|</code>, <code>;</code>, <code>,</code>, tabulation. Colonnes dans cet ordre : <strong>Identifiant · Trous · Mètres · Explosif (kg) · Statut (optionnel)</strong>. En-tête ignoré.</p>'
+                + '<p class="text-slate-500 text-xs mb-2">Exemple :<br><code class="text-amber-300">P17-239-233-306 | 787 | 5352 | 39090<br>P17-239-233-305 | 1419 | 9580 | 66288</code></p>'
+                + '<label class="block mb-2 text-xs"><span class="text-slate-400">Mois des patterns importés</span>'
+                + '<input type="month" id="fpbMonth" class="bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white ml-2" value="' + escapeHtmlForAttr(_fosseCurrentMonth()) + '"></label>'
+                + '<textarea id="fpbText" rows="10" class="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-white font-mono text-xs" placeholder="P17-239-233-306 | 787 | 5352 | 39090"></textarea>'
+                + '<div class="flex gap-2 justify-end mt-4">'
+                +   '<button type="button" onclick="document.getElementById(\'fosseBulkImportModal\').remove()" class="bg-slate-600 hover:bg-slate-500 px-4 py-2 rounded-lg text-sm">Annuler</button>'
+                +   '<button type="button" onclick="submitFossePatternsBulkImport(' + fosseIdx + ')" class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg text-sm font-semibold">Importer</button>'
+                + '</div></div>';
+            document.body.appendChild(m);
+            var ta = document.getElementById('fpbText'); if (ta) ta.focus();
+        }
+        function submitFossePatternsBulkImport(fosseIdx) {
+            var raw = getFossesRaw();
+            var f = raw[fosseIdx]; if (!f) return;
+            var txt = (document.getElementById('fpbText') || {}).value || '';
+            var month = (document.getElementById('fpbMonth') || {}).value || _fosseCurrentMonth();
+            var lines = txt.split(/\r?\n/).map(function (s) { return s.trim(); }).filter(function (s) { return s; });
+            if (!lines.length) { alert('Rien à importer.'); return; }
+            if (!Array.isArray(f.patterns)) f.patterns = [];
+            var added = 0, skipped = 0;
+            lines.forEach(function (line) {
+                var parts = line.split(/[\|;,\t]+/).map(function (x) { return x.trim(); }).filter(function (x, i) { return i === 0 || x !== ''; });
+                if (!parts.length) return;
+                // Ignore un en-tête éventuel.
+                if (/^[A-Za-z]/.test(parts[0]) && /holes|trous|pattern|id/i.test(parts[0]) && parts.length >= 2 && !/^\d/.test(parts[1])) { skipped++; return; }
+                var id = parts[0];
+                if (!id) { skipped++; return; }
+                var holes = Math.max(0, parseInt((parts[1] || '0').replace(/\s/g, ''), 10) || 0);
+                var meters = Math.max(0, parseFloat((parts[2] || '0').replace(/\s/g, '').replace(',', '.')) || 0);
+                var explosives = Math.max(0, parseFloat((parts[3] || '0').replace(/\s/g, '').replace(',', '.')) || 0);
+                var status = (parts[4] || 'PLANIFIE').toUpperCase();
+                if (!/^(PLANIFIE|PLANIFIÉ|EN COURS|TIRE|TIRÉ|ANNULE|ANNULÉ)$/.test(status)) status = 'PLANIFIE';
+                // Dédoublonne par id + mois
+                var dup = f.patterns.findIndex(function (q) { return q.id.toLowerCase() === id.toLowerCase() && (q.month || '') === (month || ''); });
+                var payload = { id: id, month: month, holes: holes, meters: meters, explosives: explosives, status: status, notes: '' };
+                if (dup >= 0) f.patterns[dup] = payload; else { f.patterns.push(payload); added++; }
+            });
+            raw[fosseIdx] = f;
+            companyInfo.fosses = raw;
+            var ex = document.getElementById('fosseBulkImportModal'); if (ex) ex.remove();
+            _fosseExpanded[fosseIdx] = true;
+            renderFosseManagerList();
+            try { saveData(); } catch (e) {}
+            alert(added + ' pattern(s) ajouté(s)' + (skipped ? ', ' + skipped + ' ligne(s) ignorée(s)' : '') + '.');
+        }
+        // ---- Éditeur de vitesse de pénétration cible ----
+        function openFossePenRateEditor(fosseIdx) {
+            var raw = getFossesRaw();
+            var f = raw[fosseIdx]; if (!f) return;
+            var ex = document.getElementById('fossePenRateModal'); if (ex) ex.remove();
+            var m = document.createElement('div');
+            m.id = 'fossePenRateModal';
+            m.className = 'fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[130] p-4';
+            m.innerHTML = '<div class="ged-modal-panel p-6 rounded-xl w-full max-w-sm">'
+                + '<div class="flex justify-between items-center mb-3"><h3 class="text-lg font-bold">PEN RATE — ' + escapeHtml(f.name) + '</h3>'
+                + '<button type="button" onclick="document.getElementById(\'fossePenRateModal\').remove()" class="text-slate-400 hover:text-white text-2xl">&times;</button></div>'
+                + '<p class="text-slate-400 text-xs mb-3">Vitesse de pénétration cible (m/h), utilisée comme référence pour comparer la production réelle.</p>'
+                + '<label class="block mb-2 text-sm"><span class="text-slate-400 text-xs">Zone Ø 90 mm (m/h)</span>'
+                + '<input type="number" step="0.1" id="fpr90" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white" value="' + escapeHtmlForAttr(f.penRate90 != null ? String(f.penRate90) : '') + '"></label>'
+                + '<label class="block mb-3 text-sm"><span class="text-slate-400 text-xs">Zone Ø 115 mm (m/h)</span>'
+                + '<input type="number" step="0.1" id="fpr115" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white" value="' + escapeHtmlForAttr(f.penRate115 != null ? String(f.penRate115) : '') + '"></label>'
+                + '<div class="flex gap-2 justify-end">'
+                +   '<button type="button" onclick="document.getElementById(\'fossePenRateModal\').remove()" class="bg-slate-600 hover:bg-slate-500 px-4 py-2 rounded-lg text-sm">Annuler</button>'
+                +   '<button type="button" onclick="submitFossePenRate(' + fosseIdx + ')" class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg text-sm font-semibold">Enregistrer</button>'
+                + '</div></div>';
+            document.body.appendChild(m);
+        }
+        function submitFossePenRate(fosseIdx) {
+            var raw = getFossesRaw();
+            var f = raw[fosseIdx]; if (!f) return;
+            var v90 = (document.getElementById('fpr90') || {}).value;
+            var v115 = (document.getElementById('fpr115') || {}).value;
+            f.penRate90 = (v90 === '' || v90 == null) ? null : parseFloat(v90);
+            f.penRate115 = (v115 === '' || v115 == null) ? null : parseFloat(v115);
+            raw[fosseIdx] = f;
+            companyInfo.fosses = raw;
+            var ex = document.getElementById('fossePenRateModal'); if (ex) ex.remove();
+            renderFosseManagerList();
+            try { saveData(); } catch (e) {}
+        }
+        // ---- Exemple Orezone Bomboré novembre 2026 (1 clic) ----
+        // Référence : « November-2026 D&B BENCH PLAN » (P17S, SE1, H1, SS2).
+        function loadOrezoneNov2026Example() {
+            if (!confirm('Pré-remplir les fosses P17, SE1, H1 et SS2 avec les 15 patterns du D&B BENCH PLAN novembre 2026 ?\n\n(Les patterns existants au même identifiant pour ce mois seront mis à jour, le reste est conservé.)')) return;
+            var month = '2026-11';
+            var sample = [
+                { name: 'P17', penRate90: 30, penRate115: 20, patterns: [
+                    { id: 'P17-239-233-306', holes: 787, meters: 5352, explosives: 39090 },
+                    { id: 'P17-239-233-305', holes: 1419, meters: 9580, explosives: 66288 },
+                    { id: 'P17-239-233-303', holes: 1111, meters: 7520, explosives: 52936 },
+                    { id: 'P17-239-233-304', holes: 1307, meters: 8805, explosives: 60113 }
+                ]},
+                { name: 'SE1', penRate90: 20, penRate115: 20, patterns: [
+                    { id: 'SE1-251-245-501', holes: 101, meters: 687, explosives: 5090 },
+                    { id: 'SE1-251-245-101', holes: 484, meters: 3291, explosives: 24394 },
+                    { id: 'SE1-251-245-102', holes: 722, meters: 4910, explosives: 36389 },
+                    { id: 'SE1-251-245-103', holes: 637, meters: 4332, explosives: 32105 }
+                ]},
+                { name: 'H1', penRate90: 30, penRate115: 30, patterns: [
+                    { id: 'H1-233-227-106', holes: 1966, meters: 8616, explosives: 99088 }
+                ]},
+                { name: 'SS2', penRate90: null, penRate115: null, patterns: [
+                    { id: 'SS2-245-239-501', holes: 101, meters: 637, explosives: 5090 },
+                    { id: 'SS2-245-239-101', holes: 427, meters: 2904, explosives: 21521 },
+                    { id: 'SS2-245-239-102', holes: 693, meters: 4712, explosives: 34927 },
+                    { id: 'SS2-245-239-103', holes: 668, meters: 4542, explosives: 33687 },
+                    { id: 'SS2-245-239-104', holes: 309, meters: 2101, explosives: 15574 },
+                    { id: 'SS2-251-245-101', holes: 177, meters: 1172, explosives: 8887 }
+                ]}
+            ];
+            var raw = getFossesRaw();
+            var siteId = (typeof currentSiteId !== 'undefined' && currentSiteId != null) ? currentSiteId : null;
+            sample.forEach(function (s) {
+                var fIdx = raw.findIndex(function (f) { return f.name.toLowerCase() === s.name.toLowerCase() && String(f.siteId) === String(siteId); });
+                var target;
+                if (fIdx < 0) {
+                    target = { name: s.name, siteId: siteId, penRate90: s.penRate90, penRate115: s.penRate115, patterns: [] };
+                    raw.push(target);
+                } else {
+                    target = raw[fIdx];
+                    if (target.penRate90 == null && s.penRate90 != null) target.penRate90 = s.penRate90;
+                    if (target.penRate115 == null && s.penRate115 != null) target.penRate115 = s.penRate115;
+                    if (!Array.isArray(target.patterns)) target.patterns = [];
+                }
+                s.patterns.forEach(function (p) {
+                    var payload = { id: p.id, month: month, holes: p.holes, meters: p.meters, explosives: p.explosives, status: 'PLANIFIE', notes: '' };
+                    var dup = target.patterns.findIndex(function (q) { return q.id.toLowerCase() === p.id.toLowerCase() && (q.month || '') === month; });
+                    if (dup >= 0) target.patterns[dup] = payload;
+                    else target.patterns.push(payload);
+                });
+            });
+            companyInfo.fosses = raw;
+            renderFosseManagerList();
+            renderFossesDatalist(currentSiteId);
+            try { saveData(); } catch (e) {}
+            alert('Exemple Orezone Bomboré nov. 2026 chargé : 15 patterns répartis sur P17, SE1, H1 et SS2.');
         }
         function addFosse() {
             var el = document.getElementById('fosseNewName');
@@ -30058,7 +30413,7 @@
             var siteId = (siteEl && siteEl.value !== '') ? siteEl.value : null;
             var raw = getFossesRaw();
             if (raw.some(function (f) { return f.name.toLowerCase() === name.toLowerCase() && String(f.siteId) === String(siteId); })) { if (el) el.value = ''; return; }
-            raw.push({ name: name, siteId: siteId });
+            raw.push({ name: name, siteId: siteId, penRate90: null, penRate115: null, patterns: [] });
             companyInfo.fosses = raw;
             if (el) el.value = '';
             renderFosseManagerList();
@@ -30068,8 +30423,13 @@
         function removeFosseAt(idx) {
             var raw = getFossesRaw();
             if (idx < 0 || idx >= raw.length) return;
+            var f = raw[idx];
+            var hasPatterns = f && Array.isArray(f.patterns) && f.patterns.length > 0;
+            if (hasPatterns && !confirm('La fosse « ' + f.name + ' » contient ' + f.patterns.length + ' pattern(s). Les supprimer aussi ?')) return;
             raw.splice(idx, 1);
             companyInfo.fosses = raw;
+            // Les index aval se décalent : on repart d'un état propre.
+            _fosseExpanded = {};
             renderFosseManagerList();
             renderFossesDatalist(currentSiteId);
             try { saveData(); } catch (e) {}
@@ -30077,6 +30437,15 @@
         window.openFosseManager = openFosseManager;
         window.addFosse = addFosse;
         window.removeFosseAt = removeFosseAt;
+        window.toggleFosseRow = toggleFosseRow;
+        window.openFossePatternForm = openFossePatternForm;
+        window.submitFossePatternForm = submitFossePatternForm;
+        window.removeFossePattern = removeFossePattern;
+        window.openFossePatternsBulkImport = openFossePatternsBulkImport;
+        window.submitFossePatternsBulkImport = submitFossePatternsBulkImport;
+        window.openFossePenRateEditor = openFossePenRateEditor;
+        window.submitFossePenRate = submitFossePenRate;
+        window.loadOrezoneNov2026Example = loadOrezoneNov2026Example;
 
         function showDailyEntryModal(machineId) {
             if (!canEnterDailyData()) {
