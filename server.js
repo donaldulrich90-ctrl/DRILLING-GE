@@ -403,6 +403,20 @@ db.run("ALTER TABLE companyInfo ADD COLUMN monthlyTargets TEXT DEFAULT '{}'", (e
     }
 });
 
+// Format du matricule employé (modèle par entreprise) : persisté côté serveur (était auparavant local uniquement).
+[
+    ["matriculePrefix", "ALTER TABLE companyInfo ADD COLUMN matriculePrefix TEXT DEFAULT 'EMP'"],
+    ["matriculeIncludeYear", "ALTER TABLE companyInfo ADD COLUMN matriculeIncludeYear INTEGER DEFAULT 1"],
+    ["matriculeSeparator", "ALTER TABLE companyInfo ADD COLUMN matriculeSeparator TEXT DEFAULT '-'"],
+    ["matriculePadding", "ALTER TABLE companyInfo ADD COLUMN matriculePadding INTEGER DEFAULT 3"]
+].forEach(function (m) {
+    db.run(m[1], function (err) {
+        if (err && !String(err.message || '').includes('duplicate column')) {
+            console.warn('Migration companyInfo.' + m[0] + ':', err.message);
+        }
+    });
+});
+
 function dailyDataElevatedRoleFromAuth(auth) {
     if (!auth) return false;
     if (auth.isSuperAdmin || auth.isPlatformOwner) return true;
@@ -3917,6 +3931,7 @@ app.get('/api/company', (req, res) => {
         }
         if (row) {
             try { row.monthlyTargets = row.monthlyTargets ? JSON.parse(row.monthlyTargets) : {}; } catch (e) { row.monthlyTargets = {}; }
+            if (row.matriculeIncludeYear != null) row.matriculeIncludeYear = !!row.matriculeIncludeYear; // 0/1 -> booléen pour le client
         }
         res.json(row || {});
     });
@@ -3982,7 +3997,8 @@ app.post('/api/company', (req, res) => {
                 `UPDATE companyInfo SET name = ?, legalName = ?, address = ?, city = ?, country = ?,
                  postalCode = ?, taxId = ?, siret = ?, ifu = ?, rccm = ?, phone = ?, email = ?, website = ?,
                  bankName = ?, iban = ?, bic = ?, vatNumber = ?, tvaRate = ?, retenueSourceRate = ?, currency = ?,
-                 signatoryFirstName = ?, signatoryLastName = ?, signatoryTitle = ?, fosses = ?, monthlyTargets = ? WHERE enterpriseId = ?`,
+                 signatoryFirstName = ?, signatoryLastName = ?, signatoryTitle = ?, fosses = ?, monthlyTargets = ?,
+                 matriculePrefix = ?, matriculeIncludeYear = ?, matriculeSeparator = ?, matriculePadding = ? WHERE enterpriseId = ?`,
                 [
                     company.name, company.legalName, company.address, company.city, company.country,
                     company.postalCode, company.taxId, company.siret, company.ifu || '', company.rccm || '',
@@ -3994,6 +4010,10 @@ app.post('/api/company', (req, res) => {
                     company.signatoryTitle || '',
                     fossesToStore,
                     monthlyTargetsToStore,
+                    (company.matriculePrefix != null && company.matriculePrefix !== '') ? String(company.matriculePrefix) : 'EMP',
+                    (company.matriculeIncludeYear === false || company.matriculeIncludeYear === 0) ? 0 : 1,
+                    (company.matriculeSeparator != null) ? String(company.matriculeSeparator) : '-',
+                    (parseInt(company.matriculePadding, 10) > 0) ? parseInt(company.matriculePadding, 10) : 3,
                     entId
                 ],
                 function(updateErr) {
@@ -4005,8 +4025,9 @@ app.post('/api/company', (req, res) => {
             db.run(
                 `INSERT INTO companyInfo (enterpriseId, name, legalName, address, city, country, postalCode, taxId,
                  siret, ifu, rccm, phone, email, website, bankName, iban, bic, vatNumber, tvaRate, retenueSourceRate, currency,
-                 signatoryFirstName, signatoryLastName, signatoryTitle, fosses, monthlyTargets)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                 signatoryFirstName, signatoryLastName, signatoryTitle, fosses, monthlyTargets,
+                 matriculePrefix, matriculeIncludeYear, matriculeSeparator, matriculePadding)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
                     entId, company.name, company.legalName, company.address, company.city, company.country,
                     company.postalCode, company.taxId, company.siret, company.ifu || '', company.rccm || '',
@@ -4017,7 +4038,11 @@ app.post('/api/company', (req, res) => {
                     company.signatoryLastName || '',
                     company.signatoryTitle || '',
                     fossesToStore,
-                    monthlyTargetsToStore
+                    monthlyTargetsToStore,
+                    (company.matriculePrefix != null && company.matriculePrefix !== '') ? String(company.matriculePrefix) : 'EMP',
+                    (company.matriculeIncludeYear === false || company.matriculeIncludeYear === 0) ? 0 : 1,
+                    (company.matriculeSeparator != null) ? String(company.matriculeSeparator) : '-',
+                    (parseInt(company.matriculePadding, 10) > 0) ? parseInt(company.matriculePadding, 10) : 3
                 ],
                 function(insertErr) {
                     if (insertErr) return res.status(500).json({ error: insertErr.message });

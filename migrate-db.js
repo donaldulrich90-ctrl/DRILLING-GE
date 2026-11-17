@@ -282,6 +282,10 @@ const migrations = [
     { name: 'enterprises.claudeApiKey', sql: 'ALTER TABLE enterprises ADD COLUMN claudeApiKey TEXT DEFAULT NULL' },
     { name: 'contracts.billRedrill', sql: 'ALTER TABLE contracts ADD COLUMN billRedrill INTEGER DEFAULT 0' },
     { name: 'companyInfo.fosses', sql: "ALTER TABLE companyInfo ADD COLUMN fosses TEXT DEFAULT '[]'" },
+    { name: 'companyInfo.matriculePrefix', sql: "ALTER TABLE companyInfo ADD COLUMN matriculePrefix TEXT DEFAULT 'EMP'" },
+    { name: 'companyInfo.matriculeIncludeYear', sql: 'ALTER TABLE companyInfo ADD COLUMN matriculeIncludeYear INTEGER DEFAULT 1' },
+    { name: 'companyInfo.matriculeSeparator', sql: "ALTER TABLE companyInfo ADD COLUMN matriculeSeparator TEXT DEFAULT '-'" },
+    { name: 'companyInfo.matriculePadding', sql: 'ALTER TABLE companyInfo ADD COLUMN matriculePadding INTEGER DEFAULT 3' },
     { name: 'sites.miningCutoffDay', sql: 'ALTER TABLE sites ADD COLUMN miningCutoffDay INTEGER DEFAULT 1' },
     // Devise du stock (prix d'achat en XOF/USD/EUR)
     { name: 'inventory.priceCurrency', sql: "ALTER TABLE inventory ADD COLUMN priceCurrency TEXT DEFAULT 'XOF'" },
