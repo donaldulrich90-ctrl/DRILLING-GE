@@ -10297,6 +10297,7 @@
                 setTimeout(function() { renderProjectOverview(); }, 50);
             } else if (view === 'rh') {
                 renderRH();
+                try { refreshEmployeesFromServer(function () { if (typeof currentMainView !== 'undefined' && currentMainView === 'rh') renderRH(); }); } catch (e) {}
             } else if (view === 'inventory') {
                 renderInventory();
             } else if (view === 'accounts') {
@@ -25476,8 +25477,11 @@
             var groupOpts = [['none', 'Aucun'], ['team', 'Équipe'], ['engin', 'Type d\'engin'], ['rotation', 'Rotation']]
                 .map(function(o) { return '<option value="' + o[0] + '"' + (rhGroupBy === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('');
             var html = '<div class="mb-4 flex justify-between items-center">' +
-                '<h3 class="text-xl font-bold">Liste des travailleurs</h3>' +
+                '<h3 class="text-xl font-bold">Liste des travailleurs <span class="text-slate-400 text-sm font-normal">(' + employeesToShow.length + ')</span></h3>' +
+                '<div class="flex gap-2">' +
+                '<button onclick="refreshRHNow()" title="Recharger la liste depuis le serveur" class="bg-slate-600 hover:bg-slate-500 text-white px-3 py-2 rounded-lg">🔄 Rafraîchir</button>' +
                 '<button onclick="showAddEmployeeModal()" class="ged-btn-primary px-4 py-2 rounded-lg">+ Nouvel employé</button>' +
+                '</div>' +
                 '</div>' +
                 '<div class="mb-4 flex flex-col sm:flex-row gap-2 sm:items-center">' +
                 '<input type="text" id="rhSearch" placeholder="Rechercher..." class="flex-1 bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white" onkeyup="filterEmployees()">' +
@@ -32811,6 +32815,27 @@
         function getEmployeesForRH() {
             return employees || [];
         }
+        /** Recharge la liste des employés depuis le serveur (évite d'afficher une liste en cache périmée après ajout sur un autre poste). */
+        function refreshEmployeesFromServer(cb) {
+            if (!(window.API && window.API.Employees && window.API.Employees.getAll && window.API.getAuthToken && window.API.getAuthToken())) { if (cb) cb(false); return; }
+            window.API.Employees.getAll().then(function (list) {
+                var arr = Array.isArray(list) ? list : (list && Array.isArray(list.employees) ? list.employees : null);
+                if (arr) {
+                    employees = arr.slice();
+                    try { localStorage.setItem('forage_employees', JSON.stringify(employees)); } catch (e) {}
+                }
+                if (cb) cb(!!arr);
+            }).catch(function () { if (cb) cb(false); });
+        }
+        window.refreshEmployeesFromServer = refreshEmployeesFromServer;
+        window.refreshRHNow = function () {
+            var btns = document.querySelectorAll('button[onclick="refreshRHNow()"]');
+            btns.forEach(function (b) { b.disabled = true; b.textContent = '⏳ …'; });
+            refreshEmployeesFromServer(function (ok) {
+                try { if (typeof currentMainView === 'undefined' || currentMainView === 'rh') renderRH(); } catch (e) {}
+                if (!ok) { try { alert('Impossible de recharger depuis le serveur (connexion ?). La liste affichée reste celle en cache.'); } catch (e) {} }
+            });
+        };
         
         function getInvoicesForSite() {
             if (!currentSiteId) return invoices || [];
