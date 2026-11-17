@@ -31268,11 +31268,14 @@
                 + '<div class="flex justify-between items-center mb-4"><h2 class="text-xl font-bold">Gérer les fosses</h2>'
                 + '<button type="button" onclick="document.getElementById(\'fosseManagerModal\').remove()" class="text-slate-400 hover:text-white text-2xl">&times;</button></div>'
                 + '<p class="text-slate-400 text-sm mb-3">Chaque fosse (pattern) est rattachée à un site. L\'objectif (m) est facultatif : une fois renseigné, l\'avancement (réalisé / objectif) s\'affiche ci-dessous et dans les rapports.</p>'
-                + '<div class="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto_auto] gap-2 mb-4">'
+                + '<div class="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto_auto] gap-2 mb-2">'
                 + '<input type="text" id="fosseNewName" class="bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white" placeholder="Nom de la fosse / pattern (ex: P17-239-233-304)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();addFosse();}">'
                 + '<select id="fosseNewSite" class="bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white">' + fosseSiteOptions(defSite) + '</select>'
                 + '<input type="number" id="fosseNewObjective" min="0" step="0.1" class="bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white w-32" placeholder="Objectif (m)" onkeydown="if(event.key===\'Enter\'){event.preventDefault();addFosse();}">'
                 + '<button type="button" onclick="addFosse()" class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg font-semibold">Ajouter</button></div>'
+                + '<div class="flex justify-end mb-4">'
+                +   '<button type="button" onclick="loadOrezoneNov2026Patterns()" class="bg-amber-700 hover:bg-amber-600 text-white text-xs px-3 py-1.5 rounded-lg" title="Pré-remplir les 15 patterns du D&B BENCH PLAN novembre 2026 d\'Orezone Bomboré (P17, SE1, H1, SS2) avec leurs objectifs en mètres">⚡ Exemple Orezone Bomboré nov. 2026 (15 patterns)</button>'
+                + '</div>'
                 + '<div id="fosseListContainer"></div></div>';
             document.body.appendChild(modal);
             renderFosseManagerList();
@@ -31362,12 +31365,67 @@
             });
             return f ? (f.objective || null) : null;
         }
+        // Pré-remplissage 1 clic : 15 patterns Orezone Bomboré (D&B BENCH PLAN nov. 2026).
+        // Chaque pattern est un {name, siteId, objective (m)} dans companyInfo.fosses — même
+        // schéma que l'ajout manuel. Les patterns existants (même nom, même site) sont
+        // conservés ; seul l'objectif en mètres est complété s'il manquait.
+        function loadOrezoneNov2026Patterns() {
+            var sample = [
+                // P17 — Fosse P17 (PEN rate 30 m/h @ Ø90 · 20 m/h @ Ø115)
+                { name: 'P17-239-233-306', meters: 5352 },
+                { name: 'P17-239-233-305', meters: 9580 },
+                { name: 'P17-239-233-303', meters: 7520 },
+                { name: 'P17-239-233-304', meters: 8805 },
+                // SE1 — Fosse SE1 (PEN rate 20 m/h · 20 m/h)
+                { name: 'SE1-251-245-501', meters: 687 },
+                { name: 'SE1-251-245-101', meters: 3291 },
+                { name: 'SE1-251-245-102', meters: 4910 },
+                { name: 'SE1-251-245-103', meters: 4332 },
+                // H1 — Fosse H1 (PEN rate 30 m/h · 30 m/h)
+                { name: 'H1-233-227-106', meters: 8616 },
+                // SS2 — Fosse SS2
+                { name: 'SS2-245-239-501', meters: 637 },
+                { name: 'SS2-245-239-101', meters: 2904 },
+                { name: 'SS2-245-239-102', meters: 4712 },
+                { name: 'SS2-245-239-103', meters: 4542 },
+                { name: 'SS2-245-239-104', meters: 2101 },
+                { name: 'SS2-251-245-101', meters: 1172 }
+            ];
+            var totalM = sample.reduce(function (s, p) { return s + p.meters; }, 0);
+            if (!confirm('Pré-remplir les ' + sample.length + ' patterns du D&B BENCH PLAN novembre 2026 (Orezone Bomboré) ?\n\n'
+                + '· P17 : 4 patterns · 31 257 m\n'
+                + '· SE1 : 4 patterns · 13 220 m\n'
+                + '· H1  : 1 pattern · 8 616 m\n'
+                + '· SS2 : 6 patterns · 16 068 m\n\n'
+                + 'Total : ' + totalM.toLocaleString('fr-FR') + ' m d\'objectifs.\n\n'
+                + 'Les patterns existants au même nom sont conservés (objectif complété si vide).')) return;
+            var siteId = (typeof currentSiteId !== 'undefined' && currentSiteId != null) ? currentSiteId : null;
+            var raw = getFossesRaw();
+            var added = 0, updated = 0;
+            sample.forEach(function (p) {
+                var dup = raw.find(function (f) {
+                    return f.name.toLowerCase() === p.name.toLowerCase() && String(f.siteId) === String(siteId);
+                });
+                if (dup) {
+                    if (!dup.objective || dup.objective <= 0) { dup.objective = p.meters; updated++; }
+                } else {
+                    raw.push({ name: p.name, siteId: siteId, objective: p.meters });
+                    added++;
+                }
+            });
+            companyInfo.fosses = raw;
+            renderFosseManagerList();
+            renderFossesDatalist(currentSiteId);
+            try { saveData(); } catch (e) {}
+            alert(added + ' pattern(s) ajouté(s)' + (updated ? ', ' + updated + ' objectif(s) complété(s)' : '') + '.');
+        }
         window.openFosseManager = openFosseManager;
         window.addFosse = addFosse;
         window.removeFosseAt = removeFosseAt;
         window.setFosseObjective = setFosseObjective;
         window.getFosseObjective = getFosseObjective;
         window._fosseRealizedMeters = _fosseRealizedMeters;
+        window.loadOrezoneNov2026Patterns = loadOrezoneNov2026Patterns;
 
         // ================= Import plan de forage (.str / .csv — interop Surpac/Deswik/Datamine) =================
         // Stockage module_state 'importPlan' : { patterns: { <KEY>: { name, siteId, files:{<filename>:{holes,meters,holeCount,importedAt,type}}, objective, holeCount, updatedAt } } }
