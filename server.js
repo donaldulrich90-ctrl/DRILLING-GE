@@ -135,6 +135,13 @@ app.get('/logo-client-vital.png', (req, res) => {
     if (fs.existsSync(p)) return res.sendFile(p);
     res.sendFile(path.join(__dirname, 'logo-client-vital.svg'));
 });
+// Logo client OREZONE (asset par défaut quand le client partenaire s'appelle OREZONE
+// et n'a pas de logo propre téléversé dans sa fiche client).
+app.get('/logo-client-orezone.png', (req, res) => {
+    const p = path.join(__dirname, 'public', 'logo-client-orezone.png');
+    if (fs.existsSync(p)) return res.sendFile(p);
+    res.status(404).end();
+});
 
 // Connexion à la base de données (module db.js : WAL, clés étrangères, intégrité)
 if (!fs.existsSync(DB_PATH)) {
