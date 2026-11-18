@@ -29944,6 +29944,14 @@
         }
 
         function findPartnerClientForReport(records) {
+            // Chercher OREZONE en priorité (client courant), puis VITAL en repli
+            // historique — les deux sont des alias « client partenaire » par défaut.
+            var orezone = clients && clients.find(function(c) {
+                return c && c.name && /^\s*orezone\b/i.test(String(c.name).trim());
+            });
+            if (orezone) return orezone;
+            orezone = clients && clients.find(function(c) { return c && c.name && /orezone/i.test(String(c.name)); });
+            if (orezone) return orezone;
             var vital = clients && clients.find(function(c) {
                 return c && c.name && /^\s*vital\b/i.test(String(c.name).trim());
             });
@@ -29968,13 +29976,20 @@
                     if (clients.length) return clients[0];
                 }
             }
-            return { name: 'VITAL', address: '', logo: '' };
+            // Par défaut : OREZONE (client partenaire courant, remplace l'ancien VITAL).
+            return { name: 'OREZONE', address: '', logo: '' };
         }
 
         function getPartnerClientLogoSrc(client) {
+            // Priorité absolue au logo téléversé dans la fiche client.
             var lg = client && client.logo && String(client.logo).trim();
             if (lg) return lg;
-            return resolveStaticAssetUrl('logo-client-vital.png');
+            // Sinon, fallback par nom : OREZONE → logo Orezone ; VITAL → logo Vital ;
+            // tout autre client sans logo → logo Orezone (client partenaire par défaut).
+            var nm = String((client && client.name) || '').toLowerCase();
+            if (/orezone/.test(nm)) return resolveStaticAssetUrl('logo-client-orezone.png');
+            if (/vital/.test(nm)) return resolveStaticAssetUrl('logo-client-vital.png');
+            return resolveStaticAssetUrl('logo-client-orezone.png');
         }
 
         function buildReportHeaderTripleHtml(companyName, companyAddress, companyPhone, companyEmail, records) {
