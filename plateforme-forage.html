@@ -1457,17 +1457,34 @@
 
         <!-- Vue Dashboard -->
         <div id="mainView-dashboard" class="main-view">
-            <div id="gedDashCompany" class="hidden items-center gap-4 mb-5 p-4 rounded-xl border border-slate-700 bg-slate-800/60">
-                <img id="gedDashCompanyLogo" src="/ge-logo.png" alt="" class="object-contain bg-white rounded-lg p-1.5" style="height:56px;max-width:170px;">
-                <div>
-                    <p class="text-[10px] font-bold tracking-[0.2em] uppercase text-slate-500">Entreprise</p>
-                    <p id="gedDashCompanyName" class="text-xl font-extrabold text-white">—</p>
+            <!-- Couverture style « Rapport journalier de forage » (reprend la maquette du
+                 PowerPoint journalier — PR #199). Remplie par renderDashboardHeroCover(). -->
+            <div id="gedDashHeroCover" class="mb-6 rounded-xl overflow-hidden border border-slate-800" style="background:#141414;">
+                <div class="px-6 md:px-10 pt-6 md:pt-8 pb-6 md:pb-8">
+                    <!-- Ligne des deux logos -->
+                    <div class="flex items-center justify-between gap-6 mb-6">
+                        <div class="bg-white rounded-xl px-3 py-2 flex items-center justify-center" style="height:80px;min-width:140px;max-width:260px;flex:0 0 auto;">
+                            <img id="gedCoverSubscriberLogo" src="/ge-logo.png" alt="" style="max-height:60px;max-width:220px;object-fit:contain;">
+                        </div>
+                        <div class="bg-white rounded-xl px-3 py-2 flex items-center justify-center" style="height:80px;min-width:140px;max-width:260px;flex:0 0 auto;">
+                            <img id="gedCoverPartnerLogo" src="" alt="" style="max-height:60px;max-width:220px;object-fit:contain;">
+                        </div>
+                    </div>
+                    <!-- Titre -->
+                    <div class="text-center">
+                        <h2 class="font-extrabold tracking-wide text-white" style="font-size:clamp(22px,3.4vw,38px);line-height:1.1;letter-spacing:0.03em;">RAPPORT JOURNALIER DE FORAGE</h2>
+                        <div class="mx-auto mt-4 mb-4" style="width:80px;height:5px;background:#F5B800;border-radius:2px;"></div>
+                        <p id="gedCoverSubscriberName" class="text-slate-200 font-semibold" style="font-size:clamp(14px,1.6vw,20px);letter-spacing:0.02em;">—</p>
+                        <p id="gedCoverProjectLine" class="text-slate-400 mt-2" style="font-size:clamp(11px,1.3vw,15px);">—</p>
+                        <p id="gedCoverProduction" class="font-extrabold mt-6" style="color:#F5B800;font-size:clamp(34px,5.6vw,60px);line-height:1;">0 m</p>
+                        <p class="text-slate-500 mt-2 uppercase" style="font-size:11px;letter-spacing:0.25em;">Production réalisée du jour</p>
+                    </div>
                 </div>
             </div>
-            <div class="mb-5">
-                <p class="text-[10px] font-bold tracking-[0.2em] uppercase text-slate-500 mb-2">Operations control room</p>
-                <h2 class="ged-page-title text-2xl md:text-3xl font-extrabold tracking-tight" data-i18n="dashboard.title">Centre de pilotage des opérations</h2>
-                <p class="text-slate-500 text-sm mt-1">État du parc, production et disponibilité en temps réel.</p>
+            <!-- Rappel du centre de pilotage, en petit -->
+            <div class="mb-4">
+                <p class="text-[10px] font-bold tracking-[0.2em] uppercase text-slate-500 mb-1">Operations control room</p>
+                <p class="text-slate-500 text-sm" data-i18n="dashboard.title_sub">Centre de pilotage des opérations — état du parc, production et disponibilité en temps réel.</p>
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-4">
                 <div class="ged-kpi-card bg-slate-800 p-4 rounded-xl border border-slate-700">
@@ -6158,21 +6175,14 @@
             img.src = logo || '/ge-logo.png';
             img.alt = (ent && ent.name) ? ent.name : 'GOOD ENGINEERS';
 
-            // Bannière entreprise sur la page d'accueil (Centre de pilotage)
-            var banner = document.getElementById('gedDashCompany');
-            if (banner) {
-                var bImg = document.getElementById('gedDashCompanyLogo');
-                var bName = document.getElementById('gedDashCompanyName');
-                if (logo) {
-                    if (bImg) bImg.src = logo;
-                    if (bName) bName.textContent = (ent && ent.name) ? ent.name : '';
-                    banner.classList.remove('hidden');
-                    banner.classList.add('flex');
-                } else {
-                    banner.classList.add('hidden');
-                    banner.classList.remove('flex');
-                }
-            }
+            // Couverture « Rapport journalier de forage » sur l'accueil :
+            // logo abonné (à gauche) + nom entreprise. Le reste (logo client, projet,
+            // date, N machines, production du jour) est rempli par renderDashboardHeroCover().
+            var coverSub = document.getElementById('gedCoverSubscriberLogo');
+            var coverName = document.getElementById('gedCoverSubscriberName');
+            if (coverSub) coverSub.src = logo || '/ge-logo.png';
+            if (coverName) coverName.textContent = (ent && ent.name) ? ent.name : ((companyInfo && companyInfo.name) || 'GOOD ENGINEERS');
+            try { if (typeof renderDashboardHeroCover === 'function') renderDashboardHeroCover(); } catch (e) {}
         }
 
         function applyUserPermissions() {
@@ -6934,6 +6944,7 @@
         // ============================================
         function renderDashboard() {
             try { if (typeof applyEnterpriseBranding === 'function') applyEnterpriseBranding(); } catch (e) {}
+            try { renderDashboardHeroCover(); } catch (e) {}
             var grid = document.getElementById('drillsGrid');
             if (!grid) return;
 
@@ -7287,6 +7298,93 @@
             renderDashAlerts();
             initDashProductionChart();
         }
+
+        // Couverture accueil « Rapport journalier de forage » — reprend la maquette du
+        // PowerPoint journalier (PR #199) : logos abonné & client, titre, filet jaune,
+        // nom entreprise, ligne « Projet / site • date • N machine(s) » et gros
+        // métrage du jour. Rafraîchie à chaque rendu du tableau de bord.
+        function renderDashboardHeroCover() {
+            try {
+                var subLogoEl = document.getElementById('gedCoverSubscriberLogo');
+                var subNameEl = document.getElementById('gedCoverSubscriberName');
+                var partnerLogoEl = document.getElementById('gedCoverPartnerLogo');
+                var projectLineEl = document.getElementById('gedCoverProjectLine');
+                var prodEl = document.getElementById('gedCoverProduction');
+                if (!prodEl || !projectLineEl) return;
+
+                // Logo abonné + nom entreprise
+                if (subLogoEl && typeof getSubscriberLogoSrcForReport === 'function') {
+                    subLogoEl.src = getSubscriberLogoSrcForReport();
+                }
+                if (subNameEl && typeof getReportBrandSubscriberName === 'function') {
+                    subNameEl.textContent = (getReportBrandSubscriberName() || '').toUpperCase();
+                }
+
+                // Saisies du jour (brouillons inclus)
+                var todayStr = (typeof getLocalDateYYYYMMDD === 'function') ? getLocalDateYYYYMMDD(new Date()) : new Date().toISOString().slice(0, 10);
+                var recs = (typeof dailyDataRecords !== 'undefined' && Array.isArray(dailyDataRecords)) ? dailyDataRecords : [];
+                var todayRecs = recs.filter(function (r) { return r && r.date === todayStr; });
+
+                // Logo client partenaire : utilise la même logique que les rapports (client lié aux saisies du jour, sinon VITAL par défaut)
+                if (partnerLogoEl) {
+                    var partnerSrc = '';
+                    try {
+                        if (typeof findPartnerClientForReport === 'function' && typeof getPartnerClientLogoSrc === 'function') {
+                            var partner = findPartnerClientForReport(todayRecs);
+                            partnerSrc = getPartnerClientLogoSrc(partner);
+                        }
+                    } catch (e) { partnerSrc = ''; }
+                    if (partnerSrc) { partnerLogoEl.src = partnerSrc; partnerLogoEl.parentNode.style.display = ''; }
+                    else { partnerLogoEl.parentNode.style.display = 'none'; }
+                }
+
+                // Projet / site
+                var projectLabel = '—';
+                try {
+                    if (typeof getReportProjectLabel === 'function') projectLabel = getReportProjectLabel(todayRecs) || '—';
+                    else if (typeof currentSiteId !== 'undefined' && currentSiteId != null && currentSiteId !== '' && typeof sites !== 'undefined' && sites.length) {
+                        var s0 = sites.find(function (x) { return String(x.id) === String(currentSiteId); });
+                        if (s0) projectLabel = s0.name || s0.code || ('Site ' + s0.id);
+                    } else if (typeof companyInfo !== 'undefined' && companyInfo && companyInfo.name) {
+                        projectLabel = companyInfo.name;
+                    }
+                } catch (e) {}
+
+                // Date du jour (long format français)
+                var dateLabel;
+                try { dateLabel = (typeof formatDate === 'function') ? formatDate(todayStr) : new Date().toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }); }
+                catch (e) { dateLabel = todayStr; }
+
+                // Nombre de machines ayant foré aujourd'hui (même logique que le PowerPoint)
+                var nbMachines = 0;
+                try {
+                    if (typeof getReportUsedMachineCount === 'function') nbMachines = getReportUsedMachineCount(todayRecs);
+                    else {
+                        var seen = {};
+                        todayRecs.forEach(function (r) { if (r && r.machineId) seen[r.machineId] = 1; });
+                        nbMachines = Object.keys(seen).length;
+                    }
+                } catch (e) { nbMachines = 0; }
+
+                projectLineEl.textContent = 'Projet / site : ' + String(projectLabel).toUpperCase()
+                    + '   •   ' + dateLabel
+                    + '   •   ' + nbMachines + ' machine(s)';
+
+                // Production réalisée du jour (brouillons inclus — cohérent avec la KPI du dashboard)
+                var totalM = 0;
+                todayRecs.forEach(function (r) {
+                    var d = (typeof _rpData === 'function') ? _rpData(r) : (r && r.data ? r.data : {});
+                    totalM += parseFloat(d && d.metersDrilled) || 0;
+                });
+                var txt;
+                try { txt = (Math.round(totalM * 100) / 100).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+                catch (e) { txt = (Math.round(totalM * 100) / 100).toString(); }
+                prodEl.textContent = txt + ' m';
+            } catch (e) {
+                console.warn('renderDashboardHeroCover:', e);
+            }
+        }
+        window.renderDashboardHeroCover = renderDashboardHeroCover;
 
         function isManagementRole(role) {
             return !role || ['admin','super_admin','gestionnaire','gestionnaire_site'].indexOf(role) >= 0;
