@@ -440,6 +440,7 @@ db.serialize(() => {
             alert INTEGER DEFAULT 0,
             averagePrice REAL DEFAULT 0,
             priceCurrency TEXT DEFAULT 'XOF',
+            locationId INTEGER,
             createdAt TEXT DEFAULT CURRENT_TIMESTAMP
         )
     `, (err) => {
@@ -651,9 +652,11 @@ db.serialize(() => {
             reason TEXT DEFAULT '',
             machineId TEXT DEFAULT '',
             notes TEXT DEFAULT '',
+            locationId INTEGER,
             createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (articleId) REFERENCES inventory(id),
-            FOREIGN KEY (enterpriseId) REFERENCES enterprises(id)
+            FOREIGN KEY (enterpriseId) REFERENCES enterprises(id),
+            FOREIGN KEY (locationId) REFERENCES stock_locations(id)
         )
     `, (err) => {
         if (err) console.error('Erreur table stockMovements:', err);
@@ -863,6 +866,110 @@ db.serialize(() => {
     `, (err) => {
         if (err) console.error('Erreur weeklyReports:', err);
         else console.log('✅ Table weeklyReports');
+    });
+    // Stock multi-sites : Bureau central (Ouagadougou) + Magasins de chantier
+    db.run(`
+        CREATE TABLE IF NOT EXISTS stock_locations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            enterpriseId INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            kind TEXT NOT NULL DEFAULT 'site',
+            siteId INTEGER,
+            address TEXT DEFAULT '',
+            managerUserId INTEGER,
+            isActive INTEGER NOT NULL DEFAULT 1,
+            notes TEXT DEFAULT '',
+            createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (enterpriseId) REFERENCES enterprises(id),
+            FOREIGN KEY (siteId) REFERENCES sites(id),
+            FOREIGN KEY (managerUserId) REFERENCES users(id)
+        )
+    `, (err) => {
+        if (err) console.error('Erreur stock_locations:', err);
+        else console.log('✅ Table stock_locations');
+    });
+    db.run(`
+        CREATE TABLE IF NOT EXISTS stock_transfers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            enterpriseId INTEGER NOT NULL,
+            transferNumber TEXT NOT NULL,
+            fromLocationId INTEGER NOT NULL,
+            toLocationId INTEGER NOT NULL,
+            status TEXT NOT NULL DEFAULT 'draft',
+            sentDate TEXT,
+            receivedDate TEXT,
+            sentByUsername TEXT DEFAULT '',
+            receivedByUsername TEXT DEFAULT '',
+            carrier TEXT DEFAULT '',
+            notes TEXT DEFAULT '',
+            createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (enterpriseId) REFERENCES enterprises(id),
+            FOREIGN KEY (fromLocationId) REFERENCES stock_locations(id),
+            FOREIGN KEY (toLocationId) REFERENCES stock_locations(id)
+        )
+    `, (err) => {
+        if (err) console.error('Erreur stock_transfers:', err);
+        else console.log('✅ Table stock_transfers');
+    });
+    db.run(`
+        CREATE TABLE IF NOT EXISTS stock_transfer_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            transferId INTEGER NOT NULL,
+            itemName TEXT NOT NULL,
+            itemCategory TEXT DEFAULT '',
+            unit TEXT DEFAULT '',
+            quantity REAL NOT NULL,
+            unitPrice REAL DEFAULT 0,
+            priceCurrency TEXT DEFAULT 'XOF',
+            notes TEXT DEFAULT '',
+            FOREIGN KEY (transferId) REFERENCES stock_transfers(id) ON DELETE CASCADE
+        )
+    `, (err) => {
+        if (err) console.error('Erreur stock_transfer_items:', err);
+        else console.log('✅ Table stock_transfer_items');
+    });
+    db.run(`
+        CREATE TABLE IF NOT EXISTS stock_replenishment_requests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            enterpriseId INTEGER NOT NULL,
+            requestNumber TEXT NOT NULL,
+            siteLocationId INTEGER NOT NULL,
+            requestedByUsername TEXT DEFAULT '',
+            requestedByName TEXT DEFAULT '',
+            requestDate TEXT DEFAULT (date('now')),
+            status TEXT NOT NULL DEFAULT 'pending',
+            urgency TEXT DEFAULT 'normal',
+            decidedByUsername TEXT DEFAULT '',
+            decidedAt TEXT,
+            decisionNotes TEXT DEFAULT '',
+            fulfilledByTransferId INTEGER,
+            notes TEXT DEFAULT '',
+            createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (enterpriseId) REFERENCES enterprises(id),
+            FOREIGN KEY (siteLocationId) REFERENCES stock_locations(id),
+            FOREIGN KEY (fulfilledByTransferId) REFERENCES stock_transfers(id)
+        )
+    `, (err) => {
+        if (err) console.error('Erreur stock_replenishment_requests:', err);
+        else console.log('✅ Table stock_replenishment_requests');
+    });
+    db.run(`
+        CREATE TABLE IF NOT EXISTS stock_replenishment_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            requestId INTEGER NOT NULL,
+            itemName TEXT NOT NULL,
+            itemCategory TEXT DEFAULT '',
+            unit TEXT DEFAULT '',
+            currentQuantity REAL DEFAULT 0,
+            minStock REAL DEFAULT 0,
+            requestedQty REAL NOT NULL,
+            approvedQty REAL,
+            notes TEXT DEFAULT '',
+            FOREIGN KEY (requestId) REFERENCES stock_replenishment_requests(id) ON DELETE CASCADE
+        )
+    `, (err) => {
+        if (err) console.error('Erreur stock_replenishment_items:', err);
+        else console.log('✅ Table stock_replenishment_items');
     });
 
     function migrateIgnoreDup(sql, label) {

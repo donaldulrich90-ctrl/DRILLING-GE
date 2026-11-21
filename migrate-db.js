@@ -349,7 +349,124 @@ const migrations = [
         htmlContent TEXT DEFAULT '',
         summary TEXT DEFAULT '{}',
         FOREIGN KEY (enterpriseId) REFERENCES enterprises(id)
-    )` }
+    )` },
+    // ─── Stock multi-sites : Bureau central (Ouagadougou) + Magasins de chantier ───
+    // Chaque article (inventory) et chaque mouvement (stockMovements) est désormais
+    // rattaché à une location. Le bureau central reçoit les commandes fournisseurs
+    // et expédie vers les sites ; les sites reçoivent, consomment, et remontent
+    // des demandes de réapprovisionnement quand ils passent sous le seuil.
+    { name: 'stock_locations.table', sql: `CREATE TABLE IF NOT EXISTS stock_locations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        enterpriseId INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        kind TEXT NOT NULL DEFAULT 'site',
+        siteId INTEGER,
+        address TEXT DEFAULT '',
+        managerUserId INTEGER,
+        isActive INTEGER NOT NULL DEFAULT 1,
+        notes TEXT DEFAULT '',
+        createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (enterpriseId) REFERENCES enterprises(id),
+        FOREIGN KEY (siteId) REFERENCES sites(id),
+        FOREIGN KEY (managerUserId) REFERENCES users(id)
+    )` },
+    { name: 'inventory.locationId', sql: `ALTER TABLE inventory ADD COLUMN locationId INTEGER` },
+    { name: 'stockMovements.locationId', sql: `ALTER TABLE stockMovements ADD COLUMN locationId INTEGER` },
+    { name: 'stock_transfers.table', sql: `CREATE TABLE IF NOT EXISTS stock_transfers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        enterpriseId INTEGER NOT NULL,
+        transferNumber TEXT NOT NULL,
+        fromLocationId INTEGER NOT NULL,
+        toLocationId INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'draft',
+        sentDate TEXT,
+        receivedDate TEXT,
+        sentByUsername TEXT DEFAULT '',
+        receivedByUsername TEXT DEFAULT '',
+        carrier TEXT DEFAULT '',
+        notes TEXT DEFAULT '',
+        createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (enterpriseId) REFERENCES enterprises(id),
+        FOREIGN KEY (fromLocationId) REFERENCES stock_locations(id),
+        FOREIGN KEY (toLocationId) REFERENCES stock_locations(id)
+    )` },
+    { name: 'stock_transfer_items.table', sql: `CREATE TABLE IF NOT EXISTS stock_transfer_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        transferId INTEGER NOT NULL,
+        itemName TEXT NOT NULL,
+        itemCategory TEXT DEFAULT '',
+        unit TEXT DEFAULT '',
+        quantity REAL NOT NULL,
+        unitPrice REAL DEFAULT 0,
+        priceCurrency TEXT DEFAULT 'XOF',
+        notes TEXT DEFAULT '',
+        FOREIGN KEY (transferId) REFERENCES stock_transfers(id) ON DELETE CASCADE
+    )` },
+    { name: 'stock_replenishment_requests.table', sql: `CREATE TABLE IF NOT EXISTS stock_replenishment_requests (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        enterpriseId INTEGER NOT NULL,
+        requestNumber TEXT NOT NULL,
+        siteLocationId INTEGER NOT NULL,
+        requestedByUsername TEXT DEFAULT '',
+        requestedByName TEXT DEFAULT '',
+        requestDate TEXT DEFAULT (date('now')),
+        status TEXT NOT NULL DEFAULT 'pending',
+        urgency TEXT DEFAULT 'normal',
+        decidedByUsername TEXT DEFAULT '',
+        decidedAt TEXT,
+        decisionNotes TEXT DEFAULT '',
+        fulfilledByTransferId INTEGER,
+        notes TEXT DEFAULT '',
+        createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (enterpriseId) REFERENCES enterprises(id),
+        FOREIGN KEY (siteLocationId) REFERENCES stock_locations(id),
+        FOREIGN KEY (fulfilledByTransferId) REFERENCES stock_transfers(id)
+    )` },
+    { name: 'stock_replenishment_items.table', sql: `CREATE TABLE IF NOT EXISTS stock_replenishment_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        requestId INTEGER NOT NULL,
+        itemName TEXT NOT NULL,
+        itemCategory TEXT DEFAULT '',
+        unit TEXT DEFAULT '',
+        currentQuantity REAL DEFAULT 0,
+        minStock REAL DEFAULT 0,
+        requestedQty REAL NOT NULL,
+        approvedQty REAL,
+        notes TEXT DEFAULT '',
+        FOREIGN KEY (requestId) REFERENCES stock_replenishment_requests(id) ON DELETE CASCADE
+    )` },
+    { name: 'stock_locations.seedCentral', sql: `
+        INSERT INTO stock_locations (enterpriseId, name, kind, siteId, isActive, notes)
+        SELECT e.id,
+               'Bureau central (Ouagadougou)',
+               'central',
+               NULL,
+               1,
+               'Créé automatiquement pour la gestion multi-sites. Reçoit les commandes fournisseurs et expédie vers les magasins de chantier.'
+        FROM enterprises e
+        WHERE NOT EXISTS (
+            SELECT 1 FROM stock_locations l WHERE l.enterpriseId = e.id AND l.kind = 'central'
+        )` },
+    { name: 'stock_locations.seedSites', sql: `
+        INSERT INTO stock_locations (enterpriseId, name, kind, siteId, isActive, notes)
+        SELECT s.enterpriseId,
+               'Magasin ' || COALESCE(NULLIF(TRIM(s.name), ''), 'site ' || s.id),
+               'site',
+               s.id,
+               1,
+               'Créé automatiquement — stock sur chantier, reçoit du bureau central et gère les consommations.'
+        FROM sites s
+        WHERE NOT EXISTS (
+            SELECT 1 FROM stock_locations l WHERE l.enterpriseId = s.enterpriseId AND l.siteId = s.id
+        )` },
+    { name: 'inventory.locationId.backfill', sql: `
+        UPDATE inventory
+        SET locationId = (SELECT l.id FROM stock_locations l WHERE l.enterpriseId = inventory.enterpriseId AND l.kind = 'central' LIMIT 1)
+        WHERE locationId IS NULL` },
+    { name: 'stockMovements.locationId.backfill', sql: `
+        UPDATE stockMovements
+        SET locationId = (SELECT l.id FROM stock_locations l WHERE l.enterpriseId = stockMovements.enterpriseId AND l.kind = 'central' LIMIT 1)
+        WHERE locationId IS NULL` }
 ];
 
 let completed = 0;
