@@ -9,16 +9,21 @@
  */
 const { generateWeeklyReport } = require('../services/weekly-report-generator');
 
+// Semaine minière : SAMEDI → VENDREDI (7 jours). 0 = dimanche … 6 = samedi.
+// Doit rester aligné avec GE_WEEK_START_DAY dans plateforme-forage.html.
+const WEEK_START_DAY = 6;
+
 function getWeekBounds(refDate) {
-    const d = refDate ? new Date(refDate) : new Date();
-    const day = d.getDay(); // 0=dim
-    const diffToMonday = (day === 0 ? -6 : 1 - day);
-    const monday = new Date(d);
-    monday.setDate(d.getDate() + diffToMonday);
-    const sunday = new Date(monday);
-    sunday.setDate(monday.getDate() + 6);
+    // Calcul en UTC sur la date AAAA-MM-JJ pour éviter tout décalage de fuseau.
+    const ymd = refDate ? String(refDate).slice(0, 10) : new Date().toISOString().slice(0, 10);
+    const [y, m, dd] = ymd.split('-').map(Number);
+    const d = new Date(Date.UTC(y, m - 1, dd));
+    const start = new Date(d);
+    start.setUTCDate(d.getUTCDate() - ((d.getUTCDay() - WEEK_START_DAY + 7) % 7));
+    const end = new Date(start);
+    end.setUTCDate(start.getUTCDate() + 6);
     const toISO = dt => dt.toISOString().slice(0, 10);
-    return { weekStart: toISO(monday), weekEnd: toISO(sunday) };
+    return { weekStart: toISO(start), weekEnd: toISO(end) };
 }
 
 module.exports = function registerWeeklyReportRoutes(app, { db, getEnterpriseId }) {
