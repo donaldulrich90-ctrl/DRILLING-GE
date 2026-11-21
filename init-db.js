@@ -830,6 +830,40 @@ db.serialize(() => {
         if (err) console.error('Erreur report_distribution_emails:', err);
         else console.log('✅ Table report_distribution_emails');
     });
+    // Rapport hebdomadaire configurable (anciennement seulement dans migrate-db.js,
+    // ce qui laissait les installations fraîches avec /api/reports/weekly/* en 500).
+    db.run(`
+        CREATE TABLE IF NOT EXISTS weeklyReportConfigs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            enterpriseId INTEGER NOT NULL,
+            reportDay INTEGER DEFAULT 5,
+            includeSections TEXT DEFAULT '["alerts","production","maintenance","stock","finance"]',
+            recipientName TEXT DEFAULT '',
+            whatsappNumber TEXT DEFAULT '',
+            notes TEXT DEFAULT '',
+            updatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (enterpriseId) REFERENCES enterprises(id)
+        )
+    `, (err) => {
+        if (err) console.error('Erreur weeklyReportConfigs:', err);
+        else console.log('✅ Table weeklyReportConfigs');
+    });
+    db.run(`
+        CREATE TABLE IF NOT EXISTS weeklyReports (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            enterpriseId INTEGER NOT NULL,
+            weekStart TEXT NOT NULL,
+            weekEnd TEXT NOT NULL,
+            generatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
+            generatedBy TEXT DEFAULT '',
+            htmlContent TEXT DEFAULT '',
+            summary TEXT DEFAULT '{}',
+            FOREIGN KEY (enterpriseId) REFERENCES enterprises(id)
+        )
+    `, (err) => {
+        if (err) console.error('Erreur weeklyReports:', err);
+        else console.log('✅ Table weeklyReports');
+    });
 
     function migrateIgnoreDup(sql, label) {
         db.run(sql, (e) => {

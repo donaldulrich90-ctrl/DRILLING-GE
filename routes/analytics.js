@@ -54,7 +54,8 @@ async function collectProduction(db, eid, from, to) {
                     0)), 0) AS fuel,
                 ROUND(AVG(CAST(json_extract(data,'$.availabilityPct') AS REAL)), 1) AS avgAvailability
          FROM dailyDataRecords
-         WHERE enterpriseId = ? AND date >= ? AND date <= ?
+         WHERE machineId IN (SELECT id FROM drills WHERE enterpriseId = ?)
+           AND date >= ? AND date <= ?
            AND workflowStatus IN ('approved','submitted')
          GROUP BY machineId
          ORDER BY meters DESC`,
@@ -70,7 +71,8 @@ async function collectProduction(db, eid, from, to) {
                 ROUND(SUM(CAST(json_extract(data,'$.metersDrilled') AS REAL)), 1) AS meters,
                 ROUND(SUM(CAST(json_extract(data,'$.hours')         AS REAL)), 1) AS hours
          FROM dailyDataRecords
-         WHERE enterpriseId = ? AND date >= ? AND date <= ?
+         WHERE machineId IN (SELECT id FROM drills WHERE enterpriseId = ?)
+           AND date >= ? AND date <= ?
            AND workflowStatus IN ('approved','submitted')
          GROUP BY formation
          HAVING (meters IS NOT NULL AND meters > 0) OR (hours IS NOT NULL AND hours > 0)
