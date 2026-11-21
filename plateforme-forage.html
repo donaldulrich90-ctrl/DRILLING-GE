@@ -7529,6 +7529,10 @@
             if (type === 'provisoire') return { from: _digestAddDays(range.from, -1), to: _digestAddDays(range.to, -1), type: 'provisoire' };
             return { from: range.from, to: range.to, type: 'final' };
         }
+        // Jours retenus pour l'OBJECTIF d'un rapport hebdo. Provisoire : le samedi n'est pas compté
+        // (son target n'est pas ajouté) → objectif sur dimanche → vendredi (6 j). Final : tous les jours.
+        function geWeeklyGoalExcluded(dateStr, type) { if (type !== 'provisoire') return false; var p = String(dateStr).slice(0, 10).split('-'); return new Date(Date.UTC(+p[0], +p[1] - 1, +p[2])).getUTCDay() === 6; }
+        function geWeeklyGoalDays(fromStr, toStr, type) { var n = 0; for (var d = fromStr; d <= toStr; d = _digestAddDays(d, 1)) { if (!geWeeklyGoalExcluded(d, type)) n++; } return n; }
         // Par défaut : provisoire le samedi (jour de la réunion), final les autres jours.
         function geDefaultWeeklyType(d) { return (d || new Date()).getDay() === 6 ? 'provisoire' : 'final'; }
         function geGetWeeklyType(selectId) { var el = document.getElementById(selectId); return (el && el.value === 'provisoire') ? 'provisoire' : (el ? 'final' : geDefaultWeeklyType()); }
@@ -24742,7 +24746,8 @@
             var dec = function (v, dd) { if (v == null || !isFinite(Number(v))) return 'N/A'; return Number(v).toLocaleString('fr-FR', { minimumFractionDigits: dd == null ? 0 : dd, maximumFractionDigits: dd == null ? 2 : dd }); };
             var nbCalDays = Math.round((new Date(endISO + 'T00:00:00') - new Date(startISO + 'T00:00:00')) / 86400000) + 1;
             var goalDay = (mt && mt.metersDay != null && isFinite(parseFloat(mt.metersDay))) ? parseFloat(mt.metersDay) : ((typeof companyInfo !== 'undefined' && companyInfo && parseFloat(companyInfo.dailyMetersObjective) > 0) ? parseFloat(companyInfo.dailyMetersObjective) : null);
-            var goalWeek = goalDay != null ? goalDay * nbCalDays : null;
+            var goalDaysCount = type ? geWeeklyGoalDays(startISO, endISO, type) : nbCalDays; // provisoire : samedi exclu de l'objectif
+            var goalWeek = goalDay != null ? goalDay * goalDaysCount : null;
             var varW = goalWeek != null ? tot.prod - goalWeek : null;
             var varWPct = (goalWeek != null && goalWeek > 0) ? (varW / goalWeek * 100) : null;
             function card(label, value, color, sub) {
@@ -24754,7 +24759,7 @@
             var pctCmp = function (v, target) { if (v == null) return 'Non renseigné'; var s = dec(v) + ' %'; if (target != null) s += ' / cible ' + dec(target) + ' %'; return s; };
             var bandeau = '<div class="report-kpi-grid">' +
                 card('Production réalisée', fmtM(tot.prod), '#1e40af', 'mètres nouveaux (semaine)') +
-                card('Objectif de la semaine', goalWeek != null ? fmtM(goalWeek) : 'Non renseigné', '#b45309', goalDay != null ? dec(goalDay) + ' m/jour × ' + nbCalDays + ' j' : 'target mine') +
+                card('Objectif de la semaine', goalWeek != null ? fmtM(goalWeek) : 'Non renseigné', '#b45309', goalDay != null ? dec(goalDay) + ' m/jour × ' + goalDaysCount + ' j' + (type === 'provisoire' ? ' (dim. → ven., samedi non compté)' : '') : 'target mine') +
                 card('Écart (réel − objectif)', varW != null ? ((varW >= 0 ? '+' : '−') + dec(Math.abs(varW)) + ' m') : 'N/A', varW == null ? '#0f172a' : (varW >= 0 ? '#166534' : '#b91c1c'), 'sur la semaine') +
                 card('Jours avec production', String(nbDays), '#0f172a', 'moy. ' + (nbDays > 0 ? dec(tot.prod / nbDays) : 'N/A') + ' m/jour') +
                 card('Rendement moyen', rend != null ? dec(rend, 2) + ' m/h' : 'N/A', '#1e40af', 'mètres / heure utilisée') +
@@ -24770,7 +24775,7 @@
                     var ds = dd.toISOString().slice(0, 10);
                     labels.push(ds.slice(8, 10) + '/' + ds.slice(5, 7));
                     realArr.push(parseFloat((byDay[ds] || 0).toFixed(1)));
-                    planArr.push(goalDay != null ? goalDay : null);
+                    planArr.push(goalDay != null && !geWeeklyGoalExcluded(ds, type) ? goalDay : null);
                 }
             }
             var chartHtml = '';
@@ -24877,7 +24882,7 @@
                     var ds = dd.toISOString().slice(0, 10);
                     labels.push(ds.slice(8, 10) + '/' + ds.slice(5, 7));
                     realArr.push(parseFloat((data.byDay[ds] || 0).toFixed(1)));
-                    planArr.push(goalDay != null ? goalDay : null);
+                    planArr.push(goalDay != null && !(opts.weeklyType && geWeeklyGoalExcluded(ds, opts.weeklyType)) ? goalDay : null);
                 }
             }
             function img(cfg, w, h) { try { return (typeof reportChartToImg === 'function') ? reportChartToImg(cfg, w, h) : ''; } catch (e) { return ''; } }
@@ -25038,8 +25043,8 @@
             var periodLabel = 'semaine du ' + fmtFr(rg.startISO) + ' au ' + fmtFr(rg.endISO) + ' — rapport ' + geWeeklyTypeShort(rg.type);
             var mt = (typeof getMonthlyTargetForDate === 'function') ? getMonthlyTargetForDate(rg.startISO) : null;
             var goalDay = (mt && mt.metersDay != null) ? parseFloat(mt.metersDay) : ((typeof companyInfo !== 'undefined' && companyInfo && parseFloat(companyInfo.dailyMetersObjective) > 0) ? parseFloat(companyInfo.dailyMetersObjective) : null);
-            var nbCalDays = Math.round((new Date(rg.endISO + 'T00:00:00') - new Date(rg.startISO + 'T00:00:00')) / 86400000) + 1;
-            var opts = { startISO: rg.startISO, endISO: rg.endISO, titleText: 'RAPPORT HEBDOMADAIRE DE PRODUCTION', periodLabel: periodLabel, periodWord: 'de la semaine', goalPeriod: goalDay != null ? goalDay * nbCalDays : null, goalDay: goalDay, mt: mt, fileName: 'rapport-hebdomadaire-' + geWeeklyTypeShort(rg.type) + '-' + rg.startISO + '.pptx' };
+            var nbGoalDays = geWeeklyGoalDays(rg.startISO, rg.endISO, rg.type); // provisoire : samedi exclu de l'objectif
+            var opts = { startISO: rg.startISO, endISO: rg.endISO, weeklyType: rg.type, titleText: 'RAPPORT HEBDOMADAIRE DE PRODUCTION', periodLabel: periodLabel, periodWord: 'de la semaine', goalPeriod: goalDay != null ? goalDay * nbGoalDays : null, goalDay: goalDay, mt: mt, fileName: 'rapport-hebdomadaire-' + geWeeklyTypeShort(rg.type) + '-' + rg.startISO + '.pptx' };
             ensureReportPlanLoaded(function () {
                 loadVendorScript('vendor/pptxgen.bundle.js', 'https://cdnjs.cloudflare.com/ajax/libs/pptxgenjs/3.12.0/pptxgen.bundle.js').then(function () {
                     try { geBuildPeriodReportPptx(opts); } catch (e) { alert('Export PowerPoint impossible : ' + (e && e.message ? e.message : e)); }
