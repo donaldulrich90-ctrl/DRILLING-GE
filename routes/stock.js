@@ -342,6 +342,73 @@ module.exports = function registerStockRoutes(app, { db, getEnterpriseId }) {
         } catch (e) { res.status(500).json({ error: e.message }); }
     });
 
+    // ───────────────────────── Consommations mensuelles → lignes de facture ───
+    // Agrège les sorties stock (type='exit', hors transferts) des magasins
+    // rattachés aux sites du client donné, sur le mois YYYY-MM, et renvoie
+    // des lignes prêtes à être injectées dans la facture mensuelle.
+    // Chaque ligne : { description, quantity, unit, unitPrice, total, currency }.
+    app.get('/api/invoices/monthly-stock-consumption', async (req, res) => {
+        const eid = reqEid(req, res); if (!eid) return;
+        const clientId = parseInt(req.query.clientId, 10);
+        const month = String(req.query.month || '').slice(0, 7); // YYYY-MM
+        if (!clientId || !/^\d{4}-\d{2}$/.test(month)) {
+            return res.status(400).json({ error: 'Paramètres clientId et month (YYYY-MM) requis' });
+        }
+        try {
+            // Sites de ce client
+            const sites = await qAll('SELECT id, name FROM sites WHERE enterpriseId = ? AND clientId = ?', [eid, clientId]);
+            if (!sites.length) return res.json({ lines: [], total: 0, currency: 'XOF', sitesCount: 0 });
+            const siteIds = sites.map(s => s.id);
+            // Locations magasin de ces sites
+            const placeholders = siteIds.map(() => '?').join(',');
+            const locations = await qAll(
+                `SELECT id FROM stock_locations WHERE enterpriseId = ? AND siteId IN (${placeholders})`,
+                [eid, ...siteIds]
+            );
+            if (!locations.length) return res.json({ lines: [], total: 0, currency: 'XOF', sitesCount: sites.length });
+            const locIds = locations.map(l => l.id);
+            const locPlaceholders = locIds.map(() => '?').join(',');
+            // Sorties du mois (exit), hors transferts (qui remplissent la source "Transfert xxx" dans reason)
+            const movements = await qAll(
+                `SELECT m.*, i.name AS itemName, i.category AS itemCategory, i.unit AS itemUnit
+                 FROM stockMovements m
+                 LEFT JOIN inventory i ON i.id = m.articleId
+                 WHERE m.enterpriseId = ?
+                   AND m.locationId IN (${locPlaceholders})
+                   AND m.type = 'exit'
+                   AND substr(m.date, 1, 7) = ?
+                   AND (m.reason IS NULL OR m.reason NOT LIKE 'Transfert %')`,
+                [eid, ...locIds, month]
+            );
+            // Agrège par (article, prix unitaire, devise)
+            const agg = new Map();
+            for (const m of movements) {
+                const key = (m.itemName || 'Article #' + m.articleId) + '|' + (m.unitPrice || 0) + '|' + (m.priceCurrency || 'XOF') + '|' + (m.itemUnit || 'unité');
+                if (!agg.has(key)) agg.set(key, { itemName: m.itemName || 'Article #' + m.articleId, unit: m.itemUnit || 'unité', unitPrice: Number(m.unitPrice) || 0, currency: m.priceCurrency || 'XOF', quantity: 0 });
+                const row = agg.get(key);
+                row.quantity += Number(m.quantity) || 0;
+            }
+            const lines = [];
+            let total = 0;
+            let currency = 'XOF';
+            for (const row of agg.values()) {
+                const qty = Math.round(row.quantity * 100) / 100;
+                const lineTotal = Math.round(qty * row.unitPrice * 100) / 100;
+                total += lineTotal;
+                currency = row.currency;
+                lines.push({
+                    description: 'Consommation ' + row.itemName + ' — ' + month,
+                    quantity: qty,
+                    unit: row.unit,
+                    unitPrice: row.unitPrice,
+                    total: lineTotal,
+                    currency: row.currency
+                });
+            }
+            res.json({ lines: lines, total: Math.round(total * 100) / 100, currency: currency, sitesCount: sites.length });
+        } catch (e) { res.status(500).json({ error: e.message }); }
+    });
+
     app.delete('/api/stock-replenishment-requests/:id', async (req, res) => {
         const eid = reqEid(req, res); if (!eid) return;
         try {

@@ -15536,10 +15536,10 @@
         function loadMonthlyInvoiceData(clientId, month, monthName) {
             var client = clients.find(function(c) { return c.id === clientId; });
             if (!client) return;
-            
+
             currentInvoiceClientId = clientId;
             invoiceItems = [];
-            
+
             var fromDrills = getMonthlyInvoiceLinesFromDrills(clientId, month, monthName);
             if (fromDrills.length > 0) {
                 invoiceItems = fromDrills;
@@ -15550,6 +15550,22 @@
                         clientId
                     );
                 }
+                // + Consommations stock des magasins de chantier rattachés aux sites du client
+                // Ajoutées asynchronement pour ne pas bloquer le chargement principal.
+                try {
+                    if (window.API && window.API.StockConsumption) {
+                        window.API.StockConsumption.monthlyForClient(clientId, month).then(function (data) {
+                            if (!data || !Array.isArray(data.lines) || !data.lines.length) return;
+                            data.lines.forEach(function (ln) {
+                                invoiceItems.push({ description: ln.description, quantity: ln.quantity, unitPrice: ln.unitPrice, unit: ln.unit || 'unité' });
+                            });
+                            var nEl = document.getElementById('invoiceNotes');
+                            if (nEl) nEl.value = (nEl.value || '') + '\n+ ' + data.lines.length + ' ligne(s) de consommation stock (magasins de chantier) — ' + Math.round(data.total || 0).toLocaleString('fr-FR') + ' ' + (data.currency || 'XOF');
+                            renderInvoiceItems();
+                            calculateInvoiceTotal();
+                        }).catch(function (e) { console.warn('Consommation stock :', e && e.message ? e.message : e); });
+                    }
+                } catch (e) {}
             } else if (client.machines && client.machines.length > 0) {
                 var monthlyData = client.monthlyMeters && client.monthlyMeters[month] ? client.monthlyMeters[month] : {};
                 client.machines.forEach(function(machine) {
