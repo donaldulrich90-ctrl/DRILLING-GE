@@ -46,7 +46,8 @@ async function collectProduction(db, eid, start, end) {
                 SUM(CAST(json_extract(data,'$.metersDrilled') AS REAL)) as totalMeters,
                 SUM(CAST(json_extract(data,'$.hours') AS REAL)) as totalHours
          FROM dailyDataRecords
-         WHERE enterpriseId = ? AND date >= ? AND date <= ?
+         WHERE machineId IN (SELECT id FROM drills WHERE enterpriseId = ?)
+           AND date >= ? AND date <= ?
            AND workflowStatus IN ('approved','submitted')
          GROUP BY machineId
          ORDER BY totalMeters DESC`,

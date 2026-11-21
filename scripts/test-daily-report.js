@@ -53,6 +53,7 @@ const helperNames = [
 ];
 const helpers = helperNames.map((name) => declaration('function', name, '}')).join('\n');
 const reportVariables = ['REPORT_PRINT_ENTETE_CSS', 'DAILY_REPORT_PRINT_CSS', 'DAILY_STOPPAGE_REASONS',
+    'TRUE_STANDBY_REASONS',
     'RPT_CHART_AVAIL_THRESHOLD', 'RPT_CHART_TREND_DAYS', '_rptFontBase', 'RPT_C', 'RPT_CHART_LAYOUTS', 'RPT_PPTX_CHART_GROUPS',
     'reportPatternsByZone', 'PATTERN_MARK_TYPES', 'PATTERN_MARK_ORDER', 'PATTERN_LEGEND_POSITIONS', 'PATTERN_DEFAULT_RADIUS']
     .map((name) => declaration('var', name, ';')).join('\n');
@@ -204,10 +205,17 @@ check('explicit site objectives require an unambiguous matching site', () => {
 });
 
 check('operational totals keep new metres, redrill, flushing, standby and breakdown separate', () => {
+    // Le STANDBY ne compte désormais que les vrais arrêts d'attente de forage
+    // (no-work-area-scheduled, standby-for-mark-up, manque-trou). Un motif comme
+    // « blast-stb » est reclassé en GSA — voir TRUE_STANDBY_REASONS dans le code.
     const app = fixture();
     const metrics = app.computeOperationalReportMetrics({
         shift: 'day', hours: 8, metersDrilled: 80, redrillMeters: 7, flushingMeters: 3,
-        stoppages: [{ reason: 'hydraulic-bdn', hours: 2 }, { reason: 'blast-stb', hours: 1 }, { reason: 'move-gsa', hours: 1 }],
+        stoppages: [
+            { reason: 'hydraulic-bdn', hours: 2 },
+            { reason: 'no-work-area-scheduled-stb', hours: 1 },
+            { reason: 'move-gsa', hours: 1 }
+        ],
         hoursCounterStart: 200, hoursCounterEnd: 208, fuelAdded: 120
     });
     assert.equal(metrics.production, 80);
