@@ -7,8 +7,8 @@ const { evaluateAlerts } = require('./alert-evaluator');
 /**
  * @param {object} db
  * @param {number} enterpriseId
- * @param {string} weekStart  YYYY-MM-DD (lundi)
- * @param {string} weekEnd    YYYY-MM-DD (dimanche)
+ * @param {string} weekStart  YYYY-MM-DD (samedi)
+ * @param {string} weekEnd    YYYY-MM-DD (vendredi)
  * @returns {Promise<{summary:object, html:string}>}
  */
 async function generateWeeklyReport(db, enterpriseId, weekStart, weekEnd) {

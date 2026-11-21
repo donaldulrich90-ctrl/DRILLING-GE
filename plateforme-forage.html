@@ -7506,6 +7506,31 @@
             });
         };
         function _digestAddDays(dateStr, n) { var p = String(dateStr).slice(0, 10).split('-'); var d = new Date(Date.UTC(+p[0], +p[1] - 1, +p[2])); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+        // ── Semaine minière : SAMEDI → VENDREDI (7 jours), règle unique pour tous les rapports hebdo ──
+        // 0 = dimanche … 6 = samedi. Modifier uniquement ici (et dans routes/weekly-report.js côté serveur).
+        var GE_WEEK_START_DAY = 6;
+        function _geYmd(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+        // Premier jour (AAAA-MM-JJ) de la semaine minière contenant la date d (Date ou 'AAAA-MM-JJ').
+        function geWeekStartFor(d) {
+            var ymd = (typeof d === 'string') ? d.slice(0, 10) : _geYmd(d || new Date());
+            var p = ymd.split('-'); var wd = new Date(Date.UTC(+p[0], +p[1] - 1, +p[2])).getUTCDay();
+            return _digestAddDays(ymd, -((wd - GE_WEEK_START_DAY + 7) % 7));
+        }
+        // Plage { from, to } (AAAA-MM-JJ) de la semaine minière contenant d.
+        function geWeekRangeFor(d) { var from = geWeekStartFor(d); return { from: from, to: _digestAddDays(from, 6) }; }
+        // Plage de la semaine minière associée à une semaine du sélecteur (AAAA-Www) :
+        // celle qui contient le lundi ISO de cette semaine (samedi et dimanche qui le précèdent + lundi→vendredi).
+        function geWeekRangeFromISOWeek(year, week) { return geWeekRangeFor(_geYmd(getDateOfISOWeek(year, week))); }
+        // Semaine du sélecteur (année + n° ISO) correspondant à la semaine minière qui contient d.
+        function geWeekISOFor(d) {
+            var from = geWeekStartFor(d);
+            var monday = _digestAddDays(from, (1 - GE_WEEK_START_DAY + 7) % 7);
+            var p = monday.split('-'); var dt = new Date(Date.UTC(+p[0], +p[1] - 1, +p[2]));
+            dt.setUTCDate(dt.getUTCDate() + 3); // jeudi ISO
+            var y = dt.getUTCFullYear(); var ys = new Date(Date.UTC(y, 0, 1));
+            return { year: y, week: Math.ceil((((dt - ys) / 86400000) + 1) / 7) };
+        }
+        function geWeekISOString(d) { var w = geWeekISOFor(d); return w.year + '-W' + String(w.week).padStart(2, '0'); }
         // Moteur d'alertes opérationnelles sur une plage [from,to]. cfg = config du bilan.
         function computeOperationalAlerts(fromStr, toStr, cfg) {
             cfg = cfg || geLoadDigestConfig();
@@ -7547,13 +7572,8 @@
             if (unpaid.length) out.push({ level: 'warning', cat: 'Factures', msg: unpaid.length + ' facture(s) impayée(s)' });
             return out;
         }
-        // Semaine courante (dimanche→samedi) en chaînes AAAA-MM-JJ
-        function _currentWeekRange() {
-            var d = new Date(); var wd = d.getDay(); // 0 = dimanche … 6 = samedi
-            var sun = new Date(d); sun.setDate(d.getDate() - wd);
-            var sunStr = getLocalDateYYYYMMDD(sun);
-            return { from: sunStr, to: _digestAddDays(sunStr, 6) };
-        }
+        // Semaine minière courante (samedi→vendredi) en chaînes AAAA-MM-JJ
+        function _currentWeekRange() { return geWeekRangeFor(new Date()); }
 
         function renderDashAlerts() {
             var el = document.getElementById('dashAlerts');
@@ -7594,9 +7614,8 @@
             geSaveDigestConfigFromDom();
             var cfg = geLoadDigestConfig();
             var parts = val.split('-W'); var year = parseInt(parts[0], 10), week = parseInt(parts[1], 10);
-            var start = getDateOfISOWeek(year, week);
-            // Semaine dimanche→samedi : on démarre le dimanche qui précède le lundi ISO de la semaine choisie.
-            var from = _digestAddDays(getLocalDateYYYYMMDD(start), -1), to = _digestAddDays(from, 6);
+            // Semaine minière samedi→vendredi associée à la semaine choisie.
+            var wr = geWeekRangeFromISOWeek(year, week); var from = wr.from, to = wr.to;
             var recs = (dailyDataRecords || []).filter(function(r) { return r && r.date && r.date >= from && r.date <= to; });
             var cur = (typeof getRevenueViewDisplayCurrency === 'function') ? getRevenueViewDisplayCurrency() : ((companyInfo && companyInfo.currency) || 'XOF');
             var esc = function(s) { return String(s == null ? '' : s).replace(/[&<>]/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); };
@@ -7724,17 +7743,14 @@
             _digestReminderChecked = true;
             var cfg = geLoadDigestConfig();
             if (!cfg.autoReminder) return;
-            // Semaine précédente (ISO)
-            var now = new Date();
-            var prev = new Date(now); prev.setDate(now.getDate() - 7);
-            var iso = _isoYearWeek(prev);
+            // Semaine minière précédente (samedi→vendredi)
+            var prevFrom = _digestAddDays(geWeekStartFor(new Date()), -7);
+            var iso = geWeekISOFor(prevFrom);
             var key = iso.year + '-W' + iso.week;
             var last = '';
             try { last = localStorage.getItem('ged_digest_last_week') || ''; } catch (e) {}
             if (last === key) return; // déjà traité
-            var start = getDateOfISOWeek(iso.year, iso.week);
-            // semaine dimanche→samedi : on démarre le dimanche qui précède le lundi ISO.
-            var from = _digestAddDays(getLocalDateYYYYMMDD(start), -1), to = _digestAddDays(from, 6);
+            var from = prevFrom, to = _digestAddDays(from, 6);
             var alerts = computeOperationalAlerts(from, to, cfg);
             geShowDigestBanner(iso.year, iso.week, from, to, alerts.length);
         }
@@ -20262,8 +20278,7 @@
             var rateVal = getUsdXofRate();
             var today = new Date();
             var todayStr = today.toISOString().split('T')[0];
-            var weekStart = new Date(today);
-            weekStart.setDate(today.getDate() - today.getDay());
+            var weekStart = new Date(geWeekStartFor(today) + 'T00:00:00'); // semaine minière samedi→vendredi
             var reportMonthKey = getRevenueReportMonthKey();
             var rmParts = reportMonthKey.split('-');
             var ry = parseInt(rmParts[0], 10);
@@ -21110,11 +21125,8 @@
                 var wp = wv.split('-W');
                 var ys = parseInt(wp[0], 10);
                 var wk = parseInt(wp[1], 10);
-                var sdRaw = getDateOfISOWeek(ys, wk);
-                sdRaw.setDate(sdRaw.getDate() - 1); // semaine dimanche→samedi
-                var startW = getLocalDateYYYYMMDD(sdRaw);
-                var edRaw = new Date(sdRaw.getFullYear(), sdRaw.getMonth(), sdRaw.getDate() + 6);
-                return { start: startW, end: getLocalDateYYYYMMDD(edRaw), label: tUi('project_overview.week') + ' ' + wv };
+                var wrO = geWeekRangeFromISOWeek(ys, wk); // semaine minière samedi→vendredi
+                return { start: wrO.from, end: wrO.to, label: tUi('project_overview.week') + ' ' + wv };
             }
             if (preset === 'year_full') {
                 var yEl = document.getElementById('projectOverviewYearPick');
@@ -21468,7 +21480,7 @@
                 '<div class="ged-content-panel p-6 rounded-xl">' +
                 '<h4 class="text-lg font-bold mb-4">📆 Rapport Hebdomadaire (format mensuel)</h4>' +
                 '<div class="mb-4">' +
-                '<label class="block text-slate-400 mb-2">Semaine minière (dimanche → samedi)</label>' +
+                '<label class="block text-slate-400 mb-2">Semaine minière (samedi → vendredi)</label>' +
                 '<input type="week" id="weeklyProdReportWeek" class="w-full bg-slate-800 border border-slate-600 rounded px-4 py-2 text-white" value="' + currentWeek + '">' +
                 '</div>' +
                 '<button onclick="generateWeeklyProductionReport()" class="w-full bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg font-semibold">📄 Rapport hebdomadaire (PDF)</button>' +
@@ -21778,10 +21790,7 @@
             var startDate, endDate;
             
             if (period === 'week') {
-                var dayOfWeek = today.getDay();
-                var diff = today.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
-                startDate = new Date(today.getFullYear(), today.getMonth(), diff);
-                startDate.setHours(0, 0, 0, 0);
+                startDate = new Date(geWeekStartFor(today) + 'T00:00:00'); // semaine minière samedi→vendredi
                 endDate = new Date(startDate);
                 endDate.setDate(startDate.getDate() + 6);
             } else if (period === 'month') {
@@ -23395,14 +23404,13 @@
             var year = parseInt(weekParts[0]);
             var week = parseInt(weekParts[1]);
             
-            var startDate = getDateOfISOWeek(year, week);
-            startDate.setDate(startDate.getDate() - 1); // semaine dimanche→samedi
-            var endDate = new Date(startDate);
-            endDate.setDate(startDate.getDate() + 6);
+            var wrG = geWeekRangeFromISOWeek(year, week); // semaine minière samedi→vendredi
+            var startDate = new Date(wrG.from + 'T00:00:00');
+            var endDate = new Date(wrG.to + 'T00:00:00');
 
             var records = getDailyDataForSite().filter(function(r) {
-                var recordDate = new Date(r.date);
-                return recordDate >= startDate && recordDate <= endDate;
+                var dk = r && r.date ? String(r.date).slice(0, 10) : '';
+                return dk >= wrG.from && dk <= wrG.to;
             });
             
             if (records.length === 0) {
@@ -24776,15 +24784,14 @@
                 '</main></body></html>';
         }
 
-        // Semaine dimanche→samedi depuis le sélecteur, puis ouverture du rapport (format mensuel).
+        // Semaine minière samedi→vendredi depuis le sélecteur, puis ouverture du rapport (format mensuel).
         function geWeeklyRangeFromPicker(pickerId) {
             var el = document.getElementById(pickerId);
             var val = el && el.value;
             if (!val || val.indexOf('-W') < 0) return null;
             var parts = val.split('-W'); var year = parseInt(parts[0], 10), week = parseInt(parts[1], 10);
-            var start = getDateOfISOWeek(year, week); start.setDate(start.getDate() - 1); // dimanche
-            var startISO = getLocalDateYYYYMMDD(start);
-            return { startISO: startISO, endISO: _digestAddDays(startISO, 6) };
+            var wrP = geWeekRangeFromISOWeek(year, week);
+            return { startISO: wrP.from, endISO: wrP.to };
         }
         function generateWeeklyProductionReport() {
             var rg = geWeeklyRangeFromPicker('weeklyProdReportWeek') || geWeeklyRangeFromPicker('reportWeeklyWeek');
@@ -25599,12 +25606,8 @@
             return getLocalDateYYYYMMDD(d);
         }
 
-        function getCurrentWeekISO() {
-            var today = new Date();
-            var year = today.getFullYear();
-            var week = getWeekNumber(today);
-            return year + '-W' + (week < 10 ? '0' + week : week);
-        }
+        // Semaine du sélecteur correspondant à la semaine minière en cours (samedi→vendredi).
+        function getCurrentWeekISO() { return geWeekISOString(new Date()); }
 
         function setFuelReportToFullProjectRange() {
             var list = getDailyDataForSite();
@@ -25708,9 +25711,8 @@
                 if (!byDay[dayKey]) byDay[dayKey] = emptyFuelAgg();
                 addRecordToFuelAgg(byDay[dayKey], data);
                 var d = new Date(r.date);
-                var weekNum = getWeekNumber(d);
                 var year = d.getFullYear();
-                var weekKey = year + '-W' + (weekNum < 10 ? '0' + weekNum : weekNum);
+                var weekKey = geWeekISOString(String(r.date).slice(0, 10)); // semaine minière samedi→vendredi
                 if (!byWeek[weekKey]) byWeek[weekKey] = emptyFuelAgg();
                 addRecordToFuelAgg(byWeek[weekKey], data);
                 var monthKey = year + '-' + (d.getMonth() + 1 < 10 ? '0' : '') + (d.getMonth() + 1);
@@ -35331,7 +35333,7 @@
                     '<h3 class="font-bold text-sm uppercase tracking-widest mb-4" style="color:#F5B800">Générer le rapport</h3>' +
                     '<div class="flex gap-3 flex-wrap items-end">' +
                         '<div>' +
-                            '<label class="block text-xs text-slate-400 mb-1">Semaine de référence (lundi)</label>' +
+                            '<label class="block text-xs text-slate-400 mb-1">Semaine de référence (n’importe quel jour — semaine samedi → vendredi)</label>' +
                             '<input id="wrWeekStart" type="date" class="rounded px-3 py-2 bg-slate-700 border border-slate-600 text-sm">' +
                         '</div>' +
                         '<button onclick="wrGenerate()" id="wrGenerateBtn" class="px-5 py-2 rounded font-bold text-sm" style="background:#063D2B;color:#F5B800;border:1px solid #F5B800">📊 Générer</button>' +
