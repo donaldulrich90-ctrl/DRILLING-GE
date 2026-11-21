@@ -7,11 +7,12 @@ const { evaluateAlerts } = require('./alert-evaluator');
 /**
  * @param {object} db
  * @param {number} enterpriseId
- * @param {string} weekStart  YYYY-MM-DD (samedi)
- * @param {string} weekEnd    YYYY-MM-DD (vendredi)
+ * @param {string} weekStart  YYYY-MM-DD (dimanche si final, samedi si provisoire)
+ * @param {string} weekEnd    YYYY-MM-DD (samedi si final, vendredi si provisoire)
+ * @param {string} [reportType] 'final' (défaut) ou 'provisoire'
  * @returns {Promise<{summary:object, html:string}>}
  */
-async function generateWeeklyReport(db, enterpriseId, weekStart, weekEnd) {
+async function generateWeeklyReport(db, enterpriseId, weekStart, weekEnd, reportType = 'final') {
     const [production, maintenance, stock, finance, alerts] = await Promise.all([
         collectProduction(db, enterpriseId, weekStart, weekEnd),
         collectMaintenance(db, enterpriseId, weekStart, weekEnd),
@@ -20,7 +21,7 @@ async function generateWeeklyReport(db, enterpriseId, weekStart, weekEnd) {
         evaluateAlerts(db, enterpriseId)
     ]);
 
-    const summary = { weekStart, weekEnd, production, maintenance, stock, finance, alerts };
+    const summary = { weekStart, weekEnd, reportType, production, maintenance, stock, finance, alerts };
     const html = renderHtml(summary);
     return { summary, html };
 }
@@ -151,6 +152,7 @@ const SEVERITY_LABEL = { critical: 'CRITIQUE', warning: 'ATTENTION', info: 'INFO
 
 function renderHtml(s) {
     const { weekStart, weekEnd, production, maintenance, stock, finance, alerts } = s;
+    const typeLabel = s.reportType === 'provisoire' ? 'provisoire (samedi → vendredi)' : 'final (dimanche → samedi)';
 
     const alertRows = alerts.items.slice(0, 10).map(a => `
         <tr>
@@ -179,7 +181,7 @@ function renderHtml(s) {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Rapport hebdomadaire GEDRILLING — ${fmtDate(weekStart)} au ${fmtDate(weekEnd)}</title>
+<title>Rapport hebdomadaire ${typeLabel} GEDRILLING — ${fmtDate(weekStart)} au ${fmtDate(weekEnd)}</title>
 <style>
   body{font-family:"Segoe UI",system-ui,sans-serif;background:#f3f4f6;margin:0;padding:16px;}
   .card{background:#fff;border-radius:10px;box-shadow:0 1px 6px rgba(0,0,0,.1);margin-bottom:16px;overflow:hidden;}
@@ -205,7 +207,7 @@ function renderHtml(s) {
       GEDRILLING — GOOD ENGINEERS
     </div>
     <div style="font-size:14px;color:#cfe0d6;margin-top:4px;">
-      Rapport hebdomadaire · ${fmtDate(weekStart)} au ${fmtDate(weekEnd)}
+      Rapport hebdomadaire ${typeLabel} · ${fmtDate(weekStart)} au ${fmtDate(weekEnd)}
     </div>
     <div style="margin-top:10px;">${alertBadge}</div>
   </div>

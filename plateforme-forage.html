@@ -7506,9 +7506,12 @@
             });
         };
         function _digestAddDays(dateStr, n) { var p = String(dateStr).slice(0, 10).split('-'); var d = new Date(Date.UTC(+p[0], +p[1] - 1, +p[2])); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
-        // ── Semaine minière : SAMEDI → VENDREDI (7 jours), règle unique pour tous les rapports hebdo ──
-        // 0 = dimanche … 6 = samedi. Modifier uniquement ici (et dans routes/weekly-report.js côté serveur).
-        var GE_WEEK_START_DAY = 6;
+        // ── Semaine minière officielle : DIMANCHE → SAMEDI (7 jours) = rapport hebdo FINAL ──
+        // Rapport PROVISOIRE (réunion du samedi, la production du samedi n'étant pas encore saisie) :
+        // SAMEDI → VENDREDI, c.-à-d. la semaine finale décalée d'un jour (ex. réunion du 28/11 :
+        // provisoire 21/11 → 27/11, puis final 22/11 → 28/11 tiré le lendemain).
+        // 0 = dimanche … 6 = samedi. Garder aligné avec routes/weekly-report.js.
+        var GE_WEEK_START_DAY = 0;
         function _geYmd(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
         // Premier jour (AAAA-MM-JJ) de la semaine minière contenant la date d (Date ou 'AAAA-MM-JJ').
         function geWeekStartFor(d) {
@@ -7519,8 +7522,28 @@
         // Plage { from, to } (AAAA-MM-JJ) de la semaine minière contenant d.
         function geWeekRangeFor(d) { var from = geWeekStartFor(d); return { from: from, to: _digestAddDays(from, 6) }; }
         // Plage de la semaine minière associée à une semaine du sélecteur (AAAA-Www) :
-        // celle qui contient le lundi ISO de cette semaine (samedi et dimanche qui le précèdent + lundi→vendredi).
-        function geWeekRangeFromISOWeek(year, week) { return geWeekRangeFor(_geYmd(getDateOfISOWeek(year, week))); }
+        // celle qui contient le lundi ISO de cette semaine (dimanche qui le précède + lundi→samedi).
+        function geWeekRangeFromISOWeek(year, week, type) { return geApplyWeeklyType(geWeekRangeFor(_geYmd(getDateOfISOWeek(year, week))), type); }
+        // Type de rapport hebdo : 'final' (dimanche → samedi) ou 'provisoire' (samedi → vendredi).
+        function geApplyWeeklyType(range, type) {
+            if (type === 'provisoire') return { from: _digestAddDays(range.from, -1), to: _digestAddDays(range.to, -1), type: 'provisoire' };
+            return { from: range.from, to: range.to, type: 'final' };
+        }
+        // Par défaut : provisoire le samedi (jour de la réunion), final les autres jours.
+        function geDefaultWeeklyType(d) { return (d || new Date()).getDay() === 6 ? 'provisoire' : 'final'; }
+        function geGetWeeklyType(selectId) { var el = document.getElementById(selectId); return (el && el.value === 'provisoire') ? 'provisoire' : (el ? 'final' : geDefaultWeeklyType()); }
+        function geWeeklyTypeLabel(type) { return type === 'provisoire' ? 'Rapport provisoire (samedi → vendredi)' : 'Rapport final (dimanche → samedi)'; }
+        function geWeeklyTypeShort(type) { return type === 'provisoire' ? 'provisoire' : 'final'; }
+        function geWeeklyTypeSelectHtml(id, onchange) {
+            var def = geDefaultWeeklyType();
+            return '<select id="' + id + '"' + (onchange ? ' onchange="' + onchange + '"' : '') + ' class="w-full bg-slate-800 border border-slate-600 rounded px-4 py-2 text-white">'
+                + '<option value="provisoire"' + (def === 'provisoire' ? ' selected' : '') + '>Provisoire — réunion du samedi (samedi → vendredi)</option>'
+                + '<option value="final"' + (def === 'final' ? ' selected' : '') + '>Final — semaine complète (dimanche → samedi)</option>'
+                + '</select>';
+        }
+        // Semaine à proposer par défaut dans les sélecteurs de rapport : celle qui contient la veille
+        // (samedi → semaine en cours pour le provisoire ; dimanche → semaine qui vient de finir pour le final).
+        function geDefaultReportWeekISO() { return geWeekISOString(_digestAddDays(_geYmd(new Date()), -1)); }
         // Semaine du sélecteur (année + n° ISO) correspondant à la semaine minière qui contient d.
         function geWeekISOFor(d) {
             var from = geWeekStartFor(d);
@@ -7572,7 +7595,7 @@
             if (unpaid.length) out.push({ level: 'warning', cat: 'Factures', msg: unpaid.length + ' facture(s) impayée(s)' });
             return out;
         }
-        // Semaine minière courante (samedi→vendredi) en chaînes AAAA-MM-JJ
+        // Semaine minière courante (dimanche→samedi) en chaînes AAAA-MM-JJ
         function _currentWeekRange() { return geWeekRangeFor(new Date()); }
 
         function renderDashAlerts() {
@@ -7614,8 +7637,9 @@
             geSaveDigestConfigFromDom();
             var cfg = geLoadDigestConfig();
             var parts = val.split('-W'); var year = parseInt(parts[0], 10), week = parseInt(parts[1], 10);
-            // Semaine minière samedi→vendredi associée à la semaine choisie.
-            var wr = geWeekRangeFromISOWeek(year, week); var from = wr.from, to = wr.to;
+            // Semaine choisie, selon le type : final (dimanche→samedi) ou provisoire (samedi→vendredi).
+            var wType = geGetWeeklyType('digestType');
+            var wr = geWeekRangeFromISOWeek(year, week, wType); var from = wr.from, to = wr.to;
             var recs = (dailyDataRecords || []).filter(function(r) { return r && r.date && r.date >= from && r.date <= to; });
             var cur = (typeof getRevenueViewDisplayCurrency === 'function') ? getRevenueViewDisplayCurrency() : ((companyInfo && companyInfo.currency) || 'XOF');
             var esc = function(s) { return String(s == null ? '' : s).replace(/[&<>]/g, function(c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); };
@@ -7671,7 +7695,7 @@
             }
 
             var periodeFr = new Date(from + 'T00:00:00').toLocaleDateString('fr-FR') + ' → ' + new Date(to + 'T00:00:00').toLocaleDateString('fr-FR');
-            var html = '<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Bilan hebdomadaire S' + week + ' ' + year + '</title>'
+            var html = '<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Bilan hebdomadaire S' + week + ' ' + year + ' (' + geWeeklyTypeShort(wType) + ')</title>'
                 + '<style>body{font-family:Arial,Helvetica,sans-serif;color:#1e293b;margin:0;padding:28px;background:#fff}'
                 + 'h1{font-size:22px;margin:0 0 2px}h2{font-size:16px;margin:0 0 10px;color:#0b2447;border-bottom:2px solid #F5B800;padding-bottom:5px}'
                 + '.head{border-bottom:3px solid #0b2447;padding-bottom:12px;margin-bottom:18px}.sub{color:#64748b;font-size:13px}'
@@ -7681,15 +7705,15 @@
                 + 'table{width:100%;border-collapse:collapse;font-size:13px;margin-top:6px}th,td{border:1px solid #e2e8f0;padding:7px 9px;text-align:left}'
                 + 'th{background:#0b2447;color:#fff;font-size:11px;text-transform:uppercase}td.r,th.r{text-align:right}'
                 + '@media print{.noprint{display:none}}</style></head><body>'
-                + '<div class="head"><h1>Bilan hebdomadaire — Semaine ' + week + ' / ' + year + '</h1>'
+                + '<div class="head"><h1>Bilan hebdomadaire — Semaine ' + week + ' / ' + year + ' — ' + geWeeklyTypeLabel(wType) + '</h1>'
                 + '<div class="sub">' + esc(company) + ' · ' + periodeFr + '</div></div>'
                 + alertHtml + sections
                 + '<p style="margin-top:28px;color:#94a3b8;font-size:11px">Généré le ' + new Date().toLocaleString('fr-FR') + ' · GEDRILLING</p>'
                 + '<div class="noprint" style="margin-top:16px"><button onclick="window.print()" style="background:#0b2447;color:#fff;border:none;padding:10px 18px;border-radius:8px;cursor:pointer">🖨️ Imprimer / PDF</button></div>'
                 + '</body></html>';
 
-            try { if (window.geAiStashReport) window.geAiStashReport('Bilan hebdomadaire S' + week + ' ' + year, html); } catch (e) {}
-            window._lastReportShare = { type: 'weekly-digest', year: year, week: week, from: from, to: to, title: 'Bilan hebdomadaire S' + week + ' ' + year, alerts: alerts.length };
+            try { if (window.geAiStashReport) window.geAiStashReport('Bilan hebdomadaire S' + week + ' ' + year + ' (' + geWeeklyTypeShort(wType) + ')', html); } catch (e) {}
+            window._lastReportShare = { type: 'weekly-digest', year: year, week: week, from: from, to: to, reportType: wType, title: 'Bilan hebdomadaire S' + week + ' ' + year + ' (' + geWeeklyTypeShort(wType) + ')', alerts: alerts.length };
             var w = window.open('', '_blank');
             if (w) { w.document.open(); w.document.write(html); w.document.close(); }
             else alert('Autorisez les fenêtres pop-up pour afficher le bilan.');
@@ -7714,21 +7738,23 @@
             else lines.push('🔔 Aucune alerte — seuils respectés.');
             return lines.join('\n');
         }
-        window.geDistributeWeeklyDigest = function(year, week, from, to) {
+        window.geDistributeWeeklyDigest = function(year, week, from, to, type) {
+            type = type === 'provisoire' ? 'provisoire' : 'final';
             var cfg = geLoadDigestConfig();
             var recips = String(cfg.recipients || '').split(/[,;\s]+/).filter(Boolean);
             if (!recips.length) { alert('Ajoutez au moins un destinataire dans la configuration du bilan.'); return; }
             if (!(window.API && window.API.ReportDist)) { alert('Distribution indisponible.'); return; }
             if (typeof canPublishCompanyInfo === 'function' && !canPublishCompanyInfo()) { alert('Vous n\'avez pas le droit de distribuer des rapports.'); return; }
             var summary = geBuildDigestSummaryText(from, to, cfg);
-            if (!confirm('Distribuer le bilan hebdomadaire S' + week + ' ' + year + ' à :\n' + recips.join(', ') + ' ?')) return;
+            var tLabel = ' (' + geWeeklyTypeShort(type) + ')';
+            if (!confirm('Distribuer le bilan hebdomadaire S' + week + ' ' + year + tLabel + ' à :\n' + recips.join(', ') + ' ?')) return;
             window.API.ReportDist.create({
-                title: 'Bilan hebdomadaire S' + week + ' ' + year,
-                body: summary,
-                reportData: { type: 'weekly-digest', year: year, week: week, from: from, to: to },
+                title: 'Bilan hebdomadaire S' + week + ' ' + year + tLabel,
+                body: geWeeklyTypeLabel(type) + '\n' + summary,
+                reportData: { type: 'weekly-digest', year: year, week: week, from: from, to: to, reportType: type },
                 emails: recips
             }).then(function() {
-                try { localStorage.setItem('ged_digest_last_week', year + '-W' + week); } catch (e) {}
+                try { localStorage.setItem('ged_digest_last_week', year + '-W' + week + '-' + type); } catch (e) {}
                 geRemoveDigestBanner();
                 alert('Bilan distribué à l\'équipe (' + recips.length + ' destinataire(s)).');
             }).catch(function(e) { alert('Erreur : ' + (e && e.message ? e.message : e)); });
@@ -7743,16 +7769,19 @@
             _digestReminderChecked = true;
             var cfg = geLoadDigestConfig();
             if (!cfg.autoReminder) return;
-            // Semaine minière précédente (samedi→vendredi)
-            var prevFrom = _digestAddDays(geWeekStartFor(new Date()), -7);
-            var iso = geWeekISOFor(prevFrom);
-            var key = iso.year + '-W' + iso.week;
+            // Samedi (jour de la réunion) : rapport PROVISOIRE samedi→vendredi de la semaine en cours.
+            // Les autres jours : rapport FINAL dimanche→samedi de la semaine qui vient de se terminer.
+            var todayStr = _geYmd(new Date());
+            var type = geDefaultWeeklyType();
+            var refDay = type === 'provisoire' ? todayStr : _digestAddDays(geWeekStartFor(todayStr), -1);
+            var iso = geWeekISOFor(refDay);
+            var rg = geApplyWeeklyType(geWeekRangeFor(refDay), type);
+            var key = iso.year + '-W' + iso.week + '-' + type;
             var last = '';
             try { last = localStorage.getItem('ged_digest_last_week') || ''; } catch (e) {}
             if (last === key) return; // déjà traité
-            var from = prevFrom, to = _digestAddDays(from, 6);
-            var alerts = computeOperationalAlerts(from, to, cfg);
-            geShowDigestBanner(iso.year, iso.week, from, to, alerts.length);
+            var alerts = computeOperationalAlerts(rg.from, rg.to, cfg);
+            geShowDigestBanner(iso.year, iso.week, rg.from, rg.to, alerts.length, type);
         }
         function _isoYearWeek(d) {
             var date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
@@ -7762,7 +7791,9 @@
             var week = Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
             return { year: date.getUTCFullYear(), week: week };
         }
-        function geShowDigestBanner(year, week, from, to, alertCount) {
+        function geShowDigestBanner(year, week, from, to, alertCount, type) {
+            type = type === 'provisoire' ? 'provisoire' : 'final';
+            var fr = function (x) { var p = String(x).split('-'); return p[2] + '/' + p[1]; };
             geRemoveDigestBanner();
             var b = document.createElement('div');
             b.id = 'gedDigestBanner';
@@ -7770,11 +7801,11 @@
             b.innerHTML = '<div style="display:flex;gap:10px;align-items:flex-start">'
                 + '<div style="font-size:20px">📅</div>'
                 + '<div style="flex:1">'
-                + '<div style="font-weight:700;margin-bottom:2px">Bilan hebdomadaire — Semaine ' + week + ' / ' + year + '</div>'
-                + '<div style="font-size:12px;color:#A7B6C9">La semaine est terminée' + (alertCount ? ' · <b style="color:#F5B800">' + alertCount + ' alerte(s)</b>' : ' · aucune alerte') + '. Générez le bilan ou distribuez-le à l\'équipe.</div>'
+                + '<div style="font-weight:700;margin-bottom:2px">Bilan hebdomadaire ' + geWeeklyTypeShort(type) + ' — Semaine ' + week + ' / ' + year + ' (' + fr(from) + ' → ' + fr(to) + ')</div>'
+                + '<div style="font-size:12px;color:#A7B6C9">' + (type === 'provisoire' ? 'Réunion du samedi : bilan sans la production du jour, le rapport final se tire demain' : 'La semaine est terminée') + (alertCount ? ' · <b style="color:#F5B800">' + alertCount + ' alerte(s)</b>' : ' · aucune alerte') + '. Générez le bilan ou distribuez-le à l\'équipe.</div>'
                 + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">'
-                + '<button onclick="document.getElementById(\'digestWeek\')&&(document.getElementById(\'digestWeek\').value=\'' + year + '-W' + String(week).padStart(2, '0') + '\');geGenerateWeeklyDigest&&geGenerateWeeklyDigest()" style="background:#1E293B;border:1px solid #334155;color:#E8EEF6;border-radius:8px;padding:7px 12px;font-size:12px;cursor:pointer">👁️ Générer</button>'
-                + '<button onclick="geDistributeWeeklyDigest(' + year + ',' + week + ',\'' + from + '\',\'' + to + '\')" style="background:#F5B800;border:none;color:#2A1D00;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">📤 Distribuer à l\'équipe</button>'
+                + '<button onclick="document.getElementById(\'digestWeek\')&&(document.getElementById(\'digestWeek\').value=\'' + year + '-W' + String(week).padStart(2, '0') + '\');document.getElementById(\'digestType\')&&(document.getElementById(\'digestType\').value=\'' + type + '\');geGenerateWeeklyDigest&&geGenerateWeeklyDigest()" style="background:#1E293B;border:1px solid #334155;color:#E8EEF6;border-radius:8px;padding:7px 12px;font-size:12px;cursor:pointer">👁️ Générer</button>'
+                + '<button onclick="geDistributeWeeklyDigest(' + year + ',' + week + ',\'' + from + '\',\'' + to + '\',\'' + type + '\')" style="background:#F5B800;border:none;color:#2A1D00;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;cursor:pointer">📤 Distribuer à l\'équipe</button>'
                 + '<button onclick="geRemoveDigestBanner()" style="background:none;border:none;color:#6E8099;font-size:12px;cursor:pointer">Plus tard</button>'
                 + '</div></div></div>';
             document.body.appendChild(b);
@@ -20278,7 +20309,7 @@
             var rateVal = getUsdXofRate();
             var today = new Date();
             var todayStr = today.toISOString().split('T')[0];
-            var weekStart = new Date(geWeekStartFor(today) + 'T00:00:00'); // semaine minière samedi→vendredi
+            var weekStart = new Date(geWeekStartFor(today) + 'T00:00:00'); // semaine minière dimanche→samedi
             var reportMonthKey = getRevenueReportMonthKey();
             var rmParts = reportMonthKey.split('-');
             var ry = parseInt(rmParts[0], 10);
@@ -21125,7 +21156,7 @@
                 var wp = wv.split('-W');
                 var ys = parseInt(wp[0], 10);
                 var wk = parseInt(wp[1], 10);
-                var wrO = geWeekRangeFromISOWeek(ys, wk); // semaine minière samedi→vendredi
+                var wrO = geWeekRangeFromISOWeek(ys, wk); // semaine minière dimanche→samedi
                 return { start: wrO.from, end: wrO.to, label: tUi('project_overview.week') + ' ' + wv };
             }
             if (preset === 'year_full') {
@@ -21480,8 +21511,11 @@
                 '<div class="ged-content-panel p-6 rounded-xl">' +
                 '<h4 class="text-lg font-bold mb-4">📆 Rapport Hebdomadaire (format mensuel)</h4>' +
                 '<div class="mb-4">' +
-                '<label class="block text-slate-400 mb-2">Semaine minière (samedi → vendredi)</label>' +
-                '<input type="week" id="weeklyProdReportWeek" class="w-full bg-slate-800 border border-slate-600 rounded px-4 py-2 text-white" value="' + currentWeek + '">' +
+                '<label class="block text-slate-400 mb-2">Type de rapport</label>' +
+                geWeeklyTypeSelectHtml('weeklyReportType', 'geUpdateWeeklyRangeHint(\'weeklyProdReportWeek\',\'weeklyReportType\',\'weeklyRangeHint\')') +
+                '<label class="block text-slate-400 mb-2 mt-3">Semaine</label>' +
+                '<input type="week" id="weeklyProdReportWeek" onchange="geUpdateWeeklyRangeHint(\'weeklyProdReportWeek\',\'weeklyReportType\',\'weeklyRangeHint\')" class="w-full bg-slate-800 border border-slate-600 rounded px-4 py-2 text-white" value="' + geDefaultReportWeekISO() + '">' +
+                '<p id="weeklyRangeHint" class="text-amber-300 text-xs mt-2">' + geWeeklyRangeHintText(geDefaultReportWeekISO(), geDefaultWeeklyType()) + '</p>' +
                 '</div>' +
                 '<button onclick="generateWeeklyProductionReport()" class="w-full bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg font-semibold">📄 Rapport hebdomadaire (PDF)</button>' +
                 '<button type="button" onclick="generateWeeklyReportPptx()" class="mt-3 w-full bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg font-semibold">📊 Rapport hebdomadaire — PowerPoint</button>' +
@@ -21490,8 +21524,11 @@
                 '<div class="ged-content-panel p-6 rounded-xl">' +
                 '<h4 class="text-lg font-bold mb-2">🧭 Bilan hebdomadaire configurable + alertes</h4>' +
                 '<p class="text-slate-400 text-sm mb-4">Synthèse paramétrable (production, finance, équipements, stock, RH) avec alertes selon vos seuils.</p>' +
-                '<div class="mb-3"><label class="block text-slate-400 mb-2">Semaine</label>' +
-                '<input type="week" id="digestWeek" class="w-full bg-slate-800 border border-slate-600 rounded px-4 py-2 text-white" value="' + currentWeek + '"></div>' +
+                '<div class="mb-3"><label class="block text-slate-400 mb-2">Type de bilan</label>' +
+                geWeeklyTypeSelectHtml('digestType', 'geUpdateWeeklyRangeHint(\'digestWeek\',\'digestType\',\'digestRangeHint\')') +
+                '<label class="block text-slate-400 mb-2 mt-3">Semaine</label>' +
+                '<input type="week" id="digestWeek" onchange="geUpdateWeeklyRangeHint(\'digestWeek\',\'digestType\',\'digestRangeHint\')" class="w-full bg-slate-800 border border-slate-600 rounded px-4 py-2 text-white" value="' + geDefaultReportWeekISO() + '">' +
+                '<p id="digestRangeHint" class="text-amber-300 text-xs mt-2">' + geWeeklyRangeHintText(geDefaultReportWeekISO(), geDefaultWeeklyType()) + '</p></div>' +
                 '<details class="mb-3 bg-slate-800/50 rounded-lg border border-slate-700"><summary class="cursor-pointer px-3 py-2 text-slate-300 text-sm font-semibold">⚙️ Configuration (sections &amp; seuils)</summary>' +
                 '<div class="p-3" id="digestConfigBody">' + geDigestConfigHtml(geLoadDigestConfig()) + '</div></details>' +
                 '<button onclick="geGenerateWeeklyDigest()" class="w-full bg-amber-600 hover:bg-amber-700 px-4 py-2 rounded-lg font-semibold">🧭 Générer le bilan hebdomadaire</button>' +
@@ -21790,7 +21827,7 @@
             var startDate, endDate;
             
             if (period === 'week') {
-                startDate = new Date(geWeekStartFor(today) + 'T00:00:00'); // semaine minière samedi→vendredi
+                startDate = new Date(geWeekStartFor(today) + 'T00:00:00'); // semaine minière dimanche→samedi
                 endDate = new Date(startDate);
                 endDate.setDate(startDate.getDate() + 6);
             } else if (period === 'month') {
@@ -23404,7 +23441,7 @@
             var year = parseInt(weekParts[0]);
             var week = parseInt(weekParts[1]);
             
-            var wrG = geWeekRangeFromISOWeek(year, week); // semaine minière samedi→vendredi
+            var wrG = geWeekRangeFromISOWeek(year, week, geGetWeeklyType('weeklyReportType'));
             var startDate = new Date(wrG.from + 'T00:00:00');
             var endDate = new Date(wrG.to + 'T00:00:00');
 
@@ -24693,9 +24730,9 @@
         }
 
         // Rapport hebdomadaire au MÊME format que le mensuel (objectif = target/jour × jours de la semaine).
-        function buildWeeklyReportDocumentHtml(startISO, endISO) {
+        function buildWeeklyReportDocumentHtml(startISO, endISO, type) {
             var fmtFr = function (s) { var p = String(s).split('-'); return p[2] + '/' + p[1] + '/' + p[0]; };
-            var periodLabel = 'semaine du ' + fmtFr(startISO) + ' au ' + fmtFr(endISO);
+            var periodLabel = 'semaine du ' + fmtFr(startISO) + ' au ' + fmtFr(endISO) + (type ? ' — rapport ' + geWeeklyTypeShort(type) : '');
             var data = geCollectPeriodReportData(startISO, endISO);
             var records = data.records, tot = data.tot, byMachine = data.byMachine, byDay = data.byDay;
             var nbDays = data.nbDays, holeCount = data.holeCount, mMech = data.mMech, mUoa = data.mUoa, rend = data.rend;
@@ -24784,14 +24821,25 @@
                 '</main></body></html>';
         }
 
-        // Semaine minière samedi→vendredi depuis le sélecteur, puis ouverture du rapport (format mensuel).
+        // Texte « du … au … » affiché sous le sélecteur de semaine.
+        function geWeeklyRangeHintText(isoWeek, type) {
+            if (!isoWeek || isoWeek.indexOf('-W') < 0) return '';
+            var p = isoWeek.split('-W'); var r = geWeekRangeFromISOWeek(parseInt(p[0], 10), parseInt(p[1], 10), type);
+            var fr = function (x) { var q = x.split('-'); return q[2] + '/' + q[1] + '/' + q[0]; };
+            return geWeeklyTypeLabel(type) + ' : du ' + fr(r.from) + ' au ' + fr(r.to);
+        }
+        window.geUpdateWeeklyRangeHint = function (weekId, typeId, hintId) {
+            var w = document.getElementById(weekId), h = document.getElementById(hintId);
+            if (w && h) h.textContent = geWeeklyRangeHintText(w.value, geGetWeeklyType(typeId));
+        };
+        // Semaine depuis le sélecteur selon le type (final dimanche→samedi / provisoire samedi→vendredi).
         function geWeeklyRangeFromPicker(pickerId) {
             var el = document.getElementById(pickerId);
             var val = el && el.value;
             if (!val || val.indexOf('-W') < 0) return null;
             var parts = val.split('-W'); var year = parseInt(parts[0], 10), week = parseInt(parts[1], 10);
-            var wrP = geWeekRangeFromISOWeek(year, week);
-            return { startISO: wrP.from, endISO: wrP.to };
+            var wrP = geWeekRangeFromISOWeek(year, week, geGetWeeklyType('weeklyReportType'));
+            return { startISO: wrP.from, endISO: wrP.to, type: wrP.type };
         }
         function generateWeeklyProductionReport() {
             var rg = geWeeklyRangeFromPicker('weeklyProdReportWeek') || geWeeklyRangeFromPicker('reportWeeklyWeek');
@@ -24799,9 +24847,9 @@
             var reportWindow = window.open('', '_blank');
             if (!reportWindow) { alert('Autorisez l’ouverture de la fenêtre du rapport.'); return; }
             try {
-                ensureReportPlanLoaded(function () { printDailyReport(null, [], reportWindow, buildWeeklyReportDocumentHtml(rg.startISO, rg.endISO)); }, function () { if (!reportWindow.closed) reportWindow.close(); });
+                ensureReportPlanLoaded(function () { printDailyReport(null, [], reportWindow, buildWeeklyReportDocumentHtml(rg.startISO, rg.endISO, rg.type)); }, function () { if (!reportWindow.closed) reportWindow.close(); });
             } catch (e) {
-                try { printDailyReport(null, [], reportWindow, buildWeeklyReportDocumentHtml(rg.startISO, rg.endISO)); } catch (e2) { if (!reportWindow.closed) reportWindow.close(); alert('Rapport hebdomadaire impossible : ' + (e2 && e2.message)); }
+                try { printDailyReport(null, [], reportWindow, buildWeeklyReportDocumentHtml(rg.startISO, rg.endISO, rg.type)); } catch (e2) { if (!reportWindow.closed) reportWindow.close(); alert('Rapport hebdomadaire impossible : ' + (e2 && e2.message)); }
             }
         }
 
@@ -24987,11 +25035,11 @@
             var rg = geWeeklyRangeFromPicker('weeklyProdReportWeek') || geWeeklyRangeFromPicker('reportWeeklyWeek');
             if (!rg) { alert('Choisissez une semaine.'); return; }
             var fmtFr = function (s) { var p = String(s).split('-'); return p[2] + '/' + p[1] + '/' + p[0]; };
-            var periodLabel = 'semaine du ' + fmtFr(rg.startISO) + ' au ' + fmtFr(rg.endISO);
+            var periodLabel = 'semaine du ' + fmtFr(rg.startISO) + ' au ' + fmtFr(rg.endISO) + ' — rapport ' + geWeeklyTypeShort(rg.type);
             var mt = (typeof getMonthlyTargetForDate === 'function') ? getMonthlyTargetForDate(rg.startISO) : null;
             var goalDay = (mt && mt.metersDay != null) ? parseFloat(mt.metersDay) : ((typeof companyInfo !== 'undefined' && companyInfo && parseFloat(companyInfo.dailyMetersObjective) > 0) ? parseFloat(companyInfo.dailyMetersObjective) : null);
             var nbCalDays = Math.round((new Date(rg.endISO + 'T00:00:00') - new Date(rg.startISO + 'T00:00:00')) / 86400000) + 1;
-            var opts = { startISO: rg.startISO, endISO: rg.endISO, titleText: 'RAPPORT HEBDOMADAIRE DE PRODUCTION', periodLabel: periodLabel, periodWord: 'de la semaine', goalPeriod: goalDay != null ? goalDay * nbCalDays : null, goalDay: goalDay, mt: mt, fileName: 'rapport-hebdomadaire-' + rg.startISO + '.pptx' };
+            var opts = { startISO: rg.startISO, endISO: rg.endISO, titleText: 'RAPPORT HEBDOMADAIRE DE PRODUCTION', periodLabel: periodLabel, periodWord: 'de la semaine', goalPeriod: goalDay != null ? goalDay * nbCalDays : null, goalDay: goalDay, mt: mt, fileName: 'rapport-hebdomadaire-' + geWeeklyTypeShort(rg.type) + '-' + rg.startISO + '.pptx' };
             ensureReportPlanLoaded(function () {
                 loadVendorScript('vendor/pptxgen.bundle.js', 'https://cdnjs.cloudflare.com/ajax/libs/pptxgenjs/3.12.0/pptxgen.bundle.js').then(function () {
                     try { geBuildPeriodReportPptx(opts); } catch (e) { alert('Export PowerPoint impossible : ' + (e && e.message ? e.message : e)); }
@@ -25606,7 +25654,7 @@
             return getLocalDateYYYYMMDD(d);
         }
 
-        // Semaine du sélecteur correspondant à la semaine minière en cours (samedi→vendredi).
+        // Semaine du sélecteur correspondant à la semaine minière en cours (dimanche→samedi).
         function getCurrentWeekISO() { return geWeekISOString(new Date()); }
 
         function setFuelReportToFullProjectRange() {
@@ -25712,7 +25760,7 @@
                 addRecordToFuelAgg(byDay[dayKey], data);
                 var d = new Date(r.date);
                 var year = d.getFullYear();
-                var weekKey = geWeekISOString(String(r.date).slice(0, 10)); // semaine minière samedi→vendredi
+                var weekKey = geWeekISOString(String(r.date).slice(0, 10)); // semaine minière dimanche→samedi
                 if (!byWeek[weekKey]) byWeek[weekKey] = emptyFuelAgg();
                 addRecordToFuelAgg(byWeek[weekKey], data);
                 var monthKey = year + '-' + (d.getMonth() + 1 < 10 ? '0' : '') + (d.getMonth() + 1);
@@ -35290,7 +35338,7 @@
                     var prod = sum.production || {};
                     var crit = (sum.alerts || {}).critical || 0;
                     return '<tr class="border-b border-slate-700 hover:bg-slate-800/40">' +
-                        '<td class="px-4 py-2 text-sm">' + fmtWRDate(r.weekStart) + ' – ' + fmtWRDate(r.weekEnd) + '</td>' +
+                        '<td class="px-4 py-2 text-sm">' + fmtWRDate(r.weekStart) + ' – ' + fmtWRDate(r.weekEnd) + ' <span class="text-xs text-slate-400">(' + (new Date(String(r.weekStart).slice(0, 10) + 'T00:00:00Z').getUTCDay() === 6 ? 'provisoire' : 'final') + ')</span></td>' +
                         '<td class="px-4 py-2 text-sm text-center">' + (prod.totalMeters || 0) + ' m</td>' +
                         '<td class="px-4 py-2 text-sm text-center">' +
                             (crit > 0 ? '<span style="color:#DC2626;font-weight:700">' + crit + ' crit.</span>' : '—') +
@@ -35333,7 +35381,14 @@
                     '<h3 class="font-bold text-sm uppercase tracking-widest mb-4" style="color:#F5B800">Générer le rapport</h3>' +
                     '<div class="flex gap-3 flex-wrap items-end">' +
                         '<div>' +
-                            '<label class="block text-xs text-slate-400 mb-1">Semaine de référence (n’importe quel jour — semaine samedi → vendredi)</label>' +
+                            '<label class="block text-xs text-slate-400 mb-1">Type de rapport</label>' +
+                            '<select id="wrReportType" class="rounded px-3 py-2 bg-slate-700 border border-slate-600 text-sm">' +
+                                '<option value="provisoire"' + (geDefaultWeeklyType() === 'provisoire' ? ' selected' : '') + '>Provisoire (samedi → vendredi)</option>' +
+                                '<option value="final"' + (geDefaultWeeklyType() === 'final' ? ' selected' : '') + '>Final (dimanche → samedi)</option>' +
+                            '</select>' +
+                        '</div>' +
+                        '<div>' +
+                            '<label class="block text-xs text-slate-400 mb-1">Semaine de référence (n’importe quel jour de la semaine dimanche → samedi)</label>' +
                             '<input id="wrWeekStart" type="date" class="rounded px-3 py-2 bg-slate-700 border border-slate-600 text-sm">' +
                         '</div>' +
                         '<button onclick="wrGenerate()" id="wrGenerateBtn" class="px-5 py-2 rounded font-bold text-sm" style="background:#063D2B;color:#F5B800;border:1px solid #F5B800">📊 Générer</button>' +
@@ -35400,7 +35455,9 @@
             var weekStartInput = document.getElementById('wrWeekStart');
             var weekStart = weekStartInput ? weekStartInput.value : null;
 
-            window.API.WeeklyReport.run(weekStart || null).then(function(data) {
+            var wrTypeEl = document.getElementById('wrReportType');
+            var reportType = wrTypeEl ? wrTypeEl.value : geDefaultWeeklyType();
+            window.API.WeeklyReport.run(weekStart || null, reportType).then(function(data) {
                 if (btn) { btn.disabled = false; btn.textContent = '📊 Générer'; }
                 _wrCurrentHtml = null;
                 return window.API.WeeklyReport.getReportHtml(data.id).then(function(html) {
@@ -35415,7 +35472,7 @@
                         var url = URL.createObjectURL(blob);
                         frame.src = url;
                     }
-                    if (resultEl) resultEl.innerHTML = '<p class="text-green-400 text-sm mt-2">Rapport généré · semaine du ' + fmtWRDate(data.weekStart) + ' au ' + fmtWRDate(data.weekEnd) + '</p>';
+                    if (resultEl) resultEl.innerHTML = '<p class="text-green-400 text-sm mt-2">Rapport ' + geWeeklyTypeShort(data.reportType) + ' généré · du ' + fmtWRDate(data.weekStart) + ' au ' + fmtWRDate(data.weekEnd) + '</p>';
                     // Rafraîchir historique
                     return window.API.WeeklyReport.getHistory();
                 });

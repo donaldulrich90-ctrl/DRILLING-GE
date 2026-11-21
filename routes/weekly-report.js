@@ -9,17 +9,23 @@
  */
 const { generateWeeklyReport } = require('../services/weekly-report-generator');
 
-// Semaine minière : SAMEDI → VENDREDI (7 jours). 0 = dimanche … 6 = samedi.
-// Doit rester aligné avec GE_WEEK_START_DAY dans plateforme-forage.html.
-const WEEK_START_DAY = 6;
+// Semaine minière officielle : DIMANCHE → SAMEDI (7 jours) = rapport FINAL.
+// Rapport PROVISOIRE (réunion du samedi, production du samedi pas encore saisie) :
+// SAMEDI → VENDREDI = semaine finale décalée d'un jour.
+// 0 = dimanche … 6 = samedi. Doit rester aligné avec GE_WEEK_START_DAY dans plateforme-forage.html.
+const WEEK_START_DAY = 0;
 
-function getWeekBounds(refDate) {
+// refDate : n'importe quel jour de la semaine finale (dimanche → samedi) visée.
+// reportType : 'final' (défaut) ou 'provisoire'.
+function getWeekBounds(refDate, reportType) {
     // Calcul en UTC sur la date AAAA-MM-JJ pour éviter tout décalage de fuseau.
-    const ymd = refDate ? String(refDate).slice(0, 10) : new Date().toISOString().slice(0, 10);
+    // Sans date : la semaine qui contient la veille (samedi → semaine en cours, dimanche → semaine qui vient de finir).
+    const ymd = refDate ? String(refDate).slice(0, 10) : new Date(Date.now() - 86400000).toISOString().slice(0, 10);
     const [y, m, dd] = ymd.split('-').map(Number);
     const d = new Date(Date.UTC(y, m - 1, dd));
     const start = new Date(d);
     start.setUTCDate(d.getUTCDate() - ((d.getUTCDay() - WEEK_START_DAY + 7) % 7));
+    if (reportType === 'provisoire') start.setUTCDate(start.getUTCDate() - 1);
     const end = new Date(start);
     end.setUTCDate(start.getUTCDate() + 6);
     const toISO = dt => dt.toISOString().slice(0, 10);
@@ -80,11 +86,12 @@ module.exports = function registerWeeklyReportRoutes(app, { db, getEnterpriseId 
         const eid = getEnterpriseId(req);
         if (!eid) return res.status(400).json({ error: 'Contexte entreprise requis' });
 
-        const { weekStart: reqStart } = req.body || {};
-        const { weekStart, weekEnd } = getWeekBounds(reqStart || null);
+        const { weekStart: reqStart, reportType: reqType } = req.body || {};
+        const reportType = reqType === 'provisoire' ? 'provisoire' : 'final';
+        const { weekStart, weekEnd } = getWeekBounds(reqStart || null, reportType);
         const generatedBy = req.auth?.username || '';
 
-        generateWeeklyReport(db, eid, weekStart, weekEnd)
+        generateWeeklyReport(db, eid, weekStart, weekEnd, reportType)
             .then(({ summary, html }) => {
                 db.run(
                     `INSERT INTO weeklyReports (enterpriseId, weekStart, weekEnd, generatedAt, generatedBy, htmlContent, summary)
@@ -92,7 +99,7 @@ module.exports = function registerWeeklyReportRoutes(app, { db, getEnterpriseId 
                     [eid, weekStart, weekEnd, new Date().toISOString(), generatedBy, html, JSON.stringify(summary)],
                     function(err) {
                         if (err) return res.status(500).json({ error: err.message });
-                        res.json({ id: this.lastID, weekStart, weekEnd, summary });
+                        res.json({ id: this.lastID, weekStart, weekEnd, reportType, summary });
                     }
                 );
             })

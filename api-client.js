@@ -677,8 +677,11 @@ const WeeklyReportAPI = {
         if (!r.ok) throw new Error(`Sauvegarde config : ${r.status}`);
         return r.json();
     },
-    async run(weekStart) {
-        const body = weekStart ? JSON.stringify({ weekStart }) : '{}';
+    async run(weekStart, reportType) {
+        const payload = {};
+        if (weekStart) payload.weekStart = weekStart;
+        if (reportType) payload.reportType = reportType;
+        const body = JSON.stringify(payload);
         const r = await wrFetch('/reports/weekly/run', { method: 'POST', body });
         if (!r.ok) {
             const e = await r.json().catch(() => ({}));
