@@ -1358,6 +1358,7 @@
                     <button type="button" onclick="showMainView('bit_sharpening')" class="ged-nav-item main-nav-btn" id="nav-bit_sharpening">⬡ &nbsp;Affûtage des bits</button>
                     <button type="button" onclick="showMainView('consumables')" class="ged-nav-item main-nav-btn" id="nav-consumables">◫ &nbsp;Consommables</button>
                     <button type="button" onclick="showMainView('inventory')" class="ged-nav-item main-nav-btn" id="nav-inventory">▣ &nbsp;Stocks</button>
+                    <button type="button" onclick="showMainView('stock_multi')" class="ged-nav-item main-nav-btn" id="nav-stock_multi">📦 &nbsp;Stock multi-sites</button>
                     <button type="button" onclick="showMainView('hse')" class="ged-nav-item main-nav-btn" id="nav-hse">✚ &nbsp;Santé &amp; sécurité</button>
                     <button type="button" onclick="showMainView('souterrain')" class="ged-nav-item main-nav-btn" id="nav-souterrain">🕳️ &nbsp;Mine souterraine</button>
                     <button type="button" onclick="showMainView('carriere')" class="ged-nav-item main-nav-btn" id="nav-carriere">⛰️ &nbsp;Carrière à ciel ouvert</button>
@@ -1705,6 +1706,14 @@
         <div id="mainView-inventory" class="main-view hidden">
             <h2 class="text-2xl font-semibold mb-4" data-i18n="view.inventory">Stocks</h2>
             <div id="inventoryContent" class="ged-content-panel p-6 rounded-xl"></div>
+        </div>
+
+        <div id="mainView-stock_multi" class="main-view hidden">
+            <div class="mb-5">
+                <h2 class="text-2xl font-semibold mb-1">📦 Stock multi-sites</h2>
+                <p class="text-slate-400 text-sm">Deux niveaux : <strong>Bureau central (Ouagadougou)</strong> qui achète et expédie, <strong>Magasins de chantier</strong> qui reçoivent, consomment et demandent du réapprovisionnement.</p>
+            </div>
+            <div id="stockMultiContent" class="ged-content-panel p-6 rounded-xl"></div>
         </div>
 
         <div id="mainView-accounts" class="main-view hidden">
@@ -6206,6 +6215,7 @@
                 'nav-reports': 'restrictReports',
                 'nav-rh': 'restrictRH',
                 'nav-inventory': 'restrictInventory',
+                'nav-stock_multi': 'restrictStockMulti',
                 'nav-clients': 'restrictClients',
                 'nav-sites': 'restrictSites',
                 'nav-translator': 'restrictTranslator',
@@ -6213,7 +6223,7 @@
                 'nav-company_info': 'restrictCompanyInfo',
                 'nav-accounts': 'restrictAccounts'
             };
-            var allNavButtons = ['nav-dashboard', 'nav-forage_plan', 'nav-import_plan', 'nav-connections', 'nav-assignments', 'nav-maintenance', 'nav-bit_sharpening', 'nav-consumables', 'nav-hse', 'nav-souterrain', 'nav-carriere', 'nav-analytics', 'nav-planification', 'nav-besoins', 'nav-rentabilite', 'nav-depenses_pm', 'nav-payments', 'nav-soustraitants', 'nav-invoices', 'nav-contracts', 'nav-enterprises', 'nav-sites', 'nav-revenue', 'nav-site_meals', 'nav-reports', 'nav-project_overview', 'nav-rh', 'nav-inventory', 'nav-accounts', 'nav-clients', 'nav-translator', 'nav-team_chat', 'nav-company_info'];
+            var allNavButtons = ['nav-dashboard', 'nav-forage_plan', 'nav-import_plan', 'nav-connections', 'nav-assignments', 'nav-maintenance', 'nav-bit_sharpening', 'nav-consumables', 'nav-hse', 'nav-souterrain', 'nav-carriere', 'nav-analytics', 'nav-planification', 'nav-besoins', 'nav-rentabilite', 'nav-depenses_pm', 'nav-payments', 'nav-soustraitants', 'nav-invoices', 'nav-contracts', 'nav-enterprises', 'nav-sites', 'nav-revenue', 'nav-site_meals', 'nav-reports', 'nav-project_overview', 'nav-rh', 'nav-inventory', 'nav-stock_multi', 'nav-accounts', 'nav-clients', 'nav-translator', 'nav-team_chat', 'nav-company_info'];
 
             if (isPlatformBillingOnlyUser(currentUser)) {
                 allNavButtons.forEach(function(btnId) {
@@ -6332,6 +6342,7 @@
                 'nav-project_overview': ['superviseur', 'gestionnaire', 'gestionnaire_site', 'ingenieur', 'foreur', 'aideforeur', 'santesecurite', 'administratif', 'visiteur'].includes(currentUser.role),
                 'nav-rh': ['superviseur', 'gestionnaire', 'gestionnaire_site'].includes(currentUser.role),
                 'nav-inventory': ['gestionnaire', 'gestionnaire_site', 'superviseur'].includes(currentUser.role),
+                'nav-stock_multi': ['gestionnaire', 'gestionnaire_site', 'superviseur', 'administratif'].includes(currentUser.role),
                 'nav-clients': ['gestionnaire', 'gestionnaire_site', 'administratif'].includes(currentUser.role),
                 'nav-sites': ['gestionnaire', 'gestionnaire_site', 'superviseur', 'ingenieur'].includes(currentUser.role),
                 'nav-translator': ['foreur', 'aideforeur', 'superviseur', 'ingenieur', 'gestionnaire', 'gestionnaire_site', 'santesecurite', 'admin', 'administratif'].includes(currentUser.role),
@@ -6451,7 +6462,7 @@
                 view !== 'enterprises' && subNav.indexOf(view) < 0) {
                 view = 'dashboard';
             }
-            var views = ['consumables', 'dashboard', 'connections', 'assignments', 'maintenance', 'bit_sharpening', 'invoices', 'payments', 'contracts', 'sites', 'enterprises', 'revenue', 'site_meals', 'reports', 'project_overview', 'planification', 'besoins', 'rh', 'inventory', 'accounts', 'clients', 'translator', 'team_chat', 'company_info', 'forage_plan', 'import_plan', 'rentabilite', 'depenses_pm', 'analytics', 'hse', 'souterrain', 'soustraitants', 'weekly_report'];
+            var views = ['consumables', 'dashboard', 'connections', 'assignments', 'maintenance', 'bit_sharpening', 'invoices', 'payments', 'contracts', 'sites', 'enterprises', 'revenue', 'site_meals', 'reports', 'project_overview', 'planification', 'besoins', 'rh', 'inventory', 'stock_multi', 'accounts', 'clients', 'translator', 'team_chat', 'company_info', 'forage_plan', 'import_plan', 'rentabilite', 'depenses_pm', 'analytics', 'hse', 'souterrain', 'soustraitants', 'weekly_report'];
             views.forEach(function(v) {
                 var el = document.getElementById('mainView-' + v);
                 if (el) el.classList.add('hidden');
@@ -8769,6 +8780,337 @@
         };
         window.ugDeletePersonnel = function (id) { var d = getUGData(); d.personnel = d.personnel.filter(function (p) { return p.id !== id; }); saveUGData(d); renderSouterrain(); };
 
+        // ============================================================
+        // STOCK MULTI-SITES (v1) — Bureau central (Ouagadougou) + Magasins de chantier
+        // Trois onglets : Locations · Transferts · Demandes de réapprovisionnement.
+        // ============================================================
+        var _stkTab = 'locations';
+        var _stkLocations = [];
+        var _stkTransfers = [];
+        var _stkRequests = [];
+        var _stkEscH = function (s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
+        var _stkFmt = function (n) { var x = Number(n) || 0; try { return x.toLocaleString('fr-FR', { maximumFractionDigits: 0 }); } catch (e) { return String(x); } };
+        var _stkStatusBadge = function (st) {
+            var map = { draft: ['#64748b', 'Brouillon'], sent: ['#f59e0b', 'Expédié'], received: ['#10b981', 'Reçu'], cancelled: ['#ef4444', 'Annulé'],
+                        pending: ['#f59e0b', 'En attente'], approved: ['#10b981', 'Approuvé'], rejected: ['#ef4444', 'Rejeté'], fulfilled: ['#3b82f6', 'Traité'] };
+            var m = map[st] || ['#64748b', st || '—'];
+            return '<span style="display:inline-block;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:700;color:#fff;background:' + m[0] + '">' + _stkEscH(m[1]) + '</span>';
+        };
+        var _stkUrgency = function (u) {
+            var m = { low: ['#64748b', 'Basse'], normal: ['#3b82f6', 'Normale'], high: ['#f59e0b', 'Haute'], critical: ['#ef4444', 'Critique'] };
+            var x = m[u] || m.normal;
+            return '<span style="display:inline-block;padding:2px 6px;border-radius:999px;font-size:10px;font-weight:700;color:#fff;background:' + x[0] + '">' + x[1] + '</span>';
+        };
+        async function stkLoadAll() {
+            if (!(window.API && window.API.StockLocations && window.API.getAuthToken && window.API.getAuthToken())) return;
+            try { _stkLocations = await window.API.StockLocations.list(); } catch (e) { _stkLocations = []; console.warn('Stock locations:', e); }
+            try { _stkTransfers = await window.API.StockTransfers.list(); } catch (e) { _stkTransfers = []; console.warn('Stock transfers:', e); }
+            try { _stkRequests = await window.API.StockReplenishment.list(); } catch (e) { _stkRequests = []; console.warn('Stock requests:', e); }
+        }
+        function renderStockMulti() {
+            var el = document.getElementById('stockMultiContent');
+            if (!el) return;
+            el.innerHTML = '<div class="text-center text-slate-400 py-8">Chargement…</div>';
+            stkLoadAll().then(function () { _renderStockMultiBody(el); });
+        }
+        window.renderStockMulti = renderStockMulti;
+        function _renderStockMultiBody(el) {
+            var tabs = [
+                { k: 'locations', lbl: '🏢 Locations (' + _stkLocations.length + ')' },
+                { k: 'transfers', lbl: '🚚 Transferts (' + _stkTransfers.length + ')' },
+                { k: 'requests', lbl: '📋 Demandes de réappro (' + _stkRequests.filter(function (r) { return r.status === 'pending'; }).length + ' en attente)' }
+            ];
+            var tabBar = '<div class="flex gap-2 mb-5 flex-wrap">' + tabs.map(function (t) {
+                return '<button type="button" onclick="_stkTab=\'' + t.k + '\';renderStockMulti()" class="px-4 py-2 rounded-lg text-sm font-semibold transition-all ' +
+                    (_stkTab === t.k ? 'ged-btn-primary' : 'bg-slate-700 hover:bg-slate-600 text-slate-300') + '">' + t.lbl + '</button>';
+            }).join('') + '</div>';
+            var body = '';
+            if (_stkTab === 'locations') body = renderStockLocationsPanel();
+            else if (_stkTab === 'transfers') body = renderStockTransfersPanel();
+            else body = renderStockRequestsPanel();
+            el.innerHTML = tabBar + body;
+        }
+        // ── Locations ──────────────────────────────────────────────
+        function renderStockLocationsPanel() {
+            var central = _stkLocations.filter(function (l) { return l.kind === 'central'; });
+            var sites = _stkLocations.filter(function (l) { return l.kind !== 'central'; });
+            var hdr = '<div class="flex justify-between items-center mb-3"><h3 class="text-lg font-semibold">Entrepôts & magasins</h3>' +
+                '<button type="button" onclick="openStockLocationForm()" class="bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1.5 rounded text-sm">+ Nouveau magasin</button></div>';
+            function card(l) {
+                var kindBadge = l.kind === 'central'
+                    ? '<span style="padding:2px 8px;border-radius:999px;background:#F5B800;color:#111;font-weight:700;font-size:10px">BUREAU CENTRAL</span>'
+                    : '<span style="padding:2px 8px;border-radius:999px;background:#3b82f6;color:#fff;font-weight:700;font-size:10px">MAGASIN SITE</span>';
+                return '<div class="border border-slate-700 rounded-lg p-3 mb-2 bg-slate-900/40">'
+                    + '<div class="flex justify-between items-start gap-2 flex-wrap">'
+                    +   '<div><div class="font-semibold text-white">' + _stkEscH(l.name) + ' ' + kindBadge + '</div>'
+                    +     '<div class="text-xs text-slate-400 mt-1">' + (l.siteName ? 'Site : ' + _stkEscH(l.siteName) + ' · ' : '')
+                    +       (l.itemCount || 0) + ' article(s) · ' + (l.isActive ? 'actif' : 'inactif') + '</div>'
+                    +     (l.notes ? '<div class="text-xs text-slate-500 mt-1 italic">' + _stkEscH(l.notes) + '</div>' : '')
+                    +   '</div>'
+                    +   '<div class="flex gap-1">'
+                    +     '<button type="button" onclick="openStockLocationForm(' + l.id + ')" class="bg-slate-700 hover:bg-slate-600 text-xs px-2 py-1 rounded">✏ Modifier</button>'
+                    +     (l.kind !== 'central' ? '<button type="button" onclick="stkRemoveLocation(' + l.id + ')" class="text-red-400 hover:text-red-300 text-xs px-2 py-1" title="Supprimer">🗑</button>' : '')
+                    +   '</div>'
+                    + '</div></div>';
+            }
+            var centralSec = '<p class="text-[10px] font-bold tracking-widest uppercase text-slate-500 mb-2">Bureau central</p>' + (central.map(card).join('') || '<p class="text-slate-500 text-sm italic mb-4">Aucun bureau central (créé automatiquement à l\'init).</p>');
+            var sitesSec = '<p class="text-[10px] font-bold tracking-widest uppercase text-slate-500 mt-4 mb-2">Magasins de chantier</p>' + (sites.map(card).join('') || '<p class="text-slate-500 text-sm italic">Aucun magasin de chantier. Créez-en un rattaché à un site.</p>');
+            return hdr + centralSec + sitesSec;
+        }
+        window.openStockLocationForm = function (id) {
+            var l = id ? (_stkLocations.find(function (x) { return x.id === id; }) || {}) : { name: '', kind: 'site', siteId: '', address: '', notes: '', isActive: 1 };
+            var ex = document.getElementById('stkLocModal'); if (ex) ex.remove();
+            var siteOpts = '<option value="">—</option>' + ((typeof sites !== 'undefined' ? sites : []).map(function (s) { return '<option value="' + s.id + '"' + (String(s.id) === String(l.siteId) ? ' selected' : '') + '>' + _stkEscH(s.name || s.code) + '</option>'; }).join(''));
+            var m = document.createElement('div');
+            m.id = 'stkLocModal';
+            m.className = 'fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[130] p-4';
+            m.innerHTML = '<div class="ged-modal-panel p-6 rounded-xl w-full max-w-lg">'
+                + '<div class="flex justify-between items-center mb-3"><h3 class="text-lg font-bold">' + (id ? 'Modifier' : 'Nouveau') + ' magasin</h3>'
+                + '<button type="button" onclick="document.getElementById(\'stkLocModal\').remove()" class="text-slate-400 hover:text-white text-2xl">&times;</button></div>'
+                + '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">'
+                +   '<label class="sm:col-span-2 block"><span class="text-slate-400 text-xs">Nom *</span><input type="text" id="stkLocName" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white" value="' + _stkEscH(l.name || '') + '"></label>'
+                +   '<label class="block"><span class="text-slate-400 text-xs">Type</span><select id="stkLocKind" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white">'
+                +     '<option value="central"' + (l.kind === 'central' ? ' selected' : '') + '>Bureau central</option>'
+                +     '<option value="site"' + (l.kind === 'site' ? ' selected' : '') + '>Magasin de chantier</option>'
+                +     '<option value="other"' + (l.kind === 'other' ? ' selected' : '') + '>Autre</option>'
+                +   '</select></label>'
+                +   '<label class="block"><span class="text-slate-400 text-xs">Site rattaché</span><select id="stkLocSite" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white">' + siteOpts + '</select></label>'
+                +   '<label class="sm:col-span-2 block"><span class="text-slate-400 text-xs">Adresse</span><input type="text" id="stkLocAddr" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white" value="' + _stkEscH(l.address || '') + '"></label>'
+                +   '<label class="sm:col-span-2 block"><span class="text-slate-400 text-xs">Notes</span><textarea id="stkLocNotes" rows="2" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white">' + _stkEscH(l.notes || '') + '</textarea></label>'
+                + '</div>'
+                + '<div class="flex gap-2 justify-end mt-4">'
+                +   '<button type="button" onclick="document.getElementById(\'stkLocModal\').remove()" class="bg-slate-600 hover:bg-slate-500 px-4 py-2 rounded-lg text-sm">Annuler</button>'
+                +   '<button type="button" onclick="submitStockLocationForm(' + (id || 'null') + ')" class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg text-sm font-semibold">Enregistrer</button>'
+                + '</div></div>';
+            document.body.appendChild(m);
+        };
+        window.submitStockLocationForm = async function (id) {
+            var payload = {
+                name: (document.getElementById('stkLocName') || {}).value || '',
+                kind: (document.getElementById('stkLocKind') || {}).value || 'site',
+                siteId: (document.getElementById('stkLocSite') || {}).value || null,
+                address: (document.getElementById('stkLocAddr') || {}).value || '',
+                notes: (document.getElementById('stkLocNotes') || {}).value || ''
+            };
+            if (!payload.name.trim()) { alert('Nom requis'); return; }
+            try {
+                if (id) await window.API.StockLocations.update(id, payload);
+                else await window.API.StockLocations.create(payload);
+                var ex = document.getElementById('stkLocModal'); if (ex) ex.remove();
+                renderStockMulti();
+            } catch (e) { alert('Erreur : ' + e.message); }
+        };
+        window.stkRemoveLocation = async function (id) {
+            if (!confirm('Supprimer ce magasin ? (impossible s\'il contient des articles)')) return;
+            try { await window.API.StockLocations.remove(id); renderStockMulti(); }
+            catch (e) { alert(e.message); }
+        };
+        // ── Transferts ─────────────────────────────────────────────
+        function renderStockTransfersPanel() {
+            var hdr = '<div class="flex justify-between items-center mb-3"><h3 class="text-lg font-semibold">Transferts bureau → site</h3>'
+                + '<button type="button" onclick="openStockTransferForm()" class="bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1.5 rounded text-sm">+ Nouveau transfert</button></div>';
+            if (!_stkTransfers.length) return hdr + '<p class="text-slate-500 text-sm italic">Aucun transfert enregistré.</p>';
+            var rows = _stkTransfers.map(function (t) {
+                var actions = '';
+                if (t.status === 'draft') actions = '<button type="button" onclick="stkSendTransfer(' + t.id + ')" class="bg-amber-600 hover:bg-amber-500 text-white text-xs px-2 py-1 rounded mr-1">📤 Expédier</button>'
+                    + '<button type="button" onclick="stkDeleteTransfer(' + t.id + ')" class="text-red-400 hover:text-red-300 text-xs px-2 py-1" title="Supprimer">🗑</button>';
+                else if (t.status === 'sent') actions = '<button type="button" onclick="stkReceiveTransfer(' + t.id + ')" class="bg-green-600 hover:bg-green-500 text-white text-xs px-2 py-1 rounded">📥 Réceptionner</button>';
+                return '<tr class="border-b border-slate-800 hover:bg-slate-800/40">'
+                    + '<td class="px-3 py-2 font-mono text-amber-300">' + _stkEscH(t.transferNumber) + '</td>'
+                    + '<td class="px-3 py-2 text-slate-300">' + _stkEscH(t.fromName || '') + ' → <span class="text-amber-200">' + _stkEscH(t.toName || '') + '</span></td>'
+                    + '<td class="px-3 py-2 text-slate-400 text-xs">' + _stkEscH((t.sentDate || t.createdAt || '').slice(0, 10)) + '</td>'
+                    + '<td class="px-3 py-2 text-right">' + (t.lineCount || 0) + '</td>'
+                    + '<td class="px-3 py-2 text-right text-xs text-slate-400">' + _stkFmt(t.totalValue || 0) + ' XOF</td>'
+                    + '<td class="px-3 py-2">' + _stkStatusBadge(t.status) + '</td>'
+                    + '<td class="px-3 py-2 text-right whitespace-nowrap">' + actions + '</td>'
+                    + '</tr>';
+            }).join('');
+            return hdr + '<div style="overflow-x:auto"><table class="w-full text-sm" style="border-collapse:collapse">'
+                + '<thead><tr class="text-slate-500 uppercase tracking-widest text-xs" style="background:rgba(0,0,0,0.2)">'
+                +   '<th class="px-3 py-2 text-left">N°</th><th class="px-3 py-2 text-left">De → Vers</th><th class="px-3 py-2 text-left">Date</th><th class="px-3 py-2 text-right">Lignes</th><th class="px-3 py-2 text-right">Valeur</th><th class="px-3 py-2">Statut</th><th></th>'
+                + '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+        }
+        window.openStockTransferForm = function () {
+            if (!_stkLocations.length) { alert('Créez au moins une location d\'abord.'); return; }
+            var central = _stkLocations.find(function (l) { return l.kind === 'central'; });
+            var ex = document.getElementById('stkTrfModal'); if (ex) ex.remove();
+            var locOpts = function (sel) { return _stkLocations.map(function (l) { return '<option value="' + l.id + '"' + (String(sel) === String(l.id) ? ' selected' : '') + '>' + _stkEscH(l.name) + '</option>'; }).join(''); };
+            var m = document.createElement('div');
+            m.id = 'stkTrfModal';
+            m.className = 'fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[130] p-4';
+            m.innerHTML = '<div class="ged-modal-panel p-6 rounded-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">'
+                + '<div class="flex justify-between items-center mb-3"><h3 class="text-lg font-bold">Nouveau transfert</h3>'
+                + '<button type="button" onclick="document.getElementById(\'stkTrfModal\').remove()" class="text-slate-400 hover:text-white text-2xl">&times;</button></div>'
+                + '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3 text-sm">'
+                +   '<label class="block"><span class="text-slate-400 text-xs">De (source)</span><select id="stkTrfFrom" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white">' + locOpts(central ? central.id : '') + '</select></label>'
+                +   '<label class="block"><span class="text-slate-400 text-xs">Vers (destination)</span><select id="stkTrfTo" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white">' + locOpts('') + '</select></label>'
+                +   '<label class="block"><span class="text-slate-400 text-xs">Transporteur</span><input type="text" id="stkTrfCarrier" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white" placeholder="Camion, chauffeur…"></label>'
+                +   '<label class="block"><span class="text-slate-400 text-xs">Notes</span><input type="text" id="stkTrfNotes" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white"></label>'
+                + '</div>'
+                + '<div class="flex justify-between items-center mb-2"><p class="text-xs text-slate-400 uppercase tracking-widest">Articles</p>'
+                + '<button type="button" onclick="stkTrfAddRow()" class="bg-slate-700 hover:bg-slate-600 px-3 py-1 rounded text-xs">+ Article</button></div>'
+                + '<div id="stkTrfRows"></div>'
+                + '<div class="flex gap-2 justify-end mt-4">'
+                +   '<button type="button" onclick="document.getElementById(\'stkTrfModal\').remove()" class="bg-slate-600 hover:bg-slate-500 px-4 py-2 rounded-lg text-sm">Annuler</button>'
+                +   '<button type="button" onclick="submitStockTransferForm()" class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg text-sm font-semibold">Enregistrer en brouillon</button>'
+                + '</div></div>';
+            document.body.appendChild(m);
+            stkTrfAddRow();
+        };
+        window.stkTrfAddRow = function () {
+            var c = document.getElementById('stkTrfRows'); if (!c) return;
+            var row = document.createElement('div');
+            row.className = 'grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_1fr_1fr_auto] gap-2 mb-2 items-center';
+            row.setAttribute('data-stk-trf-row', '1');
+            row.innerHTML =
+                '<input type="text" class="stk-trf-name bg-slate-700 border border-slate-600 rounded px-2 py-1 text-white text-xs" placeholder="Article">'
+                + '<input type="text" class="stk-trf-cat bg-slate-700 border border-slate-600 rounded px-2 py-1 text-white text-xs" placeholder="Catégorie">'
+                + '<input type="text" class="stk-trf-unit bg-slate-700 border border-slate-600 rounded px-2 py-1 text-white text-xs" placeholder="Unité" value="unité">'
+                + '<input type="number" step="0.01" min="0" class="stk-trf-qty bg-slate-700 border border-slate-600 rounded px-2 py-1 text-white text-xs" placeholder="Qté">'
+                + '<input type="number" step="1" min="0" class="stk-trf-price bg-slate-700 border border-slate-600 rounded px-2 py-1 text-white text-xs" placeholder="PU (XOF)">'
+                + '<button type="button" onclick="this.parentNode.remove()" class="text-red-400 text-xs">🗑</button>';
+            c.appendChild(row);
+        };
+        window.submitStockTransferForm = async function () {
+            var fromId = parseInt((document.getElementById('stkTrfFrom') || {}).value, 10);
+            var toId = parseInt((document.getElementById('stkTrfTo') || {}).value, 10);
+            if (!fromId || !toId || fromId === toId) { alert('Source et destination différentes requises.'); return; }
+            var rows = document.querySelectorAll('[data-stk-trf-row]');
+            var items = Array.prototype.map.call(rows, function (r) {
+                return {
+                    itemName: (r.querySelector('.stk-trf-name') || {}).value || '',
+                    itemCategory: (r.querySelector('.stk-trf-cat') || {}).value || '',
+                    unit: (r.querySelector('.stk-trf-unit') || {}).value || 'unité',
+                    quantity: parseFloat((r.querySelector('.stk-trf-qty') || {}).value) || 0,
+                    unitPrice: parseFloat((r.querySelector('.stk-trf-price') || {}).value) || 0,
+                    priceCurrency: 'XOF'
+                };
+            }).filter(function (x) { return x.itemName.trim() && x.quantity > 0; });
+            if (!items.length) { alert('Au moins une ligne avec nom et quantité.'); return; }
+            try {
+                await window.API.StockTransfers.create({
+                    fromLocationId: fromId, toLocationId: toId,
+                    carrier: (document.getElementById('stkTrfCarrier') || {}).value || '',
+                    notes: (document.getElementById('stkTrfNotes') || {}).value || '',
+                    items: items
+                });
+                var ex = document.getElementById('stkTrfModal'); if (ex) ex.remove();
+                renderStockMulti();
+            } catch (e) { alert('Erreur : ' + e.message); }
+        };
+        window.stkSendTransfer = async function (id) {
+            if (!confirm('Expédier ce transfert ? Le stock du bureau central sera décrémenté.')) return;
+            try { await window.API.StockTransfers.send(id); renderStockMulti(); } catch (e) { alert(e.message); }
+        };
+        window.stkReceiveTransfer = async function (id) {
+            if (!confirm('Confirmer la réception ? Le stock du magasin site sera incrémenté (articles créés si absents).')) return;
+            try { await window.API.StockTransfers.receive(id); renderStockMulti(); } catch (e) { alert(e.message); }
+        };
+        window.stkDeleteTransfer = async function (id) {
+            if (!confirm('Supprimer ce brouillon de transfert ?')) return;
+            try { await window.API.StockTransfers.remove(id); renderStockMulti(); } catch (e) { alert(e.message); }
+        };
+        // ── Demandes de réapprovisionnement ────────────────────────
+        function renderStockRequestsPanel() {
+            var hdr = '<div class="flex justify-between items-center mb-3"><h3 class="text-lg font-semibold">Demandes de réapprovisionnement</h3>'
+                + '<button type="button" onclick="openStockRequestForm()" class="bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1.5 rounded text-sm">+ Nouvelle demande (site)</button></div>';
+            if (!_stkRequests.length) return hdr + '<p class="text-slate-500 text-sm italic">Aucune demande.</p>';
+            var rows = _stkRequests.map(function (r) {
+                var actions = '';
+                if (r.status === 'pending') actions = '<button type="button" onclick="stkDecideRequest(' + r.id + ',\'approved\')" class="bg-green-600 hover:bg-green-500 text-white text-xs px-2 py-1 rounded mr-1">✓ Approuver</button>'
+                    + '<button type="button" onclick="stkDecideRequest(' + r.id + ',\'rejected\')" class="bg-red-700 hover:bg-red-600 text-white text-xs px-2 py-1 rounded">✗ Rejeter</button>';
+                else if (r.status === 'approved') actions = '<button type="button" onclick="stkDecideRequest(' + r.id + ',\'fulfilled\')" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-2 py-1 rounded">📦 Marquer traité</button>';
+                return '<tr class="border-b border-slate-800 hover:bg-slate-800/40">'
+                    + '<td class="px-3 py-2 font-mono text-amber-300">' + _stkEscH(r.requestNumber) + '</td>'
+                    + '<td class="px-3 py-2 text-slate-300">' + _stkEscH(r.siteName || '—') + '</td>'
+                    + '<td class="px-3 py-2 text-slate-400 text-xs">' + _stkEscH((r.requestDate || r.createdAt || '').slice(0, 10)) + '</td>'
+                    + '<td class="px-3 py-2">' + _stkUrgency(r.urgency) + '</td>'
+                    + '<td class="px-3 py-2 text-right">' + (r.lineCount || 0) + '</td>'
+                    + '<td class="px-3 py-2">' + _stkStatusBadge(r.status) + '</td>'
+                    + '<td class="px-3 py-2 text-right whitespace-nowrap">' + actions + '</td>'
+                    + '</tr>';
+            }).join('');
+            return hdr + '<div style="overflow-x:auto"><table class="w-full text-sm" style="border-collapse:collapse">'
+                + '<thead><tr class="text-slate-500 uppercase tracking-widest text-xs" style="background:rgba(0,0,0,0.2)">'
+                +   '<th class="px-3 py-2 text-left">N°</th><th class="px-3 py-2 text-left">Site</th><th class="px-3 py-2 text-left">Date</th><th class="px-3 py-2">Urgence</th><th class="px-3 py-2 text-right">Lignes</th><th class="px-3 py-2">Statut</th><th></th>'
+                + '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+        }
+        window.openStockRequestForm = function () {
+            var siteLocs = _stkLocations.filter(function (l) { return l.kind === 'site'; });
+            if (!siteLocs.length) { alert('Aucun magasin de chantier. Créez-en un dans l\'onglet Locations.'); return; }
+            var ex = document.getElementById('stkReqModal'); if (ex) ex.remove();
+            var siteOpts = siteLocs.map(function (l) { return '<option value="' + l.id + '">' + _stkEscH(l.name) + '</option>'; }).join('');
+            var m = document.createElement('div');
+            m.id = 'stkReqModal';
+            m.className = 'fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[130] p-4';
+            m.innerHTML = '<div class="ged-modal-panel p-6 rounded-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">'
+                + '<div class="flex justify-between items-center mb-3"><h3 class="text-lg font-bold">Nouvelle demande de réapprovisionnement</h3>'
+                + '<button type="button" onclick="document.getElementById(\'stkReqModal\').remove()" class="text-slate-400 hover:text-white text-2xl">&times;</button></div>'
+                + '<div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3 text-sm">'
+                +   '<label class="block"><span class="text-slate-400 text-xs">Magasin demandeur *</span><select id="stkReqSite" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white">' + siteOpts + '</select></label>'
+                +   '<label class="block"><span class="text-slate-400 text-xs">Urgence</span><select id="stkReqUrg" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white"><option value="low">Basse</option><option value="normal" selected>Normale</option><option value="high">Haute</option><option value="critical">Critique</option></select></label>'
+                +   '<label class="block"><span class="text-slate-400 text-xs">Notes</span><input type="text" id="stkReqNotes" class="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white"></label>'
+                + '</div>'
+                + '<div class="flex justify-between items-center mb-2"><p class="text-xs text-slate-400 uppercase tracking-widest">Articles manquants</p>'
+                + '<button type="button" onclick="stkReqAddRow()" class="bg-slate-700 hover:bg-slate-600 px-3 py-1 rounded text-xs">+ Article</button></div>'
+                + '<div id="stkReqRows"></div>'
+                + '<div class="flex gap-2 justify-end mt-4">'
+                +   '<button type="button" onclick="document.getElementById(\'stkReqModal\').remove()" class="bg-slate-600 hover:bg-slate-500 px-4 py-2 rounded-lg text-sm">Annuler</button>'
+                +   '<button type="button" onclick="submitStockRequestForm()" class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg text-sm font-semibold">Envoyer au bureau</button>'
+                + '</div></div>';
+            document.body.appendChild(m);
+            stkReqAddRow();
+        };
+        window.stkReqAddRow = function () {
+            var c = document.getElementById('stkReqRows'); if (!c) return;
+            var row = document.createElement('div');
+            row.className = 'grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_auto] gap-2 mb-2 items-center';
+            row.setAttribute('data-stk-req-row', '1');
+            row.innerHTML =
+                '<input type="text" class="stk-req-name bg-slate-700 border border-slate-600 rounded px-2 py-1 text-white text-xs" placeholder="Article">'
+                + '<input type="text" class="stk-req-cat bg-slate-700 border border-slate-600 rounded px-2 py-1 text-white text-xs" placeholder="Catégorie">'
+                + '<input type="text" class="stk-req-unit bg-slate-700 border border-slate-600 rounded px-2 py-1 text-white text-xs" value="unité">'
+                + '<input type="number" step="0.01" class="stk-req-cur bg-slate-700 border border-slate-600 rounded px-2 py-1 text-white text-xs" placeholder="Qté actuelle">'
+                + '<input type="number" step="0.01" class="stk-req-min bg-slate-700 border border-slate-600 rounded px-2 py-1 text-white text-xs" placeholder="Seuil min">'
+                + '<input type="number" step="0.01" class="stk-req-qty bg-slate-700 border border-slate-600 rounded px-2 py-1 text-white text-xs" placeholder="Qté demandée">'
+                + '<button type="button" onclick="this.parentNode.remove()" class="text-red-400 text-xs">🗑</button>';
+            c.appendChild(row);
+        };
+        window.submitStockRequestForm = async function () {
+            var siteId = parseInt((document.getElementById('stkReqSite') || {}).value, 10);
+            if (!siteId) { alert('Choisissez un magasin'); return; }
+            var rows = document.querySelectorAll('[data-stk-req-row]');
+            var items = Array.prototype.map.call(rows, function (r) {
+                return {
+                    itemName: (r.querySelector('.stk-req-name') || {}).value || '',
+                    itemCategory: (r.querySelector('.stk-req-cat') || {}).value || '',
+                    unit: (r.querySelector('.stk-req-unit') || {}).value || 'unité',
+                    currentQuantity: parseFloat((r.querySelector('.stk-req-cur') || {}).value) || 0,
+                    minStock: parseFloat((r.querySelector('.stk-req-min') || {}).value) || 0,
+                    requestedQty: parseFloat((r.querySelector('.stk-req-qty') || {}).value) || 0
+                };
+            }).filter(function (x) { return x.itemName.trim() && x.requestedQty > 0; });
+            if (!items.length) { alert('Au moins un article avec quantité demandée.'); return; }
+            try {
+                await window.API.StockReplenishment.create({
+                    siteLocationId: siteId,
+                    urgency: (document.getElementById('stkReqUrg') || {}).value || 'normal',
+                    notes: (document.getElementById('stkReqNotes') || {}).value || '',
+                    items: items
+                });
+                var ex = document.getElementById('stkReqModal'); if (ex) ex.remove();
+                renderStockMulti();
+            } catch (e) { alert('Erreur : ' + e.message); }
+        };
+        window.stkDecideRequest = async function (id, decision) {
+            var labels = { approved: 'Approuver', rejected: 'Rejeter', fulfilled: 'Marquer comme traité' };
+            if (!confirm(labels[decision] + ' cette demande ?')) return;
+            try {
+                await window.API.StockReplenishment.decide(id, { decision: decision });
+                renderStockMulti();
+            } catch (e) { alert(e.message); }
+        };
+
         function renderSouterrain() {
             var el = document.getElementById('souterrainContent');
             if (!el) return;
@@ -10300,6 +10642,8 @@
                 try { refreshEmployeesFromServer(function () { if (typeof currentMainView !== 'undefined' && currentMainView === 'rh') renderRH(); }); } catch (e) {}
             } else if (view === 'inventory') {
                 renderInventory();
+            } else if (view === 'stock_multi') {
+                renderStockMulti();
             } else if (view === 'accounts') {
                 renderAccounts();
                 try { if (typeof syncLoadStatus === 'function') syncLoadStatus(); } catch (e) {}

@@ -709,6 +709,30 @@ const AnalyticsAPI = {
     }
 };
 
+// Stock multi-sites : Bureau central (Ouagadougou) + Magasins de chantier,
+// transferts bureau → site, demandes de réapprovisionnement site → bureau.
+const StockLocationsAPI = {
+    async list()         { const r = await wrFetch('/stock-locations'); if (!r.ok) throw new Error('Locations : ' + r.status); return r.json(); },
+    async create(data)   { const r = await wrFetch('/stock-locations', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) }); if (!r.ok) throw new Error('Création location : ' + r.status); return r.json(); },
+    async update(id, d)  { const r = await wrFetch('/stock-locations/' + id, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(d) }); if (!r.ok) throw new Error('MAJ location : ' + r.status); return r.json(); },
+    async remove(id)     { const r = await wrFetch('/stock-locations/' + id, { method: 'DELETE' }); if (!r.ok) { const b = await r.json().catch(()=>({})); throw new Error(b.error || 'Suppression location : ' + r.status); } return r.json(); }
+};
+const StockTransfersAPI = {
+    async list()         { const r = await wrFetch('/stock-transfers'); if (!r.ok) throw new Error('Transferts : ' + r.status); return r.json(); },
+    async get(id)        { const r = await wrFetch('/stock-transfers/' + id); if (!r.ok) throw new Error('Transfert : ' + r.status); return r.json(); },
+    async create(data)   { const r = await wrFetch('/stock-transfers', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) }); if (!r.ok) { const b = await r.json().catch(()=>({})); throw new Error(b.error || 'Création transfert : ' + r.status); } return r.json(); },
+    async send(id)       { const r = await wrFetch('/stock-transfers/' + id + '/send', { method: 'POST' }); if (!r.ok) { const b = await r.json().catch(()=>({})); throw new Error(b.error || 'Envoi : ' + r.status); } return r.json(); },
+    async receive(id)    { const r = await wrFetch('/stock-transfers/' + id + '/receive', { method: 'POST' }); if (!r.ok) { const b = await r.json().catch(()=>({})); throw new Error(b.error || 'Réception : ' + r.status); } return r.json(); },
+    async remove(id)     { const r = await wrFetch('/stock-transfers/' + id, { method: 'DELETE' }); if (!r.ok) { const b = await r.json().catch(()=>({})); throw new Error(b.error || 'Suppression : ' + r.status); } return r.json(); }
+};
+const StockReplenishmentAPI = {
+    async list()         { const r = await wrFetch('/stock-replenishment-requests'); if (!r.ok) throw new Error('Demandes : ' + r.status); return r.json(); },
+    async get(id)        { const r = await wrFetch('/stock-replenishment-requests/' + id); if (!r.ok) throw new Error('Demande : ' + r.status); return r.json(); },
+    async create(data)   { const r = await wrFetch('/stock-replenishment-requests', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(data) }); if (!r.ok) { const b = await r.json().catch(()=>({})); throw new Error(b.error || 'Création demande : ' + r.status); } return r.json(); },
+    async decide(id, d)  { const r = await wrFetch('/stock-replenishment-requests/' + id + '/decide', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(d) }); if (!r.ok) { const b = await r.json().catch(()=>({})); throw new Error(b.error || 'Décision : ' + r.status); } return r.json(); },
+    async remove(id)     { const r = await wrFetch('/stock-replenishment-requests/' + id, { method: 'DELETE' }); if (!r.ok) { const b = await r.json().catch(()=>({})); throw new Error(b.error || 'Suppression : ' + r.status); } return r.json(); }
+};
+
 // Exporter pour utilisation globale
 if (typeof window !== 'undefined') {
     window.API = {
@@ -748,6 +772,9 @@ if (typeof window !== 'undefined') {
         Alerts: AlertsAPI,
         WeeklyReport: WeeklyReportAPI,
         Analytics: AnalyticsAPI,
+        StockLocations: StockLocationsAPI,
+        StockTransfers: StockTransfersAPI,
+        StockReplenishment: StockReplenishmentAPI,
         loadAllData,
         saveAllData
     };
