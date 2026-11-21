@@ -725,6 +725,14 @@ const StockTransfersAPI = {
     async receive(id)    { const r = await wrFetch('/stock-transfers/' + id + '/receive', { method: 'POST' }); if (!r.ok) { const b = await r.json().catch(()=>({})); throw new Error(b.error || 'Réception : ' + r.status); } return r.json(); },
     async remove(id)     { const r = await wrFetch('/stock-transfers/' + id, { method: 'DELETE' }); if (!r.ok) { const b = await r.json().catch(()=>({})); throw new Error(b.error || 'Suppression : ' + r.status); } return r.json(); }
 };
+const StockConsumptionAPI = {
+    async monthlyForClient(clientId, month) {
+        const q = new URLSearchParams({ clientId: String(clientId), month: String(month) });
+        const r = await wrFetch('/invoices/monthly-stock-consumption?' + q.toString());
+        if (!r.ok) throw new Error('Consommation mensuelle : ' + r.status);
+        return r.json();
+    }
+};
 const StockReplenishmentAPI = {
     async list()         { const r = await wrFetch('/stock-replenishment-requests'); if (!r.ok) throw new Error('Demandes : ' + r.status); return r.json(); },
     async get(id)        { const r = await wrFetch('/stock-replenishment-requests/' + id); if (!r.ok) throw new Error('Demande : ' + r.status); return r.json(); },
@@ -775,6 +783,7 @@ if (typeof window !== 'undefined') {
         StockLocations: StockLocationsAPI,
         StockTransfers: StockTransfersAPI,
         StockReplenishment: StockReplenishmentAPI,
+        StockConsumption: StockConsumptionAPI,
         loadAllData,
         saveAllData
     };
