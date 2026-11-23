@@ -10690,6 +10690,13 @@
                 setTimeout(function() { renderProjectOverview(); }, 50);
                 return;
             }
+            // Domaine Souterrain : conteneurs en camelCase (ugForageContent, etc.),
+            // à traiter avant le garde-fou générique "<vue>Content".
+            if (view === 'ug_forage' || view === 'ug_exploitation' || view === 'ug_securite') {
+                renderSouterrain();
+                try { ugSyncFromServer(); } catch (e) {}
+                return;
+            }
             var contentEl = document.getElementById(view + 'Content');
             if (!contentEl) return;
             
@@ -10756,9 +10763,6 @@
             } else if (view === 'hse') {
                 renderHSE();
                 try { hseSyncFromServer(); } catch (e) {}
-            } else if (view === 'ug_forage' || view === 'ug_exploitation' || view === 'ug_securite') {
-                renderSouterrain();
-                try { ugSyncFromServer(); } catch (e) {}
             } else if (view === 'carriere') {
                 renderCarriere();
                 try { cqSyncFromServer(); } catch (e) {}
