@@ -33560,17 +33560,26 @@
                 if (useAPI && window.API) {
                     // Bloc 1 : entités métier + logo (un échec ici ne doit pas bloquer les saisies journalières)
                     try {
-                        await window.API.saveAllData({
+                        // Sur une auto-sauvegarde (opts.auto), on exclut la configuration
+                        // entreprise (companyInfo : fosses/objectifs, matricules) et les
+                        // employés. Ces entités sont persistées directement lors de leur
+                        // édition (fiche entreprise, ⚙ Fosses, matricules, saveEmployee/
+                        // removeEmployee). Les renvoyer en masse à chaque cycle de 30 s
+                        // laissait un poste à la mémoire périmée réécraser le serveur.
+                        var _businessPayload = {
                             clients: clients,
-                            companyInfo: companyInfo,
                             invoices: invoices,
                             assignments: assignments,
-                            employees: employees,
                             contracts: contracts,
                             sites: sites,
                             inventory: inventory,
                             drills: drills
-                        });
+                        };
+                        if (!opts.auto) {
+                            _businessPayload.companyInfo = companyInfo;
+                            _businessPayload.employees = employees;
+                        }
+                        await window.API.saveAllData(_businessPayload);
                         if (companyLogo) {
                             await window.API.Company.updateLogo(companyLogo);
                         }
@@ -33947,8 +33956,12 @@
             el.style.flexShrink = '0';
         }
 
-        // Sauvegarder automatiquement toutes les 30 secondes
-        setInterval(saveData, 30000);
+        // Sauvegarder automatiquement toutes les 30 secondes.
+        // opts.auto = true : l'auto-save ne repousse PAS la configuration entreprise
+        // (fosses/objectifs, matricules) ni les employés — cf. saveData(). Cela évite
+        // qu'un poste resté ouvert avec une mémoire périmée réécrase, à chaque cycle,
+        // les données fraîches du serveur (symptôme : « le target se réinitialise »).
+        setInterval(function () { saveData({ auto: true }); }, 30000);
 
         // ============================================
         // INITIALISATION

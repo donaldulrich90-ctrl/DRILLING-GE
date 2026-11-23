@@ -577,16 +577,12 @@ async function saveAllData(data) {
             }
         }
         
-        if (data.employees) {
-            for (const employee of data.employees) {
-                promises.push(
-                    EmployeesAPI.update(employee.id, employee).catch(() => 
-                        EmployeesAPI.create(employee).catch(console.error)
-                    )
-                );
-            }
-        }
-        
+        // Employés : volontairement NON repoussés en masse ici. Chaque création /
+        // modification / suppression est déjà persistée directement via
+        // EmployeesAPI.create / .update / .delete (saveEmployee, removeEmployee).
+        // Un push global laissait un poste à la liste périmée réécraser les
+        // matricules/employés déjà à jour sur le serveur (régression constatée).
+
         // Assignations : ne jamais enchaîner create si update échoue — cela dupliquait des lignes pour la même foreuse.
         if (data.assignments) {
             for (const assignment of data.assignments) {
