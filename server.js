@@ -200,6 +200,29 @@ function requireUserManagementRole(req, res, next) {
     return res.status(403).json({ error: 'Accès réservé aux gestionnaires et administrateurs' });
 }
 
+// Domaines d'activité d'une entreprise (quels types d'exploitation elle réalise).
+const ACTIVITY_DOMAINS = ['ciel_ouvert', 'souterrain', 'carriere'];
+// Lecture : chaîne JSON -> tableau normalisé (ou null si non défini).
+function parseActivityDomainsJson(raw) {
+    if (raw == null || raw === '') return null;
+    try {
+        const a = JSON.parse(raw);
+        if (!Array.isArray(a)) return null;
+        const clean = Array.from(new Set(a.map(String).filter((d) => ACTIVITY_DOMAINS.includes(d))));
+        return clean.length ? clean : null;
+    } catch (e) { return null; }
+}
+// Écriture : valeur entrante -> chaîne JSON à stocker. undefined = champ non fourni.
+function normalizeActivityDomainsForStore(raw) {
+    if (raw === undefined) return undefined;
+    if (raw === null || raw === '') return null;
+    let arr = raw;
+    if (typeof raw === 'string') { try { arr = JSON.parse(raw); } catch (e) { return undefined; } }
+    if (!Array.isArray(arr)) return undefined;
+    const clean = Array.from(new Set(arr.map(String).filter((d) => ACTIVITY_DOMAINS.includes(d))));
+    return clean.length ? JSON.stringify(clean) : null;
+}
+
 function enrichEnterpriseRows(rows) {
     const list = rows || [];
     return list.map((row) => {
@@ -208,7 +231,8 @@ function enrichEnterpriseRows(rows) {
         return {
             ...safe,
             claudeApiKeySet: !!(claudeApiKey && String(claudeApiKey).trim()),
-            effectiveAllowedTabs: planRoles.getEffectiveAllowedTabs(row)
+            effectiveAllowedTabs: planRoles.getEffectiveAllowedTabs(row),
+            activityDomains: parseActivityDomainsJson(row.activityDomains)
         };
     });
 }
@@ -788,7 +812,7 @@ function parseEnterpriseSubscriptionCustom(body) {
 
 function sendRolePolicyForEnterprise(entId, res) {
     db.get(
-        'SELECT id, plan, subscriptionStatus, isActive, maxUsers, maxDrills, maxSites, allowedRoles, allowedTabs FROM enterprises WHERE id = ?',
+        'SELECT id, plan, subscriptionStatus, isActive, maxUsers, maxDrills, maxSites, allowedRoles, allowedTabs, activityDomains FROM enterprises WHERE id = ?',
         [entId],
         (err, ent) => {
             if (err) return res.status(500).json({ error: err.message });
@@ -812,6 +836,7 @@ function sendRolePolicyForEnterprise(entId, res) {
                         siteCount: rowS.n,
                         userCount: rowU.n,
                         effectiveAllowedTabs,
+                        activityDomains: parseActivityDomainsJson(ent.activityDomains),
                         allowedRolesCustom: planRoles.parseAllowedRolesJson(ent.allowedRoles),
                         effectiveAllowedRoles: planRoles.getEffectiveAllowedRoles(ent),
                         defaultRolesForPlan: planRoles.getDefaultRolesForPlan(ent.plan),
@@ -1134,6 +1159,15 @@ app.put('/api/enterprises/:id', (req, res) => {
             }
         }
     }
+    // Domaines d'activité : attribut métier modifiable par la plateforme OU l'entreprise elle-même.
+    if (req.body && req.body.activityDomains !== undefined) {
+        const adStore = normalizeActivityDomainsForStore(req.body.activityDomains);
+        if (adStore === undefined) {
+            return res.status(400).json({ error: 'activityDomains : tableau JSON parmi ciel_ouvert, souterrain, carriere' });
+        }
+        if (adStore === null) { updates.push('activityDomains = NULL'); }
+        else { updates.push('activityDomains = ?'); values.push(adStore); }
+    }
     if (platform) {
         const bodyPlat = req.body || {};
         const subTouched = bodyPlat.subscriptionCustomMonthly !== undefined ||
@@ -1194,6 +1228,11 @@ app.post('/api/enterprises', requirePlatformAdmin, (req, res) => {
     const subCustom = parseEnterpriseSubscriptionCustom(body);
     if (subCustom.error) return res.status(400).json({ error: subCustom.error });
     const slugVal = slug || name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    const adStore = normalizeActivityDomainsForStore(body.activityDomains);
+    if (adStore === undefined) {
+        return res.status(400).json({ error: 'activityDomains : tableau JSON parmi ciel_ouvert, souterrain, carriere' });
+    }
+    const adJson = adStore; // chaîne JSON ou null
     let allowedJson = null;
     if (allowedRoles !== undefined && allowedRoles !== null && allowedRoles !== '') {
         try {
@@ -1222,12 +1261,12 @@ app.post('/api/enterprises', requirePlatformAdmin, (req, res) => {
 
     if (!firstUserUsername) {
         db.run(
-            `INSERT INTO enterprises (name, slug, legalName, address, city, country, email, phone, currency, plan, maxUsers, maxDrills, maxSites, allowedRoles, subscriptionCustomMonthly, subscriptionCustomYearly, subscriptionCustomCurrency)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO enterprises (name, slug, legalName, address, city, country, email, phone, currency, plan, maxUsers, maxDrills, maxSites, allowedRoles, subscriptionCustomMonthly, subscriptionCustomYearly, subscriptionCustomCurrency, activityDomains)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 name, slugVal, legalName || '', address || '', city || '', country || '', email || '', phone || '',
                 currency || 'EUR', planVal, insMaxUsers, insMaxDrills, insMaxSites, allowedJson,
-                subCustom.monthly, subCustom.yearly, subCustom.currency
+                subCustom.monthly, subCustom.yearly, subCustom.currency, adJson
             ],
             function(err) {
                 if (err) return res.status(500).json({ error: err.message });
@@ -1240,12 +1279,12 @@ app.post('/api/enterprises', requirePlatformAdmin, (req, res) => {
     db.serialize(() => {
         db.run('BEGIN IMMEDIATE TRANSACTION');
         db.run(
-            `INSERT INTO enterprises (name, slug, legalName, address, city, country, email, phone, currency, plan, maxUsers, maxDrills, maxSites, allowedRoles, subscriptionCustomMonthly, subscriptionCustomYearly, subscriptionCustomCurrency)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO enterprises (name, slug, legalName, address, city, country, email, phone, currency, plan, maxUsers, maxDrills, maxSites, allowedRoles, subscriptionCustomMonthly, subscriptionCustomYearly, subscriptionCustomCurrency, activityDomains)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 name, slugVal, legalName || '', address || '', city || '', country || '', email || '', phone || '',
                 currency || 'EUR', planVal, insMaxUsers, insMaxDrills, insMaxSites, allowedJson,
-                subCustom.monthly, subCustom.yearly, subCustom.currency
+                subCustom.monthly, subCustom.yearly, subCustom.currency, adJson
             ],
             function(err) {
                 if (err) {

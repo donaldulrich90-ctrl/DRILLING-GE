@@ -66,6 +66,7 @@ db.serialize(() => {
             subscriptionCustomYearly REAL DEFAULT NULL,
             subscriptionCustomCurrency TEXT DEFAULT NULL,
             allowedTabs TEXT DEFAULT NULL,
+            activityDomains TEXT DEFAULT NULL,
             createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
             updatedAt TEXT DEFAULT CURRENT_TIMESTAMP
         )

@@ -3728,6 +3728,15 @@
                             </div>
                         </div>
                         <div>
+                            <h3 class="text-lg font-semibold text-amber-400 border-b border-slate-600 pb-2 mb-4">Domaines d'activité</h3>
+                            <p class="text-slate-400 text-sm mb-3">Quels types d'exploitation cette entreprise réalise-t-elle ? <strong class="text-slate-300">Seuls les modules des domaines cochés seront affichés</strong> dans son menu.</p>
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                <label class="flex items-center gap-2 cursor-pointer bg-slate-700/50 hover:bg-slate-700 rounded-lg px-3 py-2"><input type="checkbox" id="newEntDom_ciel_ouvert" checked class="rounded border-slate-500 text-amber-600 focus:ring-amber-500"><span class="text-slate-200 text-sm">⛰️ Mine à ciel ouvert</span></label>
+                                <label class="flex items-center gap-2 cursor-pointer bg-slate-700/50 hover:bg-slate-700 rounded-lg px-3 py-2"><input type="checkbox" id="newEntDom_souterrain" class="rounded border-slate-500 text-amber-600 focus:ring-amber-500"><span class="text-slate-200 text-sm">⛏ Mine souterraine</span></label>
+                                <label class="flex items-center gap-2 cursor-pointer bg-slate-700/50 hover:bg-slate-700 rounded-lg px-3 py-2"><input type="checkbox" id="newEntDom_carriere" class="rounded border-slate-500 text-amber-600 focus:ring-amber-500"><span class="text-slate-200 text-sm">🪨 Carrière</span></label>
+                            </div>
+                        </div>
+                        <div>
                             <h3 class="text-lg font-semibold text-amber-400 border-b border-slate-600 pb-2 mb-4">Abonnement</h3>
                             <p class="text-slate-400 text-sm mb-3">Sélectionnez une formule. Par défaut les montants suivent la <strong class="text-slate-300">grille catalogue</strong> ; vous pouvez les remplacer par un <strong class="text-slate-300">tarif négocié</strong> pour cette entreprise uniquement.</p>
                             <div id="newEnterprisePlanCards" class="space-y-3 min-h-[120px]">
@@ -3952,6 +3961,15 @@
                                         <label class="block text-slate-400 text-xs mb-1">Max. sites (abonnement)</label>
                                         <input type="number" id="editEntMaxSites" min="1" step="1" class="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white" title="Nombre de sites couverts par le même abonnement — extensions possibles.">
                                         <p class="text-xs text-slate-500 mt-1">Un abonnement couvre au moins un site ; augmentez ce plafond pour ajouter d’autres sites (même entreprise).</p>
+                                    </div>
+                                </div>
+                                <div class="mt-5 pt-4 border-t border-slate-600 space-y-3">
+                                    <h4 class="text-sm font-semibold text-slate-300">Domaines d'activité</h4>
+                                    <p class="text-xs text-slate-500">Seuls les modules des domaines cochés sont affichés (Ciel ouvert → plan de forage / import ; Souterrain → forage, exploitation, sécurité ; Carrière). Tout décoché = tout visible.</p>
+                                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                        <label class="flex items-center gap-2 cursor-pointer text-slate-300 text-sm"><input type="checkbox" id="editEntDom_ciel_ouvert" class="rounded border-slate-500 text-amber-600 focus:ring-amber-500"><span>⛰️ Mine à ciel ouvert</span></label>
+                                        <label class="flex items-center gap-2 cursor-pointer text-slate-300 text-sm"><input type="checkbox" id="editEntDom_souterrain" class="rounded border-slate-500 text-amber-600 focus:ring-amber-500"><span>⛏ Mine souterraine</span></label>
+                                        <label class="flex items-center gap-2 cursor-pointer text-slate-300 text-sm"><input type="checkbox" id="editEntDom_carriere" class="rounded border-slate-500 text-amber-600 focus:ring-amber-500"><span>🪨 Carrière</span></label>
                                     </div>
                                 </div>
                                 <div class="mt-5 pt-4 border-t border-slate-600 space-y-3">
@@ -6147,16 +6165,52 @@
         // GESTION DES PERMISSIONS
         // ============================================
         window.subscriptionAllowedViews = window.subscriptionAllowedViews || null;
+        // Domaines d'activité de l'entreprise courante (ciel_ouvert / souterrain / carriere).
+        // null ou vide = pas de filtrage (rétrocompatibilité avec les entreprises existantes).
+        window.enterpriseActivityDomains = window.enterpriseActivityDomains || null;
+        var ACTIVITY_DOMAINS_DEF = [
+            { key: 'ciel_ouvert', label: 'Mine à ciel ouvert', icon: '⛰️' },
+            { key: 'souterrain',  label: 'Mine souterraine',   icon: '⛏' },
+            { key: 'carriere',    label: 'Carrière',            icon: '🪨' }
+        ];
+        // Vues spécifiques à chaque domaine (les autres vues sont transversales et toujours visibles).
+        var DOMAIN_VIEWS = {
+            ciel_ouvert: ['forage_plan', 'import_plan'],
+            souterrain:  ['ug_forage', 'ug_exploitation', 'ug_securite'],
+            carriere:    ['carriere']
+        };
+        // Cases à cocher « domaines d'activité » des formulaires entreprise (préfixe newEntDom_ / editEntDom_).
+        function collectActivityDomains(prefix) {
+            var out = [];
+            ACTIVITY_DOMAINS_DEF.forEach(function (d) { var el = document.getElementById(prefix + d.key); if (el && el.checked) out.push(d.key); });
+            return out;
+        }
+        function setActivityDomainCheckboxes(prefix, domains) {
+            var set = {}; (domains || []).forEach(function (d) { set[d] = true; });
+            ACTIVITY_DOMAINS_DEF.forEach(function (d) { var el = document.getElementById(prefix + d.key); if (el) el.checked = !!set[d.key]; });
+        }
+        // Une vue de domaine est-elle autorisée par les domaines d'activité de l'entreprise ?
+        function allowedByActivityDomain(navId) {
+            var doms = window.enterpriseActivityDomains;
+            if (!Array.isArray(doms) || doms.length === 0) return true; // pas de filtrage
+            var view = String(navId).replace(/^nav-/, '');
+            var owning = null;
+            Object.keys(DOMAIN_VIEWS).forEach(function (dk) { if (DOMAIN_VIEWS[dk].indexOf(view) >= 0) owning = dk; });
+            if (!owning) return true; // vue transversale
+            return doms.indexOf(owning) >= 0;
+        }
 
         function refreshSubscriptionNavPolicy() {
             window.subscriptionAllowedViews = null;
+            window.enterpriseActivityDomains = null;
             if (!currentUser || isPlatformBillingOnlyUser(currentUser)) return Promise.resolve();
             if (!useAPI || !window.API || !window.API.EnterpriseRolePolicy || !window.API.EnterpriseRolePolicy.getMy) {
                 return Promise.resolve();
             }
             return window.API.EnterpriseRolePolicy.getMy().then(function(pol) {
                 if (pol && Array.isArray(pol.effectiveAllowedTabs)) window.subscriptionAllowedViews = pol.effectiveAllowedTabs;
-            }).catch(function() { window.subscriptionAllowedViews = null; });
+                if (pol && Array.isArray(pol.activityDomains) && pol.activityDomains.length) window.enterpriseActivityDomains = pol.activityDomains;
+            }).catch(function() { window.subscriptionAllowedViews = null; window.enterpriseActivityDomains = null; });
         }
 
         function userCanCreateSite() {
@@ -6328,6 +6382,11 @@
                         btn.style.display = 'none';
                         return;
                     }
+                    if (!allowedByActivityDomain(btnId)) {
+                        btn.classList.add('hidden');
+                        btn.style.display = 'none';
+                        return;
+                    }
                     // Respecter les onglets bloqués pour ce compte, même en rôle administrateur.
                     var admRestrictionKey = navMapping[btnId];
                     if (admRestrictionKey && restrictions[admRestrictionKey] === true) {
@@ -6354,7 +6413,7 @@
                     if (!btn) return;
                     if (btnId === 'nav-enterprises') { btn.classList.add('hidden'); btn.style.display = 'none'; return; }
                     var view = btnId.replace(/^nav-/, '');
-                    var show = grantSet[view] === true && allowedBySubscription(btnId);
+                    var show = grantSet[view] === true && allowedBySubscription(btnId) && allowedByActivityDomain(btnId);
                     btn.classList.toggle('hidden', !show);
                     btn.style.display = show ? '' : 'none';
                 });
@@ -6412,6 +6471,11 @@
                     return;
                 }
                 if (!allowedBySubscription(btnId)) {
+                    btn.classList.add('hidden');
+                    btn.style.display = 'none';
+                    return;
+                }
+                if (!allowedByActivityDomain(btnId)) {
                     btn.classList.add('hidden');
                     btn.style.display = 'none';
                     return;
@@ -18914,6 +18978,8 @@
         }
 
         function renderEditEnterpriseTabsSection(e) {
+            // Pré-remplir les domaines d'activité de l'entreprise.
+            try { setActivityDomainCheckboxes('editEntDom_', e && e.activityDomains); } catch (_) {}
             var grid = document.getElementById('editEntAllowedTabsGrid');
             var followEl = document.getElementById('editEntTabsFollowPlan');
             if (!grid || !followEl) return;
@@ -19192,6 +19258,9 @@
                 }
                 payload.allowedTabs = selectedTabs;
             }
+
+            // Domaines d'activité (tout décoché = pas de filtrage → tous les modules visibles).
+            payload.activityDomains = collectActivityDomains('editEntDom_');
 
             var logoFile = (document.getElementById('editEntLogoInput') || {}).files;
             logoFile = logoFile && logoFile[0] ? logoFile[0] : null;
@@ -19486,6 +19555,12 @@
                 currency: (document.getElementById('newEntCurrency') || {}).value || 'EUR'
             };
             if (slug) payload.slug = slug;
+            var newEntDomains = collectActivityDomains('newEntDom_');
+            if (newEntDomains.length === 0) {
+                alert('Choisissez au moins un domaine d\'activité (Mine à ciel ouvert, Mine souterraine ou Carrière).');
+                return;
+            }
+            payload.activityDomains = newEntDomains;
             payload.maxUsers = parseInt((document.getElementById('newEntMaxUsers') || {}).value, 10) || 5;
             payload.maxDrills = parseInt((document.getElementById('newEntMaxDrills') || {}).value, 10) || 10;
             payload.maxSites = parseInt((document.getElementById('newEntMaxSites') || {}).value, 10) || 1;

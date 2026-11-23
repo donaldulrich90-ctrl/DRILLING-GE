@@ -287,6 +287,8 @@ const migrations = [
     { name: 'companyInfo.matriculeSeparator', sql: "ALTER TABLE companyInfo ADD COLUMN matriculeSeparator TEXT DEFAULT '-'" },
     { name: 'companyInfo.matriculePadding', sql: 'ALTER TABLE companyInfo ADD COLUMN matriculePadding INTEGER DEFAULT 3' },
     { name: 'sites.miningCutoffDay', sql: 'ALTER TABLE sites ADD COLUMN miningCutoffDay INTEGER DEFAULT 1' },
+    // Domaines d'activité de l'entreprise (JSON : ["ciel_ouvert","souterrain","carriere"]).
+    { name: 'enterprises.activityDomains', sql: 'ALTER TABLE enterprises ADD COLUMN activityDomains TEXT DEFAULT NULL' },
     // Devise du stock (prix d'achat en XOF/USD/EUR)
     { name: 'inventory.priceCurrency', sql: "ALTER TABLE inventory ADD COLUMN priceCurrency TEXT DEFAULT 'XOF'" },
     { name: 'stockMovements.priceCurrency', sql: "ALTER TABLE stockMovements ADD COLUMN priceCurrency TEXT DEFAULT 'XOF'" },
