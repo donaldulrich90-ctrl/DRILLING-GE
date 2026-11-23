@@ -479,14 +479,33 @@ function checkDone() {
             db.run(`DELETE FROM users WHERE username = 'admin'`, function() {
                 db.run(`INSERT OR IGNORE INTO users (username, password, passwordHash, role, name, enterpriseId, restrictions, notes) VALUES (?, '', ?, 'platform_owner', 'Gestion abonnements SaaS', NULL, '{}', 'Créer entreprises, abonnements et utilisateurs plateforme (mode partagé)')`, ['gestion_abonnements', initialPlatformHash], function() {
                     db.run(`INSERT OR IGNORE INTO users (username, password, passwordHash, role, name, enterpriseId, restrictions, notes) VALUES (?, '', ?, 'platform_owner', 'Propriétaire plateforme', NULL, '{}', 'Gestion des abonnements entreprises')`, ['proprietaire', initialPlatformHash], function() {
-                        db.run('PRAGMA foreign_keys = ON');
-                        db.close((err) => {
-                            if (err) console.error('Erreur fermeture:', err);
-                            else {
-                                console.log('\n✨ Migration terminée! Mot de passe plateforme fourni par INITIAL_PLATFORM_PASSWORD.');
-                                if (!process.env.INITIAL_PLATFORM_PASSWORD) console.log('Mot de passe initial généré : ' + initialPlatformPassword);
-                            }
-                        });
+                        function finishPlatform() {
+                            db.run('PRAGMA foreign_keys = ON');
+                            db.close((err) => {
+                                if (err) console.error('Erreur fermeture:', err);
+                                else {
+                                    console.log('\n✨ Migration terminée! Mot de passe plateforme fourni par INITIAL_PLATFORM_PASSWORD.');
+                                    if (!process.env.INITIAL_PLATFORM_PASSWORD) console.log('Mot de passe initial généré : ' + initialPlatformPassword);
+                                }
+                            });
+                        }
+                        // Réinitialisation contrôlée du mot de passe des comptes plateforme.
+                        // Ne s'exécute QUE si RESET_PLATFORM_OWNER est défini ET INITIAL_PLATFORM_PASSWORD fourni.
+                        // N'altère aucune donnée métier : met uniquement à jour le hash de 2 comptes.
+                        if (process.env.RESET_PLATFORM_OWNER && String(process.env.RESET_PLATFORM_OWNER).toLowerCase() !== 'off'
+                            && process.env.INITIAL_PLATFORM_PASSWORD) {
+                            db.run(
+                                "UPDATE users SET passwordHash = ?, password = '' WHERE username IN ('proprietaire','gestion_abonnements')",
+                                [initialPlatformHash],
+                                function (uErr) {
+                                    if (uErr) console.error('🔑 Réinitialisation propriétaire échouée:', uErr.message);
+                                    else console.log('🔑 Mot de passe des comptes plateforme (proprietaire, gestion_abonnements) réinitialisé depuis INITIAL_PLATFORM_PASSWORD (' + this.changes + ' compte(s)). Retirez RESET_PLATFORM_OWNER après connexion.');
+                                    finishPlatform();
+                                }
+                            );
+                        } else {
+                            finishPlatform();
+                        }
                     });
                 });
             });
