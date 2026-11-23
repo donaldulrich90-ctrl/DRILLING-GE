@@ -490,19 +490,30 @@ function checkDone() {
                             });
                         }
                         // Réinitialisation contrôlée du mot de passe des comptes plateforme.
-                        // Ne s'exécute QUE si RESET_PLATFORM_OWNER est défini ET INITIAL_PLATFORM_PASSWORD fourni.
-                        // N'altère aucune donnée métier : met uniquement à jour le hash de 2 comptes.
-                        if (process.env.RESET_PLATFORM_OWNER && String(process.env.RESET_PLATFORM_OWNER).toLowerCase() !== 'off'
-                            && process.env.INITIAL_PLATFORM_PASSWORD) {
-                            db.run(
-                                "UPDATE users SET passwordHash = ?, password = '' WHERE username IN ('proprietaire','gestion_abonnements')",
-                                [initialPlatformHash],
-                                function (uErr) {
-                                    if (uErr) console.error('🔑 Réinitialisation propriétaire échouée:', uErr.message);
-                                    else console.log('🔑 Mot de passe des comptes plateforme (proprietaire, gestion_abonnements) réinitialisé depuis INITIAL_PLATFORM_PASSWORD (' + this.changes + ' compte(s)). Retirez RESET_PLATFORM_OWNER après connexion.');
-                                    finishPlatform();
-                                }
-                            );
+                        // Ne s'exécute QUE si RESET_PLATFORM_OWNER est défini (≠ off/vide).
+                        // La VALEUR de RESET_PLATFORM_OWNER devient le nouveau mot de passe,
+                        // sauf si c'est un simple drapeau (1/true/on/yes) : on prend alors
+                        // INITIAL_PLATFORM_PASSWORD. N'altère aucune donnée métier : met
+                        // uniquement à jour le hash de 2 comptes.
+                        var _rpo = process.env.RESET_PLATFORM_OWNER ? String(process.env.RESET_PLATFORM_OWNER) : '';
+                        if (_rpo && _rpo.toLowerCase() !== 'off') {
+                            var _isFlag = ['1', 'true', 'on', 'yes'].indexOf(_rpo.toLowerCase()) >= 0;
+                            var _newPass = _isFlag ? (process.env.INITIAL_PLATFORM_PASSWORD || '') : _rpo;
+                            if (!_newPass) {
+                                console.warn('🔑 RESET_PLATFORM_OWNER posé mais aucun mot de passe. Utilisez RESET_PLATFORM_OWNER=<nouveau_mot_de_passe>, ou définissez INITIAL_PLATFORM_PASSWORD.');
+                                finishPlatform();
+                            } else {
+                                var _newHash = bcrypt.hashSync(_newPass, 10);
+                                db.run(
+                                    "UPDATE users SET passwordHash = ?, password = '' WHERE username IN ('proprietaire','gestion_abonnements')",
+                                    [_newHash],
+                                    function (uErr) {
+                                        if (uErr) console.error('🔑 Réinitialisation propriétaire échouée:', uErr.message);
+                                        else console.log('🔑 Mot de passe des comptes plateforme (proprietaire, gestion_abonnements) réinitialisé (' + this.changes + ' compte(s)). Connectez-vous puis RETIREZ RESET_PLATFORM_OWNER.');
+                                        finishPlatform();
+                                    }
+                                );
+                            }
                         } else {
                             finishPlatform();
                         }
