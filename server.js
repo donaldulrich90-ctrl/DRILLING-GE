@@ -3985,7 +3985,7 @@ app.post('/api/company', (req, res) => {
     const company = req.body;
     const entId = resolveCreateEnterpriseId(req, company);
     
-    db.get('SELECT id, fosses, monthlyTargets FROM companyInfo WHERE enterpriseId = ? LIMIT 1', [entId], (err, existing) => {
+    db.get('SELECT id, fosses, monthlyTargets, matriculePrefix, matriculeIncludeYear, matriculeSeparator, matriculePadding FROM companyInfo WHERE enterpriseId = ? LIMIT 1', [entId], (err, existing) => {
         if (err) {
             res.status(500).json({ error: err.message });
             return;
@@ -4018,10 +4018,18 @@ app.post('/api/company', (req, res) => {
                     company.signatoryTitle || '',
                     fossesToStore,
                     monthlyTargetsToStore,
-                    (company.matriculePrefix != null && company.matriculePrefix !== '') ? String(company.matriculePrefix) : 'EMP',
-                    (company.matriculeIncludeYear === false || company.matriculeIncludeYear === 0) ? 0 : 1,
-                    (company.matriculeSeparator != null) ? String(company.matriculeSeparator) : '-',
-                    (parseInt(company.matriculePadding, 10) > 0) ? parseInt(company.matriculePadding, 10) : 3,
+                    // Config matricule : PRÉSERVER l'existante si la requête ne la fournit pas.
+                    // Évite qu'un enregistrement de la fiche entreprise par un client qui
+                    // n'envoie pas ces champs réinitialise le modèle (ex. WAUD -> EMP-2026).
+                    (company.matriculePrefix != null && company.matriculePrefix !== '') ? String(company.matriculePrefix)
+                        : ((existing.matriculePrefix != null && existing.matriculePrefix !== '') ? existing.matriculePrefix : 'EMP'),
+                    (company.matriculeIncludeYear === undefined || company.matriculeIncludeYear === null)
+                        ? (existing.matriculeIncludeYear != null ? existing.matriculeIncludeYear : 1)
+                        : ((company.matriculeIncludeYear === false || company.matriculeIncludeYear === 0) ? 0 : 1),
+                    (company.matriculeSeparator != null) ? String(company.matriculeSeparator)
+                        : (existing.matriculeSeparator != null ? existing.matriculeSeparator : '-'),
+                    (parseInt(company.matriculePadding, 10) > 0) ? parseInt(company.matriculePadding, 10)
+                        : (existing.matriculePadding != null ? existing.matriculePadding : 3),
                     entId
                 ],
                 function(updateErr) {
