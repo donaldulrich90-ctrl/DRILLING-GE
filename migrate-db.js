@@ -489,31 +489,40 @@ function checkDone() {
                                 }
                             });
                         }
-                        // Réinitialisation contrôlée du mot de passe des comptes plateforme.
-                        // Ne s'exécute QUE si RESET_PLATFORM_OWNER est défini (≠ off/vide).
-                        // La VALEUR de RESET_PLATFORM_OWNER devient le nouveau mot de passe,
-                        // sauf si c'est un simple drapeau (1/true/on/yes) : on prend alors
-                        // INITIAL_PLATFORM_PASSWORD. N'altère aucune donnée métier : met
-                        // uniquement à jour le hash de 2 comptes.
+                        // --- Récupération de l'accès propriétaire plateforme ---
+                        // (a) Si RESET_PLATFORM_OWNER est défini : sa valeur devient le nouveau
+                        //     mot de passe (ou INITIAL_PLATFORM_PASSWORD si c'est un simple
+                        //     drapeau 1/true/on/yes, sinon le mot de passe de secours).
+                        // (b) Sinon : réinitialisation AUTOMATIQUE, UNE SEULE FOIS, vers un mot
+                        //     de passe de secours connu, tant qu'un marqueur n'existe pas sur le
+                        //     volume de données. Une fois appliquée, elle n'est plus jamais
+                        //     rejouée (le marqueur est écrit) et n'écrase donc pas un mot de
+                        //     passe que vous changerez ensuite.
+                        // N'altère aucune donnée métier : UPDATE du seul passwordHash de 2 comptes.
+                        var _resetMarker = path.join(path.dirname(DB_PATH), '.owner_reset_v1');
+                        var _RECOVERY_PWD = 'GEDrilling2026';
+                        function _applyOwnerReset(newPass, note, markerPath) {
+                            var hash = bcrypt.hashSync(newPass, 10);
+                            db.run(
+                                "UPDATE users SET passwordHash = ?, password = '' WHERE username IN ('proprietaire','gestion_abonnements')",
+                                [hash],
+                                function (uErr) {
+                                    if (uErr) console.error('🔑 Réinitialisation propriétaire échouée:', uErr.message);
+                                    else {
+                                        console.log('🔑 ' + note + ' (' + this.changes + ' compte(s)).');
+                                        if (markerPath) { try { fs.writeFileSync(markerPath, new Date().toISOString() + '\n'); } catch (e) {} }
+                                    }
+                                    finishPlatform();
+                                }
+                            );
+                        }
                         var _rpo = process.env.RESET_PLATFORM_OWNER ? String(process.env.RESET_PLATFORM_OWNER) : '';
                         if (_rpo && _rpo.toLowerCase() !== 'off') {
                             var _isFlag = ['1', 'true', 'on', 'yes'].indexOf(_rpo.toLowerCase()) >= 0;
-                            var _newPass = _isFlag ? (process.env.INITIAL_PLATFORM_PASSWORD || '') : _rpo;
-                            if (!_newPass) {
-                                console.warn('🔑 RESET_PLATFORM_OWNER posé mais aucun mot de passe. Utilisez RESET_PLATFORM_OWNER=<nouveau_mot_de_passe>, ou définissez INITIAL_PLATFORM_PASSWORD.');
-                                finishPlatform();
-                            } else {
-                                var _newHash = bcrypt.hashSync(_newPass, 10);
-                                db.run(
-                                    "UPDATE users SET passwordHash = ?, password = '' WHERE username IN ('proprietaire','gestion_abonnements')",
-                                    [_newHash],
-                                    function (uErr) {
-                                        if (uErr) console.error('🔑 Réinitialisation propriétaire échouée:', uErr.message);
-                                        else console.log('🔑 Mot de passe des comptes plateforme (proprietaire, gestion_abonnements) réinitialisé (' + this.changes + ' compte(s)). Connectez-vous puis RETIREZ RESET_PLATFORM_OWNER.');
-                                        finishPlatform();
-                                    }
-                                );
-                            }
+                            var _newPass = _isFlag ? (process.env.INITIAL_PLATFORM_PASSWORD || _RECOVERY_PWD) : _rpo;
+                            _applyOwnerReset(_newPass, "Mot de passe plateforme réinitialisé via RESET_PLATFORM_OWNER — connectez-vous puis retirez la variable", null);
+                        } else if (!fs.existsSync(_resetMarker)) {
+                            _applyOwnerReset(_RECOVERY_PWD, "Réinitialisation automatique unique — identifiant 'proprietaire', mot de passe '" + _RECOVERY_PWD + "' (À CHANGER après connexion)", _resetMarker);
                         } else {
                             finishPlatform();
                         }
