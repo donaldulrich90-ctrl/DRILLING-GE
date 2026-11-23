@@ -1374,6 +1374,7 @@
                     <button type="button" onclick="showMainView('depenses_pm')" class="ged-nav-item main-nav-btn" id="nav-depenses_pm">◇ &nbsp;Dépenses PM</button>
 
                     <p class="ged-nav-section ged-nav-toggle" onclick="gedToggleNavSection(this)"><span class="nav-caret">▾</span>Gestion</p>
+                    <button type="button" onclick="showMainView('ecosystem')" class="ged-nav-item main-nav-btn" id="nav-ecosystem">⬢ &nbsp;Donneurs d'ordre</button>
                     <button type="button" onclick="showMainView('contracts')" class="ged-nav-item main-nav-btn" id="nav-contracts">▤ &nbsp;Contrats</button>
                     <button type="button" onclick="showMainView('clients')" class="ged-nav-item main-nav-btn" id="nav-clients">▰ &nbsp;Clients</button>
                     <button type="button" onclick="showMainView('sites')" class="ged-nav-item main-nav-btn" id="nav-sites">⌖ &nbsp;Sites</button>
@@ -1866,6 +1867,11 @@
         <!-- ═══ VUE PLAN DE FORAGE ══════════════════════════════════════ -->
         <div id="mainView-import_plan" class="main-view hidden">
             <div id="importPlanRoot"></div>
+        </div>
+
+        <!-- ═══ VUE DONNEURS D'ORDRE & ÉCOSYSTÈME ═══════════════════════ -->
+        <div id="mainView-ecosystem" class="main-view hidden">
+            <div id="ecosystemRoot"></div>
         </div>
 
         <div id="mainView-forage_plan" class="main-view hidden">
@@ -6208,6 +6214,7 @@
                 'nav-depenses_pm': 'restrictDepensesPM',
                 'nav-payments': 'restrictPayments',
                 'nav-soustraitants': 'restrictSoustraitants',
+                'nav-ecosystem': 'restrictEcosystem',
                 'nav-invoices': 'restrictInvoices',
                 'nav-contracts': 'restrictContracts',
                 'nav-revenue': 'restrictRevenue',
@@ -6223,7 +6230,7 @@
                 'nav-company_info': 'restrictCompanyInfo',
                 'nav-accounts': 'restrictAccounts'
             };
-            var allNavButtons = ['nav-dashboard', 'nav-forage_plan', 'nav-import_plan', 'nav-connections', 'nav-assignments', 'nav-maintenance', 'nav-bit_sharpening', 'nav-consumables', 'nav-hse', 'nav-souterrain', 'nav-carriere', 'nav-analytics', 'nav-planification', 'nav-besoins', 'nav-rentabilite', 'nav-depenses_pm', 'nav-payments', 'nav-soustraitants', 'nav-invoices', 'nav-contracts', 'nav-enterprises', 'nav-sites', 'nav-revenue', 'nav-site_meals', 'nav-reports', 'nav-project_overview', 'nav-rh', 'nav-inventory', 'nav-stock_multi', 'nav-accounts', 'nav-clients', 'nav-translator', 'nav-team_chat', 'nav-company_info'];
+            var allNavButtons = ['nav-dashboard', 'nav-forage_plan', 'nav-import_plan', 'nav-ecosystem', 'nav-connections', 'nav-assignments', 'nav-maintenance', 'nav-bit_sharpening', 'nav-consumables', 'nav-hse', 'nav-souterrain', 'nav-carriere', 'nav-analytics', 'nav-planification', 'nav-besoins', 'nav-rentabilite', 'nav-depenses_pm', 'nav-payments', 'nav-soustraitants', 'nav-invoices', 'nav-contracts', 'nav-enterprises', 'nav-sites', 'nav-revenue', 'nav-site_meals', 'nav-reports', 'nav-project_overview', 'nav-rh', 'nav-inventory', 'nav-stock_multi', 'nav-accounts', 'nav-clients', 'nav-translator', 'nav-team_chat', 'nav-company_info'];
 
             if (isPlatformBillingOnlyUser(currentUser)) {
                 allNavButtons.forEach(function(btnId) {
@@ -6269,7 +6276,7 @@
             // Onglets nouvellement gérés par l'accès explicite : jamais masqués par une
             // ancienne liste d'abonnement (qui ne les connaît pas), pour éviter de les
             // cacher à tort une fois ajoutés au contrôle d'accès.
-            var NEW_MANAGED_VIEWS = { forage_plan: 1, bit_sharpening: 1, consumables: 1, hse: 1, souterrain: 1, carriere: 1, analytics: 1, planification: 1, besoins: 1, rentabilite: 1, depenses_pm: 1, payments: 1, soustraitants: 1 };
+            var NEW_MANAGED_VIEWS = { forage_plan: 1, bit_sharpening: 1, consumables: 1, hse: 1, souterrain: 1, carriere: 1, analytics: 1, planification: 1, besoins: 1, rentabilite: 1, depenses_pm: 1, payments: 1, soustraitants: 1, ecosystem: 1 };
             function allowedBySubscription(navId) {
                 if (navId === 'nav-enterprises') return true;
                 if (!subTabs || !subTabs.length) return true;
@@ -6363,7 +6370,8 @@
                 'nav-rentabilite': true,
                 'nav-depenses_pm': true,
                 'nav-payments': true,
-                'nav-soustraitants': true
+                'nav-soustraitants': true,
+                'nav-ecosystem': true
             };
 
             allNavButtons.forEach(function(btnId) {
@@ -6462,7 +6470,7 @@
                 view !== 'enterprises' && subNav.indexOf(view) < 0) {
                 view = 'dashboard';
             }
-            var views = ['consumables', 'dashboard', 'connections', 'assignments', 'maintenance', 'bit_sharpening', 'invoices', 'payments', 'contracts', 'sites', 'enterprises', 'revenue', 'site_meals', 'reports', 'project_overview', 'planification', 'besoins', 'rh', 'inventory', 'stock_multi', 'accounts', 'clients', 'translator', 'team_chat', 'company_info', 'forage_plan', 'import_plan', 'rentabilite', 'depenses_pm', 'analytics', 'hse', 'souterrain', 'soustraitants', 'weekly_report'];
+            var views = ['consumables', 'dashboard', 'connections', 'assignments', 'maintenance', 'bit_sharpening', 'invoices', 'payments', 'contracts', 'sites', 'enterprises', 'revenue', 'site_meals', 'reports', 'project_overview', 'planification', 'besoins', 'rh', 'inventory', 'stock_multi', 'accounts', 'clients', 'translator', 'team_chat', 'company_info', 'forage_plan', 'import_plan', 'ecosystem', 'rentabilite', 'depenses_pm', 'analytics', 'hse', 'souterrain', 'soustraitants', 'weekly_report'];
             views.forEach(function(v) {
                 var el = document.getElementById('mainView-' + v);
                 if (el) el.classList.add('hidden');
@@ -10705,6 +10713,9 @@
             } else if (view === 'import_plan') {
                 renderImportPlan();
                 try { importPlanSyncFromServer(); } catch (e) {}
+            } else if (view === 'ecosystem') {
+                renderEcosystem();
+                try { ecosystemSyncFromServer(); } catch (e) {}
             } else if (view === 'planification') {
                 renderPlanification();
             } else if (view === 'besoins') {
@@ -27972,6 +27983,7 @@
             ['restrictInvoices', 'invoices'], ['restrictPayments', 'payments'],
             ['restrictContracts', 'contracts'], ['restrictRevenue', 'revenue'],
             ['restrictSoustraitants', 'soustraitants'],
+            ['restrictEcosystem', 'ecosystem'],
             ['restrictSiteMeals', 'site_meals'], ['restrictReports', 'reports'],
             ['restrictRH', 'rh'], ['restrictInventory', 'inventory'],
             ['restrictClients', 'clients'], ['restrictSites', 'sites'],
@@ -28004,7 +28016,7 @@
             // Onglets historiquement visibles de tous : pré-cochés pour tout rôle lors de
             // l'édition d'un compte existant (préserve son accès actuel ; l'admin ajuste ensuite).
             var ALL_ROLES_HIST = ['foreur', 'aideforeur', 'superviseur', 'ingenieur', 'gestionnaire', 'gestionnaire_site', 'santesecurite', 'administratif', 'visiteur'];
-            ['forage_plan', 'import_plan', 'bit_sharpening', 'consumables', 'hse', 'souterrain', 'analytics', 'planification', 'besoins', 'rentabilite', 'depenses_pm', 'payments', 'soustraitants'].forEach(function(v) { P[v] = ALL_ROLES_HIST; });
+            ['forage_plan', 'import_plan', 'ecosystem', 'bit_sharpening', 'consumables', 'hse', 'souterrain', 'analytics', 'planification', 'besoins', 'rentabilite', 'depenses_pm', 'payments', 'soustraitants'].forEach(function(v) { P[v] = ALL_ROLES_HIST; });
             var out = [];
             Object.keys(P).forEach(function(v) { if (P[v].indexOf(role) >= 0) out.push(v); });
             return out;
@@ -31856,6 +31868,273 @@
         window.getFosseObjective = getFosseObjective;
         window._fosseRealizedMeters = _fosseRealizedMeters;
         window.loadOrezoneNov2026Patterns = loadOrezoneNov2026Patterns;
+
+        // ================= Donneurs d'ordre & écosystème (mine + usine + sous-traitants par activité) =================
+        // Incrément 1 de la plateforme centrale : registre, par entreprise, des donneurs
+        // d'ordre (mines), de leur usine de traitement et de leurs sous-traitants par
+        // activité (forage, tir/blast, transport, traitement, autre). Persisté via
+        // module_state ('ecosystem'). Le champ `code` d'une mine est l'identifiant stable
+        // (futur mineId) pensé pour voyager avec les données et survivre à la synchro
+        // local ⇄ cloud. Aucune donnée inventée : uniquement les saisies de l'utilisateur.
+        // Stockage : { mines: [ { id, name, code, operator, country, notes,
+        //   usine:{name,type,capacity,capacityUnit,notes},
+        //   contractors:[ {id,name,activity,contact,phone,status,notes} ], createdAt, updatedAt } ] }
+        var ECO_ACTIVITIES = [
+            { key: 'forage',     label: 'Forage',               icon: '⛏' },
+            { key: 'tir',        label: 'Tir / Minage (blast)', icon: '💥' },
+            { key: 'transport',  label: 'Transport / Roulage',  icon: '🚛' },
+            { key: 'traitement', label: 'Traitement / Usine',   icon: '🏭' },
+            { key: 'autre',      label: 'Autre',                icon: '◦' }
+        ];
+        function ecoActivityMeta(key) {
+            for (var i = 0; i < ECO_ACTIVITIES.length; i++) { if (ECO_ACTIVITIES[i].key === key) return ECO_ACTIVITIES[i]; }
+            return { key: 'autre', label: 'Autre', icon: '◦' };
+        }
+        function _ecoKey() { return 'ged_ecosystem_' + (window.API && window.API.getEnterpriseId ? (window.API.getEnterpriseId() || '0') : '0'); }
+        function _ecoUid(prefix) { return (prefix || 'id') + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+        // Code mine stable (futur mineId) : dérivé du nom si non fourni ; alphanumérique majuscule.
+        function ecoMakeCode(raw) {
+            var s = String(raw == null ? '' : raw).trim().toUpperCase();
+            s = s.replace(/[^A-Z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+            return s.slice(0, 24) || ('MINE-' + Date.now().toString(36).toUpperCase());
+        }
+        function getEcosystemData() {
+            var def = { mines: [] };
+            try {
+                var raw = localStorage.getItem(_ecoKey()); if (!raw) return def;
+                var d = JSON.parse(raw);
+                if (!d || typeof d !== 'object' || !Array.isArray(d.mines)) return def;
+                return d;
+            } catch (e) { return def; }
+        }
+        function saveEcosystemData(d) {
+            try { localStorage.setItem(_ecoKey(), JSON.stringify(d)); } catch (e) {}
+            try { if (window.API && window.API.ModuleState) window.API.ModuleState.set('ecosystem', d).catch(function () {}); } catch (e) {}
+        }
+        function ecosystemSyncFromServer() {
+            if (!(window.API && window.API.ModuleState && window.API.getAuthToken && window.API.getAuthToken())) return;
+            window.API.ModuleState.get('ecosystem').then(function (res) {
+                if (res && res.data && Array.isArray(res.data.mines)) {
+                    try { localStorage.setItem(_ecoKey(), JSON.stringify(res.data)); } catch (e) {}
+                    if (typeof currentMainView !== 'undefined' && currentMainView === 'ecosystem') renderEcosystem();
+                }
+            }).catch(function () {});
+        }
+        window.ecosystemSyncFromServer = ecosystemSyncFromServer;
+
+        function _ecoFindMine(id) { var d = getEcosystemData(); for (var i = 0; i < d.mines.length; i++) { if (d.mines[i].id === id) return d.mines[i]; } return null; }
+
+        function renderEcosystem() {
+            var root = document.getElementById('ecosystemRoot'); if (!root) return;
+            var d = getEcosystemData();
+            var html = ''
+                + '<div class="flex flex-wrap justify-between items-start gap-3 mb-4">'
+                +   '<div>'
+                +     '<h1 class="text-2xl font-bold">⬢ Donneurs d\'ordre &amp; écosystème</h1>'
+                +     '<p class="text-slate-400 text-sm mt-1 max-w-2xl">Registre des mines (donneurs d\'ordre), de leur usine de traitement et de leurs sous-traitants par activité (forage, tir/blast, transport, traitement). Fondation de la plateforme centrale : une mine paie, ses sous-traitants alimentent les données.</p>'
+                +   '</div>'
+                +   '<button type="button" onclick="ecoOpenMineForm()" class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm whitespace-nowrap">+ Ajouter une mine</button>'
+                + '</div>';
+            if (!d.mines.length) {
+                html += '<div class="ged-card rounded-xl p-8 text-center text-slate-400"><p class="text-lg mb-1">Aucune mine enregistrée.</p><p class="text-sm">Commencez par ajouter un donneur d\'ordre (la mine), puis son usine et ses sous-traitants.</p></div>';
+                root.innerHTML = html; return;
+            }
+            d.mines.forEach(function (m) {
+                var contractors = Array.isArray(m.contractors) ? m.contractors : [];
+                html += '<div class="ged-card rounded-xl p-5 mb-4">';
+                html +=   '<div class="flex flex-wrap justify-between items-start gap-2 mb-3">';
+                html +=     '<div><h2 class="text-xl font-bold">' + escapeHtml(m.name || '(sans nom)') + ' <span class="text-xs font-normal text-slate-400 ml-1">code ' + escapeHtml(m.code || '—') + '</span></h2>';
+                html +=       '<p class="text-slate-400 text-sm">' + (m.operator ? escapeHtml(m.operator) : '') + (m.country ? ' · ' + escapeHtml(m.country) : '') + '</p>';
+                html +=       (m.notes ? '<p class="text-slate-500 text-xs mt-1">' + escapeHtml(m.notes) + '</p>' : '') + '</div>';
+                html +=     '<div class="flex gap-2">';
+                html +=       '<button type="button" onclick="ecoOpenMineForm(\'' + m.id + '\')" class="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-xs">✎ Modifier</button>';
+                html +=       '<button type="button" onclick="ecoDeleteMine(\'' + m.id + '\')" class="px-3 py-1.5 rounded-lg bg-red-700 hover:bg-red-600 text-white text-xs">🗑</button>';
+                html +=     '</div>';
+                html +=   '</div>';
+                // Usine
+                var u = m.usine || {};
+                html +=   '<div class="rounded-lg bg-slate-800/50 p-3 mb-3">';
+                html +=     '<div class="flex justify-between items-center mb-1"><span class="font-semibold text-sm">🏭 Usine de traitement</span>';
+                html +=       '<button type="button" onclick="ecoOpenUsineForm(\'' + m.id + '\')" class="text-xs text-emerald-400 hover:text-emerald-300">Configurer</button></div>';
+                if (u && (u.name || u.type || u.capacity)) {
+                    html += '<p class="text-slate-300 text-sm">' + escapeHtml(u.name || '(sans nom)') + (u.type ? ' · ' + escapeHtml(u.type) : '') + (u.capacity ? ' · ' + escapeHtml(String(u.capacity)) + ' ' + escapeHtml(u.capacityUnit || '') : '') + '</p>';
+                    if (u.notes) html += '<p class="text-slate-500 text-xs mt-1">' + escapeHtml(u.notes) + '</p>';
+                } else {
+                    html += '<p class="text-slate-500 text-xs">Non renseignée.</p>';
+                }
+                html +=   '</div>';
+                // Sous-traitants par activité
+                html +=   '<div class="flex justify-between items-center mb-2"><span class="font-semibold text-sm">Sous-traitants (' + contractors.length + ')</span>';
+                html +=     '<button type="button" onclick="ecoOpenContractorForm(\'' + m.id + '\')" class="px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white text-xs">+ Sous-traitant</button></div>';
+                if (!contractors.length) {
+                    html += '<p class="text-slate-500 text-xs">Aucun sous-traitant déclaré.</p>';
+                } else {
+                    ECO_ACTIVITIES.forEach(function (act) {
+                        var list = contractors.filter(function (c) { return (c.activity || 'autre') === act.key; });
+                        if (!list.length) return;
+                        html += '<div class="mb-2"><p class="text-xs uppercase tracking-wide text-slate-400 mb-1">' + act.icon + ' ' + escapeHtml(act.label) + '</p>';
+                        html += '<div class="flex flex-col gap-1">';
+                        list.forEach(function (c) {
+                            var inactif = (c.status === 'inactif');
+                            html += '<div class="flex flex-wrap justify-between items-center gap-2 rounded bg-slate-800/40 px-3 py-1.5">';
+                            html +=   '<span class="text-sm' + (inactif ? ' text-slate-500 line-through' : '') + '">' + escapeHtml(c.name || '(sans nom)') + (c.contact ? ' <span class="text-slate-400 text-xs">· ' + escapeHtml(c.contact) + '</span>' : '') + (c.phone ? ' <span class="text-slate-400 text-xs">· ' + escapeHtml(c.phone) + '</span>' : '') + (inactif ? ' <span class="text-xs text-red-400">(inactif)</span>' : '') + '</span>';
+                            html +=   '<span class="flex gap-2">';
+                            html +=     '<button type="button" onclick="ecoOpenContractorForm(\'' + m.id + '\',\'' + c.id + '\')" class="text-xs text-slate-300 hover:text-white">✎</button>';
+                            html +=     '<button type="button" onclick="ecoDeleteContractor(\'' + m.id + '\',\'' + c.id + '\')" class="text-xs text-red-400 hover:text-red-300">🗑</button>';
+                            html +=   '</span>';
+                            html += '</div>';
+                        });
+                        html += '</div></div>';
+                    });
+                }
+                html += '</div>';
+            });
+            root.innerHTML = html;
+        }
+        window.renderEcosystem = renderEcosystem;
+
+        function _ecoModal(id, inner) {
+            var ex = document.getElementById(id); if (ex) ex.remove();
+            var modal = document.createElement('div');
+            modal.id = id;
+            modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[120] p-4';
+            modal.innerHTML = '<div class="ged-modal-panel p-5 rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">' + inner + '</div>';
+            document.body.appendChild(modal);
+            return modal;
+        }
+        function _ecoField(label, id, value, ph, type) {
+            return '<label class="block mb-3"><span class="text-xs text-slate-400">' + escapeHtml(label) + '</span>'
+                + '<input id="' + id + '" type="' + (type || 'text') + '" value="' + escapeHtml(value == null ? '' : String(value)) + '" placeholder="' + escapeHtml(ph || '') + '" class="w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm"></label>';
+        }
+        function _ecoVal(id) { var el = document.getElementById(id); return el ? String(el.value || '').trim() : ''; }
+
+        // ----- Mine (donneur d'ordre) -----
+        window.ecoOpenMineForm = function (id) {
+            var m = id ? _ecoFindMine(id) : null;
+            var title = m ? 'Modifier la mine' : 'Ajouter une mine';
+            var inner = '<div class="flex justify-between items-center mb-3"><h2 class="text-xl font-bold">' + title + '</h2>'
+                + '<button type="button" onclick="document.getElementById(\'ecoMineModal\').remove()" class="text-slate-400 hover:text-white text-2xl">&times;</button></div>'
+                + _ecoField('Nom de la mine *', 'ecoMineName', m && m.name, 'Ex. Orezone — Bomboré')
+                + _ecoField('Code (identifiant stable)', 'ecoMineCode', m && m.code, 'Laisser vide = généré depuis le nom')
+                + _ecoField('Opérateur / société', 'ecoMineOperator', m && m.operator, 'Ex. Orezone Bomboré SA')
+                + _ecoField('Pays', 'ecoMineCountry', m && m.country, 'Burkina Faso')
+                + _ecoField('Notes', 'ecoMineNotes', m && m.notes, '')
+                + '<div class="flex justify-end gap-2 mt-2"><button type="button" onclick="document.getElementById(\'ecoMineModal\').remove()" class="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm">Annuler</button>'
+                + '<button type="button" onclick="ecoSaveMine(' + (id ? '\'' + id + '\'' : '') + ')" class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm">Enregistrer</button></div>';
+            _ecoModal('ecoMineModal', inner);
+        };
+        window.ecoSaveMine = function (id) {
+            var name = _ecoVal('ecoMineName');
+            if (!name) { alert('Le nom de la mine est obligatoire.'); return; }
+            var code = _ecoVal('ecoMineCode'); code = code ? ecoMakeCode(code) : ecoMakeCode(name);
+            var d = getEcosystemData();
+            if (id) {
+                var m = null; for (var i = 0; i < d.mines.length; i++) { if (d.mines[i].id === id) { m = d.mines[i]; break; } }
+                if (!m) return;
+                m.name = name; m.code = code; m.operator = _ecoVal('ecoMineOperator');
+                m.country = _ecoVal('ecoMineCountry'); m.notes = _ecoVal('ecoMineNotes'); m.updatedAt = new Date().toISOString();
+            } else {
+                d.mines.push({ id: _ecoUid('mine'), name: name, code: code, operator: _ecoVal('ecoMineOperator'),
+                    country: _ecoVal('ecoMineCountry'), notes: _ecoVal('ecoMineNotes'),
+                    usine: {}, contractors: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+            }
+            saveEcosystemData(d);
+            var mo = document.getElementById('ecoMineModal'); if (mo) mo.remove();
+            renderEcosystem();
+        };
+        window.ecoDeleteMine = function (id) {
+            var m = _ecoFindMine(id); if (!m) return;
+            if (!confirm('Supprimer la mine « ' + (m.name || '') + ' » et tout son écosystème (usine, sous-traitants) ? Cette action est irréversible.')) return;
+            var d = getEcosystemData();
+            d.mines = d.mines.filter(function (x) { return x.id !== id; });
+            saveEcosystemData(d); renderEcosystem();
+        };
+
+        // ----- Usine de traitement -----
+        window.ecoOpenUsineForm = function (mineId) {
+            var m = _ecoFindMine(mineId); if (!m) return; var u = m.usine || {};
+            var inner = '<div class="flex justify-between items-center mb-3"><h2 class="text-xl font-bold">🏭 Usine — ' + escapeHtml(m.name || '') + '</h2>'
+                + '<button type="button" onclick="document.getElementById(\'ecoUsineModal\').remove()" class="text-slate-400 hover:text-white text-2xl">&times;</button></div>'
+                + _ecoField('Nom de l\'usine', 'ecoUsineName', u.name, 'Ex. Usine CIL Bomboré')
+                + _ecoField('Type / procédé', 'ecoUsineType', u.type, 'Ex. CIL, flottation, concassage…')
+                + _ecoField('Capacité', 'ecoUsineCapacity', u.capacity, 'Ex. 5.2', 'number')
+                + _ecoField('Unité de capacité', 'ecoUsineCapacityUnit', u.capacityUnit, 'Ex. Mt/an, t/h')
+                + _ecoField('Notes', 'ecoUsineNotes', u.notes, '')
+                + '<div class="flex justify-end gap-2 mt-2"><button type="button" onclick="document.getElementById(\'ecoUsineModal\').remove()" class="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm">Annuler</button>'
+                + '<button type="button" onclick="ecoSaveUsine(\'' + mineId + '\')" class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm">Enregistrer</button></div>';
+            _ecoModal('ecoUsineModal', inner);
+        };
+        window.ecoSaveUsine = function (mineId) {
+            var d = getEcosystemData(); var m = null;
+            for (var i = 0; i < d.mines.length; i++) { if (d.mines[i].id === mineId) { m = d.mines[i]; break; } }
+            if (!m) return;
+            var capRaw = _ecoVal('ecoUsineCapacity'); var capNum = parseFloat(capRaw);
+            m.usine = { name: _ecoVal('ecoUsineName'), type: _ecoVal('ecoUsineType'),
+                capacity: (capRaw !== '' && isFinite(capNum)) ? capNum : '', capacityUnit: _ecoVal('ecoUsineCapacityUnit'),
+                notes: _ecoVal('ecoUsineNotes') };
+            m.updatedAt = new Date().toISOString();
+            saveEcosystemData(d);
+            var mo = document.getElementById('ecoUsineModal'); if (mo) mo.remove();
+            renderEcosystem();
+        };
+
+        // ----- Sous-traitant -----
+        window.ecoOpenContractorForm = function (mineId, cid) {
+            var m = _ecoFindMine(mineId); if (!m) return;
+            var c = null; if (cid) { (m.contractors || []).forEach(function (x) { if (x.id === cid) c = x; }); }
+            var actOpts = ECO_ACTIVITIES.map(function (a) {
+                var sel = (c && c.activity === a.key) ? ' selected' : (!c && a.key === 'forage' ? ' selected' : '');
+                return '<option value="' + a.key + '"' + sel + '>' + a.icon + ' ' + escapeHtml(a.label) + '</option>';
+            }).join('');
+            var statusActif = !c || c.status !== 'inactif';
+            var inner = '<div class="flex justify-between items-center mb-3"><h2 class="text-xl font-bold">' + (c ? 'Modifier' : 'Ajouter') + ' un sous-traitant</h2>'
+                + '<button type="button" onclick="document.getElementById(\'ecoContractorModal\').remove()" class="text-slate-400 hover:text-white text-2xl">&times;</button></div>'
+                + '<p class="text-slate-400 text-xs mb-3">Mine : ' + escapeHtml(m.name || '') + '</p>'
+                + _ecoField('Nom de la société *', 'ecoCtrName', c && c.name, 'Ex. WAUD Drilling')
+                + '<label class="block mb-3"><span class="text-xs text-slate-400">Activité</span>'
+                +   '<select id="ecoCtrActivity" class="w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm">' + actOpts + '</select></label>'
+                + _ecoField('Contact (personne)', 'ecoCtrContact', c && c.contact, '')
+                + _ecoField('Téléphone', 'ecoCtrPhone', c && c.phone, '')
+                + '<label class="block mb-3"><span class="text-xs text-slate-400">Statut</span>'
+                +   '<select id="ecoCtrStatus" class="w-full mt-1 bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm"><option value="actif"' + (statusActif ? ' selected' : '') + '>Actif</option><option value="inactif"' + (!statusActif ? ' selected' : '') + '>Inactif</option></select></label>'
+                + _ecoField('Notes', 'ecoCtrNotes', c && c.notes, '')
+                + '<div class="flex justify-end gap-2 mt-2"><button type="button" onclick="document.getElementById(\'ecoContractorModal\').remove()" class="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-sm">Annuler</button>'
+                + '<button type="button" onclick="ecoSaveContractor(\'' + mineId + '\'' + (cid ? ',\'' + cid + '\'' : '') + ')" class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm">Enregistrer</button></div>';
+            _ecoModal('ecoContractorModal', inner);
+        };
+        window.ecoSaveContractor = function (mineId, cid) {
+            var name = _ecoVal('ecoCtrName');
+            if (!name) { alert('Le nom de la société est obligatoire.'); return; }
+            var d = getEcosystemData(); var m = null;
+            for (var i = 0; i < d.mines.length; i++) { if (d.mines[i].id === mineId) { m = d.mines[i]; break; } }
+            if (!m) return;
+            if (!Array.isArray(m.contractors)) m.contractors = [];
+            var actEl = document.getElementById('ecoCtrActivity'); var activity = actEl ? actEl.value : 'autre';
+            var stEl = document.getElementById('ecoCtrStatus'); var status = stEl ? stEl.value : 'actif';
+            if (cid) {
+                var c = null; m.contractors.forEach(function (x) { if (x.id === cid) c = x; });
+                if (!c) return;
+                c.name = name; c.activity = activity; c.contact = _ecoVal('ecoCtrContact');
+                c.phone = _ecoVal('ecoCtrPhone'); c.status = status; c.notes = _ecoVal('ecoCtrNotes');
+            } else {
+                m.contractors.push({ id: _ecoUid('ctr'), name: name, activity: activity,
+                    contact: _ecoVal('ecoCtrContact'), phone: _ecoVal('ecoCtrPhone'), status: status, notes: _ecoVal('ecoCtrNotes') });
+            }
+            m.updatedAt = new Date().toISOString();
+            saveEcosystemData(d);
+            var mo = document.getElementById('ecoContractorModal'); if (mo) mo.remove();
+            renderEcosystem();
+        };
+        window.ecoDeleteContractor = function (mineId, cid) {
+            var d = getEcosystemData(); var m = null;
+            for (var i = 0; i < d.mines.length; i++) { if (d.mines[i].id === mineId) { m = d.mines[i]; break; } }
+            if (!m || !Array.isArray(m.contractors)) return;
+            var c = null; m.contractors.forEach(function (x) { if (x.id === cid) c = x; });
+            if (c && !confirm('Supprimer le sous-traitant « ' + (c.name || '') + ' » ?')) return;
+            m.contractors = m.contractors.filter(function (x) { return x.id !== cid; });
+            m.updatedAt = new Date().toISOString();
+            saveEcosystemData(d); renderEcosystem();
+        };
 
         // ================= Import plan de forage (.str / .csv — interop Surpac/Deswik/Datamine) =================
         // Stockage module_state 'importPlan' : { patterns: { <KEY>: { name, siteId, files:{<filename>:{holes,meters,holeCount,importedAt,type}}, objective, holeCount, updatedAt } } }
