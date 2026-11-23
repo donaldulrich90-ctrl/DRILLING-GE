@@ -1360,8 +1360,12 @@
                     <button type="button" onclick="showMainView('inventory')" class="ged-nav-item main-nav-btn" id="nav-inventory">▣ &nbsp;Stocks</button>
                     <button type="button" onclick="showMainView('stock_multi')" class="ged-nav-item main-nav-btn" id="nav-stock_multi">📦 &nbsp;Stock multi-sites</button>
                     <button type="button" onclick="showMainView('hse')" class="ged-nav-item main-nav-btn" id="nav-hse">✚ &nbsp;Santé &amp; sécurité</button>
-                    <button type="button" onclick="showMainView('souterrain')" class="ged-nav-item main-nav-btn" id="nav-souterrain">🕳️ &nbsp;Mine souterraine</button>
                     <button type="button" onclick="showMainView('carriere')" class="ged-nav-item main-nav-btn" id="nav-carriere">⛰️ &nbsp;Carrière à ciel ouvert</button>
+
+                    <p class="ged-nav-section ged-nav-toggle" onclick="gedToggleNavSection(this)"><span class="nav-caret">▾</span>Souterrain</p>
+                    <button type="button" onclick="showMainView('ug_forage')" class="ged-nav-item main-nav-btn" id="nav-ug_forage">⛏ &nbsp;Forage souterrain</button>
+                    <button type="button" onclick="showMainView('ug_exploitation')" class="ged-nav-item main-nav-btn" id="nav-ug_exploitation">🪨 &nbsp;Exploitation souterraine</button>
+                    <button type="button" onclick="showMainView('ug_securite')" class="ged-nav-item main-nav-btn" id="nav-ug_securite">🛟 &nbsp;Sécurité du fond</button>
 
                     <p class="ged-nav-section ged-nav-toggle" onclick="gedToggleNavSection(this)"><span class="nav-caret">▾</span>Pilotage &amp; analyse</p>
                     <button type="button" onclick="showMainView('analytics')" class="ged-nav-item main-nav-btn" id="nav-analytics">◒ &nbsp;Performance</button>
@@ -1988,13 +1992,32 @@
             <div id="hseContent"></div>
         </div>
 
-        <!-- ═══ VUE MINE SOUTERRAINE ═══════════════════════════════════ -->
-        <div id="mainView-souterrain" class="main-view hidden">
+        <!-- ═══ DOMAINE SOUTERRAIN ═══════════════════════════════════════ -->
+        <!-- Forage souterrain (développement / galeries / avancement) -->
+        <div id="mainView-ug_forage" class="main-view hidden">
             <div class="mb-6 pb-4 border-b border-slate-700">
-                <h2 class="text-2xl font-extrabold tracking-tight" style="color:var(--ged-yellow)">🕳️ Mine souterraine</h2>
-                <p class="text-slate-400 text-sm mt-1">Galeries &amp; niveaux · avancement · soutènement</p>
+                <h2 class="text-2xl font-extrabold tracking-tight" style="color:var(--ged-yellow)">⛏ Forage souterrain</h2>
+                <p class="text-slate-400 text-sm mt-1">Développement · galeries &amp; niveaux · avancement · soutènement</p>
             </div>
-            <div id="souterrainContent"></div>
+            <div id="ugForageContent"></div>
+        </div>
+
+        <!-- Exploitation souterraine (abattage / stopes / production) -->
+        <div id="mainView-ug_exploitation" class="main-view hidden">
+            <div class="mb-6 pb-4 border-b border-slate-700">
+                <h2 class="text-2xl font-extrabold tracking-tight" style="color:var(--ged-yellow)">🪨 Exploitation souterraine</h2>
+                <p class="text-slate-400 text-sm mt-1">Abattage · chantiers (stopes) · méthode · tonnage · cycle</p>
+            </div>
+            <div id="ugExploitationContent"></div>
+        </div>
+
+        <!-- Sécurité du fond (ventilation / gaz / registre personnel) -->
+        <div id="mainView-ug_securite" class="main-view hidden">
+            <div class="mb-6 pb-4 border-b border-slate-700">
+                <h2 class="text-2xl font-extrabold tracking-tight" style="color:var(--ged-yellow)">🛟 Sécurité du fond</h2>
+                <p class="text-slate-400 text-sm mt-1">Ventilation &amp; gaz (seuils) · registre entrée / sortie du personnel au fond</p>
+            </div>
+            <div id="ugSecuriteContent"></div>
         </div>
 
         <!-- ═══ VUE CARRIÈRE À CIEL OUVERT ══════════════════════════════ -->
@@ -6205,7 +6228,9 @@
                 'nav-bit_sharpening': 'restrictBitSharpening',
                 'nav-consumables': 'restrictConsumables',
                 'nav-hse': 'restrictHSE',
-                'nav-souterrain': 'restrictSouterrain',
+                'nav-ug_forage': 'restrictSouterrain',
+                'nav-ug_exploitation': 'restrictSouterrain',
+                'nav-ug_securite': 'restrictSouterrain',
                 'nav-carriere': 'restrictCarriere',
                 'nav-analytics': 'restrictAnalytics',
                 'nav-planification': 'restrictPlanification',
@@ -6230,7 +6255,7 @@
                 'nav-company_info': 'restrictCompanyInfo',
                 'nav-accounts': 'restrictAccounts'
             };
-            var allNavButtons = ['nav-dashboard', 'nav-forage_plan', 'nav-import_plan', 'nav-ecosystem', 'nav-connections', 'nav-assignments', 'nav-maintenance', 'nav-bit_sharpening', 'nav-consumables', 'nav-hse', 'nav-souterrain', 'nav-carriere', 'nav-analytics', 'nav-planification', 'nav-besoins', 'nav-rentabilite', 'nav-depenses_pm', 'nav-payments', 'nav-soustraitants', 'nav-invoices', 'nav-contracts', 'nav-enterprises', 'nav-sites', 'nav-revenue', 'nav-site_meals', 'nav-reports', 'nav-project_overview', 'nav-rh', 'nav-inventory', 'nav-stock_multi', 'nav-accounts', 'nav-clients', 'nav-translator', 'nav-team_chat', 'nav-company_info'];
+            var allNavButtons = ['nav-dashboard', 'nav-forage_plan', 'nav-import_plan', 'nav-ecosystem', 'nav-connections', 'nav-assignments', 'nav-maintenance', 'nav-bit_sharpening', 'nav-consumables', 'nav-hse', 'nav-ug_forage', 'nav-ug_exploitation', 'nav-ug_securite', 'nav-carriere', 'nav-analytics', 'nav-planification', 'nav-besoins', 'nav-rentabilite', 'nav-depenses_pm', 'nav-payments', 'nav-soustraitants', 'nav-invoices', 'nav-contracts', 'nav-enterprises', 'nav-sites', 'nav-revenue', 'nav-site_meals', 'nav-reports', 'nav-project_overview', 'nav-rh', 'nav-inventory', 'nav-stock_multi', 'nav-accounts', 'nav-clients', 'nav-translator', 'nav-team_chat', 'nav-company_info'];
 
             if (isPlatformBillingOnlyUser(currentUser)) {
                 allNavButtons.forEach(function(btnId) {
@@ -6276,7 +6301,7 @@
             // Onglets nouvellement gérés par l'accès explicite : jamais masqués par une
             // ancienne liste d'abonnement (qui ne les connaît pas), pour éviter de les
             // cacher à tort une fois ajoutés au contrôle d'accès.
-            var NEW_MANAGED_VIEWS = { forage_plan: 1, bit_sharpening: 1, consumables: 1, hse: 1, souterrain: 1, carriere: 1, analytics: 1, planification: 1, besoins: 1, rentabilite: 1, depenses_pm: 1, payments: 1, soustraitants: 1, ecosystem: 1 };
+            var NEW_MANAGED_VIEWS = { forage_plan: 1, bit_sharpening: 1, consumables: 1, hse: 1, souterrain: 1, ug_forage: 1, ug_exploitation: 1, ug_securite: 1, carriere: 1, analytics: 1, planification: 1, besoins: 1, rentabilite: 1, depenses_pm: 1, payments: 1, soustraitants: 1, ecosystem: 1 };
             function allowedBySubscription(navId) {
                 if (navId === 'nav-enterprises') return true;
                 if (!subTabs || !subTabs.length) return true;
@@ -6322,6 +6347,8 @@
             if (explicitViews) {
                 var grantSet = {};
                 explicitViews.forEach(function(v) { grantSet[v] = true; });
+                // Rétrocompat : un ancien accès 'souterrain' ouvre les 3 vues du domaine.
+                if (grantSet['souterrain']) { grantSet['ug_forage'] = true; grantSet['ug_exploitation'] = true; grantSet['ug_securite'] = true; }
                 allNavButtons.forEach(function(btnId) {
                     var btn = document.getElementById(btnId);
                     if (!btn) return;
@@ -6362,7 +6389,9 @@
                 'nav-bit_sharpening': true,
                 'nav-consumables': true,
                 'nav-hse': true,
-                'nav-souterrain': true,
+                'nav-ug_forage': true,
+                'nav-ug_exploitation': true,
+                'nav-ug_securite': true,
                 'nav-carriere': true,
                 'nav-analytics': true,
                 'nav-planification': true,
@@ -6470,7 +6499,7 @@
                 view !== 'enterprises' && subNav.indexOf(view) < 0) {
                 view = 'dashboard';
             }
-            var views = ['consumables', 'dashboard', 'connections', 'assignments', 'maintenance', 'bit_sharpening', 'invoices', 'payments', 'contracts', 'sites', 'enterprises', 'revenue', 'site_meals', 'reports', 'project_overview', 'planification', 'besoins', 'rh', 'inventory', 'stock_multi', 'accounts', 'clients', 'translator', 'team_chat', 'company_info', 'forage_plan', 'import_plan', 'ecosystem', 'rentabilite', 'depenses_pm', 'analytics', 'hse', 'souterrain', 'soustraitants', 'weekly_report'];
+            var views = ['consumables', 'dashboard', 'connections', 'assignments', 'maintenance', 'bit_sharpening', 'invoices', 'payments', 'contracts', 'sites', 'enterprises', 'revenue', 'site_meals', 'reports', 'project_overview', 'planification', 'besoins', 'rh', 'inventory', 'stock_multi', 'accounts', 'clients', 'translator', 'team_chat', 'company_info', 'forage_plan', 'import_plan', 'ecosystem', 'rentabilite', 'depenses_pm', 'analytics', 'hse', 'souterrain', 'ug_forage', 'ug_exploitation', 'ug_securite', 'soustraitants', 'weekly_report'];
             views.forEach(function(v) {
                 var el = document.getElementById('mainView-' + v);
                 if (el) el.classList.add('hidden');
@@ -9171,8 +9200,8 @@
         };
 
         function renderSouterrain() {
-            var el = document.getElementById('souterrainContent');
-            if (!el) return;
+            // Alimente les trois vues du domaine Souterrain (forage / exploitation / sécurité).
+            if (!document.getElementById('ugForageContent') && !document.getElementById('ugExploitationContent') && !document.getElementById('ugSecuriteContent')) return;
             var data = getUGData();
             var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); };
             var totPlan = data.galleries.reduce(function (s, g) { return s + (parseFloat(g.plannedLength) || 0); }, 0);
@@ -9298,24 +9327,22 @@
             var persTable = (data.personnel || []).length ? '<div class="ged-content-panel rounded-xl overflow-hidden"><div class="px-5 py-3 border-b border-slate-700 flex justify-between items-center"><h3 class="font-bold text-sm" style="color:var(--ged-black)">Registre du personnel</h3><span class="text-xs font-bold" style="color:' + (underground.length ? '#F5B800' : '#28A745') + '">' + underground.length + ' au fond</span></div><div style="overflow-x:auto"><table style="width:100%;font-size:13px;border-collapse:collapse"><thead><tr style="font-size:11px;text-transform:uppercase;color:#64748B;background:rgba(0,0,0,0.15)"><th class="px-3 py-2 text-left">Nom</th><th class="px-3 py-2 text-left">Fonction</th><th class="px-3 py-2 text-left">Zone</th><th class="px-3 py-2 text-left">Entrée</th><th class="px-3 py-2 text-left">Sortie</th><th class="px-3 py-2"></th></tr></thead><tbody>' + persRows + '</tbody></table></div></div>' : '';
             var securiteTab = ventForm + ventTable + persForm + persTable;
 
-            // KPIs selon l'onglet
-            var kpiRow;
-            if (window._ugTab === 'abattage') {
-                kpiRow = kpi('Chantiers actifs', activeStopes, '#F5B800') + kpi('Tonnage abattu', totTon.toFixed(0) + ' t', '#28A745') + kpi('Chantiers', data.stopes.length, '') + kpi('Saisies', data.abattage.length, '');
-            } else if (window._ugTab === 'securite') {
-                var lastVent = data.ventilation[0];
-                kpiRow = kpi('Personnel au fond', underground.length, underground.length ? '#F5B800' : '#28A745') + kpi('Relevés ventilation', data.ventilation.length, '') + kpi('Dernier CO', lastVent && lastVent.co != null ? lastVent.co + ' ppm' : '—', '') + kpi('Dernier relevé', lastVent ? lastVent.date : '—', '');
-            } else {
-                kpiRow = kpi('Galeries actives', active, '#F5B800') + kpi('Mètres planifiés', totPlan.toFixed(0) + ' m', '') + kpi('Mètres avancés', totAdv.toFixed(0) + ' m', '#28A745') + kpi('Avancement global', prog.toFixed(1) + ' %', prog >= 90 ? '#28A745' : prog >= 50 ? '#F5B800' : '#DC3545');
-            }
-            function tabBtn(id, label) { var on = window._ugTab === id; return '<button onclick="ugSetTab(\'' + id + '\')" style="padding:8px 16px;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;' + (on ? 'background:var(--ged-yellow);color:#1a1200' : 'background:rgba(255,255,255,0.06);color:#A7B6C9') + '">' + label + '</button>'; }
-            var tabBar = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px">' + tabBtn('galleries', '🕳️ Galeries') + tabBtn('abattage', '⛏️ Abattage') + tabBtn('securite', '🛟 Sécurité du fond') + '</div>';
-            var content = window._ugTab === 'abattage' ? abattageTab : (window._ugTab === 'securite' ? securiteTab : galleriesTab);
+            // KPIs par domaine (forage / exploitation / sécurité)
+            var lastVent = data.ventilation[0];
+            var kpiForage = kpi('Galeries actives', active, '#F5B800') + kpi('Mètres planifiés', totPlan.toFixed(0) + ' m', '') + kpi('Mètres avancés', totAdv.toFixed(0) + ' m', '#28A745') + kpi('Avancement global', prog.toFixed(1) + ' %', prog >= 90 ? '#28A745' : prog >= 50 ? '#F5B800' : '#DC3545');
+            var kpiExploit = kpi('Chantiers actifs', activeStopes, '#F5B800') + kpi('Tonnage abattu', totTon.toFixed(0) + ' t', '#28A745') + kpi('Chantiers', data.stopes.length, '') + kpi('Saisies', data.abattage.length, '');
+            var kpiSecurite = kpi('Personnel au fond', underground.length, underground.length ? '#F5B800' : '#28A745') + kpi('Relevés ventilation', data.ventilation.length, '') + kpi('Dernier CO', lastVent && lastVent.co != null ? lastVent.co + ' ppm' : '—', '') + kpi('Dernier relevé', lastVent ? lastVent.date : '—', '');
 
-            el.innerHTML = tabBar +
-                '<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">' + kpiRow + '</div>' +
-                content +
-                '<p class="text-xs text-slate-500 mt-3">Module Mine souterraine — données enregistrées sur le serveur (sauvegardées et accessibles sur tous vos appareils).</p>';
+            // Domaine Souterrain : chaque sous-domaine est désormais une vue à part entière.
+            var note = '<p class="text-xs text-slate-500 mt-3">Domaine Mine souterraine — données enregistrées sur le serveur (sauvegardées et accessibles sur tous vos appareils).</p>';
+            function writeUgSection(containerId, kpiRow, body) {
+                var c = document.getElementById(containerId);
+                if (!c) return;
+                c.innerHTML = '<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">' + kpiRow + '</div>' + body + note;
+            }
+            writeUgSection('ugForageContent', kpiForage, galleriesTab);
+            writeUgSection('ugExploitationContent', kpiExploit, abattageTab);
+            writeUgSection('ugSecuriteContent', kpiSecurite, securiteTab);
         }
         window.renderSouterrain = renderSouterrain;
 
@@ -10729,7 +10756,7 @@
             } else if (view === 'hse') {
                 renderHSE();
                 try { hseSyncFromServer(); } catch (e) {}
-            } else if (view === 'souterrain') {
+            } else if (view === 'ug_forage' || view === 'ug_exploitation' || view === 'ug_securite') {
                 renderSouterrain();
                 try { ugSyncFromServer(); } catch (e) {}
             } else if (view === 'carriere') {
@@ -27977,7 +28004,7 @@
             ['restrictConnections', 'connections'], ['restrictAssignments', 'assignments'],
             ['restrictMaintenance', 'maintenance'],
             ['restrictBitSharpening', 'bit_sharpening'], ['restrictConsumables', 'consumables'],
-            ['restrictHSE', 'hse'], ['restrictSouterrain', 'souterrain'], ['restrictCarriere', 'carriere'], ['restrictAnalytics', 'analytics'],
+            ['restrictHSE', 'hse'], ['restrictSouterrain', 'ug_forage'], ['restrictSouterrain', 'ug_exploitation'], ['restrictSouterrain', 'ug_securite'], ['restrictCarriere', 'carriere'], ['restrictAnalytics', 'analytics'],
             ['restrictPlanification', 'planification'], ['restrictBesoins', 'besoins'],
             ['restrictRentabilite', 'rentabilite'], ['restrictDepensesPM', 'depenses_pm'],
             ['restrictInvoices', 'invoices'], ['restrictPayments', 'payments'],
@@ -28016,7 +28043,7 @@
             // Onglets historiquement visibles de tous : pré-cochés pour tout rôle lors de
             // l'édition d'un compte existant (préserve son accès actuel ; l'admin ajuste ensuite).
             var ALL_ROLES_HIST = ['foreur', 'aideforeur', 'superviseur', 'ingenieur', 'gestionnaire', 'gestionnaire_site', 'santesecurite', 'administratif', 'visiteur'];
-            ['forage_plan', 'import_plan', 'ecosystem', 'bit_sharpening', 'consumables', 'hse', 'souterrain', 'analytics', 'planification', 'besoins', 'rentabilite', 'depenses_pm', 'payments', 'soustraitants'].forEach(function(v) { P[v] = ALL_ROLES_HIST; });
+            ['forage_plan', 'import_plan', 'ecosystem', 'bit_sharpening', 'consumables', 'hse', 'souterrain', 'ug_forage', 'ug_exploitation', 'ug_securite', 'analytics', 'planification', 'besoins', 'rentabilite', 'depenses_pm', 'payments', 'soustraitants'].forEach(function(v) { P[v] = ALL_ROLES_HIST; });
             var out = [];
             Object.keys(P).forEach(function(v) { if (P[v].indexOf(role) >= 0) out.push(v); });
             return out;
