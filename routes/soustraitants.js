@@ -97,6 +97,39 @@ module.exports = function registerSoustraitantsRoutes(app, options) {
         db.run("ALTER TABLE subcontractor_bit_rates ADD COLUMN materialType TEXT NOT NULL DEFAULT ''", (e) => {
             if (e && !String(e.message || '').includes('duplicate column')) console.warn('subcontractor_bit_rates.materialType:', e.message);
         });
+        // Reconstruction si la table a été créée avec l'ancienne contrainte UNIQUE
+        // à 2 colonnes (subcontractorId, bitType) : un ALTER ne peut pas changer une
+        // contrainte, il faut recréer la table avec la clé à 3 colonnes incluant le
+        // type de sol. Idempotent : ne s'exécute que tant que la clé n'est pas à jour.
+        db.get("SELECT sql FROM sqlite_master WHERE type='table' AND name='subcontractor_bit_rates'", (err, row) => {
+            if (err || !row || !row.sql) return;
+            if (row.sql.indexOf('bitType, materialType)') !== -1) return; // déjà à la bonne clé
+            db.serialize(() => {
+                db.run('BEGIN');
+                db.run(`CREATE TABLE subcontractor_bit_rates__new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    enterpriseId INTEGER NOT NULL,
+                    subcontractorId INTEGER NOT NULL,
+                    bitType TEXT NOT NULL DEFAULT '',
+                    materialType TEXT NOT NULL DEFAULT '',
+                    rate REAL DEFAULT 0,
+                    active INTEGER DEFAULT 1,
+                    updatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(subcontractorId, bitType, materialType)
+                )`);
+                db.run(`INSERT OR IGNORE INTO subcontractor_bit_rates__new
+                        (id, enterpriseId, subcontractorId, bitType, materialType, rate, active, updatedAt)
+                        SELECT id, enterpriseId, subcontractorId, bitType, COALESCE(materialType,''), rate, active, updatedAt
+                        FROM subcontractor_bit_rates`);
+                db.run('DROP TABLE subcontractor_bit_rates');
+                db.run('ALTER TABLE subcontractor_bit_rates__new RENAME TO subcontractor_bit_rates');
+                db.run('CREATE INDEX IF NOT EXISTS idx_bitrate_enterprise ON subcontractor_bit_rates(enterpriseId)');
+                db.run('COMMIT', (ce) => {
+                    if (ce) { console.warn('subcontractor_bit_rates rebuild:', ce.message); db.run('ROLLBACK', () => {}); }
+                    else console.log('subcontractor_bit_rates : clé UNIQUE migrée vers (subcontractorId, bitType, materialType).');
+                });
+            });
+        });
 
         // Migrations additives (bases créées avant ces champs)
         db.run("ALTER TABLE rented_machines ADD COLUMN drillId TEXT DEFAULT NULL", (e) => {
