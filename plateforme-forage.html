@@ -1921,6 +1921,7 @@
                 <button type="button" class="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded text-sm" data-sttab="subs" onclick="stSwitch('subs')">🏢 Sous-traitants</button>
                 <button type="button" class="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded text-sm" data-sttab="machines" onclick="stSwitch('machines')">🛠 Machines louées</button>
                 <button type="button" class="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded text-sm" data-sttab="usage" onclick="stSwitch('usage')">📏 Relevé d'usage</button>
+                <button type="button" class="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded text-sm" data-sttab="bitrates" onclick="stSwitch('bitrates')">💠 Prix par taillant</button>
                 <button type="button" class="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded text-sm" data-sttab="backcharges" onclick="stSwitch('backcharges')">➖ Back-charges</button>
                 <button type="button" class="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded text-sm" data-sttab="allocation" onclick="stSwitch('allocation')">🚜 Allocation foreuses</button>
             </div>
@@ -12805,7 +12806,7 @@
         // SOUS-TRAITANTS & LOCATION DE MACHINES
         // Paiement mensuel = tarif × usage réel − back-charges · bénéfice net
         // ============================================
-        var ST = { period: '', tab: 'statement', subs: [], machines: [], statement: null };
+        var ST = { period: '', tab: 'statement', subs: [], machines: [], statement: null, bitRates: [], drills: [] };
         function stFmt(n) { return (Number(n) || 0).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + ' F'; }
         function stDefaultPeriod() { var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
         function stUnitLabel(u) { return u === 'heure' ? '/h' : u === 'metre' ? '/m' : u === 'forfait' ? 'forfait' : '/jour'; }
@@ -12833,9 +12834,12 @@
             try {
                 ST.subs = await apiRequest('/soustraitants', 'GET');
                 ST.machines = await apiRequest('/soustraitants/machines', 'GET');
+                try { ST.bitRates = await apiRequest('/soustraitants/bitrates', 'GET'); } catch (e) { ST.bitRates = []; }
+                try { var _dr = await apiRequest('/drills', 'GET'); ST.drills = Array.isArray(_dr) ? _dr : ((_dr && _dr.drills) || []); } catch (e) { ST.drills = []; }
             } catch (e) { el.innerHTML = '<div class="text-red-400 p-4">Erreur de chargement des sous-traitants.</div>'; return; }
             if (ST.tab === 'subs') return stRenderSubs();
             if (ST.tab === 'machines') return stRenderMachines();
+            if (ST.tab === 'bitrates') return stRenderBitrates();
             if (ST.tab === 'usage') return stRenderUsage();
             if (ST.tab === 'backcharges') return stRenderBackcharges();
             if (ST.tab === 'allocation') return stRenderAllocation();
@@ -12887,19 +12891,88 @@
             return total;
         }
 
+        // ---- Facturation par type de taillant -----------------------------
+        // Foreuses rattachées à un sous-traitant : machines louées liées (drillId)
+        // + foreuses allouées (drills.subcontractorId). Correspondance stricte par id.
+        function stDrillIdsForSub(subId) {
+            var ids = [];
+            (ST.machines || []).forEach(function (m) {
+                if (Number(m.subcontractorId) === Number(subId) && m.drillId != null && String(m.drillId).trim() !== '') ids.push(String(m.drillId));
+            });
+            (ST.drills || []).forEach(function (d) {
+                if (d && d.subcontractorId != null && Number(d.subcontractorId) === Number(subId)) ids.push(String(d.id));
+            });
+            // Dédoublonnage (un id peut venir des deux sources)
+            var seen = {}, out = [];
+            ids.forEach(function (x) { if (!seen[x]) { seen[x] = 1; out.push(x); } });
+            return out;
+        }
+        // Métrage foré par type de bit sur la période, pour les foreuses du sous-traitant.
+        // Source : saisies journalières réelles (data.bitsUsed), repli sur le bit
+        // primaire + métrage total du poste si aucun détail par bit n'est saisi.
+        function stBitMetrageForSub(subId, periodYM) {
+            var drillIds = stDrillIdsForSub(subId);
+            var out = {};
+            if (!drillIds.length) return out;
+            (dailyDataRecords || []).forEach(function (r) {
+                if (isDailyRecordIncompleteDraft(r) || !r.date) return;
+                var sid = (typeof _siteIdForDrill === 'function') ? _siteIdForDrill(r.machineId) : null;
+                if (miningMonthKey(r.date, sid) !== periodYM) return;
+                var matches = drillIds.some(function (id) { return drillIdsMatch(r.machineId, id); });
+                if (!matches) return;
+                var data = r.data || {}; if (typeof data === 'string') { try { data = JSON.parse(data); } catch (e) { data = {}; } }
+                var bits = data.bitsUsed;
+                if (Array.isArray(bits) && bits.length) {
+                    bits.forEach(function (b) { if (b && b.bitType) { out[b.bitType] = (out[b.bitType] || 0) + (parseFloat(b.meters) || 0); } });
+                } else if (data.bitType) {
+                    out[data.bitType] = (out[data.bitType] || 0) + (parseFloat(data.metersDrilled) || 0);
+                }
+            });
+            return out;
+        }
+        function stTotalMetrageForSub(subId, periodYM) {
+            var m = stBitMetrageForSub(subId, periodYM), t = 0;
+            Object.keys(m).forEach(function (k) { t += Number(m[k]) || 0; });
+            return t;
+        }
+        function stBitRateFor(subId, bitType) {
+            var hit = (ST.bitRates || []).filter(function (x) { return Number(x.subcontractorId) === Number(subId) && x.bitType === bitType; })[0];
+            return hit ? (Number(hit.rate) || 0) : 0;
+        }
+        // Lignes de facture par taillant d'un sous-traitant (prix × mètres par bit).
+        function stBitLinesForSub(subId, periodYM) {
+            var metrage = stBitMetrageForSub(subId, periodYM);
+            var lines = [];
+            Object.keys(metrage).forEach(function (bt) {
+                var meters = Number(metrage[bt]) || 0;
+                var rate = stBitRateFor(subId, bt);
+                lines.push({ bitType: bt, label: (typeof dailyBitLabel === 'function') ? dailyBitLabel(bt) : bt, meters: meters, rate: rate, amount: rate * meters });
+            });
+            // Taillants tarifés mais sans métrage : ignorés (pas de facturation fictive).
+            lines.sort(function (a, b) { return b.amount - a.amount; });
+            return lines;
+        }
+
         // Remplace l'usage manuel par l'usage auto (foreuse liée) et recalcule les totaux.
         function stApplyAutoUsage(st) {
             if (!st || !st.subcontractors) return st;
             var gTot = 0, bTot = 0, nTot = 0;
             st.subcontractors.forEach(function (s) {
                 var gross = 0;
-                (s.machines || []).forEach(function (m) {
-                    if (m.drillId && m.unit !== 'forfait') {
-                        var au = stAutoUsageForDrill(m.drillId, m.unit, ST.period);
-                        if (au != null) { m.quantity = au; m.gross = (Number(m.rate) || 0) * au; m.auto = true; }
-                    }
-                    gross += Number(m.gross) || 0;
-                });
+                if (s.billingMode === 'taillant') {
+                    // Facturation par type de taillant : les lignes par bit remplacent
+                    // le brut par machine (pas de double comptage).
+                    s.bitLines = stBitLinesForSub(s.id, ST.period);
+                    gross = s.bitLines.reduce(function (a, l) { return a + (Number(l.amount) || 0); }, 0);
+                } else {
+                    (s.machines || []).forEach(function (m) {
+                        if (m.drillId && m.unit !== 'forfait') {
+                            var au = stAutoUsageForDrill(m.drillId, m.unit, ST.period);
+                            if (au != null) { m.quantity = au; m.gross = (Number(m.rate) || 0) * au; m.auto = true; }
+                        }
+                        gross += Number(m.gross) || 0;
+                    });
+                }
                 s.grossTotal = gross;
                 s.net = gross - (Number(s.backTotal) || 0);
                 gTot += gross; bTot += (Number(s.backTotal) || 0); nTot += s.net;
@@ -12940,7 +13013,19 @@
                 html += '<div class="flex items-center justify-between flex-wrap gap-2 mb-2"><div><strong class="text-lg">' + escapeHtml(s.name) + '</strong>' + (s.phone ? ' <span class="text-slate-400 text-sm">· ' + escapeHtml(s.phone) + '</span>' : '') + '</div>'
                     + '<div class="flex items-center gap-3"><button type="button" onclick="stGenerateInvoice(' + s.id + ')" class="bg-cyan-700 hover:bg-cyan-600 text-white px-3 py-1.5 rounded text-sm font-semibold">🧾 Facture PDF</button>'
                     + '<div class="text-right"><div class="text-xs text-slate-400 uppercase">Net à payer</div><div class="text-xl font-extrabold" style="color:var(--ged-yellow)">' + stFmt(s.net) + '</div></div></div></div>';
-                if (s.machines.length) {
+                if (s.billingMode === 'taillant') {
+                    var bl = s.bitLines || [];
+                    html += '<div class="text-xs text-cyan-300 mb-1">💠 Facturation par type de taillant (mètres réels des saisies × prix du bit)</div>';
+                    if (bl.length) {
+                        html += '<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-slate-400 text-left"><th class="py-1">Type de taillant</th><th>Mètres forés</th><th>Prix / m</th><th class="text-right">Montant</th></tr></thead><tbody>';
+                        bl.forEach(function (l) {
+                            var rateCell = l.rate > 0 ? (stFmt(l.rate) + ' /m') : '<span class="text-amber-400">prix manquant</span>';
+                            html += '<tr class="border-t border-slate-700"><td class="py-1">' + escapeHtml(l.label) + '</td><td>' + (Number(l.meters) || 0).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' m <span class="text-emerald-400 text-xs">auto</span></td><td>' + rateCell + '</td><td class="text-right">' + stFmt(l.amount) + '</td></tr>';
+                        });
+                        html += '</tbody></table></div>';
+                        if (bl.some(function (l) { return l.rate <= 0; })) html += '<p class="text-xs text-amber-400 mt-1">⚠ Certains taillants forés n\'ont pas de prix défini (onglet « Prix par taillant ») — leur montant est à 0.</p>';
+                    } else { html += '<p class="text-slate-500 text-sm">Aucun métrage par taillant trouvé pour ce mois (vérifie les foreuses allouées et les saisies journalières).</p>'; }
+                } else if (s.machines.length) {
                     html += '<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-slate-400 text-left"><th class="py-1">Machine</th><th>Foreuse</th><th>Tarif</th><th>Usage</th><th class="text-right">Brut</th></tr></thead><tbody>';
                     s.machines.forEach(function (m) {
                         var usageCell = m.unit === 'forfait' ? 'forfait' : ((Number(m.quantity) || 0) + ' ' + stUnitQty(m.unit) + (m.auto ? ' <span class="text-emerald-400 text-xs">auto</span>' : ''));
@@ -12987,10 +13072,18 @@
             if (pParts.length === 2) {
                 try { periodLabel = new Date(parseInt(pParts[0], 10), parseInt(pParts[1], 10) - 1, 1).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }); } catch (e) {}
             }
-            var rows = (s.machines || []).map(function (m) {
-                var usage = m.unit === 'forfait' ? 'forfait' : ((Number(m.quantity) || 0) + ' ' + stUnitQty(m.unit) + (m.auto ? ' (auto)' : ''));
-                return '<tr><td>' + escapeHtmlReportCell(m.label) + '</td><td>' + escapeHtmlReportCell(m.drillId || '—') + '</td><td>' + escapeHtmlReportCell(stUnitLabel(m.unit)) + '</td><td class="num">' + usage + '</td><td class="num">' + stInvoiceMoney(m.rate, cur) + '</td><td class="num">' + stInvoiceMoney(m.gross, cur) + '</td></tr>';
-            }).join('') || '<tr><td colspan="6" style="text-align:center;color:#64748b">Aucune machine</td></tr>';
+            var rows;
+            if (s.billingMode === 'taillant') {
+                rows = (s.bitLines || []).map(function (l) {
+                    var meters = (Number(l.meters) || 0).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' m (auto)';
+                    return '<tr><td>' + escapeHtmlReportCell(l.label) + '</td><td>—</td><td>/m</td><td class="num">' + meters + '</td><td class="num">' + stInvoiceMoney(l.rate, cur) + '</td><td class="num">' + stInvoiceMoney(l.amount, cur) + '</td></tr>';
+                }).join('') || '<tr><td colspan="6" style="text-align:center;color:#64748b">Aucun métrage par taillant</td></tr>';
+            } else {
+                rows = (s.machines || []).map(function (m) {
+                    var usage = m.unit === 'forfait' ? 'forfait' : ((Number(m.quantity) || 0) + ' ' + stUnitQty(m.unit) + (m.auto ? ' (auto)' : ''));
+                    return '<tr><td>' + escapeHtmlReportCell(m.label) + '</td><td>' + escapeHtmlReportCell(m.drillId || '—') + '</td><td>' + escapeHtmlReportCell(stUnitLabel(m.unit)) + '</td><td class="num">' + usage + '</td><td class="num">' + stInvoiceMoney(m.rate, cur) + '</td><td class="num">' + stInvoiceMoney(m.gross, cur) + '</td></tr>';
+                }).join('') || '<tr><td colspan="6" style="text-align:center;color:#64748b">Aucune machine</td></tr>';
+            }
             var bcRows = (s.backCharges || []).map(function (c) {
                 return '<tr><td colspan="5">Back-charge : ' + escapeHtmlReportCell(c.label) + '</td><td class="num" style="color:#b91c1c">− ' + stInvoiceMoney(c.amount, cur) + '</td></tr>';
             }).join('');
@@ -13014,7 +13107,7 @@
                 + (companyInfo.address ? '<br>' + escapeHtmlReportCell(companyInfo.address) : '') + (companyInfo.phone ? '<br>Tél : ' + escapeHtmlReportCell(companyInfo.phone) : '') + (companyInfo.ifu ? '<br>IFU : ' + escapeHtmlReportCell(companyInfo.ifu) : '') + '</div></div>'
                 + '<div class="parties"><div class="party"><h4>Payeur (prestataire principal)</h4><strong>' + escapeHtmlReportCell(companyInfo.name || '—') + '</strong>' + (companyInfo.rccm ? '<br>RCCM : ' + escapeHtmlReportCell(companyInfo.rccm) : '') + '</div>'
                 + '<div class="party" style="text-align:right"><h4>Sous-traitant</h4><strong>' + escapeHtmlReportCell(s.name) + '</strong>' + (subInfo.contact ? '<br>' + escapeHtmlReportCell(subInfo.contact) : '') + (s.phone ? '<br>Tél : ' + escapeHtmlReportCell(s.phone) : '') + (s.email ? '<br>' + escapeHtmlReportCell(s.email) : '') + '</div></div>'
-                + '<table><thead><tr><th>Machine louée</th><th>Foreuse</th><th>Unité</th><th class="num">Usage</th><th class="num">Tarif</th><th class="num">Montant</th></tr></thead>'
+                + '<table><thead><tr><th>' + (s.billingMode === 'taillant' ? 'Type de taillant' : 'Machine louée') + '</th><th>Foreuse</th><th>Unité</th><th class="num">' + (s.billingMode === 'taillant' ? 'Mètres' : 'Usage') + '</th><th class="num">' + (s.billingMode === 'taillant' ? 'Prix/m' : 'Tarif') + '</th><th class="num">Montant</th></tr></thead>'
                 + '<tbody>' + rows + bcRows + '</tbody>'
                 + '<tfoot><tr><td colspan="5" class="num">Brut</td><td class="num">' + stInvoiceMoney(s.grossTotal, cur) + '</td></tr>'
                 + (Number(s.backTotal) ? '<tr><td colspan="5" class="num">Back-charges déduites</td><td class="num" style="color:#b91c1c">− ' + stInvoiceMoney(s.backTotal, cur) + '</td></tr>' : '')
@@ -13078,33 +13171,38 @@
                     + '<input id="subPhone" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm" placeholder="Téléphone">'
                     + '<input id="subEmail" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm" placeholder="Email">'
                     + '<select id="subCurrency" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm"><option value="XOF">XOF (FCFA)</option><option value="EUR">EUR</option><option value="USD">USD</option></select>'
-                    + '</div><textarea id="subNote" rows="2" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm w-full mt-2" placeholder="Note (ex: référence du contrat, conditions de paiement)"></textarea>'
+                    + '<select id="subBillingMode" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm"><option value="machine">Facturation par machine (tarif × usage)</option><option value="taillant">Facturation par type de taillant (prix × mètres/bit)</option></select>'
+                    + '</div><p class="text-xs text-slate-500 mt-1">Mode « par taillant » : la facture additionne, pour chaque type de bit, les mètres forés (relevés automatiquement des saisies journalières des foreuses allouées à ce sous-traitant) × le prix défini dans l\'onglet « Prix par taillant ».</p>'
+                    + '<textarea id="subNote" rows="2" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm w-full mt-2" placeholder="Note (ex: référence du contrat, conditions de paiement)"></textarea>'
                     + '<div class="mt-2 flex gap-2"><button class="ged-btn-primary px-4 py-2 rounded text-sm" onclick="stSaveSub()">Enregistrer</button><button class="bg-slate-700 px-4 py-2 rounded text-sm" onclick="stResetSubForm()">Annuler</button></div></div>';
             }
             html += '<div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><h3 class="font-bold mb-2">Sous-traitants (' + ST.subs.length + ')</h3>';
             if (!ST.subs.length) html += '<p class="text-slate-500 text-sm">Aucun sous-traitant enregistré.</p>';
             else {
-                html += '<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-slate-400 text-left"><th class="py-1">Nom</th><th>Contact</th><th>Téléphone</th><th>Email</th>' + (w ? '<th></th>' : '') + '</tr></thead><tbody>';
+                html += '<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-slate-400 text-left"><th class="py-1">Nom</th><th>Contact</th><th>Téléphone</th><th>Facturation</th>' + (w ? '<th></th>' : '') + '</tr></thead><tbody>';
                 ST.subs.forEach(function (s) {
-                    html += '<tr class="border-t border-slate-700"><td class="py-1">' + escapeHtml(s.name) + '</td><td>' + escapeHtml(s.contact || '') + '</td><td>' + escapeHtml(s.phone || '') + '</td><td>' + escapeHtml(s.email || '') + '</td>' + (w ? '<td class="text-right whitespace-nowrap"><button class="text-blue-400 mr-2" onclick="stEditSub(' + s.id + ')">✎</button><button class="text-red-400" onclick="stDeleteSub(' + s.id + ')">🗑</button></td>' : '') + '</tr>';
+                    var modeBadge = s.billingMode === 'taillant' ? '<span class="text-cyan-300">💠 par taillant</span>' : '<span class="text-slate-400">par machine</span>';
+                    html += '<tr class="border-t border-slate-700"><td class="py-1">' + escapeHtml(s.name) + '</td><td>' + escapeHtml(s.contact || '') + '</td><td>' + escapeHtml(s.phone || '') + '</td><td>' + modeBadge + '</td>' + (w ? '<td class="text-right whitespace-nowrap"><button class="text-blue-400 mr-2" onclick="stEditSub(' + s.id + ')">✎</button><button class="text-red-400" onclick="stDeleteSub(' + s.id + ')">🗑</button></td>' : '') + '</tr>';
                 });
                 html += '</tbody></table></div>';
             }
             html += '</div>'; el.innerHTML = html;
         }
-        function stResetSubForm() { ['subEditId', 'subName', 'subContact', 'subPhone', 'subEmail', 'subNote'].forEach(function (id) { var e = document.getElementById(id); if (e) e.value = ''; }); var c = document.getElementById('subCurrency'); if (c) c.value = 'XOF'; }
+        function stResetSubForm() { ['subEditId', 'subName', 'subContact', 'subPhone', 'subEmail', 'subNote'].forEach(function (id) { var e = document.getElementById(id); if (e) e.value = ''; }); var c = document.getElementById('subCurrency'); if (c) c.value = 'XOF'; var bm = document.getElementById('subBillingMode'); if (bm) bm.value = 'machine'; }
         function stEditSub(id) {
             var s = ST.subs.filter(function (x) { return Number(x.id) === Number(id); })[0]; if (!s) return;
             document.getElementById('subEditId').value = s.id; document.getElementById('subName').value = s.name || '';
             document.getElementById('subContact').value = s.contact || ''; document.getElementById('subPhone').value = s.phone || '';
             document.getElementById('subEmail').value = s.email || ''; document.getElementById('subNote').value = s.note || '';
             var c = document.getElementById('subCurrency'); if (c) c.value = s.currency || 'XOF';
+            var bm = document.getElementById('subBillingMode'); if (bm) bm.value = s.billingMode || 'machine';
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
         async function stSaveSub() {
             var id = document.getElementById('subEditId').value;
             var curEl = document.getElementById('subCurrency');
-            var data = { name: document.getElementById('subName').value.trim(), contact: document.getElementById('subContact').value.trim(), phone: document.getElementById('subPhone').value.trim(), email: document.getElementById('subEmail').value.trim(), note: document.getElementById('subNote').value.trim(), currency: curEl ? curEl.value : 'XOF' };
+            var bmEl = document.getElementById('subBillingMode');
+            var data = { name: document.getElementById('subName').value.trim(), contact: document.getElementById('subContact').value.trim(), phone: document.getElementById('subPhone').value.trim(), email: document.getElementById('subEmail').value.trim(), note: document.getElementById('subNote').value.trim(), currency: curEl ? curEl.value : 'XOF', billingMode: bmEl ? bmEl.value : 'machine' };
             if (!data.name) { alert('Nom requis.'); return; }
             try { await apiRequest('/soustraitants' + (id ? '/' + id : ''), id ? 'PUT' : 'POST', data); stResetSubForm(); renderSoustraitants(); }
             catch (e) { alert(e.message || 'Erreur.'); }
@@ -13172,6 +13270,46 @@
             try { await apiRequest('/soustraitants/machines/' + id, 'DELETE'); renderSoustraitants(); } catch (e) { alert(e.message || 'Erreur.'); }
         }
 
+        // ---- Prix par type de taillant (grille tarifaire) ------------------
+        function stBitRateValue(subId, bitType) {
+            var hit = (ST.bitRates || []).filter(function (x) { return Number(x.subcontractorId) === Number(subId) && x.bitType === bitType; })[0];
+            return hit ? (Number(hit.rate) || 0) : '';
+        }
+        function stRenderBitrates() {
+            var el = document.getElementById('soustraitantsContent'); var w = stCanWrite();
+            if (!ST.subs.length) { el.innerHTML = '<div class="text-slate-400 border border-dashed border-slate-600 rounded-xl p-6 text-center">Ajoute d\'abord un sous-traitant.</div>'; return; }
+            if (!ST.bitRateSub || !ST.subs.some(function (s) { return Number(s.id) === Number(ST.bitRateSub); })) ST.bitRateSub = ST.subs[0].id;
+            var opts = ST.subs.map(function (s) { return '<option value="' + s.id + '"' + (Number(s.id) === Number(ST.bitRateSub) ? ' selected' : '') + '>' + escapeHtml(s.name) + (s.billingMode === 'taillant' ? ' — 💠 par taillant' : '') + '</option>'; }).join('');
+            var bitOpts = (typeof DAILY_BIT_OPTIONS !== 'undefined' ? DAILY_BIT_OPTIONS : []);
+            var html = '<div class="bg-slate-800 border border-slate-700 rounded-xl p-4">'
+                + '<h3 class="font-bold mb-1">💠 Prix par type de taillant</h3>'
+                + '<p class="text-slate-500 text-sm mb-3">Définis le prix au mètre foré pour chaque diamètre / type de bit. Utilisé pour les sous-traitants dont la facturation est « par type de taillant ». Laisse vide (ou 0) pour un bit non facturé.</p>'
+                + '<div class="flex items-center gap-2 mb-3 flex-wrap"><label class="text-sm text-slate-400">Sous-traitant</label>'
+                + '<select ' + (w ? '' : 'disabled') + ' onchange="stBitRateSelectSub(this.value)" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm">' + opts + '</select></div>';
+            html += '<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-slate-400 text-left"><th class="py-1">Type de taillant</th><th>Prix / mètre (FCFA)</th></tr></thead><tbody>';
+            bitOpts.forEach(function (o) {
+                var val = stBitRateValue(ST.bitRateSub, o.value);
+                html += '<tr class="border-t border-slate-700"><td class="py-1">' + escapeHtml(o.label) + '</td>'
+                    + '<td><input type="number" step="any" min="0" ' + (w ? '' : 'disabled') + ' value="' + (val === '' ? '' : val) + '" data-bitrate-type="' + escapeHtmlForAttr(o.value) + '" class="bg-slate-900 border border-slate-600 rounded px-2 py-1 text-sm w-40" placeholder="—"></td></tr>';
+            });
+            html += '</tbody></table></div>';
+            if (w) html += '<div class="mt-3"><button class="ged-btn-primary px-4 py-2 rounded text-sm" onclick="stSaveBitrates()">💾 Enregistrer la grille</button></div>';
+            html += '</div>'; el.innerHTML = html;
+        }
+        function stBitRateSelectSub(v) { ST.bitRateSub = v; stRenderBitrates(); }
+        async function stSaveBitrates() {
+            var inputs = document.querySelectorAll('[data-bitrate-type]');
+            try {
+                for (var i = 0; i < inputs.length; i++) {
+                    var bitType = inputs[i].getAttribute('data-bitrate-type');
+                    var rate = inputs[i].value === '' ? 0 : Number(inputs[i].value) || 0;
+                    await apiRequest('/soustraitants/bitrates', 'POST', { subcontractorId: ST.bitRateSub, bitType: bitType, rate: rate });
+                }
+                ST.bitRates = await apiRequest('/soustraitants/bitrates', 'GET');
+                alert('Grille de prix enregistrée.'); stRenderBitrates();
+            } catch (e) { alert(e.message || 'Erreur.'); }
+        }
+
         // ---- Relevé d'usage mensuel ---------------------------------------
         async function stRenderUsage() {
             var el = document.getElementById('soustraitantsContent');
@@ -13218,9 +13356,16 @@
                     + '<input type="hidden" name="period" value="' + escapeHtmlForAttr(ST.period) + '">'
                     + '<div class="grid grid-cols-1 sm:grid-cols-2 gap-2">'
                     + '<select name="scope" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm" onchange="stBcScope(this.value)"><option value="subcontractor">Déduire d\'un sous-traitant</option><option value="enterprise">Côté entreprise (coût propre)</option></select>'
-                    + '<select name="subcontractorId" id="stBcSub" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm">' + stSubOptions() + '</select>'
+                    + '<select name="subcontractorId" id="stBcSub" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm" onchange="stBcSuggestMeters()">' + stSubOptions() + '</select>'
                     + '<input name="label" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm" placeholder="Libellé (carburant, pièces, réparation…) *">'
-                    + '<input name="amount" type="number" step="any" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm" placeholder="Montant (FCFA) *">'
+                    + '<select name="mode" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm" onchange="stBcMode(this.value)"><option value="amount">Montant fixe</option><option value="metrage">Au métrage (taux × mètres)</option></select>'
+                    + '</div>'
+                    + '<div id="stBcAmountBox" class="mt-2"><input name="amount" type="number" step="any" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm w-full" placeholder="Montant (FCFA) *"></div>'
+                    + '<div id="stBcMetrageBox" class="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2" style="display:none">'
+                    + '<input name="rate" type="number" step="any" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm" placeholder="Taux (FCFA/m)" oninput="stBcMetragePreview()">'
+                    + '<input name="meters" type="number" step="any" id="stBcMeters" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm" placeholder="Mètres" oninput="stBcMetragePreview()">'
+                    + '<div class="flex items-center text-sm text-slate-300" id="stBcMetrageCalc">= 0 F</div>'
+                    + '<p class="text-xs text-slate-500 sm:col-span-3">Mètres suggérés automatiquement depuis le métrage réel du sous-traitant ce mois — modifiable.</p>'
                     + '</div>'
                     + '<textarea name="note" rows="2" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm w-full mt-2" placeholder="Note / détail"></textarea>'
                     + '<div class="mt-2 flex items-center gap-3 flex-wrap"><label class="text-sm text-slate-400">Justificatif :</label><input type="file" name="attachment" class="text-sm"><button class="ged-btn-primary px-4 py-2 rounded text-sm">Enregistrer</button></div>'
@@ -13232,17 +13377,41 @@
                 html += '<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-slate-400 text-left"><th class="py-1">Libellé</th><th>Imputation</th><th>Montant</th><th>Justif.</th>' + (w ? '<th></th>' : '') + '</tr></thead><tbody>';
                 list.forEach(function (c) {
                     var imp = c.scope === 'enterprise' ? '<span class="text-amber-400">Entreprise</span>' : escapeHtml(stSubName(c.subcontractorId));
-                    html += '<tr class="border-t border-slate-700"><td class="py-1">' + escapeHtml(c.label) + '</td><td>' + imp + '</td><td class="text-red-400">− ' + stFmt(c.amount) + '</td><td>' + (c.attachment ? '<a class="text-blue-400" href="' + escapeHtmlForAttr(c.attachment) + '" target="_blank">📎</a>' : '—') + '</td>' + (w ? '<td class="text-right"><button class="text-red-400" onclick="stDeleteBackcharge(' + c.id + ')">🗑</button></td>' : '') + '</tr>';
+                    var det = c.mode === 'metrage' ? ' <span class="text-xs text-cyan-300">(au métrage : ' + stFmt(c.rate) + '/m × ' + (Number(c.meters) || 0).toLocaleString('fr-FR', { maximumFractionDigits: 1 }) + ' m)</span>' : '';
+                    html += '<tr class="border-t border-slate-700"><td class="py-1">' + escapeHtml(c.label) + det + '</td><td>' + imp + '</td><td class="text-red-400">− ' + stFmt(c.amount) + '</td><td>' + (c.attachment ? '<a class="text-blue-400" href="' + escapeHtmlForAttr(c.attachment) + '" target="_blank">📎</a>' : '—') + '</td>' + (w ? '<td class="text-right"><button class="text-red-400" onclick="stDeleteBackcharge(' + c.id + ')">🗑</button></td>' : '') + '</tr>';
                 });
                 html += '</tbody></table></div>';
             }
             html += '</div>'; el.innerHTML = html; stBcScope('subcontractor');
         }
         function stBcScope(v) { var s = document.getElementById('stBcSub'); if (s) s.style.display = v === 'enterprise' ? 'none' : ''; }
+        function stBcMode(v) {
+            var a = document.getElementById('stBcAmountBox'), m = document.getElementById('stBcMetrageBox');
+            if (a) a.style.display = v === 'metrage' ? 'none' : '';
+            if (m) m.style.display = v === 'metrage' ? '' : 'none';
+            if (v === 'metrage') stBcSuggestMeters();
+        }
+        function stBcSuggestMeters() {
+            var form = document.getElementById('stBcForm'); if (!form || form.mode.value !== 'metrage') return;
+            var sub = document.getElementById('stBcSub'); var mInp = document.getElementById('stBcMeters');
+            if (!sub || !mInp || mInp.value) return; // ne pas écraser une saisie manuelle
+            var tot = stTotalMetrageForSub(sub.value, ST.period);
+            if (tot > 0) { mInp.value = +tot.toFixed(1); stBcMetragePreview(); }
+        }
+        function stBcMetragePreview() {
+            var form = document.getElementById('stBcForm'); if (!form) return;
+            var calc = document.getElementById('stBcMetrageCalc');
+            var amt = (Number(form.rate.value) || 0) * (Number(form.meters.value) || 0);
+            if (calc) calc.textContent = '= ' + stFmt(amt);
+        }
         async function stSaveBackcharge(ev) {
             ev.preventDefault();
             var form = document.getElementById('stBcForm');
-            if (!form.label.value.trim() || !form.amount.value) { alert('Libellé et montant requis.'); return false; }
+            var mode = form.mode ? form.mode.value : 'amount';
+            if (!form.label.value.trim()) { alert('Libellé requis.'); return false; }
+            if (mode === 'metrage') {
+                if (!form.rate.value || !form.meters.value) { alert('Taux (FCFA/m) et mètres requis.'); return false; }
+            } else if (!form.amount.value) { alert('Montant requis.'); return false; }
             try {
                 var headers = {}; var eid = window.API && window.API.getEnterpriseId ? window.API.getEnterpriseId() : null;
                 if (eid != null) headers['X-Enterprise-Id'] = String(eid);

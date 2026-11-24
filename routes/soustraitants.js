@@ -10,6 +10,11 @@ const multer = require('multer');
 const WRITE_ROLES = new Set(['admin', 'gestionnaire', 'gestionnaire_site', 'superviseur', 'ingenieur', 'platform_owner']);
 const UNITS = new Set(['heure', 'jour', 'metre', 'forfait']);
 const SCOPES = new Set(['subcontractor', 'enterprise']);
+// Mode de facturation d'un sous-traitant : par machine (tarif × usage) ou par
+// type de taillant (prix par bit × mètres forés par ce bit).
+const BILLING_MODES = new Set(['machine', 'taillant']);
+// Mode d'une back-charge : montant fixe ou au métrage (taux FCFA/m × mètres).
+const BC_MODES = new Set(['amount', 'metrage']);
 
 function text(v, max) { if (v == null) return ''; const s = String(v); return s.length > max ? s.slice(0, max) : s; }
 function num(v, min, max, fb) { let n = Number(v); if (!Number.isFinite(n)) return fb; if (min != null && n < min) n = min; if (max != null && n > max) n = max; return n; }
@@ -72,12 +77,39 @@ module.exports = function registerSoustraitantsRoutes(app, options) {
         )`);
         db.run('CREATE INDEX IF NOT EXISTS idx_bc_enterprise ON back_charges(enterpriseId, period)');
 
+        // Grille tarifaire par type de taillant (bit) pour un sous-traitant.
+        // Facture « par taillant » = Σ (prix du bit × mètres forés par ce bit,
+        // relevés automatiquement depuis les saisies journalières).
+        db.run(`CREATE TABLE IF NOT EXISTS subcontractor_bit_rates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            enterpriseId INTEGER NOT NULL,
+            subcontractorId INTEGER NOT NULL,
+            bitType TEXT NOT NULL DEFAULT '',
+            rate REAL DEFAULT 0,
+            active INTEGER DEFAULT 1,
+            updatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(subcontractorId, bitType)
+        )`);
+        db.run('CREATE INDEX IF NOT EXISTS idx_bitrate_enterprise ON subcontractor_bit_rates(enterpriseId)');
+
         // Migrations additives (bases créées avant ces champs)
         db.run("ALTER TABLE rented_machines ADD COLUMN drillId TEXT DEFAULT NULL", (e) => {
             if (e && !String(e.message || '').includes('duplicate column')) console.warn('rented_machines.drillId:', e.message);
         });
         db.run("ALTER TABLE subcontractors ADD COLUMN currency TEXT DEFAULT 'XOF'", (e) => {
             if (e && !String(e.message || '').includes('duplicate column')) console.warn('subcontractors.currency:', e.message);
+        });
+        db.run("ALTER TABLE subcontractors ADD COLUMN billingMode TEXT DEFAULT 'machine'", (e) => {
+            if (e && !String(e.message || '').includes('duplicate column')) console.warn('subcontractors.billingMode:', e.message);
+        });
+        db.run("ALTER TABLE back_charges ADD COLUMN mode TEXT DEFAULT 'amount'", (e) => {
+            if (e && !String(e.message || '').includes('duplicate column')) console.warn('back_charges.mode:', e.message);
+        });
+        db.run("ALTER TABLE back_charges ADD COLUMN rate REAL DEFAULT 0", (e) => {
+            if (e && !String(e.message || '').includes('duplicate column')) console.warn('back_charges.rate:', e.message);
+        });
+        db.run("ALTER TABLE back_charges ADD COLUMN meters REAL DEFAULT 0", (e) => {
+            if (e && !String(e.message || '').includes('duplicate column')) console.warn('back_charges.meters:', e.message);
         });
     });
 
@@ -123,8 +155,9 @@ module.exports = function registerSoustraitantsRoutes(app, options) {
         const b = req.body || {};
         const name = text(b.name, 160);
         if (!name) return res.status(400).json({ error: 'Nom requis' });
-        db.run('INSERT INTO subcontractors (enterpriseId, name, contact, phone, email, note, active, currency) VALUES (?,?,?,?,?,?,?,?)',
-            [eid, name, text(b.contact, 160), text(b.phone, 60), text(b.email, 160), text(b.note, 1000), b.active === false ? 0 : 1, text(b.currency, 8) || 'XOF'],
+        const billingMode = BILLING_MODES.has(b.billingMode) ? b.billingMode : 'machine';
+        db.run('INSERT INTO subcontractors (enterpriseId, name, contact, phone, email, note, active, currency, billingMode) VALUES (?,?,?,?,?,?,?,?,?)',
+            [eid, name, text(b.contact, 160), text(b.phone, 60), text(b.email, 160), text(b.note, 1000), b.active === false ? 0 : 1, text(b.currency, 8) || 'XOF', billingMode],
             function (err) {
                 if (err) return res.status(500).json({ error: err.message });
                 db.get('SELECT * FROM subcontractors WHERE id = ?', [this.lastID], (e, r) => res.json(r));
@@ -137,8 +170,9 @@ module.exports = function registerSoustraitantsRoutes(app, options) {
         const id = Number(req.params.id); const b = req.body || {};
         const name = text(b.name, 160);
         if (!name) return res.status(400).json({ error: 'Nom requis' });
-        db.run('UPDATE subcontractors SET name=?, contact=?, phone=?, email=?, note=?, active=?, currency=? WHERE id=? AND enterpriseId=?',
-            [name, text(b.contact, 160), text(b.phone, 60), text(b.email, 160), text(b.note, 1000), b.active === false ? 0 : 1, text(b.currency, 8) || 'XOF', id, eid],
+        const billingMode = BILLING_MODES.has(b.billingMode) ? b.billingMode : 'machine';
+        db.run('UPDATE subcontractors SET name=?, contact=?, phone=?, email=?, note=?, active=?, currency=?, billingMode=? WHERE id=? AND enterpriseId=?',
+            [name, text(b.contact, 160), text(b.phone, 60), text(b.email, 160), text(b.note, 1000), b.active === false ? 0 : 1, text(b.currency, 8) || 'XOF', billingMode, id, eid],
             function (err) {
                 if (err) return res.status(500).json({ error: err.message });
                 db.get('SELECT * FROM subcontractors WHERE id = ?', [id], (e, r) => res.json(r || {}));
@@ -155,6 +189,48 @@ module.exports = function registerSoustraitantsRoutes(app, options) {
             db.run('DELETE FROM back_charges WHERE subcontractorId=? AND enterpriseId=?', [id, eid], () => {});
             res.json({ ok: true });
         });
+    });
+
+    // ------------------------------------------------------------------ Grille prix par type de taillant
+    app.get('/api/soustraitants/bitrates', (req, res) => {
+        const eid = tenantOr400(req, res); if (eid == null) return;
+        db.all('SELECT * FROM subcontractor_bit_rates WHERE enterpriseId = ? ORDER BY subcontractorId, bitType', [eid], (err, rows) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json(rows || []);
+        });
+    });
+
+    // Upsert d'un prix (sous-traitant + type de bit). rate <= 0 supprime la ligne.
+    app.post('/api/soustraitants/bitrates', (req, res) => {
+        if (!canWrite(req)) return res.status(403).json({ error: 'Droits insuffisants' });
+        const eid = tenantOr400(req, res); if (eid == null) return;
+        const b = req.body || {};
+        const subId = Number(b.subcontractorId);
+        const bitType = text(b.bitType, 60);
+        if (!Number.isFinite(subId)) return res.status(400).json({ error: 'Sous-traitant requis' });
+        if (!bitType) return res.status(400).json({ error: 'Type de taillant requis' });
+        const rate = num(b.rate, 0, 1e12, 0);
+        const now = new Date().toISOString();
+        if (rate <= 0) {
+            db.run('DELETE FROM subcontractor_bit_rates WHERE enterpriseId=? AND subcontractorId=? AND bitType=?', [eid, subId, bitType],
+                (err) => err ? res.status(500).json({ error: err.message }) : res.json({ ok: true, deleted: true }));
+            return;
+        }
+        db.run(`INSERT INTO subcontractor_bit_rates (enterpriseId, subcontractorId, bitType, rate, updatedAt)
+                VALUES (?,?,?,?,?)
+                ON CONFLICT(subcontractorId, bitType) DO UPDATE SET rate=excluded.rate, updatedAt=excluded.updatedAt`,
+            [eid, subId, bitType, rate, now],
+            function (err) {
+                if (err) return res.status(500).json({ error: err.message });
+                res.json({ ok: true });
+            });
+    });
+
+    app.delete('/api/soustraitants/bitrates/:id', (req, res) => {
+        if (!canWrite(req)) return res.status(403).json({ error: 'Droits insuffisants' });
+        const eid = tenantOr400(req, res); if (eid == null) return;
+        db.run('DELETE FROM subcontractor_bit_rates WHERE id=? AND enterpriseId=?', [Number(req.params.id), eid],
+            (err) => err ? res.status(500).json({ error: err.message }) : res.json({ ok: true }));
     });
 
     // ------------------------------------------------------------------ Machines louées
@@ -267,16 +343,20 @@ module.exports = function registerSoustraitantsRoutes(app, options) {
             const scope = SCOPES.has(b.scope) ? b.scope : 'subcontractor';
             const p = period(b.period);
             if (!p) return res.status(400).json({ error: 'Période AAAA-MM requise' });
-            const amount = num(b.amount, 0, 1e12, 0);
+            const mode = BC_MODES.has(b.mode) ? b.mode : 'amount';
+            const rate = num(b.rate, 0, 1e12, 0);
+            const meters = num(b.meters, 0, 1e12, 0);
+            // Au métrage : montant = taux × mètres. Sinon montant saisi directement.
+            const amount = mode === 'metrage' ? rate * meters : num(b.amount, 0, 1e12, 0);
             const label = text(b.label, 200);
             if (!label) return res.status(400).json({ error: 'Libellé requis' });
             let subId = Number(b.subcontractorId);
             if (scope === 'enterprise' || !Number.isFinite(subId)) subId = null;
             if (scope === 'subcontractor' && subId == null) return res.status(400).json({ error: 'Sous-traitant requis' });
             const url = req.file ? ('/uploads/backcharges/' + eid + '/' + req.file.filename) : '';
-            db.run(`INSERT INTO back_charges (enterpriseId, scope, subcontractorId, period, label, amount, note, attachment, createdBy)
-                    VALUES (?,?,?,?,?,?,?,?,?)`,
-                [eid, scope, subId, p, label, amount, text(b.note, 1000), url, actor(req)],
+            db.run(`INSERT INTO back_charges (enterpriseId, scope, subcontractorId, period, label, amount, note, attachment, createdBy, mode, rate, meters)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+                [eid, scope, subId, p, label, amount, text(b.note, 1000), url, actor(req), mode, rate, meters],
                 function (err) {
                     if (err) return res.status(500).json({ error: err.message });
                     db.get('SELECT * FROM back_charges WHERE id = ?', [this.lastID], (e, r) => res.json(r));
@@ -307,7 +387,8 @@ module.exports = function registerSoustraitantsRoutes(app, options) {
             q('SELECT * FROM rented_machines WHERE enterpriseId = ?', [eid]),
             q('SELECT * FROM machine_usage WHERE enterpriseId = ? AND period = ?', [eid, p]),
             q('SELECT * FROM back_charges WHERE enterpriseId = ? AND period = ?', [eid, p]),
-        ]).then(([subs, machines, usage, charges]) => {
+            q('SELECT * FROM subcontractor_bit_rates WHERE enterpriseId = ?', [eid]),
+        ]).then(([subs, machines, usage, charges, bitRates]) => {
             const usageByMachine = {};
             usage.forEach(u => { usageByMachine[u.machineId] = u; });
             const chargesBySub = {};
@@ -332,6 +413,7 @@ module.exports = function registerSoustraitantsRoutes(app, options) {
                 totGross += grossTotal; totSubBack += backTotal; totNet += net;
                 return {
                     id: s.id, name: s.name, phone: s.phone, email: s.email,
+                    billingMode: s.billingMode || 'machine',
                     machines: sMachines, grossTotal,
                     backCharges: bch, backTotal, net,
                 };
@@ -339,6 +421,7 @@ module.exports = function registerSoustraitantsRoutes(app, options) {
             res.json({
                 period: p,
                 subcontractors: out,
+                bitRates: bitRates || [],
                 enterpriseBackCharges: entCharges,
                 totals: {
                     gross: totGross,
