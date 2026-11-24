@@ -12891,7 +12891,17 @@
             return total;
         }
 
-        // ---- Facturation par type de taillant -----------------------------
+        // ---- Facturation par type de taillant (× type de sol) -------------
+        var ST_KEY_SEP = '\u0001'; // séparateur interne clé « bit|sol »
+        // Colonnes de la grille de prix : '' = tarif générique « tous sols »,
+        // puis les matériaux de la saisie journalière (FrM/TrM/OxM).
+        var ST_MATERIAL_COLS = [
+            { value: '', label: 'Tous / non précisé' },
+            { value: 'FrM', label: 'FrM (frais)' },
+            { value: 'TrM', label: 'TrM (transition)' },
+            { value: 'OxM', label: 'OxM (oxyde)' }
+        ];
+        function stMaterialShort(code) { return code ? code : 'Tous'; }
         // Foreuses rattachées à un sous-traitant : machines louées liées (drillId)
         // + foreuses allouées (drills.subcontractorId). Correspondance stricte par id.
         function stDrillIdsForSub(subId) {
@@ -12921,11 +12931,12 @@
                 var matches = drillIds.some(function (id) { return drillIdsMatch(r.machineId, id); });
                 if (!matches) return;
                 var data = r.data || {}; if (typeof data === 'string') { try { data = JSON.parse(data); } catch (e) { data = {}; } }
+                var mat = data.materialType || '';
                 var bits = data.bitsUsed;
                 if (Array.isArray(bits) && bits.length) {
-                    bits.forEach(function (b) { if (b && b.bitType) { out[b.bitType] = (out[b.bitType] || 0) + (parseFloat(b.meters) || 0); } });
+                    bits.forEach(function (b) { if (b && b.bitType) { var k = b.bitType + ST_KEY_SEP + mat; out[k] = (out[k] || 0) + (parseFloat(b.meters) || 0); } });
                 } else if (data.bitType) {
-                    out[data.bitType] = (out[data.bitType] || 0) + (parseFloat(data.metersDrilled) || 0);
+                    var k0 = data.bitType + ST_KEY_SEP + mat; out[k0] = (out[k0] || 0) + (parseFloat(data.metersDrilled) || 0);
                 }
             });
             return out;
@@ -12935,18 +12946,26 @@
             Object.keys(m).forEach(function (k) { t += Number(m[k]) || 0; });
             return t;
         }
-        function stBitRateFor(subId, bitType) {
-            var hit = (ST.bitRates || []).filter(function (x) { return Number(x.subcontractorId) === Number(subId) && x.bitType === bitType; })[0];
-            return hit ? (Number(hit.rate) || 0) : 0;
+        // Prix pour (sous-traitant, bit, sol) : match exact, repli sur le tarif
+        // générique « tous sols » (materialType = '') si aucun prix spécifique au sol.
+        function stBitRateFor(subId, bitType, materialType) {
+            var rates = (ST.bitRates || []).filter(function (x) { return Number(x.subcontractorId) === Number(subId) && x.bitType === bitType; });
+            var exact = rates.filter(function (x) { return (x.materialType || '') === (materialType || ''); })[0];
+            if (exact) return Number(exact.rate) || 0;
+            if (materialType) { var gen = rates.filter(function (x) { return (x.materialType || '') === ''; })[0]; if (gen) return Number(gen.rate) || 0; }
+            return 0;
         }
-        // Lignes de facture par taillant d'un sous-traitant (prix × mètres par bit).
+        // Lignes de facture par (taillant × sol) d'un sous-traitant : prix × mètres.
         function stBitLinesForSub(subId, periodYM) {
             var metrage = stBitMetrageForSub(subId, periodYM);
             var lines = [];
-            Object.keys(metrage).forEach(function (bt) {
-                var meters = Number(metrage[bt]) || 0;
-                var rate = stBitRateFor(subId, bt);
-                lines.push({ bitType: bt, label: (typeof dailyBitLabel === 'function') ? dailyBitLabel(bt) : bt, meters: meters, rate: rate, amount: rate * meters });
+            Object.keys(metrage).forEach(function (key) {
+                var parts = key.split(ST_KEY_SEP);
+                var bt = parts[0], mat = parts[1] || '';
+                var meters = Number(metrage[key]) || 0;
+                var rate = stBitRateFor(subId, bt, mat);
+                var label = ((typeof dailyBitLabel === 'function') ? dailyBitLabel(bt) : bt) + (mat ? ' — ' + mat : '');
+                lines.push({ bitType: bt, materialType: mat, label: label, meters: meters, rate: rate, amount: rate * meters });
             });
             // Taillants tarifés mais sans métrage : ignorés (pas de facturation fictive).
             lines.sort(function (a, b) { return b.amount - a.amount; });
@@ -13271,8 +13290,8 @@
         }
 
         // ---- Prix par type de taillant (grille tarifaire) ------------------
-        function stBitRateValue(subId, bitType) {
-            var hit = (ST.bitRates || []).filter(function (x) { return Number(x.subcontractorId) === Number(subId) && x.bitType === bitType; })[0];
+        function stBitRateValue(subId, bitType, materialType) {
+            var hit = (ST.bitRates || []).filter(function (x) { return Number(x.subcontractorId) === Number(subId) && x.bitType === bitType && (x.materialType || '') === (materialType || ''); })[0];
             return hit ? (Number(hit.rate) || 0) : '';
         }
         function stRenderBitrates() {
@@ -13282,15 +13301,19 @@
             var opts = ST.subs.map(function (s) { return '<option value="' + s.id + '"' + (Number(s.id) === Number(ST.bitRateSub) ? ' selected' : '') + '>' + escapeHtml(s.name) + (s.billingMode === 'taillant' ? ' — 💠 par taillant' : '') + '</option>'; }).join('');
             var bitOpts = (typeof DAILY_BIT_OPTIONS !== 'undefined' ? DAILY_BIT_OPTIONS : []);
             var html = '<div class="bg-slate-800 border border-slate-700 rounded-xl p-4">'
-                + '<h3 class="font-bold mb-1">💠 Prix par type de taillant</h3>'
-                + '<p class="text-slate-500 text-sm mb-3">Définis le prix au mètre foré pour chaque diamètre / type de bit. Utilisé pour les sous-traitants dont la facturation est « par type de taillant ». Laisse vide (ou 0) pour un bit non facturé.</p>'
+                + '<h3 class="font-bold mb-1">💠 Prix par type de taillant × type de sol</h3>'
+                + '<p class="text-slate-500 text-sm mb-3">Prix au mètre foré, par diamètre/type de bit <strong>et</strong> par type de sol (FrM frais, TrM transition, OxM oxyde). La colonne « Tous / non précisé » sert de tarif générique : il s\'applique quand aucun prix spécifique au sol n\'est renseigné pour ce bit. Laisse une case vide (ou 0) pour ne pas facturer.</p>'
                 + '<div class="flex items-center gap-2 mb-3 flex-wrap"><label class="text-sm text-slate-400">Sous-traitant</label>'
                 + '<select ' + (w ? '' : 'disabled') + ' onchange="stBitRateSelectSub(this.value)" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm">' + opts + '</select></div>';
-            html += '<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-slate-400 text-left"><th class="py-1">Type de taillant</th><th>Prix / mètre (FCFA)</th></tr></thead><tbody>';
+            html += '<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-slate-400 text-left"><th class="py-1">Type de taillant</th>'
+                + ST_MATERIAL_COLS.map(function (c) { return '<th class="px-2">' + escapeHtml(c.label) + '</th>'; }).join('') + '</tr></thead><tbody>';
             bitOpts.forEach(function (o) {
-                var val = stBitRateValue(ST.bitRateSub, o.value);
-                html += '<tr class="border-t border-slate-700"><td class="py-1">' + escapeHtml(o.label) + '</td>'
-                    + '<td><input type="number" step="any" min="0" ' + (w ? '' : 'disabled') + ' value="' + (val === '' ? '' : val) + '" data-bitrate-type="' + escapeHtmlForAttr(o.value) + '" class="bg-slate-900 border border-slate-600 rounded px-2 py-1 text-sm w-40" placeholder="—"></td></tr>';
+                html += '<tr class="border-t border-slate-700"><td class="py-1 whitespace-nowrap">' + escapeHtml(o.label) + '</td>';
+                ST_MATERIAL_COLS.forEach(function (c) {
+                    var val = stBitRateValue(ST.bitRateSub, o.value, c.value);
+                    html += '<td class="px-1"><input type="number" step="any" min="0" ' + (w ? '' : 'disabled') + ' value="' + (val === '' ? '' : val) + '" data-bitrate-type="' + escapeHtmlForAttr(o.value) + '" data-bitrate-mat="' + escapeHtmlForAttr(c.value) + '" class="bg-slate-900 border border-slate-600 rounded px-2 py-1 text-sm w-28" placeholder="—"></td>';
+                });
+                html += '</tr>';
             });
             html += '</tbody></table></div>';
             if (w) html += '<div class="mt-3"><button class="ged-btn-primary px-4 py-2 rounded text-sm" onclick="stSaveBitrates()">💾 Enregistrer la grille</button></div>';
@@ -13302,8 +13325,9 @@
             try {
                 for (var i = 0; i < inputs.length; i++) {
                     var bitType = inputs[i].getAttribute('data-bitrate-type');
+                    var materialType = inputs[i].getAttribute('data-bitrate-mat') || '';
                     var rate = inputs[i].value === '' ? 0 : Number(inputs[i].value) || 0;
-                    await apiRequest('/soustraitants/bitrates', 'POST', { subcontractorId: ST.bitRateSub, bitType: bitType, rate: rate });
+                    await apiRequest('/soustraitants/bitrates', 'POST', { subcontractorId: ST.bitRateSub, bitType: bitType, materialType: materialType, rate: rate });
                 }
                 ST.bitRates = await apiRequest('/soustraitants/bitrates', 'GET');
                 alert('Grille de prix enregistrée.'); stRenderBitrates();

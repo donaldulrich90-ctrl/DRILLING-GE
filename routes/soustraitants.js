@@ -85,12 +85,18 @@ module.exports = function registerSoustraitantsRoutes(app, options) {
             enterpriseId INTEGER NOT NULL,
             subcontractorId INTEGER NOT NULL,
             bitType TEXT NOT NULL DEFAULT '',
+            materialType TEXT NOT NULL DEFAULT '',
             rate REAL DEFAULT 0,
             active INTEGER DEFAULT 1,
             updatedAt TEXT DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(subcontractorId, bitType)
+            UNIQUE(subcontractorId, bitType, materialType)
         )`);
         db.run('CREATE INDEX IF NOT EXISTS idx_bitrate_enterprise ON subcontractor_bit_rates(enterpriseId)');
+        // Prix différenciés aussi par type de sol/matériau (FrM/TrM/OxM) ; '' = tarif
+        // générique « tous sols » (repli quand aucun prix spécifique au sol n'est défini).
+        db.run("ALTER TABLE subcontractor_bit_rates ADD COLUMN materialType TEXT NOT NULL DEFAULT ''", (e) => {
+            if (e && !String(e.message || '').includes('duplicate column')) console.warn('subcontractor_bit_rates.materialType:', e.message);
+        });
 
         // Migrations additives (bases créées avant ces champs)
         db.run("ALTER TABLE rented_machines ADD COLUMN drillId TEXT DEFAULT NULL", (e) => {
@@ -207,22 +213,20 @@ module.exports = function registerSoustraitantsRoutes(app, options) {
         const b = req.body || {};
         const subId = Number(b.subcontractorId);
         const bitType = text(b.bitType, 60);
+        const materialType = text(b.materialType, 16); // '' = tarif générique « tous sols »
         if (!Number.isFinite(subId)) return res.status(400).json({ error: 'Sous-traitant requis' });
         if (!bitType) return res.status(400).json({ error: 'Type de taillant requis' });
         const rate = num(b.rate, 0, 1e12, 0);
         const now = new Date().toISOString();
-        if (rate <= 0) {
-            db.run('DELETE FROM subcontractor_bit_rates WHERE enterpriseId=? AND subcontractorId=? AND bitType=?', [eid, subId, bitType],
-                (err) => err ? res.status(500).json({ error: err.message }) : res.json({ ok: true, deleted: true }));
-            return;
-        }
-        db.run(`INSERT INTO subcontractor_bit_rates (enterpriseId, subcontractorId, bitType, rate, updatedAt)
-                VALUES (?,?,?,?,?)
-                ON CONFLICT(subcontractorId, bitType) DO UPDATE SET rate=excluded.rate, updatedAt=excluded.updatedAt`,
-            [eid, subId, bitType, rate, now],
-            function (err) {
-                if (err) return res.status(500).json({ error: err.message });
-                res.json({ ok: true });
+        // Upsert manuel (indépendant de la contrainte UNIQUE) : on supprime la ligne
+        // (sous-traitant, bit, sol) puis on réinsère si le prix est positif.
+        db.run('DELETE FROM subcontractor_bit_rates WHERE enterpriseId=? AND subcontractorId=? AND bitType=? AND materialType=?',
+            [eid, subId, bitType, materialType], (delErr) => {
+                if (delErr) return res.status(500).json({ error: delErr.message });
+                if (rate <= 0) return res.json({ ok: true, deleted: true });
+                db.run('INSERT INTO subcontractor_bit_rates (enterpriseId, subcontractorId, bitType, materialType, rate, updatedAt) VALUES (?,?,?,?,?,?)',
+                    [eid, subId, bitType, materialType, rate, now],
+                    (insErr) => insErr ? res.status(500).json({ error: insErr.message }) : res.json({ ok: true }));
             });
     });
 
