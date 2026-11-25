@@ -34250,10 +34250,30 @@
             });
         }
         
-        function getDailyDataForSite(includeDrafts) {
-            var records = (dailyDataRecords || []).filter(function(record) {
-                return includeDrafts === true || !isDailyRecordIncompleteDraft(record);
+        // Dédoublonnage par clé métier (machineId, date, poste) : cette clé est
+        // unique par conception, donc deux enregistrements qui la partagent sont un
+        // doublon (fusion local/serveur transitoire). On garde le plus récemment
+        // modifié (à défaut, le plus grand id serveur), sans changer l'ordre. Évite
+        // qu'un doublon transitoire ne compte deux fois dans un rapport.
+        function dedupeDailyRecords(list) {
+            var best = {};
+            (list || []).forEach(function (r) {
+                if (!r) return;
+                var key = String(r.machineId) + '|' + String(r.date) + '|' + String(r.shift || '');
+                var cur = best[key];
+                if (!cur) { best[key] = r; return; }
+                var tr = r.lastModifiedAt || r.enteredAt || r.createdAt || '';
+                var tc = cur.lastModifiedAt || cur.enteredAt || cur.createdAt || '';
+                if (tr > tc || (tr === tc && (Number(r.id) || 0) > (Number(cur.id) || 0))) best[key] = r;
             });
+            return (list || []).filter(function (r) {
+                return r && best[String(r.machineId) + '|' + String(r.date) + '|' + String(r.shift || '')] === r;
+            });
+        }
+        function getDailyDataForSite(includeDrafts) {
+            var records = dedupeDailyRecords((dailyDataRecords || []).filter(function(record) {
+                return includeDrafts === true || !isDailyRecordIncompleteDraft(record);
+            }));
             if (!currentSiteId) return records;
             var siteDrills = getDrillsForSite();
             return records.filter(function(r) {
