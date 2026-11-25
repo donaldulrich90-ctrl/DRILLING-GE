@@ -13313,7 +13313,9 @@
                     + '<input id="pettyPerson" placeholder="Bénéficiaire / payé par" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm">'
                     + '<input id="pettyRef" placeholder="Référence / pièce" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm">'
                     + '<select id="pettyCur" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm"><option value="XOF">XOF (FCFA)</option><option value="USD">USD</option><option value="EUR">EUR</option></select>'
-                    + '</div><div class="mt-2 flex gap-2"><button class="ged-btn-primary px-4 py-2 rounded text-sm" onclick="pettySave()">Enregistrer</button><button class="bg-slate-700 px-4 py-2 rounded text-sm" onclick="pettyResetForm()">Annuler</button></div></div>';
+                    + '</div>'
+                    + '<div class="mt-2 flex items-center gap-3 flex-wrap"><label class="text-sm text-slate-400">📷 Photo du justificatif :</label><input type="file" id="pettyPhoto" accept="image/*,application/pdf" capture="environment" class="text-sm text-slate-300"><span id="pettyPhotoHint" class="text-xs text-slate-500"></span></div>'
+                    + '<div class="mt-2 flex gap-2"><button class="ged-btn-primary px-4 py-2 rounded text-sm" onclick="pettySave()">Enregistrer</button><button class="bg-slate-700 px-4 py-2 rounded text-sm" onclick="pettyResetForm()">Annuler</button></div></div>';
             }
             html += '<div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><h3 class="font-bold mb-2">Écritures — ' + escapeHtml(PETTY.month) + ' (' + entries.length + ')</h3>';
             if (!entries.length) html += '<p class="text-slate-500 text-sm">Aucune écriture ce mois.</p>';
@@ -13322,7 +13324,8 @@
                 entries.forEach(function (e) {
                     var isIn = e.direction === 'in';
                     var curSuffix = (e.currency && e.currency !== 'XOF') ? ' ' + escapeHtml(e.currency) : '';
-                    html += '<tr class="border-t border-slate-700"><td class="py-1">' + escapeHtml(e.date) + '</td><td>' + escapeHtml(e.label) + (e.person ? ' <span class="text-xs text-slate-500">· ' + escapeHtml(e.person) + '</span>' : '') + '</td><td class="text-slate-400">' + escapeHtml(e.category || '') + '</td>'
+                    var photoLink = e.attachment ? ' <a class="text-blue-400" href="' + escapeHtmlForAttr(e.attachment) + '" target="_blank" title="Voir le justificatif">📎</a>' : '';
+                    html += '<tr class="border-t border-slate-700"><td class="py-1">' + escapeHtml(e.date) + '</td><td>' + escapeHtml(e.label) + photoLink + (e.person ? ' <span class="text-xs text-slate-500">· ' + escapeHtml(e.person) + '</span>' : '') + '</td><td class="text-slate-400">' + escapeHtml(e.category || '') + '</td>'
                         + '<td class="text-right text-green-400">' + (isIn ? pettyF(e.amount) + curSuffix : '') + '</td>'
                         + '<td class="text-right text-red-400">' + (!isIn ? pettyF(e.amount) + curSuffix : '') + '</td>'
                         + (w ? '<td class="text-right whitespace-nowrap"><button class="text-blue-400 mr-1" onclick="pettyEdit(' + e.id + ')">✎</button><button class="text-red-400" onclick="pettyDelete(' + e.id + ')">🗑</button></td>' : '') + '</tr>';
@@ -13333,22 +13336,40 @@
             el.innerHTML = html;
         }
         function pettyReload() { var m = document.getElementById('pettyMonth'); PETTY.month = (m && m.value) || pettyDefaultMonth(); renderPettyCash(); }
-        function pettyResetForm() { ['pettyEditId', 'pettyAmount', 'pettyLabel', 'pettyCat', 'pettyPerson', 'pettyRef'].forEach(function (id) { var e = document.getElementById(id); if (e) e.value = ''; }); var d = document.getElementById('pettyDir'); if (d) d.value = 'out'; }
+        function pettyResetForm() { ['pettyEditId', 'pettyAmount', 'pettyLabel', 'pettyCat', 'pettyPerson', 'pettyRef'].forEach(function (id) { var e = document.getElementById(id); if (e) e.value = ''; }); var d = document.getElementById('pettyDir'); if (d) d.value = 'out'; var p = document.getElementById('pettyPhoto'); if (p) p.value = ''; var h = document.getElementById('pettyPhotoHint'); if (h) h.innerHTML = ''; }
         function pettyEdit(id) {
             var e = (PETTY.data && PETTY.data.entries || []).find(function (x) { return x.id === id; }); if (!e) return;
             var set = function (i, val) { var el = document.getElementById(i); if (el) el.value = val == null ? '' : val; };
             set('pettyEditId', e.id); set('pettyDir', e.direction); set('pettyDate', e.date); set('pettyAmount', e.amount); set('pettyLabel', e.label);
             set('pettyCat', e.category); set('pettyPerson', e.person); set('pettyRef', e.reference); set('pettyCur', e.currency || 'XOF');
+            var ph = document.getElementById('pettyPhoto'); if (ph) ph.value = '';
+            var hint = document.getElementById('pettyPhotoHint');
+            if (hint) hint.innerHTML = e.attachment ? '<a class="text-blue-400" href="' + escapeHtmlForAttr(e.attachment) + '" target="_blank">justificatif actuel 📎</a> — choisir un fichier pour le remplacer' : '';
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
         async function pettySave() {
             var g = function (id) { var e = document.getElementById(id); return e ? e.value.trim() : ''; };
             var id = g('pettyEditId');
-            var data = { direction: document.getElementById('pettyDir').value, date: g('pettyDate'), amount: g('pettyAmount'), label: g('pettyLabel'),
-                category: g('pettyCat'), person: g('pettyPerson'), reference: g('pettyRef'), currency: document.getElementById('pettyCur').value };
-            if (!data.date || !data.label || !(Number(data.amount) > 0)) { alert('Date, libellé et montant valides requis.'); return; }
-            try { await apiRequest('/petty-cash' + (id ? '/' + id : ''), id ? 'PUT' : 'POST', data); pettyResetForm(); renderPettyCash(); }
-            catch (e) { alert(e.message || 'Erreur'); }
+            var date = g('pettyDate'), label = g('pettyLabel'), amount = g('pettyAmount');
+            if (!date || !label || !(Number(amount) > 0)) { alert('Date, libellé et montant valides requis.'); return; }
+            var fd = new FormData();
+            fd.append('direction', document.getElementById('pettyDir').value);
+            fd.append('date', date); fd.append('amount', amount); fd.append('label', label);
+            fd.append('category', g('pettyCat')); fd.append('person', g('pettyPerson'));
+            fd.append('reference', g('pettyRef')); fd.append('currency', document.getElementById('pettyCur').value);
+            var ph = document.getElementById('pettyPhoto');
+            if (ph && ph.files && ph.files[0]) fd.append('attachment', ph.files[0]);
+            try {
+                var base = (window.API && window.API.getBaseUrl) ? window.API.getBaseUrl() : '/api';
+                var headers = {};
+                var eid = window.API && window.API.getEnterpriseId ? window.API.getEnterpriseId() : null;
+                if (eid != null) headers['X-Enterprise-Id'] = String(eid);
+                var tok = window.API && window.API.getAuthToken ? window.API.getAuthToken() : null;
+                if (tok) headers['Authorization'] = 'Bearer ' + tok;
+                var res = await fetch(base + '/petty-cash' + (id ? '/' + id : ''), { method: id ? 'PUT' : 'POST', credentials: 'include', headers: headers, body: fd });
+                if (!res.ok) { var er = await res.json().catch(function () { return {}; }); throw new Error(er.error || ('HTTP ' + res.status)); }
+                pettyResetForm(); renderPettyCash();
+            } catch (e) { alert(e.message || 'Erreur'); }
         }
         async function pettyDelete(id) {
             if (!confirm('Supprimer cette écriture ?')) return;
