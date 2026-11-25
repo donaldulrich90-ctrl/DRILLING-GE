@@ -442,6 +442,9 @@ db.serialize(() => {
             averagePrice REAL DEFAULT 0,
             priceCurrency TEXT DEFAULT 'XOF',
             locationId INTEGER,
+            code TEXT DEFAULT '',
+            familyCode TEXT DEFAULT '',
+            reference TEXT DEFAULT '',
             createdAt TEXT DEFAULT CURRENT_TIMESTAMP
         )
     `, (err) => {
