@@ -311,7 +311,8 @@ const MiningMonthClosureAPI = {
 const InventoryAPI = {
     getAll: () => apiRequest('/inventory'),
     create: (item) => apiRequest('/inventory', 'POST', item),
-    update: (id, item) => apiRequest(`/inventory/${id}`, 'PUT', item)
+    update: (id, item) => apiRequest(`/inventory/${id}`, 'PUT', item),
+    delete: (id) => apiRequest(`/inventory/${id}`, 'DELETE')
 };
 
 // ============================================

@@ -3418,6 +3418,24 @@ app.put('/api/inventory/:id', (req, res) => {
     });
 });
 
+app.delete('/api/inventory/:id', (req, res) => {
+    const { id } = req.params;
+    const entId = getEnterpriseId(req);
+    let sql = 'DELETE FROM inventory WHERE id = ?';
+    const vals = [id];
+    if (entId !== null) { sql += ' AND enterpriseId = ?'; vals.push(entId); }
+    db.run(sql, vals, function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        if (this.changes === 0) return res.status(404).json({ error: 'Article introuvable ou accès refusé' });
+        // Nettoyage des mouvements de stock rattachés à cet article.
+        let movSql = 'DELETE FROM stockMovements WHERE articleId = ?';
+        const movVals = [id];
+        if (entId !== null) { movSql += ' AND enterpriseId = ?'; movVals.push(entId); }
+        db.run(movSql, movVals, function() {});
+        res.json({ message: 'Article supprimé', changes: this.changes });
+    });
+});
+
 // ============================================
 // TAUX USD → XOF (cours mid-market affiché sur xe.com — page convertisseur publique)
 // Pas d’API XE gratuite : lecture HTML locale, cache court pour limiter la charge.
