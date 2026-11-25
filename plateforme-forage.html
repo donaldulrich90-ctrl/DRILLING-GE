@@ -1386,6 +1386,8 @@
                     <button type="button" onclick="showMainView('payments')" class="ged-nav-item main-nav-btn" id="nav-payments">💰 &nbsp;Paiements</button>
                     <button type="button" onclick="showMainView('revenue')" class="ged-nav-item main-nav-btn" id="nav-revenue">◍ &nbsp;Revenus</button>
                     <button type="button" onclick="showMainView('soustraitants')" class="ged-nav-item main-nav-btn" id="nav-soustraitants">⚒ &nbsp;Sous-traitants</button>
+                    <button type="button" onclick="showMainView('fleet_light')" class="ged-nav-item main-nav-btn" id="nav-fleet_light">🚐 &nbsp;Flotte véhicules légers</button>
+                    <button type="button" onclick="showMainView('petty_cash')" class="ged-nav-item main-nav-btn" id="nav-petty_cash">💵 &nbsp;Petit cash</button>
                     <button type="button" onclick="showMainView('site_meals')" class="ged-nav-item main-nav-btn" id="nav-site_meals">◌ &nbsp;Repas chantier</button>
                     <button type="button" onclick="showMainView('rh')" class="ged-nav-item main-nav-btn" id="nav-rh">♙ &nbsp;Ressources humaines</button>
                     <button type="button" onclick="showMainView('accounts')" class="ged-nav-item main-nav-btn" id="nav-accounts">⊙ &nbsp;Comptes &amp; accès</button>
@@ -1926,6 +1928,24 @@
                 <button type="button" class="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded text-sm" data-sttab="allocation" onclick="stSwitch('allocation')">🚜 Allocation foreuses</button>
             </div>
             <div id="soustraitantsContent"></div>
+        </div>
+
+        <!-- ═══ VUE FLOTTE VÉHICULES LÉGERS ═════════════════════════════ -->
+        <div id="mainView-fleet_light" class="main-view hidden">
+            <div class="mb-5 pb-4 border-b border-slate-700">
+                <h2 class="text-2xl font-extrabold tracking-tight" style="color:var(--ged-yellow)">🚐 Flotte de véhicules légers</h2>
+                <p class="text-slate-400 text-sm mt-1">Véhicules de l'entreprise · alertes assurance, visite technique et entretien (PM)</p>
+            </div>
+            <div id="fleet_lightContent"></div>
+        </div>
+
+        <!-- ═══ VUE PETIT CASH ══════════════════════════════════════════ -->
+        <div id="mainView-petty_cash" class="main-view hidden">
+            <div class="mb-5 pb-4 border-b border-slate-700">
+                <h2 class="text-2xl font-extrabold tracking-tight" style="color:var(--ged-yellow)">💵 Petit cash</h2>
+                <p class="text-slate-400 text-sm mt-1">Journal de caisse · approvisionnements et dépenses · solde courant</p>
+            </div>
+            <div id="petty_cashContent"></div>
         </div>
 
         <!-- ═══ VUE RAPPORT HEBDOMADAIRE ════════════════════════════════ -->
@@ -3568,6 +3588,8 @@
                                 <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictPayments" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Paiements</span></label>
                                 <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictRevenue" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Revenus</span></label>
                                 <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictSoustraitants" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Sous-traitants</span></label>
+                                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictFleetLight" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Flotte véhicules légers</span></label>
+                                <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictPettyCash" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Petit cash</span></label>
                                 <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictSiteMeals" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Repas chantier</span></label>
                                 <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictRH" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Ressources Humaines</span></label>
                                 <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="restrictAccounts" class="w-4 h-4 text-blue-600 rounded"><span class="text-slate-300">Comptes</span></label>
@@ -6300,7 +6322,7 @@
                 'nav-company_info': 'restrictCompanyInfo',
                 'nav-accounts': 'restrictAccounts'
             };
-            var allNavButtons = ['nav-dashboard', 'nav-forage_plan', 'nav-import_plan', 'nav-ecosystem', 'nav-connections', 'nav-assignments', 'nav-maintenance', 'nav-bit_sharpening', 'nav-consumables', 'nav-hse', 'nav-ug_forage', 'nav-ug_exploitation', 'nav-ug_securite', 'nav-carriere', 'nav-analytics', 'nav-planification', 'nav-besoins', 'nav-rentabilite', 'nav-depenses_pm', 'nav-payments', 'nav-soustraitants', 'nav-invoices', 'nav-contracts', 'nav-enterprises', 'nav-sites', 'nav-revenue', 'nav-site_meals', 'nav-reports', 'nav-project_overview', 'nav-rh', 'nav-inventory', 'nav-stock_multi', 'nav-accounts', 'nav-clients', 'nav-translator', 'nav-team_chat', 'nav-company_info'];
+            var allNavButtons = ['nav-dashboard', 'nav-forage_plan', 'nav-import_plan', 'nav-ecosystem', 'nav-connections', 'nav-assignments', 'nav-maintenance', 'nav-bit_sharpening', 'nav-consumables', 'nav-hse', 'nav-ug_forage', 'nav-ug_exploitation', 'nav-ug_securite', 'nav-carriere', 'nav-analytics', 'nav-planification', 'nav-besoins', 'nav-rentabilite', 'nav-depenses_pm', 'nav-payments', 'nav-soustraitants', 'nav-fleet_light', 'nav-petty_cash', 'nav-invoices', 'nav-contracts', 'nav-enterprises', 'nav-sites', 'nav-revenue', 'nav-site_meals', 'nav-reports', 'nav-project_overview', 'nav-rh', 'nav-inventory', 'nav-stock_multi', 'nav-accounts', 'nav-clients', 'nav-translator', 'nav-team_chat', 'nav-company_info'];
 
             if (isPlatformBillingOnlyUser(currentUser)) {
                 allNavButtons.forEach(function(btnId) {
@@ -6346,7 +6368,7 @@
             // Onglets nouvellement gérés par l'accès explicite : jamais masqués par une
             // ancienne liste d'abonnement (qui ne les connaît pas), pour éviter de les
             // cacher à tort une fois ajoutés au contrôle d'accès.
-            var NEW_MANAGED_VIEWS = { forage_plan: 1, bit_sharpening: 1, consumables: 1, hse: 1, souterrain: 1, ug_forage: 1, ug_exploitation: 1, ug_securite: 1, carriere: 1, analytics: 1, planification: 1, besoins: 1, rentabilite: 1, depenses_pm: 1, payments: 1, soustraitants: 1, ecosystem: 1 };
+            var NEW_MANAGED_VIEWS = { forage_plan: 1, bit_sharpening: 1, consumables: 1, hse: 1, souterrain: 1, ug_forage: 1, ug_exploitation: 1, ug_securite: 1, carriere: 1, analytics: 1, planification: 1, besoins: 1, rentabilite: 1, depenses_pm: 1, payments: 1, soustraitants: 1, ecosystem: 1, fleet_light: 1, petty_cash: 1 };
             function allowedBySubscription(navId) {
                 if (navId === 'nav-enterprises') return true;
                 if (!subTabs || !subTabs.length) return true;
@@ -6554,7 +6576,7 @@
                 view !== 'enterprises' && subNav.indexOf(view) < 0) {
                 view = 'dashboard';
             }
-            var views = ['consumables', 'dashboard', 'connections', 'assignments', 'maintenance', 'bit_sharpening', 'invoices', 'payments', 'contracts', 'sites', 'enterprises', 'revenue', 'site_meals', 'reports', 'project_overview', 'planification', 'besoins', 'rh', 'inventory', 'stock_multi', 'accounts', 'clients', 'translator', 'team_chat', 'company_info', 'forage_plan', 'import_plan', 'ecosystem', 'rentabilite', 'depenses_pm', 'analytics', 'hse', 'souterrain', 'ug_forage', 'ug_exploitation', 'ug_securite', 'soustraitants', 'weekly_report'];
+            var views = ['consumables', 'dashboard', 'connections', 'assignments', 'maintenance', 'bit_sharpening', 'invoices', 'payments', 'contracts', 'sites', 'enterprises', 'revenue', 'site_meals', 'reports', 'project_overview', 'planification', 'besoins', 'rh', 'inventory', 'stock_multi', 'accounts', 'clients', 'translator', 'team_chat', 'company_info', 'forage_plan', 'import_plan', 'ecosystem', 'rentabilite', 'depenses_pm', 'analytics', 'hse', 'souterrain', 'ug_forage', 'ug_exploitation', 'ug_securite', 'soustraitants', 'fleet_light', 'petty_cash', 'weekly_report'];
             views.forEach(function(v) {
                 var el = document.getElementById('mainView-' + v);
                 if (el) el.classList.add('hidden');
@@ -7685,6 +7707,19 @@
                 var nd = s.nextMaintenanceDate; if (!nd) return;
                 if (nd < todayS) out.push({ level: 'critical', cat: 'Maintenance', msg: 'Révision en retard : ' + s.machineId + ' (prévue le ' + nd + ')' });
                 else if (nd <= leadDate) out.push({ level: 'warning', cat: 'Maintenance', msg: 'Révision proche : ' + s.machineId + ' le ' + nd });
+            });
+            // Véhicules légers : assurance / visite technique / entretien (PM) / vignette
+            if (typeof window.lightVehicles === 'undefined') {
+                window.lightVehicles = [];
+                try { apiRequest('/light-vehicles').then(function (r) { window.lightVehicles = r || []; }).catch(function () {}); } catch (e) {}
+            }
+            var vehLead = _digestAddDays(todayS, 30);
+            (window.lightVehicles || []).forEach(function (v) {
+                [['insuranceExpiry', 'Assurance'], ['inspectionExpiry', 'Visite technique'], ['pmNextDate', 'Entretien (PM)'], ['vignetteExpiry', 'Vignette']].forEach(function (p) {
+                    var dt = v[p[0]]; if (!dt) return;
+                    if (dt < todayS) out.push({ level: 'critical', cat: 'Véhicules', msg: p[1] + ' expirée : ' + (v.plate || 'véhicule') + ' (le ' + dt + ')' });
+                    else if (dt <= vehLead) out.push({ level: 'warning', cat: 'Véhicules', msg: p[1] + ' proche : ' + (v.plate || 'véhicule') + ' le ' + dt });
+                });
             });
             // Factures impayées
             var unpaid = (typeof invoices !== 'undefined' ? invoices : []).filter(function(i) { return i.status && /impay|unpaid|en attente|overdue|retard/i.test(i.status); });
@@ -10825,6 +10860,10 @@
                 renderBitSharpening();
             } else if (view === 'soustraitants') {
                 renderSoustraitants();
+            } else if (view === 'fleet_light') {
+                renderFleetLight();
+            } else if (view === 'petty_cash') {
+                renderPettyCash();
             } else if (view === 'weekly_report') {
                 renderWeeklyReportView();
             }
@@ -13128,6 +13167,189 @@
             win.document.close();
         }
         window.stGenerateInvoice = stGenerateInvoice;
+
+        // ============================================
+        // FLOTTE DE VÉHICULES LÉGERS
+        // Alertes assurance / visite technique / entretien (PM)
+        // ============================================
+        var FLEET = { list: [] };
+        function fleetCanWrite() { return (typeof stCanWrite === 'function') ? stCanWrite() : true; }
+        function fleetKpi(lab, val, sub, color) {
+            return '<div class="bg-slate-800 p-3 rounded-xl border border-slate-700"><p class="text-slate-400 text-xs uppercase tracking-wide font-semibold">' + escapeHtml(lab) + '</p><p class="text-2xl font-bold mt-1"' + (color ? ' style="color:' + color + '"' : '') + '>' + val + '</p><p class="text-xs text-slate-500 mt-1">' + escapeHtml(sub || '') + '</p></div>';
+        }
+        function fleetDaysTo(dateStr) { if (!dateStr) return null; var t = new Date(dateStr + 'T00:00:00'); if (isNaN(t.getTime())) return null; var now = new Date(); now.setHours(0, 0, 0, 0); return Math.round((t - now) / 86400000); }
+        function fleetBadge(label, dateStr) {
+            var d = fleetDaysTo(dateStr);
+            if (d === null) return '<span class="text-xs px-2 py-0.5 rounded border bg-slate-800 text-slate-500 border-slate-700">' + label + ' : —</span>';
+            var cls, txt;
+            if (d < 0) { cls = 'bg-red-900/40 text-red-300 border-red-700'; txt = label + ' : expiré (' + (-d) + ' j)'; }
+            else if (d <= 15) { cls = 'bg-red-900/30 text-red-300 border-red-800'; txt = label + ' : ' + d + ' j'; }
+            else if (d <= 30) { cls = 'bg-amber-900/30 text-amber-300 border-amber-800'; txt = label + ' : ' + d + ' j'; }
+            else { cls = 'bg-slate-900 text-slate-300 border-slate-600'; txt = label + ' : ' + dateStr; }
+            return '<span class="text-xs px-2 py-0.5 rounded border ' + cls + '">' + txt + '</span>';
+        }
+        function fleetAlertsCount(list) {
+            var r = { insurance: 0, inspection: 0, pm: 0 };
+            (list || []).forEach(function (v) {
+                [['insuranceExpiry', 'insurance'], ['inspectionExpiry', 'inspection'], ['pmNextDate', 'pm']].forEach(function (p) {
+                    var d = fleetDaysTo(v[p[0]]); if (d !== null && d <= 30) r[p[1]]++;
+                });
+            });
+            return r;
+        }
+        async function renderFleetLight() {
+            var el = document.getElementById('fleet_lightContent'); if (!el) return;
+            el.innerHTML = '<div class="text-slate-400 p-4">Chargement…</div>';
+            try { FLEET.list = await apiRequest('/light-vehicles', 'GET'); } catch (e) { el.innerHTML = '<div class="text-red-400 p-4">Erreur de chargement.</div>'; return; }
+            window.lightVehicles = FLEET.list;
+            var w = fleetCanWrite();
+            var a = fleetAlertsCount(FLEET.list);
+            var html = '<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">'
+                + fleetKpi('Véhicules', FLEET.list.length, '')
+                + fleetKpi('Assurance', a.insurance, '≤30 j ou expirée', 'var(--ged-yellow)')
+                + fleetKpi('Visite technique', a.inspection, '≤30 j ou expirée', 'var(--ged-yellow)')
+                + fleetKpi('Entretien (PM)', a.pm, '≤30 j ou dépassé', 'var(--ged-yellow)')
+                + '</div>';
+            if (w) {
+                html += '<div class="bg-slate-800 border border-slate-700 rounded-xl p-4 mb-4"><h3 class="font-bold mb-2">➕ Ajouter / modifier un véhicule</h3>'
+                    + '<input type="hidden" id="fleetEditId">'
+                    + '<div class="grid grid-cols-1 sm:grid-cols-3 gap-2">'
+                    + '<input id="fleetPlate" placeholder="Immatriculation *" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm">'
+                    + '<input id="fleetBrand" placeholder="Marque" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm">'
+                    + '<input id="fleetModel" placeholder="Modèle" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm">'
+                    + '<input id="fleetType" placeholder="Type (pick-up, 4x4, moto…)" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm">'
+                    + '<input id="fleetAssigned" placeholder="Affecté à (chauffeur)" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm">'
+                    + '<input id="fleetOdo" type="number" step="any" placeholder="Kilométrage" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm">'
+                    + '</div>'
+                    + '<div class="grid grid-cols-1 sm:grid-cols-4 gap-2 mt-2">'
+                    + '<div><label class="text-xs text-slate-400 block mb-1">Assurance (échéance)</label><input id="fleetIns" type="date" class="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm"></div>'
+                    + '<div><label class="text-xs text-slate-400 block mb-1">Visite technique</label><input id="fleetInsp" type="date" class="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm"></div>'
+                    + '<div><label class="text-xs text-slate-400 block mb-1">Entretien / PM</label><input id="fleetPm" type="date" class="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm"></div>'
+                    + '<div><label class="text-xs text-slate-400 block mb-1">Vignette</label><input id="fleetVig" type="date" class="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm"></div>'
+                    + '</div>'
+                    + '<div class="mt-2 flex gap-2"><button class="ged-btn-primary px-4 py-2 rounded text-sm" onclick="fleetSave()">Enregistrer</button><button class="bg-slate-700 px-4 py-2 rounded text-sm" onclick="fleetResetForm()">Annuler</button></div></div>';
+            }
+            if (!FLEET.list.length) { html += '<div class="text-slate-400 border border-dashed border-slate-600 rounded-xl p-6 text-center">Aucun véhicule léger enregistré.</div>'; }
+            else {
+                html += '<div class="space-y-3">';
+                FLEET.list.forEach(function (v) {
+                    html += '<div class="bg-slate-800 border border-slate-700 rounded-xl p-4">'
+                        + '<div class="flex justify-between items-start flex-wrap gap-2">'
+                        + '<div><span class="font-mono text-cyan-300 text-lg font-bold">' + escapeHtml(v.plate) + '</span> <span class="text-slate-300">' + escapeHtml([v.brand, v.model].filter(Boolean).join(' ')) + '</span>'
+                        + (v.vtype ? ' <span class="text-xs text-slate-500">(' + escapeHtml(v.vtype) + ')</span>' : '')
+                        + (v.assignedTo ? '<div class="text-xs text-slate-400 mt-1">Affecté à : ' + escapeHtml(v.assignedTo) + '</div>' : '')
+                        + '</div>'
+                        + (w ? '<div class="flex gap-2"><button class="text-blue-400" onclick="fleetEdit(' + v.id + ')">✎</button><button class="text-red-400" onclick="fleetDelete(' + v.id + ')">🗑</button></div>' : '')
+                        + '</div>'
+                        + '<div class="flex flex-wrap gap-2 mt-3 items-center">'
+                        + fleetBadge('Assurance', v.insuranceExpiry)
+                        + fleetBadge('Visite tech.', v.inspectionExpiry)
+                        + fleetBadge('PM', v.pmNextDate)
+                        + (v.vignetteExpiry ? fleetBadge('Vignette', v.vignetteExpiry) : '')
+                        + (v.odometer != null ? '<span class="text-xs text-slate-500">' + Number(v.odometer).toLocaleString('fr-FR') + ' km</span>' : '')
+                        + '</div></div>';
+                });
+                html += '</div>';
+            }
+            el.innerHTML = html;
+        }
+        function fleetResetForm() { ['fleetEditId', 'fleetPlate', 'fleetBrand', 'fleetModel', 'fleetType', 'fleetAssigned', 'fleetOdo', 'fleetIns', 'fleetInsp', 'fleetPm', 'fleetVig'].forEach(function (id) { var e = document.getElementById(id); if (e) e.value = ''; }); }
+        function fleetEdit(id) {
+            var v = FLEET.list.find(function (x) { return x.id === id; }); if (!v) return;
+            var set = function (i, val) { var e = document.getElementById(i); if (e) e.value = val == null ? '' : val; };
+            set('fleetEditId', v.id); set('fleetPlate', v.plate); set('fleetBrand', v.brand); set('fleetModel', v.model); set('fleetType', v.vtype);
+            set('fleetAssigned', v.assignedTo); set('fleetOdo', v.odometer); set('fleetIns', v.insuranceExpiry); set('fleetInsp', v.inspectionExpiry);
+            set('fleetPm', v.pmNextDate); set('fleetVig', v.vignetteExpiry);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        async function fleetSave() {
+            var g = function (id) { var e = document.getElementById(id); return e ? e.value.trim() : ''; };
+            var id = g('fleetEditId');
+            var data = { plate: g('fleetPlate'), brand: g('fleetBrand'), model: g('fleetModel'), vtype: g('fleetType'), assignedTo: g('fleetAssigned'),
+                odometer: g('fleetOdo') || null, insuranceExpiry: g('fleetIns') || null, inspectionExpiry: g('fleetInsp') || null, pmNextDate: g('fleetPm') || null, vignetteExpiry: g('fleetVig') || null };
+            if (!data.plate) { alert('Immatriculation requise.'); return; }
+            try { await apiRequest('/light-vehicles' + (id ? '/' + id : ''), id ? 'PUT' : 'POST', data); fleetResetForm(); renderFleetLight(); }
+            catch (e) { alert(e.message || 'Erreur'); }
+        }
+        async function fleetDelete(id) {
+            if (!confirm('Supprimer ce véhicule ?')) return;
+            try { await apiRequest('/light-vehicles/' + id, 'DELETE'); renderFleetLight(); } catch (e) { alert(e.message || 'Erreur'); }
+        }
+
+        // ============================================
+        // PETIT CASH / CAISSE
+        // ============================================
+        var PETTY = { month: '', data: null };
+        function pettyDefaultMonth() { var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
+        function pettyF(n) { return (Number(n) || 0).toLocaleString('fr-FR', { maximumFractionDigits: 0 }) + ' F'; }
+        async function renderPettyCash() {
+            var el = document.getElementById('petty_cashContent'); if (!el) return;
+            if (!PETTY.month) PETTY.month = pettyDefaultMonth();
+            el.innerHTML = '<div class="text-slate-400 p-4">Chargement…</div>';
+            var res; try { res = await apiRequest('/petty-cash?month=' + encodeURIComponent(PETTY.month), 'GET'); } catch (e) { el.innerHTML = '<div class="text-red-400 p-4">Erreur de chargement.</div>'; return; }
+            PETTY.data = res; var entries = res.entries || [], balances = res.balances || {};
+            var xof = balances.XOF || { in: 0, out: 0, balance: 0 };
+            var w = fleetCanWrite();
+            var html = '<div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">'
+                + fleetKpi('Solde caisse (XOF)', pettyF(xof.balance), 'Toutes périodes', xof.balance < 0 ? '#f87171' : 'var(--ged-yellow)')
+                + fleetKpi('Total entrées', pettyF(xof.in), 'Approvisionnements')
+                + fleetKpi('Total sorties', pettyF(xof.out), 'Dépenses')
+                + '</div>';
+            Object.keys(balances).forEach(function (c) { if (c !== 'XOF') { html += '<div class="text-xs text-slate-400 mb-2">Solde ' + escapeHtml(c) + ' : ' + (Number(balances[c].balance) || 0).toLocaleString('fr-FR') + ' ' + escapeHtml(c) + '</div>'; } });
+            html += '<div class="flex items-center gap-2 mb-4"><label class="text-xs text-slate-400 font-semibold uppercase">Mois</label><input type="month" id="pettyMonth" value="' + escapeHtmlForAttr(PETTY.month) + '" onchange="pettyReload()" class="bg-slate-800 border border-slate-600 rounded px-3 py-2 text-sm"></div>';
+            if (w) {
+                html += '<div class="bg-slate-800 border border-slate-700 rounded-xl p-4 mb-4"><h3 class="font-bold mb-2">➕ Nouvelle écriture</h3>'
+                    + '<input type="hidden" id="pettyEditId">'
+                    + '<div class="grid grid-cols-1 sm:grid-cols-3 gap-2">'
+                    + '<select id="pettyDir" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm"><option value="out">Dépense (sortie)</option><option value="in">Approvisionnement (entrée)</option></select>'
+                    + '<input id="pettyDate" type="date" value="' + new Date().toISOString().slice(0, 10) + '" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm">'
+                    + '<input id="pettyAmount" type="number" step="any" placeholder="Montant *" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm">'
+                    + '<input id="pettyLabel" placeholder="Libellé *" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm sm:col-span-2">'
+                    + '<input id="pettyCat" placeholder="Catégorie (carburant, péage…)" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm">'
+                    + '<input id="pettyPerson" placeholder="Bénéficiaire / payé par" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm">'
+                    + '<input id="pettyRef" placeholder="Référence / pièce" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm">'
+                    + '<select id="pettyCur" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm"><option value="XOF">XOF (FCFA)</option><option value="USD">USD</option><option value="EUR">EUR</option></select>'
+                    + '</div><div class="mt-2 flex gap-2"><button class="ged-btn-primary px-4 py-2 rounded text-sm" onclick="pettySave()">Enregistrer</button><button class="bg-slate-700 px-4 py-2 rounded text-sm" onclick="pettyResetForm()">Annuler</button></div></div>';
+            }
+            html += '<div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><h3 class="font-bold mb-2">Écritures — ' + escapeHtml(PETTY.month) + ' (' + entries.length + ')</h3>';
+            if (!entries.length) html += '<p class="text-slate-500 text-sm">Aucune écriture ce mois.</p>';
+            else {
+                html += '<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-slate-400 text-left"><th class="py-1">Date</th><th>Libellé</th><th>Catégorie</th><th class="text-right">Entrée</th><th class="text-right">Sortie</th>' + (w ? '<th></th>' : '') + '</tr></thead><tbody>';
+                entries.forEach(function (e) {
+                    var isIn = e.direction === 'in';
+                    var curSuffix = (e.currency && e.currency !== 'XOF') ? ' ' + escapeHtml(e.currency) : '';
+                    html += '<tr class="border-t border-slate-700"><td class="py-1">' + escapeHtml(e.date) + '</td><td>' + escapeHtml(e.label) + (e.person ? ' <span class="text-xs text-slate-500">· ' + escapeHtml(e.person) + '</span>' : '') + '</td><td class="text-slate-400">' + escapeHtml(e.category || '') + '</td>'
+                        + '<td class="text-right text-green-400">' + (isIn ? pettyF(e.amount) + curSuffix : '') + '</td>'
+                        + '<td class="text-right text-red-400">' + (!isIn ? pettyF(e.amount) + curSuffix : '') + '</td>'
+                        + (w ? '<td class="text-right whitespace-nowrap"><button class="text-blue-400 mr-1" onclick="pettyEdit(' + e.id + ')">✎</button><button class="text-red-400" onclick="pettyDelete(' + e.id + ')">🗑</button></td>' : '') + '</tr>';
+                });
+                html += '</tbody></table></div>';
+            }
+            html += '</div>';
+            el.innerHTML = html;
+        }
+        function pettyReload() { var m = document.getElementById('pettyMonth'); PETTY.month = (m && m.value) || pettyDefaultMonth(); renderPettyCash(); }
+        function pettyResetForm() { ['pettyEditId', 'pettyAmount', 'pettyLabel', 'pettyCat', 'pettyPerson', 'pettyRef'].forEach(function (id) { var e = document.getElementById(id); if (e) e.value = ''; }); var d = document.getElementById('pettyDir'); if (d) d.value = 'out'; }
+        function pettyEdit(id) {
+            var e = (PETTY.data && PETTY.data.entries || []).find(function (x) { return x.id === id; }); if (!e) return;
+            var set = function (i, val) { var el = document.getElementById(i); if (el) el.value = val == null ? '' : val; };
+            set('pettyEditId', e.id); set('pettyDir', e.direction); set('pettyDate', e.date); set('pettyAmount', e.amount); set('pettyLabel', e.label);
+            set('pettyCat', e.category); set('pettyPerson', e.person); set('pettyRef', e.reference); set('pettyCur', e.currency || 'XOF');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+        async function pettySave() {
+            var g = function (id) { var e = document.getElementById(id); return e ? e.value.trim() : ''; };
+            var id = g('pettyEditId');
+            var data = { direction: document.getElementById('pettyDir').value, date: g('pettyDate'), amount: g('pettyAmount'), label: g('pettyLabel'),
+                category: g('pettyCat'), person: g('pettyPerson'), reference: g('pettyRef'), currency: document.getElementById('pettyCur').value };
+            if (!data.date || !data.label || !(Number(data.amount) > 0)) { alert('Date, libellé et montant valides requis.'); return; }
+            try { await apiRequest('/petty-cash' + (id ? '/' + id : ''), id ? 'PUT' : 'POST', data); pettyResetForm(); renderPettyCash(); }
+            catch (e) { alert(e.message || 'Erreur'); }
+        }
+        async function pettyDelete(id) {
+            if (!confirm('Supprimer cette écriture ?')) return;
+            try { await apiRequest('/petty-cash/' + id, 'DELETE'); renderPettyCash(); } catch (e) { alert(e.message || 'Erreur'); }
+        }
 
         // Champs numériques : autoriser toutes les décimales (step="any") et
         // empêcher la molette de la souris de modifier un champ pendant le défilement.
@@ -28389,6 +28611,7 @@
             ['restrictInvoices', 'invoices'], ['restrictPayments', 'payments'],
             ['restrictContracts', 'contracts'], ['restrictRevenue', 'revenue'],
             ['restrictSoustraitants', 'soustraitants'],
+            ['restrictFleetLight', 'fleet_light'], ['restrictPettyCash', 'petty_cash'],
             ['restrictEcosystem', 'ecosystem'],
             ['restrictSiteMeals', 'site_meals'], ['restrictReports', 'reports'],
             ['restrictRH', 'rh'], ['restrictInventory', 'inventory'],
