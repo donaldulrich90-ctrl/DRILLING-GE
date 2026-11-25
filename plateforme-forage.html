@@ -28062,6 +28062,7 @@
                         '<button onclick="showStockEntryModal(' + item.id + ')" class="bg-green-600 hover:bg-green-700 px-3 py-1 rounded text-sm">+ Entrée</button>' +
                         '<button onclick="showStockExitModal(' + item.id + ')" class="bg-red-600 hover:bg-red-700 px-3 py-1 rounded text-sm">- Sortie</button>' +
                         '<button onclick="viewStockHistory(' + item.id + ')" class="ged-btn-primary px-3 py-1 rounded text-sm">📋 Historique</button>' +
+                        (canResetInventoryStock() ? '<button onclick="deleteInventoryArticle(' + item.id + ')" class="bg-red-900/60 hover:bg-red-800 border border-red-700 px-3 py-1 rounded text-sm text-red-100">🗑 Supprimer</button>' : '') +
                         '</div>' +
                         '</div>' +
                         '</div>';
@@ -28170,6 +28171,19 @@
         }
         function articlePriceCurrency(article) {
             return normalizeMoneyCurrency(article && article.priceCurrency ? article.priceCurrency : stockDefaultCurrency());
+        }
+
+        async function deleteInventoryArticle(id) {
+            var a = (inventory || []).find(function (x) { return x.id === id; });
+            var nom = (a && a.name) || ('#' + id);
+            if (!confirm('Supprimer définitivement l\'article « ' + nom + ' » ?\nSon historique de mouvements sera aussi supprimé. Cette action est irréversible.')) return;
+            try {
+                await apiRequest('/inventory/' + id, 'DELETE');
+                var idx = (inventory || []).findIndex(function (x) { return x.id === id; });
+                if (idx >= 0) inventory.splice(idx, 1);
+                if (Array.isArray(window.stockMovements)) { window.stockMovements = window.stockMovements.filter(function (m) { return m.articleId !== id; }); }
+                renderInventory();
+            } catch (e) { alert(e.message || 'Erreur lors de la suppression.'); }
         }
 
         function updateEntryArticle() {
