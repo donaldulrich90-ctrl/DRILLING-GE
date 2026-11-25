@@ -1424,6 +1424,8 @@ require('./routes/weekly-report')(app, { db, getEnterpriseId });
 require('./routes/analytics')(app, { db, getEnterpriseId });
 require('./routes/stock')(app, { db, getEnterpriseId });
 require('./routes/material-catalog')(app, { db, getEnterpriseId });
+require('./routes/fleet-light')(app, { db, getEnterpriseId });
+require('./routes/petty-cash')(app, { db, getEnterpriseId });
 require('./routes/planification')(app, { db, getEnterpriseId });
 require('./routes/besoins')(app, { db, getEnterpriseId });
 require('./routes/soustraitants')(app, { db, getEnterpriseId });
