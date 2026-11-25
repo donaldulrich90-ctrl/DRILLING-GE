@@ -1423,6 +1423,7 @@ require('./routes/alerts')(app, { db, getEnterpriseId });
 require('./routes/weekly-report')(app, { db, getEnterpriseId });
 require('./routes/analytics')(app, { db, getEnterpriseId });
 require('./routes/stock')(app, { db, getEnterpriseId });
+require('./routes/material-catalog')(app, { db, getEnterpriseId });
 require('./routes/planification')(app, { db, getEnterpriseId });
 require('./routes/besoins')(app, { db, getEnterpriseId });
 require('./routes/soustraitants')(app, { db, getEnterpriseId });
@@ -3374,11 +3375,12 @@ app.post('/api/inventory', (req, res) => {
     const item = req.body;
     const entId = resolveCreateEnterpriseId(req, item);
     db.run(
-        `INSERT INTO inventory (id, enterpriseId, name, category, quantity, minStock, unit, price, alert, averagePrice, priceCurrency)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO inventory (id, enterpriseId, name, category, quantity, minStock, unit, price, alert, averagePrice, priceCurrency, code, familyCode, reference)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
             item.id, entId, item.name, item.category, item.quantity, item.minStock, item.unit,
-            item.price, item.alert ? 1 : 0, item.averagePrice || item.price, item.priceCurrency || 'XOF'
+            item.price, item.alert ? 1 : 0, item.averagePrice || item.price, item.priceCurrency || 'XOF',
+            item.code || '', item.familyCode || '', item.reference || ''
         ],
         function(err) {
             if (err) {
@@ -3395,10 +3397,13 @@ app.put('/api/inventory/:id', (req, res) => {
     const entId = getEnterpriseId(req);
     const item = req.body;
     let sql = `UPDATE inventory SET name = ?, category = ?, quantity = ?, minStock = ?, unit = ?,
-         price = ?, alert = ?, averagePrice = ?, priceCurrency = ? WHERE id = ?`;
+         price = ?, alert = ?, averagePrice = ?, priceCurrency = ?,
+         code = COALESCE(?, code), familyCode = COALESCE(?, familyCode), reference = COALESCE(?, reference) WHERE id = ?`;
     const vals = [
         item.name, item.category, item.quantity, item.minStock, item.unit,
-        item.price, item.alert ? 1 : 0, item.averagePrice || item.price, item.priceCurrency || 'XOF', id
+        item.price, item.alert ? 1 : 0, item.averagePrice || item.price, item.priceCurrency || 'XOF',
+        item.code != null ? item.code : null, item.familyCode != null ? item.familyCode : null,
+        item.reference != null ? item.reference : null, id
     ];
     if (entId !== null) {
         sql += ' AND enterpriseId = ?';

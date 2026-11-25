@@ -3342,38 +3342,26 @@
                                 <input type="text" id="newArticleName" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white" placeholder="Ex: Filtre hydraulique">
                             </div>
                             <div>
-                                <label class="block text-slate-400 mb-2">Catégorie</label>
-                                <select id="newArticleCategory" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white">
-                                    <optgroup label="Consommables de forage">
-                                        <option value="Bits">Bits / Couronnes</option>
-                                        <option value="Shanks">Shanks</option>
-                                        <option value="Rods">Tiges de forage (Rods)</option>
-                                        <option value="Tuyaux">Tuyaux de forage</option>
-                                        <option value="Casing">Casing / Tubage</option>
-                                        <option value="Stabilisateurs">Stabilisateurs</option>
-                                        <option value="Marteau">Pièces marteau</option>
-                                        <option value="Consommables forage">Autres consommables forage</option>
-                                    </optgroup>
-                                    <optgroup label="Huiles">
-                                        <option value="Huile hydraulique">Huile hydraulique</option>
-                                        <option value="Huile moteur">Huile moteur</option>
-                                        <option value="Graisse">Graisse</option>
-                                        <option value="Lubrifiants">Lubrifiants</option>
-                                    </optgroup>
-                                    <optgroup label="Filtres">
-                                        <option value="Filtre hydraulique">Filtre hydraulique</option>
-                                        <option value="Filtre carburant">Filtre à carburant</option>
-                                        <option value="Filtre air">Filtre à air</option>
-                                        <option value="Filtre huile">Filtre à huile</option>
-                                        <option value="Filtres">Autres filtres</option>
-                                    </optgroup>
-                                    <optgroup label="Autres">
-                                        <option value="Pièces détachées">Pièces détachées</option>
-                                        <option value="Joints">Joints et garnitures</option>
-                                        <option value="Outils">Outils</option>
-                                        <option value="Autre">Autre</option>
-                                    </optgroup>
+                                <label class="block text-slate-400 mb-2">Famille *</label>
+                                <select id="newArticleFamily" onchange="onNewArticleFamilyChange()" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white">
+                                    <option value="">Chargement…</option>
                                 </select>
+                                <input type="hidden" id="newArticleCategory">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                            <div>
+                                <label class="block text-slate-400 mb-2">Article du catalogue</label>
+                                <input type="text" id="newArticleCatalog" list="newArticleCatalogList" onchange="onNewArticleCatalogPick()" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white" placeholder="Choisir (ou laisser vide)">
+                                <datalist id="newArticleCatalogList"></datalist>
+                            </div>
+                            <div>
+                                <label class="block text-slate-400 mb-2">Code article</label>
+                                <input type="text" id="newArticleCode" class="w-full bg-slate-900 border border-slate-600 rounded px-4 py-2 text-cyan-300 font-mono" placeholder="(auto)">
+                            </div>
+                            <div>
+                                <label class="block text-slate-400 mb-2">Référence fournisseur</label>
+                                <input type="text" id="newArticleReference" class="w-full bg-slate-700 border border-slate-600 rounded px-4 py-2 text-white" placeholder="Réf. / N° pièce">
                             </div>
                         </div>
                         <div class="grid grid-cols-2 gap-4 mb-4">
@@ -27779,6 +27767,7 @@
                 '<div class="flex gap-2 flex-wrap items-center">' +
                 '<button onclick="showStockEntryModal()" class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg">+ Entrée</button>' +
                 '<button onclick="showStockExitModal()" class="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg">- Sortie</button>' +
+                '<button onclick="openMaterialCatalog()" class="bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-lg">📚 Catalogue</button>' +
                 (canResetInventoryStock()
                     ? '<button type="button" onclick="resetAllInventoryStock()" class="bg-orange-950 hover:bg-orange-900 border border-orange-700 px-4 py-2 rounded-lg text-sm text-orange-100" title="Trois confirmations requises">🧹 Vider tout le stock</button>'
                     : '') +
@@ -27822,8 +27811,10 @@
                     html += '<div class="ged-content-panel p-4 rounded-lg border-2 ' + alertClass + '">' +
                         '<div class="flex justify-between items-start mb-3">' +
                         '<div class="flex-1">' +
-                        '<div class="flex items-center gap-2 mb-2">' +
+                        '<div class="flex items-center gap-2 mb-2 flex-wrap">' +
+                        (item.code ? '<span class="font-mono text-xs bg-slate-900 text-cyan-300 px-2 py-0.5 rounded border border-slate-600">' + escapeHtml(item.code) + '</span>' : '') +
                         '<p class="font-bold text-lg">' + item.name + '</p>' +
+                        (item.reference ? '<span class="text-xs text-slate-500">réf. ' + escapeHtml(item.reference) + '</span>' : '') +
                         '</div>' +
                         '<div class="grid grid-cols-3 gap-4 mb-3">' +
                         '<div class="ged-stat-card p-3 rounded">' +
@@ -27977,6 +27968,114 @@
 
             var isNew = document.getElementById('entryArticle').value === 'new';
             document.getElementById('newArticleFields').classList.toggle('hidden', !isNew);
+            if (isNew) { loadMaterialRefs().then(function () { fillNewArticleFamilySelect(); }); }
+        }
+
+        // ===== Catalogue matériel codifié (familles + articles types) =====
+        var MAT_FAMILIES = [], MAT_CATALOG = [];
+        async function loadMaterialRefs(force) {
+            try {
+                if (force || !MAT_FAMILIES.length) MAT_FAMILIES = await apiRequest('/material/families', 'GET');
+                if (force || !MAT_CATALOG.length) MAT_CATALOG = await apiRequest('/material/catalog', 'GET');
+            } catch (e) { MAT_FAMILIES = MAT_FAMILIES || []; MAT_CATALOG = MAT_CATALOG || []; }
+        }
+        function matFamilyLabel(code) { var f = MAT_FAMILIES.find(function (x) { return x.code === code; }); return f ? f.label : (code || ''); }
+        function fillNewArticleFamilySelect() {
+            var sel = document.getElementById('newArticleFamily'); if (!sel) return;
+            sel.innerHTML = '<option value="">— Choisir une famille —</option>' + MAT_FAMILIES.map(function (f) {
+                return '<option value="' + escapeHtmlForAttr(f.code) + '">' + escapeHtml(f.code + ' — ' + f.label) + '</option>';
+            }).join('');
+        }
+        function onNewArticleFamilyChange() {
+            var fam = document.getElementById('newArticleFamily').value;
+            var cat = document.getElementById('newArticleCategory'); if (cat) cat.value = fam ? matFamilyLabel(fam) : '';
+            var dl = document.getElementById('newArticleCatalogList');
+            if (dl) {
+                var items = MAT_CATALOG.filter(function (c) { return c.familyCode === fam; });
+                dl.innerHTML = items.map(function (c) { return '<option value="' + escapeHtmlForAttr(c.label) + '">' + escapeHtml(c.code) + '</option>'; }).join('');
+            }
+            var catInp = document.getElementById('newArticleCatalog'); if (catInp) catInp.value = '';
+            refreshNewArticleCode(fam);
+        }
+        function onNewArticleCatalogPick() {
+            var val = document.getElementById('newArticleCatalog').value.trim();
+            var fam = document.getElementById('newArticleFamily').value;
+            var item = MAT_CATALOG.find(function (c) { return c.familyCode === fam && c.label === val; }) || MAT_CATALOG.find(function (c) { return c.label === val; });
+            if (!item) return;
+            if (item.familyCode !== fam) {
+                document.getElementById('newArticleFamily').value = item.familyCode;
+                onNewArticleFamilyChange();
+                document.getElementById('newArticleCatalog').value = val;
+            }
+            document.getElementById('newArticleName').value = item.label;
+            var u = document.getElementById('newArticleUnit'); if (u) u.value = item.unit || 'unité';
+            if (item.reference) { var rf = document.getElementById('newArticleReference'); if (rf) rf.value = item.reference; }
+            var codeEl = document.getElementById('newArticleCode'); if (codeEl) codeEl.value = item.code || '';
+            var cat = document.getElementById('newArticleCategory'); if (cat) cat.value = matFamilyLabel(item.familyCode);
+        }
+        async function refreshNewArticleCode(fam) {
+            var codeEl = document.getElementById('newArticleCode'); if (!codeEl) return;
+            if (!fam) { codeEl.value = ''; return; }
+            try { var r = await apiRequest('/material/next-code?family=' + encodeURIComponent(fam), 'GET'); codeEl.value = (r && r.code) || ''; }
+            catch (e) { codeEl.value = ''; }
+        }
+
+        // ===== Gestionnaire de catalogue (familles + articles types) =====
+        async function openMaterialCatalog() { await loadMaterialRefs(true); renderMaterialCatalog(); }
+        function renderMaterialCatalog() {
+            var content = document.getElementById('inventoryContent'); if (!content) return;
+            var html = '<div class="mb-4 flex justify-between items-center flex-wrap gap-2">'
+                + '<h3 class="text-xl font-bold">📚 Catalogue matériel</h3>'
+                + '<button onclick="renderInventory()" class="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-lg">← Retour au stock</button></div>'
+                + '<p class="text-slate-400 text-sm mb-4">Familles codifiées et articles types. Le code article suit le format <span class="font-mono text-cyan-300">FAMILLE-####</span>. Tu peux ajouter tes propres familles et articles.</p>';
+            html += '<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-5">';
+            html += '<div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><h4 class="font-bold mb-2">➕ Nouvelle famille</h4>'
+                + '<div class="flex gap-2 flex-wrap"><input id="matFamCode" maxlength="8" placeholder="Code (ex: PMP)" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm w-32" style="text-transform:uppercase">'
+                + '<input id="matFamLabel" placeholder="Libellé" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm flex-1">'
+                + '<button onclick="matSaveFamily()" class="ged-btn-primary px-4 py-2 rounded text-sm">Ajouter</button></div></div>';
+            html += '<div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><h4 class="font-bold mb-2">➕ Nouvel article type</h4>'
+                + '<div class="grid grid-cols-1 sm:grid-cols-2 gap-2">'
+                + '<select id="matCatFam" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm">' + MAT_FAMILIES.map(function (f) { return '<option value="' + escapeHtmlForAttr(f.code) + '">' + escapeHtml(f.code + ' — ' + f.label) + '</option>'; }).join('') + '</select>'
+                + '<input id="matCatLabel" placeholder="Libellé *" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm">'
+                + '<input id="matCatUnit" placeholder="Unité" value="unité" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm">'
+                + '<input id="matCatRef" placeholder="Référence (option)" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm">'
+                + '</div><button onclick="matSaveCatalog()" class="ged-btn-primary px-4 py-2 rounded text-sm mt-2">Ajouter au catalogue</button></div>';
+            html += '</div>';
+            MAT_FAMILIES.forEach(function (f) {
+                var items = MAT_CATALOG.filter(function (c) { return c.familyCode === f.code; });
+                html += '<div class="border border-slate-700 rounded-lg overflow-hidden mb-3">'
+                    + '<div class="bg-slate-700 px-4 py-2 font-bold text-amber-400 flex justify-between items-center"><span><span class="font-mono text-cyan-300">' + escapeHtml(f.code) + '</span> — ' + escapeHtml(f.label) + '</span><span class="text-xs text-slate-300">' + items.length + ' article(s)</span></div>';
+                if (items.length) {
+                    html += '<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-slate-400 text-left"><th class="py-1 px-3">Code</th><th>Libellé</th><th>Unité</th><th>Référence</th><th></th></tr></thead><tbody>';
+                    items.forEach(function (c) {
+                        html += '<tr class="border-t border-slate-700"><td class="py-1 px-3 font-mono text-cyan-300">' + escapeHtml(c.code) + '</td><td>' + escapeHtml(c.label) + '</td><td>' + escapeHtml(c.unit || '') + '</td><td class="text-slate-400">' + escapeHtml(c.reference || '') + '</td><td class="text-right pr-3"><button onclick="matDeleteCatalog(' + c.id + ')" class="text-red-400">🗑</button></td></tr>';
+                    });
+                    html += '</tbody></table></div>';
+                } else { html += '<div class="p-3 text-slate-500 text-sm">Aucun article dans cette famille.</div>'; }
+                html += '</div>';
+            });
+            content.innerHTML = html;
+        }
+        async function matSaveFamily() {
+            var code = (document.getElementById('matFamCode').value || '').trim().toUpperCase();
+            var label = (document.getElementById('matFamLabel').value || '').trim();
+            if (!code || !label) { alert('Code et libellé requis.'); return; }
+            try { await apiRequest('/material/families', 'POST', { code: code, label: label }); await loadMaterialRefs(true); renderMaterialCatalog(); }
+            catch (e) { alert(e.message || 'Erreur'); }
+        }
+        async function matSaveCatalog() {
+            var fam = document.getElementById('matCatFam').value;
+            var label = (document.getElementById('matCatLabel').value || '').trim();
+            var unit = (document.getElementById('matCatUnit').value || '').trim() || 'unité';
+            var ref = (document.getElementById('matCatRef').value || '').trim();
+            if (!fam || !label) { alert('Famille et libellé requis.'); return; }
+            try { await apiRequest('/material/catalog', 'POST', { familyCode: fam, label: label, unit: unit, reference: ref }); await loadMaterialRefs(true); renderMaterialCatalog(); }
+            catch (e) { alert(e.message || 'Erreur'); }
+        }
+        async function matDeleteCatalog(id) {
+            if (!confirm('Supprimer cet article du catalogue ?')) return;
+            try { await apiRequest('/material/catalog/' + id, 'DELETE'); await loadMaterialRefs(true); renderMaterialCatalog(); }
+            catch (e) { alert(e.message || 'Erreur'); }
         }
 
         function calculateEntryTotal() {
@@ -28014,10 +28113,16 @@
                 var name = document.getElementById('newArticleName').value.trim();
                 if (!name) { alert('Veuillez saisir un nom pour le nouvel article'); return; }
                 articleId = inventory.length > 0 ? Math.max.apply(null, inventory.map(function(a) { return a.id; })) + 1 : 1;
+                var famEl = document.getElementById('newArticleFamily');
+                var codeEl = document.getElementById('newArticleCode');
+                var refEl = document.getElementById('newArticleReference');
                 article = {
                     id: articleId,
                     name: name,
-                    category: document.getElementById('newArticleCategory').value || 'Autre',
+                    category: document.getElementById('newArticleCategory').value || (famEl && famEl.value ? matFamilyLabel(famEl.value) : 'Autre'),
+                    familyCode: famEl ? famEl.value : '',
+                    code: codeEl ? codeEl.value.trim() : '',
+                    reference: refEl ? refEl.value.trim() : '',
                     quantity: 0,
                     minStock: parseInt(document.getElementById('newArticleMinStock').value) || 5,
                     unit: document.getElementById('newArticleUnit').value.trim() || 'unite',
