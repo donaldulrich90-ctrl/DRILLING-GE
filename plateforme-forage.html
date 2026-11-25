@@ -6187,6 +6187,10 @@
             { key: 'carriere',    label: 'Carrière',            icon: '🪨' }
         ];
         // Vues spécifiques à chaque domaine (les autres vues sont transversales et toujours visibles).
+        // Vues ajoutées après coup : jamais masquées ni redirigées par une ancienne
+        // liste d'abonnement (qui ne les connaît pas). Source unique, utilisée par la
+        // visibilité des onglets ET par showMainView (ouverture de la vue).
+        var GED_NEW_MANAGED_VIEWS = { forage_plan: 1, bit_sharpening: 1, consumables: 1, hse: 1, souterrain: 1, ug_forage: 1, ug_exploitation: 1, ug_securite: 1, carriere: 1, analytics: 1, planification: 1, besoins: 1, rentabilite: 1, depenses_pm: 1, payments: 1, soustraitants: 1, ecosystem: 1, fleet_light: 1, petty_cash: 1 };
         var DOMAIN_VIEWS = {
             ciel_ouvert: ['forage_plan', 'import_plan'],
             souterrain:  ['ug_forage', 'ug_exploitation', 'ug_securite'],
@@ -6368,7 +6372,7 @@
             // Onglets nouvellement gérés par l'accès explicite : jamais masqués par une
             // ancienne liste d'abonnement (qui ne les connaît pas), pour éviter de les
             // cacher à tort une fois ajoutés au contrôle d'accès.
-            var NEW_MANAGED_VIEWS = { forage_plan: 1, bit_sharpening: 1, consumables: 1, hse: 1, souterrain: 1, ug_forage: 1, ug_exploitation: 1, ug_securite: 1, carriere: 1, analytics: 1, planification: 1, besoins: 1, rentabilite: 1, depenses_pm: 1, payments: 1, soustraitants: 1, ecosystem: 1, fleet_light: 1, petty_cash: 1 };
+            var NEW_MANAGED_VIEWS = GED_NEW_MANAGED_VIEWS;
             function allowedBySubscription(navId) {
                 if (navId === 'nav-enterprises') return true;
                 if (!subTabs || !subTabs.length) return true;
@@ -6573,7 +6577,7 @@
             }
             var subNav = window.subscriptionAllowedViews;
             if (currentUser && !isPlatformBillingOnlyUser(currentUser) && subNav && subNav.length &&
-                view !== 'enterprises' && subNav.indexOf(view) < 0) {
+                view !== 'enterprises' && !GED_NEW_MANAGED_VIEWS[view] && subNav.indexOf(view) < 0) {
                 view = 'dashboard';
             }
             var views = ['consumables', 'dashboard', 'connections', 'assignments', 'maintenance', 'bit_sharpening', 'invoices', 'payments', 'contracts', 'sites', 'enterprises', 'revenue', 'site_meals', 'reports', 'project_overview', 'planification', 'besoins', 'rh', 'inventory', 'stock_multi', 'accounts', 'clients', 'translator', 'team_chat', 'company_info', 'forage_plan', 'import_plan', 'ecosystem', 'rentabilite', 'depenses_pm', 'analytics', 'hse', 'souterrain', 'ug_forage', 'ug_exploitation', 'ug_securite', 'soustraitants', 'fleet_light', 'petty_cash', 'weekly_report'];
