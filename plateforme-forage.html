@@ -1364,7 +1364,6 @@
 
                     <p class="ged-nav-section ged-nav-toggle" onclick="gedToggleNavSection(this)"><span class="nav-caret">▾</span>Souterrain</p>
                     <button type="button" onclick="showMainView('ug_forage')" class="ged-nav-item main-nav-btn" id="nav-ug_forage">⛏ &nbsp;Forage souterrain</button>
-                    <button type="button" onclick="showMainView('ug_exploitation')" class="ged-nav-item main-nav-btn" id="nav-ug_exploitation">🪨 &nbsp;Exploitation souterraine</button>
                     <button type="button" onclick="showMainView('ug_securite')" class="ged-nav-item main-nav-btn" id="nav-ug_securite">🛟 &nbsp;Sécurité du fond</button>
 
                     <p class="ged-nav-section ged-nav-toggle" onclick="gedToggleNavSection(this)"><span class="nav-caret">▾</span>Pilotage &amp; analyse</p>
@@ -2023,14 +2022,8 @@
             <div id="ugForageContent"></div>
         </div>
 
-        <!-- Exploitation souterraine (abattage / stopes / production) -->
-        <div id="mainView-ug_exploitation" class="main-view hidden">
-            <div class="mb-6 pb-4 border-b border-slate-700">
-                <h2 class="text-2xl font-extrabold tracking-tight" style="color:var(--ged-yellow)">🪨 Exploitation souterraine</h2>
-                <p class="text-slate-400 text-sm mt-1">Abattage · chantiers (stopes) · méthode · tonnage · cycle</p>
-            </div>
-            <div id="ugExploitationContent"></div>
-        </div>
+        <!-- L'exploitation souterraine (mining) est gérée dans GEMining, pas ici :
+             GEDrilling = forage. Les données existantes restent en base (module_state). -->
 
         <!-- Sécurité du fond (ventilation / gaz / registre personnel) -->
         <div id="mainView-ug_securite" class="main-view hidden">
@@ -3743,8 +3736,7 @@
                             <p class="text-slate-400 text-sm mb-3">Quels types d'exploitation cette entreprise réalise-t-elle ? <strong class="text-slate-300">Seuls les modules des domaines cochés seront affichés</strong> dans son menu.</p>
                             <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
                                 <label class="flex items-center gap-2 cursor-pointer bg-slate-700/50 hover:bg-slate-700 rounded-lg px-3 py-2"><input type="checkbox" id="newEntDom_ciel_ouvert" checked class="rounded border-slate-500 text-amber-600 focus:ring-amber-500"><span class="text-slate-200 text-sm">⛰️ Mine à ciel ouvert</span></label>
-                                <label class="flex items-center gap-2 cursor-pointer bg-slate-700/50 hover:bg-slate-700 rounded-lg px-3 py-2"><input type="checkbox" id="newEntDom_souterrain_forage" class="rounded border-slate-500 text-amber-600 focus:ring-amber-500"><span class="text-slate-200 text-sm">⛏ Forage souterrain</span></label>
-                                <label class="flex items-center gap-2 cursor-pointer bg-slate-700/50 hover:bg-slate-700 rounded-lg px-3 py-2"><input type="checkbox" id="newEntDom_souterrain_mining" class="rounded border-slate-500 text-amber-600 focus:ring-amber-500"><span class="text-slate-200 text-sm">🧱 Exploitation souterraine (mining)</span></label>
+                                <label class="flex items-center gap-2 cursor-pointer bg-slate-700/50 hover:bg-slate-700 rounded-lg px-3 py-2"><input type="checkbox" id="newEntDom_souterrain" class="rounded border-slate-500 text-amber-600 focus:ring-amber-500"><span class="text-slate-200 text-sm">⛏ Mine souterraine</span></label>
                                 <label class="flex items-center gap-2 cursor-pointer bg-slate-700/50 hover:bg-slate-700 rounded-lg px-3 py-2"><input type="checkbox" id="newEntDom_carriere" class="rounded border-slate-500 text-amber-600 focus:ring-amber-500"><span class="text-slate-200 text-sm">🪨 Carrière</span></label>
                             </div>
                         </div>
@@ -3980,8 +3972,7 @@
                                     <p class="text-xs text-slate-500">Seuls les modules des domaines cochés sont affichés (Ciel ouvert → plan de forage / import ; Souterrain → forage, exploitation, sécurité ; Carrière). Tout décoché = tout visible.</p>
                                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
                                         <label class="flex items-center gap-2 cursor-pointer text-slate-300 text-sm"><input type="checkbox" id="editEntDom_ciel_ouvert" class="rounded border-slate-500 text-amber-600 focus:ring-amber-500"><span>⛰️ Mine à ciel ouvert</span></label>
-                                        <label class="flex items-center gap-2 cursor-pointer text-slate-300 text-sm"><input type="checkbox" id="editEntDom_souterrain_forage" class="rounded border-slate-500 text-amber-600 focus:ring-amber-500"><span>⛏ Forage souterrain</span></label>
-                                        <label class="flex items-center gap-2 cursor-pointer text-slate-300 text-sm"><input type="checkbox" id="editEntDom_souterrain_mining" class="rounded border-slate-500 text-amber-600 focus:ring-amber-500"><span>🧱 Exploitation souterraine (mining)</span></label>
+                                        <label class="flex items-center gap-2 cursor-pointer text-slate-300 text-sm"><input type="checkbox" id="editEntDom_souterrain" class="rounded border-slate-500 text-amber-600 focus:ring-amber-500"><span>⛏ Mine souterraine</span></label>
                                         <label class="flex items-center gap-2 cursor-pointer text-slate-300 text-sm"><input type="checkbox" id="editEntDom_carriere" class="rounded border-slate-500 text-amber-600 focus:ring-amber-500"><span>🪨 Carrière</span></label>
                                     </div>
                                 </div>
@@ -6183,11 +6174,13 @@
         // Domaines d'activité de l'entreprise courante (ciel_ouvert / souterrain / carriere).
         // null ou vide = pas de filtrage (rétrocompatibilité avec les entreprises existantes).
         window.enterpriseActivityDomains = window.enterpriseActivityDomains || null;
+        // GEDrilling = plateforme de FORAGE. L'exploitation (mining) souterraine et
+        // le traitement carrière vivent dans GEMining. Ici, « souterrain » = forage
+        // souterrain. Les types servent à filtrer l'environnement par client.
         var ACTIVITY_DOMAINS_DEF = [
-            { key: 'ciel_ouvert',       label: 'Mine à ciel ouvert',                icon: '⛰️' },
-            { key: 'souterrain_forage', label: 'Forage souterrain',                 icon: '⛏' },
-            { key: 'souterrain_mining', label: 'Exploitation souterraine (mining)', icon: '🧱' },
-            { key: 'carriere',          label: 'Carrière',                          icon: '🪨' }
+            { key: 'ciel_ouvert', label: 'Mine à ciel ouvert', icon: '⛰️' },
+            { key: 'souterrain',  label: 'Mine souterraine',   icon: '⛏' },
+            { key: 'carriere',    label: 'Carrière',            icon: '🪨' }
         ];
         // Vues spécifiques à chaque domaine (les autres vues sont transversales et toujours visibles).
         // Vues ajoutées après coup : jamais masquées ni redirigées par une ancienne
@@ -6195,12 +6188,9 @@
         // visibilité des onglets ET par showMainView (ouverture de la vue).
         var GED_NEW_MANAGED_VIEWS = { forage_plan: 1, bit_sharpening: 1, consumables: 1, hse: 1, souterrain: 1, ug_forage: 1, ug_exploitation: 1, ug_securite: 1, carriere: 1, analytics: 1, planification: 1, besoins: 1, rentabilite: 1, depenses_pm: 1, payments: 1, soustraitants: 1, ecosystem: 1, fleet_light: 1, petty_cash: 1 };
         var DOMAIN_VIEWS = {
-            ciel_ouvert:        ['forage_plan', 'import_plan'],
-            souterrain_forage:  ['ug_forage', 'ug_securite'],
-            souterrain_mining:  ['ug_exploitation', 'ug_securite'],
-            // Clé héritée « souterrain » (rétrocompat) : équivaut aux deux sous-domaines.
-            souterrain:         ['ug_forage', 'ug_exploitation', 'ug_securite'],
-            carriere:           ['carriere']
+            ciel_ouvert: ['forage_plan', 'import_plan'],
+            souterrain:  ['ug_forage', 'ug_securite'],
+            carriere:    ['carriere']
         };
         // Cases à cocher « domaines d'activité » des formulaires entreprise (préfixe newEntDom_ / editEntDom_).
         function collectActivityDomains(prefix) {
@@ -6210,8 +6200,8 @@
         }
         function setActivityDomainCheckboxes(prefix, domains) {
             var set = {}; (domains || []).forEach(function (d) { set[d] = true; });
-            // Rétrocompat : l'ancienne clé unique « souterrain » coche les deux sous-domaines.
-            if (set.souterrain) { set.souterrain_forage = true; set.souterrain_mining = true; }
+            // Rétrocompat : d'anciens sous-domaines souterrains cochent « souterrain ».
+            if (set.souterrain_forage || set.souterrain_mining) set.souterrain = true;
             ACTIVITY_DOMAINS_DEF.forEach(function (d) { var el = document.getElementById(prefix + d.key); if (el) el.checked = !!set[d.key]; });
         }
         // Une vue de domaine est-elle autorisée par les domaines d'activité de l'entreprise ?
@@ -6591,7 +6581,7 @@
                 view !== 'enterprises' && !GED_NEW_MANAGED_VIEWS[view] && subNav.indexOf(view) < 0) {
                 view = 'dashboard';
             }
-            var views = ['consumables', 'dashboard', 'connections', 'assignments', 'maintenance', 'bit_sharpening', 'invoices', 'payments', 'contracts', 'sites', 'enterprises', 'revenue', 'site_meals', 'reports', 'project_overview', 'planification', 'besoins', 'rh', 'inventory', 'stock_multi', 'accounts', 'clients', 'translator', 'team_chat', 'company_info', 'forage_plan', 'import_plan', 'ecosystem', 'rentabilite', 'depenses_pm', 'analytics', 'hse', 'souterrain', 'ug_forage', 'ug_exploitation', 'ug_securite', 'soustraitants', 'fleet_light', 'petty_cash', 'weekly_report'];
+            var views = ['consumables', 'dashboard', 'connections', 'assignments', 'maintenance', 'bit_sharpening', 'invoices', 'payments', 'contracts', 'sites', 'enterprises', 'revenue', 'site_meals', 'reports', 'project_overview', 'planification', 'besoins', 'rh', 'inventory', 'stock_multi', 'accounts', 'clients', 'translator', 'team_chat', 'company_info', 'forage_plan', 'import_plan', 'ecosystem', 'rentabilite', 'depenses_pm', 'analytics', 'hse', 'souterrain', 'ug_forage', 'ug_securite', 'soustraitants', 'fleet_light', 'petty_cash', 'weekly_report'];
             views.forEach(function(v) {
                 var el = document.getElementById('mainView-' + v);
                 if (el) el.classList.add('hidden');
@@ -9446,7 +9436,7 @@
                 c.innerHTML = '<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">' + kpiRow + '</div>' + body + note;
             }
             writeUgSection('ugForageContent', kpiForage, galleriesTab);
-            writeUgSection('ugExploitationContent', kpiExploit, abattageTab);
+            // Exploitation souterraine (mining) déplacée vers GEMining.
             writeUgSection('ugSecuriteContent', kpiSecurite, securiteTab);
         }
         window.renderSouterrain = renderSouterrain;
@@ -10797,7 +10787,7 @@
             }
             // Domaine Souterrain : conteneurs en camelCase (ugForageContent, etc.),
             // à traiter avant le garde-fou générique "<vue>Content".
-            if (view === 'ug_forage' || view === 'ug_exploitation' || view === 'ug_securite') {
+            if (view === 'ug_forage' || view === 'ug_securite') {
                 renderSouterrain();
                 try { ugSyncFromServer(); } catch (e) {}
                 return;

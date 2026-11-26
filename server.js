@@ -201,9 +201,9 @@ function requireUserManagementRole(req, res, next) {
 }
 
 // Domaines d'activité d'une entreprise (quels types d'exploitation elle réalise).
-// 'souterrain' = clé héritée (rétrocompat) ; remplacée à la saisie par les deux
-// sous-domaines souterrain_forage (drilling) et souterrain_mining (exploitation).
-const ACTIVITY_DOMAINS = ['ciel_ouvert', 'souterrain', 'souterrain_forage', 'souterrain_mining', 'carriere'];
+// GEDrilling (forage) : trois types de mine côté client. Le mining (exploitation
+// souterraine, traitement carrière) est développé dans GEMining.
+const ACTIVITY_DOMAINS = ['ciel_ouvert', 'souterrain', 'carriere'];
 // Lecture : chaîne JSON -> tableau normalisé (ou null si non défini).
 function parseActivityDomainsJson(raw) {
     if (raw == null || raw === '') return null;
