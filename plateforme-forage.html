@@ -3743,7 +3743,8 @@
                             <p class="text-slate-400 text-sm mb-3">Quels types d'exploitation cette entreprise réalise-t-elle ? <strong class="text-slate-300">Seuls les modules des domaines cochés seront affichés</strong> dans son menu.</p>
                             <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
                                 <label class="flex items-center gap-2 cursor-pointer bg-slate-700/50 hover:bg-slate-700 rounded-lg px-3 py-2"><input type="checkbox" id="newEntDom_ciel_ouvert" checked class="rounded border-slate-500 text-amber-600 focus:ring-amber-500"><span class="text-slate-200 text-sm">⛰️ Mine à ciel ouvert</span></label>
-                                <label class="flex items-center gap-2 cursor-pointer bg-slate-700/50 hover:bg-slate-700 rounded-lg px-3 py-2"><input type="checkbox" id="newEntDom_souterrain" class="rounded border-slate-500 text-amber-600 focus:ring-amber-500"><span class="text-slate-200 text-sm">⛏ Mine souterraine</span></label>
+                                <label class="flex items-center gap-2 cursor-pointer bg-slate-700/50 hover:bg-slate-700 rounded-lg px-3 py-2"><input type="checkbox" id="newEntDom_souterrain_forage" class="rounded border-slate-500 text-amber-600 focus:ring-amber-500"><span class="text-slate-200 text-sm">⛏ Forage souterrain</span></label>
+                                <label class="flex items-center gap-2 cursor-pointer bg-slate-700/50 hover:bg-slate-700 rounded-lg px-3 py-2"><input type="checkbox" id="newEntDom_souterrain_mining" class="rounded border-slate-500 text-amber-600 focus:ring-amber-500"><span class="text-slate-200 text-sm">🧱 Exploitation souterraine (mining)</span></label>
                                 <label class="flex items-center gap-2 cursor-pointer bg-slate-700/50 hover:bg-slate-700 rounded-lg px-3 py-2"><input type="checkbox" id="newEntDom_carriere" class="rounded border-slate-500 text-amber-600 focus:ring-amber-500"><span class="text-slate-200 text-sm">🪨 Carrière</span></label>
                             </div>
                         </div>
@@ -3979,7 +3980,8 @@
                                     <p class="text-xs text-slate-500">Seuls les modules des domaines cochés sont affichés (Ciel ouvert → plan de forage / import ; Souterrain → forage, exploitation, sécurité ; Carrière). Tout décoché = tout visible.</p>
                                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
                                         <label class="flex items-center gap-2 cursor-pointer text-slate-300 text-sm"><input type="checkbox" id="editEntDom_ciel_ouvert" class="rounded border-slate-500 text-amber-600 focus:ring-amber-500"><span>⛰️ Mine à ciel ouvert</span></label>
-                                        <label class="flex items-center gap-2 cursor-pointer text-slate-300 text-sm"><input type="checkbox" id="editEntDom_souterrain" class="rounded border-slate-500 text-amber-600 focus:ring-amber-500"><span>⛏ Mine souterraine</span></label>
+                                        <label class="flex items-center gap-2 cursor-pointer text-slate-300 text-sm"><input type="checkbox" id="editEntDom_souterrain_forage" class="rounded border-slate-500 text-amber-600 focus:ring-amber-500"><span>⛏ Forage souterrain</span></label>
+                                        <label class="flex items-center gap-2 cursor-pointer text-slate-300 text-sm"><input type="checkbox" id="editEntDom_souterrain_mining" class="rounded border-slate-500 text-amber-600 focus:ring-amber-500"><span>🧱 Exploitation souterraine (mining)</span></label>
                                         <label class="flex items-center gap-2 cursor-pointer text-slate-300 text-sm"><input type="checkbox" id="editEntDom_carriere" class="rounded border-slate-500 text-amber-600 focus:ring-amber-500"><span>🪨 Carrière</span></label>
                                     </div>
                                 </div>
@@ -6182,9 +6184,10 @@
         // null ou vide = pas de filtrage (rétrocompatibilité avec les entreprises existantes).
         window.enterpriseActivityDomains = window.enterpriseActivityDomains || null;
         var ACTIVITY_DOMAINS_DEF = [
-            { key: 'ciel_ouvert', label: 'Mine à ciel ouvert', icon: '⛰️' },
-            { key: 'souterrain',  label: 'Mine souterraine',   icon: '⛏' },
-            { key: 'carriere',    label: 'Carrière',            icon: '🪨' }
+            { key: 'ciel_ouvert',       label: 'Mine à ciel ouvert',                icon: '⛰️' },
+            { key: 'souterrain_forage', label: 'Forage souterrain',                 icon: '⛏' },
+            { key: 'souterrain_mining', label: 'Exploitation souterraine (mining)', icon: '🧱' },
+            { key: 'carriere',          label: 'Carrière',                          icon: '🪨' }
         ];
         // Vues spécifiques à chaque domaine (les autres vues sont transversales et toujours visibles).
         // Vues ajoutées après coup : jamais masquées ni redirigées par une ancienne
@@ -6192,9 +6195,12 @@
         // visibilité des onglets ET par showMainView (ouverture de la vue).
         var GED_NEW_MANAGED_VIEWS = { forage_plan: 1, bit_sharpening: 1, consumables: 1, hse: 1, souterrain: 1, ug_forage: 1, ug_exploitation: 1, ug_securite: 1, carriere: 1, analytics: 1, planification: 1, besoins: 1, rentabilite: 1, depenses_pm: 1, payments: 1, soustraitants: 1, ecosystem: 1, fleet_light: 1, petty_cash: 1 };
         var DOMAIN_VIEWS = {
-            ciel_ouvert: ['forage_plan', 'import_plan'],
-            souterrain:  ['ug_forage', 'ug_exploitation', 'ug_securite'],
-            carriere:    ['carriere']
+            ciel_ouvert:        ['forage_plan', 'import_plan'],
+            souterrain_forage:  ['ug_forage', 'ug_securite'],
+            souterrain_mining:  ['ug_exploitation', 'ug_securite'],
+            // Clé héritée « souterrain » (rétrocompat) : équivaut aux deux sous-domaines.
+            souterrain:         ['ug_forage', 'ug_exploitation', 'ug_securite'],
+            carriere:           ['carriere']
         };
         // Cases à cocher « domaines d'activité » des formulaires entreprise (préfixe newEntDom_ / editEntDom_).
         function collectActivityDomains(prefix) {
@@ -6204,17 +6210,22 @@
         }
         function setActivityDomainCheckboxes(prefix, domains) {
             var set = {}; (domains || []).forEach(function (d) { set[d] = true; });
+            // Rétrocompat : l'ancienne clé unique « souterrain » coche les deux sous-domaines.
+            if (set.souterrain) { set.souterrain_forage = true; set.souterrain_mining = true; }
             ACTIVITY_DOMAINS_DEF.forEach(function (d) { var el = document.getElementById(prefix + d.key); if (el) el.checked = !!set[d.key]; });
         }
         // Une vue de domaine est-elle autorisée par les domaines d'activité de l'entreprise ?
+        // Multi-domaines : une vue est visible si AU MOINS un des domaines qui la portent
+        // figure dans ceux de l'entreprise (gère les sous-domaines et les vues partagées,
+        // ex. Sécurité du fond commune au forage et à l'exploitation souterrains).
         function allowedByActivityDomain(navId) {
             var doms = window.enterpriseActivityDomains;
             if (!Array.isArray(doms) || doms.length === 0) return true; // pas de filtrage
             var view = String(navId).replace(/^nav-/, '');
-            var owning = null;
-            Object.keys(DOMAIN_VIEWS).forEach(function (dk) { if (DOMAIN_VIEWS[dk].indexOf(view) >= 0) owning = dk; });
-            if (!owning) return true; // vue transversale
-            return doms.indexOf(owning) >= 0;
+            var owningDomains = [];
+            Object.keys(DOMAIN_VIEWS).forEach(function (dk) { if (DOMAIN_VIEWS[dk].indexOf(view) >= 0) owningDomains.push(dk); });
+            if (!owningDomains.length) return true; // vue transversale
+            return owningDomains.some(function (dk) { return doms.indexOf(dk) >= 0; });
         }
 
         function refreshSubscriptionNavPolicy() {

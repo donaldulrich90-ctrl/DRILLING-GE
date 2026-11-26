@@ -201,7 +201,9 @@ function requireUserManagementRole(req, res, next) {
 }
 
 // Domaines d'activité d'une entreprise (quels types d'exploitation elle réalise).
-const ACTIVITY_DOMAINS = ['ciel_ouvert', 'souterrain', 'carriere'];
+// 'souterrain' = clé héritée (rétrocompat) ; remplacée à la saisie par les deux
+// sous-domaines souterrain_forage (drilling) et souterrain_mining (exploitation).
+const ACTIVITY_DOMAINS = ['ciel_ouvert', 'souterrain', 'souterrain_forage', 'souterrain_mining', 'carriere'];
 // Lecture : chaîne JSON -> tableau normalisé (ou null si non défini).
 function parseActivityDomainsJson(raw) {
     if (raw == null || raw === '') return null;
@@ -1163,7 +1165,7 @@ app.put('/api/enterprises/:id', (req, res) => {
     if (req.body && req.body.activityDomains !== undefined) {
         const adStore = normalizeActivityDomainsForStore(req.body.activityDomains);
         if (adStore === undefined) {
-            return res.status(400).json({ error: 'activityDomains : tableau JSON parmi ciel_ouvert, souterrain, carriere' });
+            return res.status(400).json({ error: 'activityDomains : tableau JSON de domaines valides' });
         }
         if (adStore === null) { updates.push('activityDomains = NULL'); }
         else { updates.push('activityDomains = ?'); values.push(adStore); }
@@ -1230,7 +1232,7 @@ app.post('/api/enterprises', requirePlatformAdmin, (req, res) => {
     const slugVal = slug || name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
     const adStore = normalizeActivityDomainsForStore(body.activityDomains);
     if (adStore === undefined) {
-        return res.status(400).json({ error: 'activityDomains : tableau JSON parmi ciel_ouvert, souterrain, carriere' });
+        return res.status(400).json({ error: 'activityDomains : tableau JSON de domaines valides' });
     }
     const adJson = adStore; // chaîne JSON ou null
     let allowedJson = null;
