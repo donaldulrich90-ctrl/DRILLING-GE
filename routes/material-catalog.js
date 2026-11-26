@@ -367,7 +367,8 @@ module.exports = function registerMaterialCatalogRoutes(app, { db, getEnterprise
     app.get('/api/material/families', async (req, res) => {
         const eid = reqEid(req, res); if (!eid) return;
         try {
-            await ensureSeed(eid);
+            // Pas de remplissage automatique : on n'affiche que ce qui a été saisi
+            // (ou chargé explicitement via POST /api/material/seed).
             const rows = await qAll('SELECT * FROM material_families WHERE enterpriseId = ? ORDER BY sortOrder, code', [eid]);
             res.json(rows);
         } catch (e) { res.status(500).json({ error: e.message }); }
@@ -417,7 +418,7 @@ module.exports = function registerMaterialCatalogRoutes(app, { db, getEnterprise
     app.get('/api/material/catalog', async (req, res) => {
         const eid = reqEid(req, res); if (!eid) return;
         try {
-            await ensureSeed(eid);
+            // Pas de remplissage automatique (voir GET families).
             const fam = text(req.query.family, 8).toUpperCase();
             let sql = 'SELECT * FROM material_catalog WHERE enterpriseId = ?';
             const p = [eid];
@@ -469,6 +470,29 @@ module.exports = function registerMaterialCatalogRoutes(app, { db, getEnterprise
         try {
             await qRun('DELETE FROM material_catalog WHERE id = ? AND enterpriseId = ?', [Number(req.params.id), eid]);
             res.json({ ok: true });
+        } catch (e) { res.status(500).json({ error: e.message }); }
+    });
+
+    // ── Catalogue standard : chargement / vidage EXPLICITES ──────────────────
+    // Charge le catalogue standard (familles + articles types) à la demande.
+    app.post('/api/material/seed', async (req, res) => {
+        const eid = reqEid(req, res); if (!eid) return;
+        try {
+            await ensureSeed(eid);
+            const f = await qOne('SELECT COUNT(*) AS n FROM material_families WHERE enterpriseId = ?', [eid]);
+            const c = await qOne('SELECT COUNT(*) AS n FROM material_catalog WHERE enterpriseId = ?', [eid]);
+            res.json({ ok: true, familles: f ? f.n : 0, articles: c ? c.n : 0 });
+        } catch (e) { res.status(500).json({ error: e.message }); }
+    });
+
+    // Vide le catalogue de l'entreprise (familles + articles types). N'affecte
+    // PAS l'inventaire réel (table inventory) ni les mouvements de stock.
+    app.post('/api/material/clear', async (req, res) => {
+        const eid = reqEid(req, res); if (!eid) return;
+        try {
+            const c = await qRun('DELETE FROM material_catalog WHERE enterpriseId = ?', [eid]);
+            const f = await qRun('DELETE FROM material_families WHERE enterpriseId = ?', [eid]);
+            res.json({ ok: true, articlesSupprimes: c.changes || 0, famillesSupprimees: f.changes || 0 });
         } catch (e) { res.status(500).json({ error: e.message }); }
     });
 

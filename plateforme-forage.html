@@ -28288,8 +28288,14 @@
             var content = document.getElementById('inventoryContent'); if (!content) return;
             var html = '<div class="mb-4 flex justify-between items-center flex-wrap gap-2">'
                 + '<h3 class="text-xl font-bold">📚 Catalogue matériel</h3>'
-                + '<button onclick="renderInventory()" class="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-lg">← Retour au stock</button></div>'
-                + '<p class="text-slate-400 text-sm mb-4">Familles codifiées et articles types. Le code article suit le format <span class="font-mono text-cyan-300">FAMILLE-####</span>. Tu peux ajouter tes propres familles et articles.</p>';
+                + '<div class="flex gap-2 flex-wrap">'
+                + '<button onclick="matSeedCatalog()" class="bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-lg text-sm">📥 Charger le catalogue standard</button>'
+                + (MAT_CATALOG.length || MAT_FAMILIES.length ? '<button onclick="matClearCatalog()" class="bg-red-700 hover:bg-red-600 px-4 py-2 rounded-lg text-sm">🗑 Vider le catalogue</button>' : '')
+                + '<button onclick="renderInventory()" class="bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-lg text-sm">← Retour au stock</button></div></div>'
+                + '<p class="text-slate-400 text-sm mb-4">Familles codifiées et articles types. Le code article suit le format <span class="font-mono text-cyan-300">FAMILLE-####</span>. Le catalogue est <strong class="text-slate-300">vide par défaut</strong> : ajoute tes familles et articles, ou charge le catalogue standard d\'un clic (tu pourras le modifier ensuite).</p>';
+            if (!MAT_FAMILIES.length && !MAT_CATALOG.length) {
+                html += '<div class="bg-slate-800 border border-dashed border-slate-600 rounded-xl p-5 mb-4 text-slate-400 text-sm">Aucune famille ni article pour l\'instant. Rien ne se crée tout seul — utilise « 📥 Charger le catalogue standard » si tu veux partir de la liste minière préremplie, ou ajoute tes propres entrées ci-dessous.</div>';
+            }
             html += '<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-5">';
             html += '<div class="bg-slate-800 border border-slate-700 rounded-xl p-4"><h4 class="font-bold mb-2">➕ Nouvelle famille</h4>'
                 + '<div class="flex gap-2 flex-wrap"><input id="matFamCode" maxlength="8" placeholder="Code (ex: PMP)" class="bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm w-32" style="text-transform:uppercase">'
@@ -28337,6 +28343,16 @@
         async function matDeleteCatalog(id) {
             if (!confirm('Supprimer cet article du catalogue ?')) return;
             try { await apiRequest('/material/catalog/' + id, 'DELETE'); await loadMaterialRefs(true); renderMaterialCatalog(); }
+            catch (e) { alert(e.message || 'Erreur'); }
+        }
+        async function matSeedCatalog() {
+            if (!confirm('Charger le catalogue minier standard (familles + articles types) ? Tu pourras ensuite le modifier ou le vider.')) return;
+            try { var r = await apiRequest('/material/seed', 'POST', {}); await loadMaterialRefs(true); renderMaterialCatalog(); alert('Catalogue standard chargé : ' + (r.familles || 0) + ' familles, ' + (r.articles || 0) + ' articles.'); }
+            catch (e) { alert(e.message || 'Erreur'); }
+        }
+        async function matClearCatalog() {
+            if (!confirm('Vider complètement le catalogue (familles + articles types) ? Cela n\'affecte PAS ton stock réel ni les mouvements, seulement la liste de référence.')) return;
+            try { var r = await apiRequest('/material/clear', 'POST', {}); await loadMaterialRefs(true); renderMaterialCatalog(); alert('Catalogue vidé : ' + (r.articlesSupprimes || 0) + ' articles, ' + (r.famillesSupprimees || 0) + ' familles supprimés.'); }
             catch (e) { alert(e.message || 'Erreur'); }
         }
 
