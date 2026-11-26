@@ -290,16 +290,35 @@ function registerMetrics(app) {
             || name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''));
         const plan = String(b.plan || 'enterprise');
         if (!name) return res.status(400).json({ error: 'name requis' });
+        // Type de mine piloté par le portail -> domaine d'activité unique.
+        // Accepte type_mine ('ciel_ouvert'|'souterrain'|'carriere') ou activityDomains (tableau).
+        let adStore; // undefined = ne pas toucher
+        if (b.type_mine !== undefined && b.type_mine !== null && String(b.type_mine).trim() !== '') {
+            adStore = normalizeActivityDomainsForStore([String(b.type_mine).trim()]);
+        } else if (b.activityDomains !== undefined) {
+            adStore = normalizeActivityDomainsForStore(b.activityDomains);
+        }
         const db = getDb();
         db.get('SELECT id FROM enterprises WHERE slug = ?', [slug], (err, row) => {
             if (err) return res.status(500).json({ error: err.message });
-            if (row) return res.json({ ok: true, existing: true, id: row.id, slug });
+            if (row) {
+                // Entreprise déjà reliée : on synchronise le type si fourni.
+                if (adStore !== undefined) {
+                    db.run('UPDATE enterprises SET activityDomains = ? WHERE id = ?', [adStore, row.id], (e3) => {
+                        if (e3) return res.status(500).json({ error: e3.message });
+                        res.json({ ok: true, existing: true, id: row.id, slug, activityDomains: adStore });
+                    });
+                } else {
+                    res.json({ ok: true, existing: true, id: row.id, slug });
+                }
+                return;
+            }
             db.run(
-                'INSERT INTO enterprises (name, slug, currency, plan, maxUsers, maxDrills, maxSites) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                [name, slug, 'XOF', plan, 50, 50, 20],
+                'INSERT INTO enterprises (name, slug, currency, plan, maxUsers, maxDrills, maxSites, activityDomains) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                [name, slug, 'XOF', plan, 50, 50, 20, adStore === undefined ? null : adStore],
                 function (e2) {
                     if (e2) return res.status(500).json({ error: e2.message });
-                    res.json({ ok: true, created: true, id: this.lastID, slug });
+                    res.json({ ok: true, created: true, id: this.lastID, slug, activityDomains: adStore === undefined ? null : adStore });
                 }
             );
         });
